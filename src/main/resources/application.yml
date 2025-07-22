@@ -1,0 +1,175 @@
+spring:
+  application:
+    name: bus-route-backend
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  r2dbc:
+    url: r2dbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:bus_route_db}
+    username: ${DB_USERNAME:bus_route_user}
+    password: ${DB_PASSWORD:bus_route_pass}
+    pool:
+      initial-size: ${DB_POOL_MIN_IDLE:2}
+      max-size: ${DB_POOL_MAX_SIZE:10}
+      max-idle-time: 30m
+      max-acquire-time: 60s
+      max-create-connection-time: 60s
+      validation-query: SELECT 1
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.spatial.dialect.postgis.PostgisPG95Dialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_updates: true
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+    clean-disabled: true
+    schemas: public
+
+  webflux:
+    base-path: /api/v1
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      write-durations-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    time-zone: UTC
+    default-property-inclusion: non_null
+
+
+
+external:
+  api:
+    gps:
+      base-url: https://gps.tugdk.gov.tm/api
+      token: ${GPS_API_TOKEN:sfdsfsdfsdfsfsfsft4t4t43543543efgdf}
+      timeout: 10s
+      retry:
+        max-attempts: 3
+        initial-interval: 1s
+        multiplier: 2.0
+        max-interval: 10s
+      rate-limit:
+        requests-per-minute: 120
+
+    bus-info:
+      base-url: https://edu.ayauk.gov.tm/gps/buses
+      username: ${BUS_INFO_API_USERNAME:test}
+      password: ${BUS_INFO_API_PASSWORD:test}
+      timeout: 10s
+      retry:
+        max-attempts: 3
+        initial-interval: 1s
+        multiplier: 2.0
+        max-interval: 10s
+
+business:
+  routing:
+    nearby-stops-radius: 800
+    max-transfers: 2
+    max-search-results: 5
+    max-transfer-wait-time: 30
+    walking-speed: 5.0
+
+  vehicle-tracking:
+    position-update-interval: 30
+    position-max-age: 5
+    stop-arrival-radius: 50
+
+  bus-info:
+    sync-interval: 24
+    sync-time: "06:00"
+
+
+cache:
+  redis:
+    routes-ttl: 3600
+    stops-ttl: 7200
+    vehicle-positions-ttl: 60
+    search-results-ttl: 300
+    key-prefix:
+      routes: "routes:"
+      stops: "stops:"
+      vehicles: "vehicles:"
+      search: "search:"
+
+websocket:
+  max-connections: 10000
+  heartbeat-interval: 30
+  message-buffer-size: 1024
+  connection-timeout: 60
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when_authorized
+      show-components: always
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+
+logging:
+  level:
+    biz.ugur.busroutebackend: ${LOG_LEVEL_INFO}\
+    org.springframework.web.reactive: ${SPRING_LOG_LEVEL:WARN}
+    org.springframework.data: ${DATA_LOG_LEVEL:WARN}
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
+    org.flywaydb: ${FLYWAY_LOG_LEVEL:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${LOG_FILE:logs/bus-route-backend.log}
+  logback:
+    rollingpolicy:
+      max-history: 7
+      max-file-size: 10MB
+
+server:
+  port: ${SERVER_PORT:8080}
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  http2:
+    enabled: true
+  error:
+    include-message: always
+    include-binding-errors: always

@@ -1,0 +1,37 @@
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: jdbc:tc:postgresql:15-alpine:///test_db?TC_TMPFS=/testtmpfs:rw
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+    hikari:
+      maximum-pool-size: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+  data:
+    redis:
+      host: localhost
+      port: 0
+
+  flyway:
+    enabled: false
+
+logging:
+  level:
+    biz.ugur.busroutebackend: DEBUG
+    org.testcontainers: INFO
+    com.github.dockerjava: WARN
+
+# Mock external APIs
+external:
+  api:
+    gps:
+      base-url: http://localhost:${wiremock.server.port}/mock/gps/api
+    bus-info:
+      base-url: http://localhost:${wiremock.server.port}/mock/bus-info

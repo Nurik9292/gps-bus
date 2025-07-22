@@ -1,0 +1,29 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  r2dbc:
+    pool:
+      max-size: 5
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+logging:
+  level:
+    biz.ugur.busroutebackend: DEBUG
+    org.springframework.web.reactive: DEBUG
+    org.springframework.data: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+
+external:
+  api:
+    gps:
+      base-url: http://localhost:8081/mock/gps/api
+    bus-info:
+      base-url: http://localhost:8081/mock/bus-info
