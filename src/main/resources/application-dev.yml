@@ -3,8 +3,15 @@ spring:
     activate:
       on-profile: dev
 
+  datasource:
+    url: jdbc:postgresql://db-route:5432/bus_route_db
+    username: bus_route_user
+    password: bus_route_pass
+    driver-class-name: org.postgresql.Driver
+
+
   r2dbc:
-    url: r2dbc:postgresql://localhost:5432/bus_route_db
+    url: r2dbc:postgresql://db-route:5432/bus_route_db
     username: bus_route_user
     password: bus_route_pass
     pool:
@@ -17,7 +24,7 @@ spring:
 
   data:
     redis:
-      host: localhost
+      host: redis-route
       port: 6379
       timeout: 2000ms
 
@@ -32,7 +39,7 @@ logging:
     org.springframework.web.reactive: DEBUG
     org.springframework.data: INFO
     org.springframework.r2dbc: DEBUG
-    io.r2dbc.postgresql: DEBUG             #
+    io.r2dbc.postgresql: DEBUG
     org.flywaydb: INFO
 
 external:
