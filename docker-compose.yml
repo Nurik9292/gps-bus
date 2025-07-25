@@ -1,0 +1,148 @@
+services:
+  db-route:
+    image: postgis/postgis
+    container_name: db-route
+    environment:
+      POSTGRES_DB: bus_route_db
+      POSTGRES_USER: bus_route_user
+      POSTGRES_PASSWORD: bus_route_pass
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_bus_route:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - bus-route-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bus_route_user -d bus_route_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+
+  redis-route:
+    image: redis
+    container_name: redis-route
+    command: redis-server --appendonly yes --requirepass ""
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_bus_route:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - bus-route-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: bus-route-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@busroute.tm
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data_bus_route:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json
+    depends_on:
+      db-route:
+        condition: service_healthy
+    networks:
+      - bus-route-network
+    restart: unless-stopped
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: bus-route-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+      HTTP_USER: admin
+      HTTP_PASSWORD: admin123
+    ports:
+      - "8081:8081"
+    depends_on:
+      redis-route:
+        condition: service_healthy
+    networks:
+      - bus-route-network
+    restart: unless-stopped
+
+
+  wiremock:
+    image: wiremock/wiremock:3.13.1
+    container_name: bus-route-wiremock
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./docker/wiremock/mappings:/home/wiremock/mappings
+      - ./docker/wiremock/responses:/home/wiremock/__files
+    command: [ "--global-response-templating", "--verbose" ]
+    networks:
+      - bus-route-network
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: bus-route-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data_bus_route:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - bus-route-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: bus-route-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana_data_bus_route:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - bus-route-network
+    restart: unless-stopped
+
+
+networks:
+  bus-route-network:
+    driver: bridge
+    name: bus-route-network
+
+
+volumes:
+  postgres_data_bus_route:
+    name: bus-route-postgres-data
+  redis_data_bus_route:
+    name: bus-route-redis-data
+  pgadmin_data_bus_route:
+    name: bus-route-pgadmin-data
+  prometheus_data_bus_route:
+    name: bus-route-prometheus-data
+  grafana_data_bus_route:
+    name: bus-route-grafana-data

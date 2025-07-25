@@ -1,0 +1,26 @@
+[
+  {
+    "car_number": "12-53 AGH",
+    "number": "1",
+    "date": "{{now format='yyyy-MM-dd'}}",
+    "change": 0
+  },
+  {
+    "car_number": "45-78 AGH",
+    "number": "5",
+    "date": "{{now format='yyyy-MM-dd'}}",
+    "change": 1
+  },
+  {
+    "car_number": "23-91 AGH",
+    "number": "12",
+    "date": "{{now format='yyyy-MM-dd'}}",
+    "change": 0
+  },
+  {
+    "car_number": "67-34 AGH",
+    "number": "1",
+    "date": "{{now format='yyyy-MM-dd'}}",
+    "change": 1
+  }
+]

@@ -1,0 +1,49 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/mock/bus-info/gps/buses/info",
+    "headers": {
+      "Authorization": {
+        "matches": "Basic .*"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": [
+      {
+        "car_number": "1234 ABD",
+        "number": "29",
+        "date": "2025-07-25",
+        "change": 1
+      },
+      {
+        "car_number": "5678 AGH",
+        "number": "12",
+        "date": "2025-07-25",
+        "change": 1
+      },
+      {
+        "car_number": "9012 ATM",
+        "number": "7A",
+        "date": "2025-07-25",
+        "change": 2
+      },
+      {
+        "car_number": "3456 AWM",
+        "number": "29",
+        "date": "2025-07-25",
+        "change": 2
+      },
+      {
+        "car_number": "7890 AZN",
+        "number": "15",
+        "date": "2025-07-25",
+        "change": 1
+      }
+    ]
+  }
+}

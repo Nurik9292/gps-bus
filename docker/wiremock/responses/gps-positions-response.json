@@ -1,0 +1,35 @@
+[
+  {
+    "deviceId": "device-001",
+    "latitude": 37.9601,
+    "longitude": 58.3261,
+    "speed": 25.5,
+    "attributes": {
+      "name": "12-53 AGH",
+      "motion": true
+    },
+    "fixTime": "{{now format='yyyy-MM-dd HH:mm:ss'}}"
+  },
+  {
+    "deviceId": "device-002",
+    "latitude": 37.9455,
+    "longitude": 58.3833,
+    "speed": 0.0,
+    "attributes": {
+      "name": "45-78 AGH",
+      "motion": false
+    },
+    "fixTime": "{{now format='yyyy-MM-dd HH:mm:ss'}}"
+  },
+  {
+    "deviceId": "device-003",
+    "latitude": 37.9344,
+    "longitude": 58.3697,
+    "speed": 18.2,
+    "attributes": {
+      "name": "23-91 AGH",
+      "motion": true
+    },
+    "fixTime": "{{now format='yyyy-MM-dd HH:mm:ss'}}"
+  }
+]

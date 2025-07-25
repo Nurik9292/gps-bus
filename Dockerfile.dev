@@ -1,0 +1,42 @@
+FROM openjdk:24-jdk-slim
+
+LABEL maintainer="Bus Route Team"
+LABEL version="1.0.0-dev"
+LABEL description="Bus Route Backend - Development Container"
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    vim \
+    htop \
+    postgresql-client \
+    redis-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+COPY pom.xml ./
+COPY .mvn .mvn
+COPY mvnw ./
+
+RUN chmod +x mvnw
+
+RUN ./mvnw dependency:go-offline -B
+
+COPY src ./src
+
+
+EXPOSE 8080 5005
+
+ENV SPRING_PROFILES_ACTIVE=dev
+ENV JAVA_OPTS="-Xms512m -Xmx1g -XX:+UseG1GC -XX:+UseStringDeduplication"
+ENV DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+
+
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+CMD ["./mvnw", "-X", "spring-boot:run", "-Dspring-boot.run.jvmArguments=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"]
+

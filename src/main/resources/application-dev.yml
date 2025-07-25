@@ -4,26 +4,79 @@ spring:
       on-profile: dev
 
   r2dbc:
+    url: r2dbc:postgresql://localhost:5432/bus_route_db
+    username: bus_route_user
+    password: bus_route_pass
     pool:
+      initial-size: 2
       max-size: 5
+      max-idle-time: 30m
+      max-acquire-time: 60s
+      max-create-connection-time: 60s
+      validation-query: SELECT 1
 
   data:
     redis:
       host: localhost
       port: 6379
+      timeout: 2000ms
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
 
 logging:
   level:
     biz.ugur.busroutebackend: DEBUG
     org.springframework.web.reactive: DEBUG
     org.springframework.data: INFO
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-
+    org.springframework.r2dbc: DEBUG
+    io.r2dbc.postgresql: DEBUG             #
+    org.flywaydb: INFO
 
 external:
   api:
     gps:
       base-url: http://localhost:8081/mock/gps/api
+      token: mock-token
+      timeout: 5s
+      retry:
+        max-attempts: 2
+        initial-interval: 1s
     bus-info:
       base-url: http://localhost:8081/mock/bus-info
+      username: test
+      password: test
+      timeout: 5s
+      retry:
+        max-attempts: 2
+        initial-interval: 1s
+
+app:
+  scheduling:
+    enabled: true
+
+business:
+  vehicle-tracking:
+    position-update-interval: 10
+    position-max-age: 2
+
+cache:
+  redis:
+    routes-ttl: 300
+    stops-ttl: 600
+    vehicle-positions-ttl: 30
+    search-results-ttl: 60
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,loggers,flyway
+  endpoint:
+    health:
+      show-details: always
+
+server:
+  port: 8080

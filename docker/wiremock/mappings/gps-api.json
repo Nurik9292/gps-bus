@@ -1,0 +1,74 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/mock/gps/api/positions",
+    "headers": {
+      "Authorization": {
+        "matches": "Bearer .*"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": [
+      {
+        "deviceId": "GPS_DEVICE_1001",
+        "latitude": 37.9601,
+        "longitude": 58.3261,
+        "speed": 0.0,
+        "fixTime": "2025-07-25T08:00:00Z",
+        "attributes": {
+          "name": "1234 ABD",
+          "motion": false
+        }
+      },
+      {
+        "deviceId": "GPS_DEVICE_1002",
+        "latitude": 37.9255,
+        "longitude": 58.3836,
+        "speed": 25.5,
+        "fixTime": "2025-07-25T08:00:00Z",
+        "attributes": {
+          "name": "5678 AGH",
+          "motion": true
+        }
+      },
+      {
+        "deviceId": "GPS_DEVICE_1003",
+        "latitude": 37.9868,
+        "longitude": 58.3609,
+        "speed": 0.0,
+        "fixTime": "2025-07-25T08:00:00Z",
+        "attributes": {
+          "name": "9012 ATM",
+          "motion": false
+        }
+      },
+      {
+        "deviceId": "GPS_DEVICE_1004",
+        "latitude": 37.9089,
+        "longitude": 58.3831,
+        "speed": 18.2,
+        "fixTime": "2025-07-25T08:00:00Z",
+        "attributes": {
+          "name": "3456 AWM",
+          "motion": true
+        }
+      },
+      {
+        "deviceId": "GPS_DEVICE_1005",
+        "latitude": 37.9345,
+        "longitude": 58.3012,
+        "speed": 32.1,
+        "fixTime": "2025-07-25T08:00:00Z",
+        "attributes": {
+          "name": "7890 AZN",
+          "motion": true
+        }
+      }
+    ]
+  }
+}

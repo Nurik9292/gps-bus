@@ -1,0 +1,70 @@
+package biz.ugur.busroutebackend.routing.application.dto;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Data
+public class TripOptionDTO {
+
+    @JsonProperty("option_id")
+    private String optionId;
+
+    @JsonProperty("trip_type")
+    private String tripType; // "direct", "one_transfer", "two_transfers"
+
+    @JsonProperty("summary")
+    private String summary;
+
+    @JsonProperty("total_travel_minutes")
+    private int totalTravelMinutes;
+
+    @JsonProperty("total_walking_minutes")
+    private int totalWalkingMinutes;
+
+    @JsonProperty("transfers_count")
+    private int transfersCount;
+
+    @JsonProperty("estimated_departure")
+    private LocalDateTime estimatedDeparture;
+
+    @JsonProperty("estimated_arrival")
+    private LocalDateTime estimatedArrival;
+
+    @JsonProperty("route_segments")
+    private List<RouteSegmentDTO> routeSegments;
+
+    @JsonProperty("cost_estimate")
+    private CostEstimate costEstimate;
+
+    public TripOptionDTO(String optionId, String tripType, String summary,
+                         int totalTravelMinutes, int totalWalkingMinutes,
+                         int transfersCount, List<RouteSegmentDTO> routeSegments) {
+        this.optionId = optionId;
+        this.tripType = tripType;
+        this.summary = summary;
+        this.totalTravelMinutes = totalTravelMinutes;
+        this.totalWalkingMinutes = totalWalkingMinutes;
+        this.transfersCount = transfersCount;
+        this.routeSegments = routeSegments;
+        this.estimatedDeparture = LocalDateTime.now().plusMinutes(5);
+        this.estimatedArrival = estimatedDeparture.plusMinutes(totalTravelMinutes);
+        this.costEstimate = new CostEstimate(transfersCount + 1); // One fare per route
+    }
+
+    @Data
+    public static class CostEstimate {
+        @JsonProperty("total_fare_manat")
+        private double totalFareManat;
+
+        @JsonProperty("number_of_fares")
+        private int numberOfFares;
+
+        public CostEstimate(int numberOfFares) {
+            this.numberOfFares = numberOfFares;
+            this.totalFareManat = numberOfFares * 1.0; // 1 manat per fare
+        }
+    }
+}

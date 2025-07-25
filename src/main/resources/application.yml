@@ -1,9 +1,12 @@
+# application.yml - ИСПРАВЛЕННАЯ ВЕРСИЯ
+
 spring:
   application:
     name: bus-route-backend
 
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+
 
   r2dbc:
     url: r2dbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:bus_route_db}
@@ -16,21 +19,6 @@ spring:
       max-acquire-time: 60s
       max-create-connection-time: 60s
       validation-query: SELECT 1
-
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.spatial.dialect.postgis.PostgisPG95Dialect
-        format_sql: true
-        jdbc:
-          batch_size: 20
-        order_updates: true
-        cache:
-          use_second_level_cache: false
-          use_query_cache: false
 
   data:
     redis:
@@ -65,13 +53,25 @@ spring:
     time-zone: UTC
     default-property-inclusion: non_null
 
-
+app:
+  scheduling:
+    enabled: false
+  admin:
+    default-password: "admin123"
+    password-expiry-days: 90
+    validation:
+      coordinates:
+        turkmenistan:
+          min-latitude: 35.0
+          max-latitude: 43.0
+          min-longitude: 52.0
+          max-longitude: 67.0
 
 external:
   api:
     gps:
-      base-url: https://gps.tugdk.gov.tm/api
-      token: ${GPS_API_TOKEN:sfdsfsdfsdfsfsfsft4t4t43543543efgdf}
+      base-url:  https://gps.tugdk.gov.tm/api #http://disabled-api.local
+      token: ${GPS_API_TOKEN:RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0}
       timeout: 10s
       retry:
         max-attempts: 3
@@ -82,9 +82,9 @@ external:
         requests-per-minute: 120
 
     bus-info:
-      base-url: https://edu.ayauk.gov.tm/gps/buses
-      username: ${BUS_INFO_API_USERNAME:test}
-      password: ${BUS_INFO_API_PASSWORD:test}
+      base-url: https://edu.ayauk.gov.tm/gps/buses #http://disabled-api.local
+      username: ${BUS_INFO_API_USERNAME:turkmenportal}
+      password: ${BUS_INFO_API_PASSWORD:turkmenportal}
       timeout: 10s
       retry:
         max-attempts: 3
@@ -92,6 +92,7 @@ external:
         multiplier: 2.0
         max-interval: 10s
 
+# ✅ Бизнес-логика
 business:
   routing:
     nearby-stops-radius: 800
@@ -109,7 +110,6 @@ business:
     sync-interval: 24
     sync-time: "06:00"
 
-
 cache:
   redis:
     routes-ttl: 3600
@@ -122,13 +122,14 @@ cache:
       vehicles: "vehicles:"
       search: "search:"
 
+# ✅ WebSocket
 websocket:
   max-connections: 10000
   heartbeat-interval: 30
   message-buffer-size: 1024
   connection-timeout: 60
 
-
+# ✅ Мониторинг
 management:
   endpoints:
     web:
@@ -146,12 +147,13 @@ management:
       percentiles:
         http.server.requests: 0.5, 0.9, 0.95, 0.99
 
+# ✅ ИСПРАВЛЕННЫЕ ЛОГИ (убрали лишний слеш)
 logging:
   level:
-    biz.ugur.busroutebackend: ${LOG_LEVEL_INFO}\
+    biz.ugur.busroutebackend: ${LOG_LEVEL:INFO}  # ✅ Исправлено
     org.springframework.web.reactive: ${SPRING_LOG_LEVEL:WARN}
     org.springframework.data: ${DATA_LOG_LEVEL:WARN}
-    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
+    org.springframework.r2dbc: ${R2DBC_LOG_LEVEL:WARN}  # ✅ Добавили R2DBC логи
     org.flywaydb: ${FLYWAY_LOG_LEVEL:INFO}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
@@ -163,6 +165,7 @@ logging:
       max-history: 7
       max-file-size: 10MB
 
+# ✅ Сервер
 server:
   port: ${SERVER_PORT:8080}
   compression:
@@ -173,3 +176,32 @@ server:
   error:
     include-message: always
     include-binding-errors: always
+
+---
+# ✅ ПРОФИЛЬ ДЛЯ ЛОКАЛЬНОЙ РАЗРАБОТКИ
+spring:
+  config:
+    activate:
+      on-profile: local
+
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/bus_route_db
+    username: bus_route_user
+    password: bus_route_pass
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+logging:
+  level:
+    biz.ugur.busroutebackend: DEBUG
+    org.springframework.r2dbc: DEBUG
+
+external:
+  api:
+    gps:
+      base-url: http://disabled-api.local  # Отключено для разработки
+    bus-info:
+      base-url: http://disabled-api.local  # Отключено для разработки
