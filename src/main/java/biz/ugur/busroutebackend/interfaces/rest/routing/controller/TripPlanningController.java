@@ -1,7 +1,7 @@
-package biz.ugur.busroutebackend.interfaces.rest.routing;
+package biz.ugur.busroutebackend.interfaces.rest.routing.controller;
 
-import biz.ugur.busroutebackend.routing.application.dto.TripSearchRequest;
-import biz.ugur.busroutebackend.routing.application.dto.TripSearchResponse;
+import biz.ugur.busroutebackend.interfaces.rest.routing.dto.request.TripSearchRequest;
+import biz.ugur.busroutebackend.interfaces.rest.routing.dto.response.TripSearchResponse;
 import biz.ugur.busroutebackend.routing.application.usecase.SearchTripsUseCase;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import jakarta.validation.Valid;
@@ -205,10 +205,9 @@ public class TripPlanningController {
         ));
     }
 
-    // Private helper methods
 
     private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-        final int R = 6371000; // Earth radius in meters
+        final int R = 6371000;
 
         double lat1Rad = Math.toRadians(lat1);
         double lat2Rad = Math.toRadians(lat2);

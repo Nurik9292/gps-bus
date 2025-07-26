@@ -14,10 +14,10 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -193,7 +193,6 @@ public class VehiclePositionHandler extends TextWebSocketHandler {
             }
         }
 
-        // Подписка на конкретные маршруты
         else if (params.containsKey("routes")) {
             String[] routes = params.get("routes").split(",");
             sessionWrapper.setRouteFilter(java.util.Set.of(routes));
@@ -203,7 +202,6 @@ public class VehiclePositionHandler extends TextWebSocketHandler {
                     sessionWrapper.getSessionId(), java.util.Arrays.toString(routes));
         }
 
-        // Подписка на все автобусы
         else {
             sessionWrapper.setSubscriptionType("all");
         }
@@ -225,7 +223,7 @@ public class VehiclePositionHandler extends TextWebSocketHandler {
 
     private void sendInitialVehiclePositions(WebSocketSessionWrapper sessionWrapper) {
         getActiveVehiclesUseCase.execute(null)
-                .filter(vehicle -> sessionWrapper.isInterestedInVehicle(vehicle))
+                .filter(sessionWrapper::isInterestedInVehicle)
                 .take(100) // Ограничиваем количество для начальной загрузки
                 .map(this::convertToWebSocketMessage)
                 .collectList()
@@ -375,7 +373,7 @@ public class VehiclePositionHandler extends TextWebSocketHandler {
                 vehicle.getCurrentLongitude(),
                 vehicle.getSpeedKmh(),
                 vehicle.getIsInMotion(),
-                vehicle.getLastPositionUpdate().toInstant()
+                vehicle.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
         );
     }
 }

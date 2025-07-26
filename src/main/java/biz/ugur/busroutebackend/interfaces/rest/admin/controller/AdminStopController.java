@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.interfaces.rest.admin;
+package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
 import biz.ugur.busroutebackend.transport.application.dto.BusStopCreateRequest;
 import biz.ugur.busroutebackend.transport.application.dto.BusStopListResponse;

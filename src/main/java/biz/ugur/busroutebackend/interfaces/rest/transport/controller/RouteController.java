@@ -1,5 +1,7 @@
-package biz.ugur.busroutebackend.interfaces.rest.transport;
+package biz.ugur.busroutebackend.interfaces.rest.transport.controller;
 
+import biz.ugur.busroutebackend.interfaces.rest.transport.dto.request.RouteGeometryRequest;
+import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.RouteGeometryUpdateResponse;
 import biz.ugur.busroutebackend.transport.application.dto.*;
 import biz.ugur.busroutebackend.transport.application.usecase.FindRoutesInAreaUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.GetRouteWithGeometryUseCase;

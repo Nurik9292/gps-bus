@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.transport.application.dto;
+package biz.ugur.busroutebackend.interfaces.rest.transport.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotNull;

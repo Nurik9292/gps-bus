@@ -2,8 +2,8 @@ package biz.ugur.busroutebackend.routing.application.usecase;
 
 import biz.ugur.busroutebackend.routing.application.dto.RouteSegmentDTO;
 import biz.ugur.busroutebackend.routing.application.dto.TripOptionDTO;
-import biz.ugur.busroutebackend.routing.application.dto.TripSearchRequest;
-import biz.ugur.busroutebackend.routing.application.dto.TripSearchResponse;
+import biz.ugur.busroutebackend.interfaces.rest.routing.dto.request.TripSearchRequest;
+import biz.ugur.busroutebackend.interfaces.rest.routing.dto.response.TripSearchResponse;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.repository.TripPlanRepository;
 import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;

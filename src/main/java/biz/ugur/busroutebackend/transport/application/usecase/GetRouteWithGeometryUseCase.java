@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.transport.application.usecase;
 
 import biz.ugur.busroutebackend.shared.application.UseCase;
-import biz.ugur.busroutebackend.transport.application.dto.RouteGeometryRequest;
+import biz.ugur.busroutebackend.interfaces.rest.transport.dto.request.RouteGeometryRequest;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.RouteWithGeometryDTO;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;

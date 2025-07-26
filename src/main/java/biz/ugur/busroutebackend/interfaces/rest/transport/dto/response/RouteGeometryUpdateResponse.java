@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.transport.application.dto;
+package biz.ugur.busroutebackend.interfaces.rest.transport.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;

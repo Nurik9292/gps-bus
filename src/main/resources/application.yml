@@ -60,7 +60,8 @@ app:
   scheduling:
     enabled: false
   admin:
-    default-password: "admin123"
+    default-username: ${ADMIN_DEFAULT_USERNAME:admin}
+    default-password: ${ADMIN_DEFAULT_PASSWORD:admin123}
     password-expiry-days: 90
     validation:
       coordinates:
@@ -69,6 +70,13 @@ app:
           max-latitude: 43.0
           min-longitude: 52.0
           max-longitude: 67.0
+
+  security:
+    jwt:
+      secret: "at-least-32-characters-long-secret-key-here"
+      access-token-expiration: "PT1H"    # 1 hour
+      refresh-token-expiration: "P7D"    # 7 days
+      issuer: "bus-route-system"
 
 external:
   api:

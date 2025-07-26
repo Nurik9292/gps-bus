@@ -1,6 +1,6 @@
-package biz.ugur.busroutebackend.interfaces.rest.transport;
+package biz.ugur.busroutebackend.interfaces.rest.transport.controller;
 
-import biz.ugur.busroutebackend.transport.application.dto.BusStopArrivalsResponse;
+import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.BusStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.application.dto.NearbyStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.infrastructure.services.BusStopRealTimeServiceImpl;
 import lombok.extern.slf4j.Slf4j;
@@ -20,12 +20,6 @@ public class BusStopRealTimeController {
         this.busStopRealTimeService = busStopRealTimeService;
     }
 
-    /**
-     * ГЛАВНЫЙ ENDPOINT: Real-time информация о прибытии автобусов на остановку
-     *
-     * GET /api/stops/{stopId}/arrivals
-     * GET /api/stops/nearby/arrivals?lat=37.9601&lon=58.3261
-     */
     @GetMapping("/{stopId}/arrivals")
     public Mono<BusStopArrivalsResponse> getStopArrivals(@PathVariable String stopId) {
         log.info("Getting real-time arrivals for stop: {}", stopId);
@@ -35,9 +29,6 @@ public class BusStopRealTimeController {
                         response.getArrivals().size(), stopId));
     }
 
-    /**
-     * Прибытие автобусов для ближайшей остановки к координатам
-     */
     @GetMapping("/nearby/arrivals")
     public Flux<NearbyStopArrivalsResponse> getNearbyStopArrivals(
             @RequestParam Double lat,
@@ -49,9 +40,6 @@ public class BusStopRealTimeController {
         return busStopRealTimeService.getNearbyStopArrivals(lat, lon, radiusMeters);
     }
 
-    /**
-     * WebSocket для real-time обновлений остановки
-     */
     @GetMapping("/{stopId}/arrivals/stream")
     public Flux<ServerSentEvent<BusStopArrivalsResponse>> streamStopArrivals(@PathVariable String stopId) {
         log.info("Starting real-time stream for stop: {}", stopId);
