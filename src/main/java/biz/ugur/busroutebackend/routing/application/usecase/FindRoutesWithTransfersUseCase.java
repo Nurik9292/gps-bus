@@ -164,25 +164,28 @@ public class FindRoutesWithTransfersUseCase implements UseCase<FindRoutesWithTra
                 .filter(Objects::nonNull)
                 .take(8) // Ограничиваем количество для производительности
                 .collectList()
-                .map(tripOptions -> {
+                .flatMap(tripOptions -> {
                     tripOptions.forEach(tripPlan::addTripOption);
 
                     // Публикуем events
                     tripPlan.getUncommittedEvents().forEach(eventBus::publish);
                     tripPlan.markEventsAsCommitted();
 
-                    return tripPlan;
+                    return Mono.just(tripPlan)
+                            .doOnNext(plan -> log.debug("Added {} one-transfer options", tripOptions.size()));
                 })
-                .doOnNext(plan -> log.debug("Added {} one-transfer options",
-                        tripOptions.size()));
+                .onErrorResume(e -> {
+                    log.error("Error finding one-transfer routes", e);
+                    return Mono.just(tripPlan);
+                });
     }
 
     /**
      * Поиск маршрутов с двумя пересадками (более сложный алгоритм)
      */
     private Mono<TripPlan> findRoutesWithTwoTransfers(TripPlan tripPlan, List<BusStop> fromStops,
-                                                      List<BusStop> toStops, Location fromLocation,
-                                                      Location toLocation, TripSearchCriteria criteria) {
+                                                     List<BusStop> toStops, Location fromLocation,
+                                                     Location toLocation, TripSearchCriteria criteria) {
 
         double maxTransferDistance = 0.3; // 300м для двух пересадок - более строгое требование
 
@@ -192,18 +195,20 @@ public class FindRoutesWithTransfersUseCase implements UseCase<FindRoutesWithTra
                 .filter(Objects::nonNull)
                 .take(4) // Меньше вариантов для двух пересадок
                 .collectList()
-                .map(tripOptions -> {
+                .flatMap(tripOptions -> {
                     tripOptions.forEach(tripPlan::addTripOption);
 
                     tripPlan.getUncommittedEvents().forEach(eventBus::publish);
                     tripPlan.markEventsAsCommitted();
 
-                    return tripPlan;
+                    return Mono.just(tripPlan)
+                            .doOnNext(plan -> log.debug("Added {} two-transfer options", tripOptions.size()));
                 })
-                .doOnNext(plan -> log.debug("Added {} two-transfer options",
-                        tripOptions.size()));
+                .onErrorResume(e -> {
+                    log.error("Error finding two-transfer routes", e);
+                    return Mono.just(tripPlan); // Возвращаем план даже при ошибке, чтобы не ломать цепочку
+                });
     }
-
     /**
      * Проверить жизнеспособность маршрута с одной пересадкой
      */

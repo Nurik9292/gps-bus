@@ -263,7 +263,7 @@ public class VehicleDataScheduler {
         public boolean healthy;
         public Instant lastCheck;
 
-        public HealthStatus() {} // Для Jackson
+        public HealthStatus() {}
 
         public HealthStatus(boolean healthy, Instant lastCheck) {
             this.healthy = healthy;
