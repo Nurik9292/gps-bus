@@ -27,11 +27,26 @@ public class R2dbcVehicleRepository implements VehicleRepository {
 
     @Override
     public Mono<Vehicle> save(Vehicle vehicle) {
-        if (vehicle.getId() == null) {
-            return insert(vehicle);
-        } else {
-            return update(vehicle);
-        }
+        return existsById(vehicle.getId())
+                .flatMap(exists -> {
+                    if (exists) {
+                        log.debug("Updating existing vehicle: {}", vehicle.getId().getValue());
+                        return update(vehicle);
+                    } else {
+                        log.debug("Inserting new vehicle: {}", vehicle.getId().getValue());
+                        return insert(vehicle);
+                    }
+                });
+    }
+
+    private Mono<Boolean> existsById(VehicleId vehicleId) {
+        String sql = "SELECT COUNT(*) FROM vehicles WHERE id = :id";
+
+        return databaseClient.sql(sql)
+                .bind("id", vehicleId.getValue())
+                .map(row -> row.get(0, Long.class))
+                .one()
+                .map(count -> count > 0);
     }
 
     private Mono<Vehicle> insert(Vehicle vehicle) {
@@ -45,21 +60,28 @@ public class R2dbcVehicleRepository implements VehicleRepository {
             """;
 
         Instant now = Instant.now();
-        DatabaseClient.GenericExecuteSpec spec  = databaseClient.sql(sql);
-        spec.bind("id", vehicle.getId().getValue())
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
+                .bind("id", vehicle.getId().getValue())
                 .bind("deviceId", vehicle.getDeviceId())
                 .bind("licensePlate", vehicle.getLicensePlate())
                 .bind("currentLatitude", vehicle.getCurrentLatitude())
                 .bind("currentLongitude", vehicle.getCurrentLongitude())
                 .bind("speedKmh", vehicle.getSpeedKmh())
                 .bind("isInMotion", vehicle.getIsInMotion())
-                .bind("lastPositionUpdate", vehicle.getLastPositionUpdate())
-                .bind("routeNumber", vehicle.getRouteNumber());
+                .bind("lastPositionUpdate", vehicle.getLastPositionUpdate());
 
+        // FIX 1: Правильный binding для assignedRouteId
         if (vehicle.getAssignedRouteId() != null) {
             spec = spec.bind("assignedRouteId", vehicle.getAssignedRouteId().getValue());
         } else {
             spec = spec.bindNull("assignedRouteId", String.class);
+        }
+
+        // FIX 2: Правильный binding для routeNumber (КРИТИЧЕСКИЙ БАГ)
+        if (vehicle.getRouteNumber() != null) {
+            spec = spec.bind("routeNumber", vehicle.getRouteNumber());
+        } else {
+            spec = spec.bindNull("routeNumber", String.class);
         }
 
         return spec
@@ -69,9 +91,9 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 .bind("version", 0L)
                 .then()
                 .thenReturn(vehicle)
-                .doOnSuccess(v -> log.debug("Inserted vehicle: {}", v.getLicensePlate()));
+                .doOnSuccess(v -> log.info("Successfully inserted vehicle: {} with device ID: {}",
+                        v.getLicensePlate(), v.getDeviceId()));
     }
-
 
     private Mono<Vehicle> update(Vehicle vehicle) {
         String sql = """
@@ -95,23 +117,31 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 .bind("isInMotion", vehicle.getIsInMotion())
                 .bind("lastPositionUpdate", vehicle.getLastPositionUpdate());
 
+        // FIX 3: Правильный binding для assignedRouteId в update
         if (vehicle.getAssignedRouteId() != null) {
             spec = spec.bind("assignedRouteId", vehicle.getAssignedRouteId().getValue());
         } else {
             spec = spec.bindNull("assignedRouteId", String.class);
         }
 
+        // FIX 4: Правильный binding для routeNumber в update
+        if (vehicle.getRouteNumber() != null) {
+            spec = spec.bind("routeNumber", vehicle.getRouteNumber());
+        } else {
+            spec = spec.bindNull("routeNumber", String.class);
+        }
 
-        return   spec.bind("routeNumber", vehicle.getRouteNumber())
+        return spec
                 .bind("isActive", vehicle.getIsActive())
                 .bind("updatedAt", Instant.now())
                 .then()
-                .thenReturn(vehicle);
+                .thenReturn(vehicle)
+                .doOnSuccess(v -> log.debug("Successfully updated vehicle: {}", v.getLicensePlate()));
     }
 
     @Override
     public Flux<Vehicle> findByRouteNumber(String routeNumber) {
-        String sql = "SELECT * FROM vehicles WHERE cached_route_number = :routeNumber AND is_active = true";
+        String sql = "SELECT * FROM vehicles WHERE route_number = :routeNumber AND is_active = true";
 
         return databaseClient.sql(sql)
                 .bind("routeNumber", routeNumber)
@@ -122,15 +152,13 @@ public class R2dbcVehicleRepository implements VehicleRepository {
 
     @Override
     public Flux<Vehicle> findUnassignedVehicles() {
-        String sql = "SELECT * FROM vehicles WHERE cached_route_number IS NULL AND is_active = true";
+        String sql = "SELECT * FROM vehicles WHERE route_number IS NULL AND is_active = true";
 
         return databaseClient.sql(sql)
                 .map(this::mapRowToVehicle)
                 .all()
                 .doOnNext(v -> log.debug("Found unassigned vehicle: {}", v.getLicensePlate()));
     }
-
-
 
     @Override
     public Mono<Vehicle> findById(VehicleId vehicleId) {
@@ -162,7 +190,7 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 .bind("licensePlate", licensePlate)
                 .map(this::mapRowToVehicle)
                 .one()
-                .doOnNext(v -> log.debug("Found vehicle by plate: {}", licensePlate));
+                .doOnNext(v -> log.debug("Found vehicle by license plate: {}", licensePlate));
     }
 
     @Override
@@ -173,52 +201,46 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 .bind("routeId", routeId.getValue())
                 .map(this::mapRowToVehicle)
                 .all()
-                .doOnComplete(() -> log.debug("Found vehicles for route: {}", routeId.getValue()));
+                .doOnNext(v -> log.debug("Found vehicle by route ID {}: {}", routeId, v.getLicensePlate()));
     }
 
     @Override
     public Flux<Vehicle> findActiveVehicles() {
-        String sql = "SELECT * FROM vehicles WHERE is_active = true ORDER BY license_plate";
+        String sql = "SELECT * FROM vehicles WHERE is_active = true ORDER BY last_position_update DESC";
 
         return databaseClient.sql(sql)
                 .map(this::mapRowToVehicle)
                 .all()
-                .doOnComplete(() -> log.debug("Found all active vehicles"));
+                .doOnNext(v -> log.debug("Found active vehicle: {}", v.getLicensePlate()));
     }
 
     @Override
     public Flux<Vehicle> findVehiclesInMotion() {
-        String sql = """
-            SELECT * FROM vehicles 
-            WHERE is_active = true AND is_in_motion = true 
-            AND last_position_update > :cutoffTime
-            ORDER BY last_position_update DESC
-            """;
-
-        Instant cutoffTime = Instant.now().minusSeconds(300); // 5 минут назад
+        String sql = "SELECT * FROM vehicles WHERE is_in_motion = true AND is_active = true";
 
         return databaseClient.sql(sql)
-                .bind("cutoffTime", cutoffTime)
                 .map(this::mapRowToVehicle)
                 .all()
-                .doOnComplete(() -> log.debug("Found vehicles in motion"));
+                .doOnNext(v -> log.debug("Found vehicle in motion: {}", v.getLicensePlate()));
     }
 
     @Override
     public Flux<Vehicle> findVehiclesWithinRadius(Double centerLat, Double centerLon, Integer radiusMeters) {
         String sql = """
             SELECT *, 
-                   (6371000 * acos(cos(radians(:centerLat)) * cos(radians(current_latitude)) 
-                   * cos(radians(current_longitude) - radians(:centerLon)) 
-                   + sin(radians(:centerLat)) * sin(radians(current_latitude)))) as distance
+                   ST_Distance(
+                       ST_Transform(ST_SetSRID(ST_Point(current_longitude, current_latitude), 4326), 3857),
+                       ST_Transform(ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326), 3857)
+                   ) as distance_meters
             FROM vehicles 
             WHERE is_active = true 
             AND current_latitude IS NOT NULL 
             AND current_longitude IS NOT NULL
-            AND (6371000 * acos(cos(radians(:centerLat)) * cos(radians(current_latitude)) 
-                * cos(radians(current_longitude) - radians(:centerLon)) 
-                + sin(radians(:centerLat)) * sin(radians(current_latitude)))) <= :radiusMeters
-            ORDER BY distance
+            AND ST_Distance(
+                ST_Transform(ST_SetSRID(ST_Point(current_longitude, current_latitude), 4326), 3857),
+                ST_Transform(ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326), 3857)
+            ) <= :radiusMeters
+            ORDER BY distance_meters
             """;
 
         return databaseClient.sql(sql)
@@ -227,8 +249,7 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 .bind("radiusMeters", radiusMeters)
                 .map(this::mapRowToVehicle)
                 .all()
-                .doOnComplete(() -> log.debug("Found vehicles within {} meters of ({}, {})",
-                        radiusMeters, centerLat, centerLon));
+                .doOnNext(v -> log.debug("Found vehicle within radius: {}", v.getLicensePlate()));
     }
 
     @Override
@@ -236,17 +257,14 @@ public class R2dbcVehicleRepository implements VehicleRepository {
         String sql = """
             SELECT * FROM vehicles 
             WHERE is_active = true 
-            AND last_position_update > :cutoffTime
+            AND last_position_update > NOW() - INTERVAL '5 minutes'
             ORDER BY last_position_update DESC
             """;
 
-        Instant cutoffTime = Instant.now().minusSeconds(300);
-
         return databaseClient.sql(sql)
-                .bind("cutoffTime", cutoffTime)
                 .map(this::mapRowToVehicle)
                 .all()
-                .doOnComplete(() -> log.debug("Found vehicles with recent position"));
+                .doOnNext(v -> log.debug("Found vehicle with recent position: {}", v.getLicensePlate()));
     }
 
     @Override

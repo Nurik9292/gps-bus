@@ -93,9 +93,7 @@ public class GpsApiClient {
                 .switchIfEmpty(Mono.error(new GpsApiException("Vehicle not found: " + deviceId)));
     }
 
-    /**
-     * Проверка доступности GPS API
-     */
+
     public Mono<Boolean> healthCheck() {
         log.debug("Performing GPS API health check");
 

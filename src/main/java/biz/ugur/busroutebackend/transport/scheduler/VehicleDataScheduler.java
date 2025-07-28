@@ -7,6 +7,8 @@ import biz.ugur.busroutebackend.transport.application.usecase.SyncBusRouteAssign
 import biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -88,8 +90,9 @@ public class VehicleDataScheduler {
     }
 
 
-    @Scheduled(cron = "0 0 6 * * *")
+    @Scheduled(cron = "0 * * * * *")
     public void syncBusRouteAssignments() {
+        log.info("🔥🔥🔥 SCHEDULER TRIGGERED! Current time: {}", Instant.now());
         if (!busInfoSyncInProgress.compareAndSet(false, true)) {
             log.warn("Bus info sync already in progress, skipping this cycle");
             return;
@@ -122,7 +125,7 @@ public class VehicleDataScheduler {
     }
 
 
-    @Scheduled(cron = "0 */5 * * * *")
+    @Scheduled(cron = "* * 6 * * *")
     public void checkExternalApisHealth() {
         log.debug("Checking external APIs health");
 
@@ -165,6 +168,43 @@ public class VehicleDataScheduler {
                 .subscribe();
 
         // Можно добавить очистку других кэшированных данных
+    }
+
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady(ApplicationReadyEvent event) {
+        log.info("🚀 Application ready - triggering initial route sync");
+
+        Mono.delay(Duration.ofSeconds(10))
+                .then(Mono.defer(this::performInitialRouteSync))
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe(
+                        result -> log.info("✅ Initial route sync completed: {}", result),
+                        error -> log.error("❌ Initial route sync failed", error)
+                );
+    }
+
+    private Mono<SyncBusRouteAssignmentsUseCase.BusRouteAssignmentResult> performInitialRouteSync() {
+        log.info("🔄 Performing initial route synchronization...");
+
+        return busInfoApiClient.fetchAllBusInfo()
+                .flatMap(busInfos -> {
+                    if (busInfos.isEmpty()) {
+                        log.warn("⚠️ No bus info available for initial sync");
+                        return Mono.empty();
+                    }
+
+                    log.info("📡 Initial sync: processing {} bus assignments", busInfos.size());
+                    return syncBusRouteAssignmentsUseCase.execute(busInfos);
+                })
+                .doOnSuccess(result -> {
+                    if (result != null && result.assignedCount() > 0) {
+                        log.info("🎯 Initial route sync successful: {} vehicles assigned to routes",
+                                result.assignedCount());
+                    } else {
+                        log.info("ℹ️ Initial route sync: no assignments needed");
+                    }
+                });
     }
 
 
