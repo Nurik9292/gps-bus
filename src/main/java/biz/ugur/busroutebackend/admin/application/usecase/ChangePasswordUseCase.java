@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.infrastructure.security.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -12,7 +13,7 @@ import reactor.core.publisher.Mono;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ChangePasswordUseCase implements UseCase<ChangePasswordUseCase.Request, Admin> {
+public class ChangePasswordUseCase implements UseCase<ChangePasswordUseCase.Request, Mono<Admin> > {
 
     private final AdminRepository adminRepository;
     private final TokenBlacklistService tokenBlacklistService;

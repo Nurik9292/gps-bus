@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtService;
+import biz.ugur.busroutebackend.shared.infrastructure.security.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,7 +22,7 @@ public class RefreshTokenUseCase implements UseCase<RefreshTokenUseCase.Request,
     private final AdminRepository adminRepository;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
-    private final TokenBlacklistService  tokenBlacklistService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     public record Request(String refreshToken) {}
 

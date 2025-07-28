@@ -20,6 +20,10 @@ public interface VehicleRepository {
 
     Flux<Vehicle> findActiveVehicles();
 
+    Flux<Vehicle> findByRouteNumber(String routeNumber);
+
+    Flux<Vehicle> findUnassignedVehicles();
+
     Flux<Vehicle> findVehiclesInMotion();
 
     Flux<Vehicle> findVehiclesWithinRadius(Double centerLat, Double centerLon, Integer radiusMeters);

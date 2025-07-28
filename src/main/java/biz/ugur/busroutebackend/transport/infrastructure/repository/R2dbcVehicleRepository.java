@@ -4,6 +4,8 @@ import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
+import io.r2dbc.spi.Row;
+import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
@@ -11,6 +13,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.Optional;
 
 @Repository
 @Slf4j
@@ -34,16 +37,16 @@ public class R2dbcVehicleRepository implements VehicleRepository {
     private Mono<Vehicle> insert(Vehicle vehicle) {
         String sql = """
             INSERT INTO vehicles (id, device_id, license_plate, current_latitude, current_longitude,
-                                speed_kmh, is_in_motion, last_position_update, assigned_route_id, is_active,
-                                created_at, updated_at, version)
+                                 speed_kmh, is_in_motion, last_position_update, assigned_route_id,
+                                 route_number, is_active, created_at, updated_at, version)
             VALUES (:id, :deviceId, :licensePlate, :currentLatitude, :currentLongitude,
-                   :speedKmh, :isInMotion, :lastPositionUpdate, :assignedRouteId, :isActive,
-                   :createdAt, :updatedAt, :version)
+                   :speedKmh, :isInMotion, :lastPositionUpdate, :assignedRouteId,
+                   :routeNumber, :isActive, :createdAt, :updatedAt, :version)
             """;
 
         Instant now = Instant.now();
-        return databaseClient.sql(sql)
-                .bind("id", vehicle.getId().getValue())
+        DatabaseClient.GenericExecuteSpec spec  = databaseClient.sql(sql);
+        spec.bind("id", vehicle.getId().getValue())
                 .bind("deviceId", vehicle.getDeviceId())
                 .bind("licensePlate", vehicle.getLicensePlate())
                 .bind("currentLatitude", vehicle.getCurrentLatitude())
@@ -51,8 +54,15 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 .bind("speedKmh", vehicle.getSpeedKmh())
                 .bind("isInMotion", vehicle.getIsInMotion())
                 .bind("lastPositionUpdate", vehicle.getLastPositionUpdate())
-                .bind("assignedRouteId", vehicle.getAssignedRouteId() != null ?
-                        vehicle.getAssignedRouteId().getValue() : null)
+                .bind("routeNumber", vehicle.getRouteNumber());
+
+        if (vehicle.getAssignedRouteId() != null) {
+            spec = spec.bind("assignedRouteId", vehicle.getAssignedRouteId().getValue());
+        } else {
+            spec = spec.bindNull("assignedRouteId", String.class);
+        }
+
+        return spec
                 .bind("isActive", vehicle.getIsActive())
                 .bind("createdAt", now)
                 .bind("updatedAt", now)
@@ -62,6 +72,7 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 .doOnSuccess(v -> log.debug("Inserted vehicle: {}", v.getLicensePlate()));
     }
 
+
     private Mono<Vehicle> update(Vehicle vehicle) {
         String sql = """
             UPDATE vehicles 
@@ -69,11 +80,12 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 current_latitude = :currentLatitude, current_longitude = :currentLongitude,
                 speed_kmh = :speedKmh, is_in_motion = :isInMotion,
                 last_position_update = :lastPositionUpdate, assigned_route_id = :assignedRouteId,
-                is_active = :isActive, updated_at = :updatedAt, version = version + 1
+                route_number = :routeNumber, is_active = :isActive, 
+                updated_at = :updatedAt, version = version + 1
             WHERE id = :id
             """;
 
-        return databaseClient.sql(sql)
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
                 .bind("id", vehicle.getId().getValue())
                 .bind("deviceId", vehicle.getDeviceId())
                 .bind("licensePlate", vehicle.getLicensePlate())
@@ -81,15 +93,44 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 .bind("currentLongitude", vehicle.getCurrentLongitude())
                 .bind("speedKmh", vehicle.getSpeedKmh())
                 .bind("isInMotion", vehicle.getIsInMotion())
-                .bind("lastPositionUpdate", vehicle.getLastPositionUpdate())
-                .bind("assignedRouteId", vehicle.getAssignedRouteId() != null ?
-                        vehicle.getAssignedRouteId().getValue() : null)
+                .bind("lastPositionUpdate", vehicle.getLastPositionUpdate());
+
+        if (vehicle.getAssignedRouteId() != null) {
+            spec = spec.bind("assignedRouteId", vehicle.getAssignedRouteId().getValue());
+        } else {
+            spec = spec.bindNull("assignedRouteId", String.class);
+        }
+
+
+        return   spec.bind("routeNumber", vehicle.getRouteNumber())
                 .bind("isActive", vehicle.getIsActive())
                 .bind("updatedAt", Instant.now())
                 .then()
-                .thenReturn(vehicle)
-                .doOnSuccess(v -> log.debug("Updated vehicle: {}", v.getLicensePlate()));
+                .thenReturn(vehicle);
     }
+
+    @Override
+    public Flux<Vehicle> findByRouteNumber(String routeNumber) {
+        String sql = "SELECT * FROM vehicles WHERE cached_route_number = :routeNumber AND is_active = true";
+
+        return databaseClient.sql(sql)
+                .bind("routeNumber", routeNumber)
+                .map(this::mapRowToVehicle)
+                .all()
+                .doOnNext(v -> log.debug("Found vehicle by route number {}: {}", routeNumber, v.getLicensePlate()));
+    }
+
+    @Override
+    public Flux<Vehicle> findUnassignedVehicles() {
+        String sql = "SELECT * FROM vehicles WHERE cached_route_number IS NULL AND is_active = true";
+
+        return databaseClient.sql(sql)
+                .map(this::mapRowToVehicle)
+                .all()
+                .doOnNext(v -> log.debug("Found unassigned vehicle: {}", v.getLicensePlate()));
+    }
+
+
 
     @Override
     public Mono<Vehicle> findById(VehicleId vehicleId) {
@@ -250,7 +291,7 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 .doOnNext(count -> log.debug("Active vehicles count: {}", count));
     }
 
-    private Vehicle mapRowToVehicle(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
+    private Vehicle mapRowToVehicle(Row row, RowMetadata metadata) {
         return new Vehicle(
                 VehicleId.of(row.get("id", String.class)),
                 row.get("device_id", String.class),
@@ -260,8 +301,10 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 row.get("speed_kmh", Double.class),
                 row.get("is_in_motion", Boolean.class),
                 row.get("last_position_update", Instant.class),
-                row.get("assigned_route_id", String.class) != null ?
-                        BusRouteId.of(row.get("assigned_route_id", String.class)) : null,
+                Optional.ofNullable(row.get("assigned_route_id", String.class))
+                        .map(BusRouteId::of)
+                        .orElse(null),
+                row.get("route_number", String.class),
                 row.get("is_active", Boolean.class)
         );
     }

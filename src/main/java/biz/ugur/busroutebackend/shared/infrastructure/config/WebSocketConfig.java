@@ -1,14 +1,18 @@
 package biz.ugur.busroutebackend.shared.infrastructure.config;
 
 import biz.ugur.busroutebackend.interfaces.websocket.VehiclePositionHandler;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.socket.config.annotation.EnableWebSocket;
-import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
-import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
+import org.springframework.web.reactive.HandlerMapping;
+import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping;
+import org.springframework.web.reactive.socket.WebSocketHandler;
+import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @Configuration
-@EnableWebSocket
-public class WebSocketConfig implements WebSocketConfigurer {
+public class WebSocketConfig {
 
     private final VehiclePositionHandler vehiclePositionHandler;
 
@@ -16,10 +20,21 @@ public class WebSocketConfig implements WebSocketConfigurer {
         this.vehiclePositionHandler = vehiclePositionHandler;
     }
 
-    @Override
-    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(vehiclePositionHandler, "/ws/vehicle-positions")
-                .setAllowedOrigins("*"); // В продакшне указать конкретные домены
+
+    @Bean
+    public HandlerMapping webSocketHandlerMapping() {
+        Map<String, WebSocketHandler> map = new HashMap<>();
+        map.put("/ws/vehicle-positions", vehiclePositionHandler);
+
+        SimpleUrlHandlerMapping mapping = new SimpleUrlHandlerMapping();
+        mapping.setUrlMap(map);
+        mapping.setOrder(10);
+        return mapping;
+    }
+
+
+    @Bean
+    public WebSocketHandlerAdapter handlerAdapter() {
+        return new WebSocketHandlerAdapter();
     }
 }
-

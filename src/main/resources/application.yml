@@ -15,6 +15,9 @@ spring:
     url: r2dbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:bus_route_db}
     username: ${DB_USERNAME:bus_route_user}
     password: ${DB_PASSWORD:bus_route_pass}
+    host: ${DB_HOST:localhost}
+    port: ${DB_PORT:5432}
+    database: ${DB_NAME:bus_route_db}
     pool:
       initial-size: ${DB_POOL_MIN_IDLE:2}
       max-size: ${DB_POOL_MAX_SIZE:10}
@@ -56,9 +59,11 @@ spring:
     time-zone: UTC
     default-property-inclusion: non_null
 
+
+
 app:
   scheduling:
-    enabled: false
+    enabled: true
   admin:
     default-username: ${ADMIN_DEFAULT_USERNAME:admin}
     default-password: ${ADMIN_DEFAULT_PASSWORD:admin123}
@@ -73,7 +78,7 @@ app:
 
   security:
     jwt:
-      secret: "at-least-32-characters-long-secret-key-here"
+      secret:  ${JWT_SECRET:at-least-32-characters-long-secret-key-here}
       access-token-expiration: "PT1H"    # 1 hour
       refresh-token-expiration: "P7D"    # 7 days
       issuer: "bus-route-system"
@@ -132,14 +137,12 @@ cache:
       vehicles: "vehicles:"
       search: "search:"
 
-# ✅ WebSocket
 websocket:
   max-connections: 10000
   heartbeat-interval: 30
   message-buffer-size: 1024
   connection-timeout: 60
 
-# ✅ Мониторинг
 management:
   endpoints:
     web:
@@ -159,10 +162,10 @@ management:
 
 logging:
   level:
-    biz.ugur.busroutebackend: ${LOG_LEVEL:INFO}  # ✅ Исправлено
+    biz.ugur.busroutebackend: ${LOG_LEVEL:INFO}
     org.springframework.web.reactive: ${SPRING_LOG_LEVEL:WARN}
     org.springframework.data: ${DATA_LOG_LEVEL:WARN}
-    org.springframework.r2dbc: ${R2DBC_LOG_LEVEL:WARN}  # ✅ Добавили R2DBC логи
+    org.springframework.r2dbc: ${R2DBC_LOG_LEVEL:WARN}
     org.flywaydb: ${FLYWAY_LOG_LEVEL:INFO}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

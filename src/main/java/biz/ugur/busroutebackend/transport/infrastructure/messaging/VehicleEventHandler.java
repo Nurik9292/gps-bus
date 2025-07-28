@@ -18,6 +18,11 @@ import java.util.Map;
 @Slf4j
 public class VehicleEventHandler {
 
+    private static final Duration POSITION_CACHE_TTL = Duration.ofMinutes(10);
+    private static final Duration ROUTE_CACHE_TTL = Duration.ofHours(24);
+    private static final Duration UNASSIGN_ROUTE_TTL = Duration.ofMinutes(5);
+    private static final Duration VEHICLE_INFO_TTL = Duration.ofDays(30);
+
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final VehiclePositionWebSocketPublisher webSocketPublisher;
 
@@ -27,98 +32,91 @@ public class VehicleEventHandler {
         this.webSocketPublisher = webSocketPublisher;
     }
 
-    /**
-     * Обработка события обновления позиции автобуса
-     * - Кэширование позиции в Redis
-     * - Отправка через WebSocket клиентам
-     * - Обновление статистики
-     */
     @EventListener
     public void handleVehiclePositionUpdated(VehiclePositionUpdatedEvent event) {
+        if (event == null) {
+            log.warn("Received null VehiclePositionUpdatedEvent");
+            return;
+        }
         log.debug("Handling VehiclePositionUpdated: {}", event);
 
-        // Кэшируем позицию в Redis для быстрого доступа
         cacheVehiclePosition(event)
                 .then(updateVehicleStatistics(event))
                 .then(broadcastPositionUpdate(event))
+                .publishOn(Schedulers.boundedElastic())
                 .subscribe(
-                        unused -> log.debug("Vehicle position event processed: {}", event.getVehicleId()),
-                        error -> log.error("Failed to process vehicle position event: {}", event.getVehicleId(), error)
+                        unused -> log.trace("Vehicle position processed: {}", event.getVehicleId()),
+                        error -> log.error("Error processing vehicle position: {}", event.getVehicleId(), error)
                 );
     }
 
-    /**
-     * Обработка события назначения автобуса на маршрут
-     * - Обновление кэша назначений
-     * - Уведомление о изменении маршрута
-     */
     @EventListener
     public void handleVehicleAssignedToRoute(VehicleAssignedToRouteEvent event) {
+        if (event == null) {
+            log.warn("Received null VehicleAssignedToRouteEvent");
+            return;
+        }
         log.debug("Handling VehicleAssignedToRoute: {}", event);
 
         updateRouteAssignmentCache(event)
-                .then(Mono.defer(() -> notifyRouteAssignmentChange(event)))
-                .subscribeOn(Schedulers.boundedElastic())
+                .then(notifyRouteAssignmentChange(event))
+                .publishOn(Schedulers.boundedElastic())
                 .subscribe(
-                        unused -> log.debug("Vehicle route assignment processed: {}", event.getVehicleId()),
-                        error -> log.error("Failed to process route assignment: {}", event.getVehicleId(), error)
+                        unused -> log.trace("Route assignment processed: {}", event.getVehicleId()),
+                        error -> log.error("Error processing route assignment: {}", event.getVehicleId(), error)
                 );
     }
 
-    /**
-     * Обработка события регистрации нового автобуса
-     * - Логирование для аудита
-     * - Инициализация кэша
-     */
     @EventListener
     public void handleVehicleRegistered(VehicleRegisteredEvent event) {
-        log.info("New vehicle registered: {} with plate {}", event.getDeviceId(), event.getLicensePlate());
+        if (event == null) {
+            log.warn("Received null VehicleRegisteredEvent");
+            return;
+        }
+        log.info("New vehicle registered: {} | Plate: {}", event.getDeviceId(), event.getLicensePlate());
 
         initializeVehicleCache(event)
+                .publishOn(Schedulers.boundedElastic())
                 .subscribe(
-                        unused -> log.debug("Vehicle cache initialized: {}", event.getVehicleId()),
+                        unused -> log.trace("Vehicle cache initialized: {}", event.getVehicleId()),
                         error -> log.error("Failed to initialize vehicle cache: {}", event.getVehicleId(), error)
                 );
     }
 
-    // Приватные методы для обработки событий
 
     private Mono<Void> cacheVehiclePosition(VehiclePositionUpdatedEvent event) {
-        String cacheKey = "vehicle:position:" + event.getVehicleId();
+        String key = "vehicle:position:" + event.getVehicleId();
 
-        Map<String, Object> positionData = new HashMap<>();
-        positionData.put("vehicleId", event.getVehicleId());
-        positionData.put("deviceId", event.getDeviceId());
-        positionData.put("licensePlate", event.getLicensePlate());
-        positionData.put("latitude", event.getLatitude());
-        positionData.put("longitude", event.getLongitude());
-        positionData.put("speedKmh", event.getSpeedKmh());
-        positionData.put("isInMotion", event.getIsInMotion());
-        positionData.put("timestamp", event.getPositionTimestamp().toString());
-        positionData.put("lastUpdated", event.getOccurredAt().toString());
+        Map<String, Object> data = new HashMap<>();
+        data.put("vehicleId", event.getVehicleId());
+        data.put("deviceId", event.getDeviceId());
+        data.put("licensePlate", event.getLicensePlate());
+        data.put("latitude", event.getLatitude());
+        data.put("longitude", event.getLongitude());
+        data.put("speedKmh", event.getSpeedKmh());
+        data.put("inMotion", event.getIsInMotion());
+        data.put("timestamp", String.valueOf(event.getPositionTimestamp()));
+        data.put("lastUpdated", String.valueOf(event.getOccurredAt()));
 
         return redisTemplate.opsForValue()
-                .set(cacheKey, positionData, Duration.ofMinutes(10))
-                .then()
-                .doOnSuccess(unused -> log.debug("Cached position for vehicle: {}", event.getVehicleId()));
+                .set(key, data, POSITION_CACHE_TTL)
+                .then(Mono.fromRunnable(() -> log.trace("Cached vehicle position: {}", event.getVehicleId())));
     }
 
     private Mono<Void> updateVehicleStatistics(VehiclePositionUpdatedEvent event) {
-        // Обновляем счетчики автобусов в движении
         String statsKey = "vehicles:stats:motion";
-        String motionKey = event.getIsInMotion() ? "in_motion" : "stopped";
+        String motionKey = Boolean.TRUE.equals(event.getIsInMotion()) ? "in_motion" : "stopped";
 
         return redisTemplate.opsForHash()
                 .increment(statsKey, motionKey, 1)
-                .then()
-                .doOnSuccess(unused -> log.trace("Updated vehicle motion statistics"));
+                .then(Mono.fromRunnable(() -> log.trace("Updated motion stats for {}", event.getVehicleId())));
     }
 
     private Mono<Void> broadcastPositionUpdate(VehiclePositionUpdatedEvent event) {
-        // Отправляем обновление позиции через WebSocket всем подключенным клиентам
-        VehiclePositionWebSocketMessage message = new VehiclePositionWebSocketMessage(
+        VehiclePositionWebSocketMessage msg = new VehiclePositionWebSocketMessage(
                 event.getVehicleId(),
                 event.getLicensePlate(),
+                event.getRouteNumber(),
                 event.getLatitude(),
                 event.getLongitude(),
                 event.getSpeedKmh(),
@@ -126,31 +124,29 @@ public class VehicleEventHandler {
                 event.getPositionTimestamp()
         );
 
-        return webSocketPublisher.broadcastVehiclePosition(message)
-                .doOnSuccess(unused -> log.trace("Broadcasted position update for: {}", event.getVehicleId()));
+        return webSocketPublisher.broadcastVehiclePosition(msg)
+                .then(Mono.fromRunnable(() -> log.trace("Broadcasted position for {}", event.getVehicleId())));
     }
 
     private Mono<Void> updateRouteAssignmentCache(VehicleAssignedToRouteEvent event) {
-        String cacheKey = "vehicle:route:" + event.getVehicleId();
+        String key = "vehicle:route:" + event.getVehicleId();
 
-        Map<String, Object> assignmentData = new HashMap<>();
-        assignmentData.put("vehicleId", event.getVehicleId());
-        assignmentData.put("licensePlate", event.getLicensePlate());
-        assignmentData.put("previousRouteId", event.getPreviousRouteId());
-        assignmentData.put("newRouteId", event.getNewRouteId());
-        assignmentData.put("assignmentTime", event.getOccurredAt().toString());
+        Map<String, Object> data = new HashMap<>();
+        data.put("vehicleId", event.getVehicleId());
+        data.put("licensePlate", event.getLicensePlate());
+        data.put("previousRouteId", event.getPreviousRouteId());
+        data.put("newRouteId", event.getNewRouteId());
+        data.put("assignmentTime", String.valueOf(event.getOccurredAt()));
 
-        Duration ttl = event.isUnassignment() ? Duration.ofMinutes(5) : Duration.ofHours(24);
+        Duration ttl = event.isUnassignment() ? UNASSIGN_ROUTE_TTL : ROUTE_CACHE_TTL;
 
         return redisTemplate.opsForValue()
-                .set(cacheKey, assignmentData, ttl)
-                .then()
-                .doOnSuccess(unused -> log.debug("Updated route assignment cache for: {}", event.getVehicleId()));
+                .set(key, data, ttl)
+                .then(Mono.fromRunnable(() -> log.trace("Updated route cache: {}", event.getVehicleId())));
     }
 
     private Mono<Void> notifyRouteAssignmentChange(VehicleAssignedToRouteEvent event) {
-        // Уведомляем клиентов об изменении назначения автобуса
-        VehicleRouteAssignmentMessage message = new VehicleRouteAssignmentMessage(
+        VehicleRouteAssignmentMessage msg = new VehicleRouteAssignmentMessage(
                 event.getVehicleId(),
                 event.getLicensePlate(),
                 event.getPreviousRouteId(),
@@ -158,23 +154,22 @@ public class VehicleEventHandler {
                 event.getOccurredAt()
         );
 
-        return webSocketPublisher.broadcastRouteAssignment(message)
-                .doOnSuccess(unused -> log.debug("Notified route assignment change: {}", event.getVehicleId()));
+        return webSocketPublisher.broadcastRouteAssignment(msg)
+                .then(Mono.fromRunnable(() -> log.trace("Broadcasted route assignment: {}", event.getVehicleId())));
     }
 
     private Mono<Void> initializeVehicleCache(VehicleRegisteredEvent event) {
-        String cacheKey = "vehicle:info:" + event.getVehicleId();
+        String key = "vehicle:info:" + event.getVehicleId();
 
-        Map<String, Object> vehicleInfo = new HashMap<>();
-        vehicleInfo.put("vehicleId", event.getVehicleId());
-        vehicleInfo.put("deviceId", event.getDeviceId());
-        vehicleInfo.put("licensePlate", event.getLicensePlate());
-        vehicleInfo.put("registeredAt", event.getOccurredAt().toString());
-        vehicleInfo.put("status", "active");
+        Map<String, Object> info = new HashMap<>();
+        info.put("vehicleId", event.getVehicleId());
+        info.put("deviceId", event.getDeviceId());
+        info.put("licensePlate", event.getLicensePlate());
+        info.put("registeredAt", String.valueOf(event.getOccurredAt()));
+        info.put("status", "active");
 
         return redisTemplate.opsForValue()
-                .set(cacheKey, vehicleInfo, Duration.ofDays(30))
-                .then()
-                .doOnSuccess(unused -> log.debug("Initialized cache for new vehicle: {}", event.getVehicleId()));
+                .set(key, info, VEHICLE_INFO_TTL)
+                .then(Mono.fromRunnable(() -> log.trace("Vehicle info cached: {}", event.getVehicleId())));
     }
 }

@@ -10,6 +10,8 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
+import java.time.Instant;
+
 @Getter
 @Table("admins")
 public class Admin extends AggregateRoot<Admin, AdminId> {
@@ -34,7 +36,7 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     private Boolean isSuperAdmin;
 
     @Column("last_login_at")
-    private java.time.Instant lastLoginAt;
+    private Instant lastLoginAt;
 
     private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -45,6 +47,7 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         this.fullName = fullName;
         this.isActive = true;
         this.isSuperAdmin = isSuperAdmin != null ? isSuperAdmin : false;
+        this.lastLoginAt = Instant.now();
 
         registerEvent(new AdminCreatedEvent(
                 this.id.getValue(),

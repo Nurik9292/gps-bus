@@ -14,6 +14,9 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("license_plate")
     private final String licensePlate;
 
+    @JsonProperty("rout_number")
+    private final String routeNumber;
+
     @JsonProperty("latitude")
     private final Double latitude;
 
@@ -32,12 +35,18 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("message_type")
     private final String messageType = "vehicle_position_update";
 
-    public VehiclePositionWebSocketMessage(String vehicleId, String licensePlate,
-                                           Double latitude, Double longitude,
-                                           Double speedKmh, Boolean isInMotion,
-                                           Instant timestamp) {
+    public VehiclePositionWebSocketMessage(
+            String vehicleId,
+            String licensePlate,
+            String routeNumber,
+            Double latitude,
+            Double longitude,
+            Double speedKmh,
+            Boolean isInMotion,
+            Instant timestamp) {
         this.vehicleId = vehicleId;
         this.licensePlate = licensePlate;
+        this.routeNumber = routeNumber;
         this.latitude = latitude;
         this.longitude = longitude;
         this.speedKmh = speedKmh;

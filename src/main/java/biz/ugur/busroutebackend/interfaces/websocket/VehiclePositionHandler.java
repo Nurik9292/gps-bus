@@ -3,170 +3,261 @@ package biz.ugur.busroutebackend.interfaces.websocket;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
 import biz.ugur.busroutebackend.transport.application.usecase.GetActiveVehiclesUseCase;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketSession;
-import org.springframework.web.socket.handler.TextWebSocketHandler;
+import org.springframework.web.reactive.socket.WebSocketHandler;
+import org.springframework.web.reactive.socket.WebSocketMessage;
+import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
-import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 @Slf4j
-public class VehiclePositionHandler extends TextWebSocketHandler {
+public class VehiclePositionHandler implements WebSocketHandler {
 
-    private final GetActiveVehiclesUseCase  getActiveVehiclesUseCase;
+    private final GetActiveVehiclesUseCase getActiveVehiclesUseCase;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
 
-    private final Map<String, WebSocketSessionWrapper> activeSessions = new ConcurrentHashMap<>();
+    private final Map<String, SessionConfig> activeSessions = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCounter = new AtomicInteger(0);
 
+    private final Sinks.Many<VehiclePositionWebSocketMessage> broadcastSink =
+            Sinks.many().multicast().onBackpressureBuffer();
+
     public VehiclePositionHandler(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
-                                  ReactiveRedisTemplate<String, Object> redisTemplate,
-                                  ObjectMapper objectMapper) {
+                                           ReactiveRedisTemplate<String, Object> redisTemplate,
+                                           ObjectMapper objectMapper) {
         this.getActiveVehiclesUseCase = getActiveVehiclesUseCase;
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
+
+        subscribeToRedisUpdates();
     }
 
+
+
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+    public Mono<Void> handle(WebSocketSession session) {
         String sessionId = generateSessionId();
-        WebSocketSessionWrapper sessionWrapper = new WebSocketSessionWrapper(sessionId, session);
-
-        // Парсим параметры подписки из URL
-        parseSubscriptionParameters(sessionWrapper);
-
-        activeSessions.put(sessionId, sessionWrapper);
+        SessionConfig sessionConfig = parseSessionConfig(session);
+        activeSessions.put(sessionId, sessionConfig);
 
         log.info("WebSocket connection established: {} (total: {})",
                 sessionId, activeSessions.size());
 
-        // Отправляем текущие позиции при подключении
-        sendInitialVehiclePositions(sessionWrapper);
+        Flux<WebSocketMessage> outbound = createOutboundMessageStream(session, sessionConfig);
 
-        // Подписываемся на обновления
-        subscribeToPositionUpdates(sessionWrapper);
+        Mono<Void> inbound = session.receive()
+                .doOnNext(message -> handleIncomingMessage(sessionId, sessionConfig, message))
+                .doOnError(error -> log.error("Error in inbound stream for session {}: {}",
+                        sessionId, error.getMessage()))
+                .then();
+
+        return session.send(outbound)
+                .and(inbound)
+                .doFinally(signalType -> {
+                    activeSessions.remove(sessionId);
+                    log.info("WebSocket connection closed: {} (total: {}, signal: {})",
+                            sessionId, activeSessions.size(), signalType);
+                });
     }
 
-    @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-        String sessionId = findSessionId(session);
-        if (sessionId != null) {
-            WebSocketSessionWrapper sessionWrapper = activeSessions.remove(sessionId);
-            if (sessionWrapper != null) {
-                sessionWrapper.dispose();
-            }
+    private Flux<WebSocketMessage> createOutboundMessageStream(WebSocketSession session,
+                                                               SessionConfig config) {
+        Flux<WebSocketMessage> initialPositions = getInitialPositions(session, config);
 
-            log.info("WebSocket connection closed: {} (total: {}, status: {})",
-                    sessionId, activeSessions.size(), status);
-        }
+        Flux<WebSocketMessage> liveUpdates = getLivePositionUpdates(session, config);
+
+        Flux<WebSocketMessage> heartbeat = getHeartbeatMessages(session);
+
+        return Flux.merge(initialPositions, liveUpdates, heartbeat)
+                .onErrorContinue((error, obj) ->
+                        log.warn("Error sending message: {}", error.getMessage()));
     }
 
-    @Override
-    public void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        try {
-            String sessionId = findSessionId(session);
-            WebSocketSessionWrapper sessionWrapper = activeSessions.get(sessionId);
-
-            if (sessionWrapper != null) {
-                handleClientMessage(sessionWrapper, message.getPayload());
-            }
-        } catch (Exception e) {
-            log.warn("Error handling WebSocket message: {}", e.getMessage());
-            sendErrorMessage(session, "Invalid message format");
-        }
-    }
-
-    @Override
-    public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
-        String sessionId = findSessionId(session);
-        log.error("WebSocket transport error for session {}: {}", sessionId, exception.getMessage());
-
-        if (session.isOpen()) {
-            session.close(CloseStatus.SERVER_ERROR);
-        }
-    }
-
-    /**
-     * Broadcast обновления позиций всем подключенным клиентам
-     */
-    public void broadcastVehiclePosition(VehiclePositionWebSocketMessage message) {
-        if (activeSessions.isEmpty()) {
-            return;
-        }
-
-        activeSessions.values().parallelStream()
-                .filter(sessionWrapper -> sessionWrapper.isInterestedInVehicle(message))
-                .forEach(sessionWrapper -> {
+    private Flux<WebSocketMessage> getInitialPositions(WebSocketSession session,
+                                                       SessionConfig config) {
+        return getActiveVehiclesUseCase.execute(null)
+                .filter(vehicle -> isVehicleInScope(vehicle, config))
+                .take(100) // Ограничиваем для начальной загрузки
+                .map(this::convertToWebSocketMessage)
+                .collectList()
+                .map(positions -> {
                     try {
-                        sendVehiclePositionToSession(sessionWrapper, message);
-                    } catch (Exception e) {
-                        log.warn("Failed to send position update to session {}: {}",
-                                sessionWrapper.getSessionId(), e.getMessage());
+                        Map<String, Object> response = Map.of(
+                                "type", "initial_positions",
+                                "count", positions.size(),
+                                "vehicles", positions,
+                                "timestamp", Instant.now().toString()
+                        );
+                        return session.textMessage(objectMapper.writeValueAsString(response));
+                    } catch (JsonProcessingException e) {
+                        log.error("Error serializing initial positions: {}", e.getMessage());
+                        return session.textMessage("{\"type\":\"error\",\"message\":\"Serialization error\"}");
+                    }
+                })
+                .flux()
+                .doOnNext(msg -> log.debug("Sent initial positions to session"));
+    }
+
+    private Flux<WebSocketMessage> getLivePositionUpdates(WebSocketSession session,
+                                                          SessionConfig config) {
+        return broadcastSink.asFlux()
+                .filter(positionMsg -> isPositionInScope(positionMsg, config))
+                .map(positionMsg -> {
+                    try {
+                        Map<String, Object> response = Map.of(
+                                "type", "position_update",
+                                "vehicle", positionMsg,
+                                "timestamp", Instant.now().toString()
+                        );
+                        return session.textMessage(objectMapper.writeValueAsString(response));
+                    } catch (JsonProcessingException e) {
+                        log.warn("Error serializing position update: {}", e.getMessage());
+                        return session.textMessage("{\"type\":\"error\",\"message\":\"Serialization error\"}");
+                    }
+                })
+                .onErrorContinue((error, obj) ->
+                        log.warn("Error in live updates: {}", error.getMessage()));
+    }
+
+    private Flux<WebSocketMessage> getHeartbeatMessages(WebSocketSession session) {
+        return Flux.interval(Duration.ofSeconds(30))
+                .map(tick -> {
+                    try {
+                        Map<String, Object> heartbeat = Map.of(
+                                "type", "heartbeat",
+                                "timestamp", Instant.now().toString(),
+                                "session_active", true
+                        );
+                        return session.textMessage(objectMapper.writeValueAsString(heartbeat));
+                    } catch (JsonProcessingException e) {
+                        return session.textMessage("{\"type\":\"heartbeat\"}");
                     }
                 });
     }
 
-    /**
-     * Получить статистику активных соединений
-     */
+    private void handleIncomingMessage(String sessionId, SessionConfig config, WebSocketMessage message) {
+        try {
+            String payload = message.getPayloadAsText();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> clientMessage = objectMapper.readValue(payload, Map.class);
+
+            String messageType = (String) clientMessage.get("type");
+
+            switch (messageType) {
+                case "ping":
+                    // Ping обрабатывается через heartbeat
+                    log.debug("Received ping from session {}", sessionId);
+                    break;
+
+                case "subscribe_routes":
+                    @SuppressWarnings("unchecked")
+                    java.util.List<String> routes = (java.util.List<String>) clientMessage.get("routes");
+                    if (routes != null) {
+                        config.setRouteFilter(Set.copyOf(routes));
+                        config.setSubscriptionType("routes");
+                        log.debug("Session {} updated route subscription: {}", sessionId, routes);
+                    }
+                    break;
+
+                case "subscribe_bounds":
+                    @SuppressWarnings("unchecked")
+                    java.util.List<Double> bounds = (java.util.List<Double>) clientMessage.get("bounds");
+                    if (bounds != null && bounds.size() == 4) {
+                        config.setBounds(bounds.get(0), bounds.get(1), bounds.get(2), bounds.get(3));
+                        config.setSubscriptionType("bounds");
+                        log.debug("Session {} updated bounds subscription", sessionId);
+                    }
+                    break;
+
+                default:
+                    log.debug("Unknown message type from session {}: {}", sessionId, messageType);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to handle message from session {}: {}", sessionId, e.getMessage());
+        }
+    }
+
+    private void subscribeToRedisUpdates() {
+        redisTemplate.listenToChannel("vehicle-position-updates")
+                .mapNotNull(message -> {
+                    try {
+                        return objectMapper.readValue(
+                                message.getMessage().toString(),
+                                VehiclePositionWebSocketMessage.class
+                        );
+                    } catch (Exception e) {
+                        log.warn("Error parsing Redis message: {}", e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(java.util.Objects::nonNull)
+                .subscribe(
+                        positionMessage -> {
+                            // Отправляем в broadcast sink
+                            Sinks.EmitResult result = broadcastSink.tryEmitNext(positionMessage);
+                            if (result.isFailure()) {
+                                log.warn("Failed to emit position update: {}", result);
+                            }
+                        },
+                        error -> log.error("Redis subscription error: {}", error.getMessage()),
+                        () -> log.info("Redis subscription completed")
+                );
+    }
+
+    public void broadcastVehiclePosition(VehiclePositionWebSocketMessage message) {
+        Sinks.EmitResult result = broadcastSink.tryEmitNext(message);
+        if (result.isFailure()) {
+            log.warn("Failed to broadcast vehicle position: {}", result);
+        }
+    }
+
     public Mono<WebSocketStatsDTO> getConnectionStats() {
         return Mono.fromCallable(() -> {
             int totalSessions = activeSessions.size();
-            long activeSessions = this.activeSessions.values().stream()
-                    .filter(WebSocketSessionWrapper::isActive)
-                    .count();
 
-            Map<String, Long> subscriptionTypes = this.activeSessions.values().stream()
+            Map<String, Long> subscriptionTypes = activeSessions.values().stream()
                     .collect(java.util.stream.Collectors.groupingBy(
-                            WebSocketSessionWrapper::getSubscriptionType,
+                            SessionConfig::getSubscriptionType,
                             java.util.stream.Collectors.counting()
                     ));
 
             return new WebSocketStatsDTO(
                     totalSessions,
-                    (int) activeSessions,
+                    totalSessions, // В reactive WebSocket все сессии активны
                     subscriptionTypes,
                     Instant.now()
             );
         });
     }
 
-
+    // Утилитные методы
 
     private String generateSessionId() {
         return "ws-" + sessionCounter.incrementAndGet() + "-" + System.currentTimeMillis();
     }
 
-    private String findSessionId(WebSocketSession session) {
-        return activeSessions.entrySet().stream()
-                .filter(entry -> entry.getValue().getSession().equals(session))
-                .map(Map.Entry::getKey)
-                .findFirst()
-                .orElse(null);
-    }
+    private SessionConfig parseSessionConfig(WebSocketSession session) {
+        SessionConfig config = new SessionConfig();
 
-    private void parseSubscriptionParameters(WebSocketSessionWrapper sessionWrapper) {
-        URI uri = sessionWrapper.getSession().getUri();
-        if (uri == null) return;
-
-        String query = uri.getQuery();
+        String query = session.getHandshakeInfo().getUri().getQuery();
         if (query == null) {
-            sessionWrapper.setSubscriptionType("all");
-            return;
+            config.setSubscriptionType("all");
+            return config;
         }
 
         Map<String, String> params = parseQueryString(query);
@@ -181,30 +272,24 @@ public class VehiclePositionHandler extends TextWebSocketHandler {
                     double lat2 = Double.parseDouble(bounds[2]);
                     double lon2 = Double.parseDouble(bounds[3]);
 
-                    sessionWrapper.setBounds(lat1, lon1, lat2, lon2);
-                    sessionWrapper.setSubscriptionType("bounds");
-
-                    log.debug("Session {} subscribed to bounds: ({},{}) to ({},{})",
-                            sessionWrapper.getSessionId(), lat1, lon1, lat2, lon2);
+                    config.setBounds(lat1, lon1, lat2, lon2);
+                    config.setSubscriptionType("bounds");
                 } catch (NumberFormatException e) {
-                    log.warn("Invalid bounds format for session {}: {}",
-                            sessionWrapper.getSessionId(), params.get("bounds"));
+                    log.warn("Invalid bounds format: {}", params.get("bounds"));
                 }
             }
         }
-
+        // Подписка на маршруты
         else if (params.containsKey("routes")) {
             String[] routes = params.get("routes").split(",");
-            sessionWrapper.setRouteFilter(java.util.Set.of(routes));
-            sessionWrapper.setSubscriptionType("routes");
-
-            log.debug("Session {} subscribed to routes: {}",
-                    sessionWrapper.getSessionId(), java.util.Arrays.toString(routes));
+            config.setRouteFilter(Set.of(routes));
+            config.setSubscriptionType("routes");
         }
-
         else {
-            sessionWrapper.setSubscriptionType("all");
+            config.setSubscriptionType("all");
         }
+
+        return config;
     }
 
     private Map<String, String> parseQueryString(String query) {
@@ -221,147 +306,37 @@ public class VehiclePositionHandler extends TextWebSocketHandler {
         return params;
     }
 
-    private void sendInitialVehiclePositions(WebSocketSessionWrapper sessionWrapper) {
-        getActiveVehiclesUseCase.execute(null)
-                .filter(sessionWrapper::isInterestedInVehicle)
-                .take(100) // Ограничиваем количество для начальной загрузки
-                .map(this::convertToWebSocketMessage)
-                .collectList()
-                .subscribe(
-                        positions -> {
-                            try {
-                                String message = objectMapper.writeValueAsString(Map.of(
-                                        "type", "initial_positions",
-                                        "count", positions.size(),
-                                        "vehicles", positions
-                                ));
-                                sessionWrapper.sendMessage(new TextMessage(message));
+    private boolean isVehicleInScope(VehiclePositionDTO vehicle, SessionConfig config) {
+        switch (config.getSubscriptionType()) {
+            case "routes":
+                return config.getRouteFilter() != null &&
+                        config.getRouteFilter().contains(vehicle.getRouteNumber());
 
-                                log.debug("Sent {} initial positions to session {}",
-                                        positions.size(), sessionWrapper.getSessionId());
-                            } catch (Exception e) {
-                                log.error("Failed to send initial positions to session {}: {}",
-                                        sessionWrapper.getSessionId(), e.getMessage());
-                            }
-                        },
-                        error -> log.error("Error loading initial positions for session {}: {}",
-                                sessionWrapper.getSessionId(), error.getMessage())
+            case "bounds":
+                return config.isInBounds(
+                        vehicle.getCurrentLatitude(),
+                        vehicle.getCurrentLongitude()
                 );
-    }
 
-    private void subscribeToPositionUpdates(WebSocketSessionWrapper sessionWrapper) {
-        // Подписываемся на Redis Pub/Sub для обновлений позиций
-        Flux<String> redisStream = redisTemplate.listenToChannel("vehicle-position-updates")
-                .map(message -> message.getMessage().toString());
-
-        sessionWrapper.setUpdateSubscription(
-                redisStream
-                        .delayElements(Duration.ofMillis(100))
-                        .subscribe(
-                                messageJson -> handlePositionUpdate(sessionWrapper, messageJson),
-                                error -> {
-                                    log.error("Redis subscription error for session {}: {}",
-                                            sessionWrapper.getSessionId(), error.getMessage());
-                                    sessionWrapper.dispose();
-                                }
-                        )
-        );
-    }
-
-    private void handlePositionUpdate(WebSocketSessionWrapper sessionWrapper, String messageJson) {
-        try {
-            VehiclePositionWebSocketMessage positionMessage =
-                    objectMapper.readValue(messageJson, VehiclePositionWebSocketMessage.class);
-
-            if (sessionWrapper.isInterestedInVehicle(positionMessage)) {
-                sendVehiclePositionToSession(sessionWrapper, positionMessage);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to process position update for session {}: {}",
-                    sessionWrapper.getSessionId(), e.getMessage());
+            default:
+                return true;
         }
     }
 
-    private void sendVehiclePositionToSession(WebSocketSessionWrapper sessionWrapper,
-                                              VehiclePositionWebSocketMessage message) {
-        try {
-            String json = objectMapper.writeValueAsString(Map.of(
-                    "type", "position_update",
-                    "vehicle", message
-            ));
+    private boolean isPositionInScope(VehiclePositionWebSocketMessage position, SessionConfig config) {
+        switch (config.getSubscriptionType()) {
+            case "routes":
+                return config.getRouteFilter() != null &&
+                        config.getRouteFilter().contains(position.getRouteNumber());
 
-            sessionWrapper.sendMessage(new TextMessage(json));
-            sessionWrapper.incrementMessageCount();
+            case "bounds":
+                return config.isInBounds(
+                        position.getLatitude(),
+                        position.getLongitude()
+                );
 
-        } catch (Exception e) {
-            log.warn("Failed to send position to session {}: {}",
-                    sessionWrapper.getSessionId(), e.getMessage());
-        }
-    }
-
-    private void handleClientMessage(WebSocketSessionWrapper sessionWrapper, String messagePayload) {
-        try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> clientMessage = objectMapper.readValue(messagePayload, Map.class);
-
-            String messageType = (String) clientMessage.get("type");
-
-            switch (messageType) {
-                case "ping":
-                    sendPongMessage(sessionWrapper);
-                    break;
-                case "subscribe_routes":
-                    @SuppressWarnings("unchecked")
-                    java.util.List<String> routes = (java.util.List<String>) clientMessage.get("routes");
-                    if (routes != null) {
-                        sessionWrapper.setRouteFilter(new java.util.HashSet<>(routes));
-                        sessionWrapper.setSubscriptionType("routes");
-                        log.debug("Session {} updated route subscription: {}",
-                                sessionWrapper.getSessionId(), routes);
-                    }
-                    break;
-                case "subscribe_bounds":
-                    @SuppressWarnings("unchecked")
-                    java.util.List<Double> bounds = (java.util.List<Double>) clientMessage.get("bounds");
-                    if (bounds != null && bounds.size() == 4) {
-                        sessionWrapper.setBounds(bounds.get(0), bounds.get(1), bounds.get(2), bounds.get(3));
-                        sessionWrapper.setSubscriptionType("bounds");
-                        log.debug("Session {} updated bounds subscription", sessionWrapper.getSessionId());
-                    }
-                    break;
-                default:
-                    log.debug("Unknown message type from session {}: {}",
-                            sessionWrapper.getSessionId(), messageType);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to handle client message from session {}: {}",
-                    sessionWrapper.getSessionId(), e.getMessage());
-        }
-    }
-
-    private void sendPongMessage(WebSocketSessionWrapper sessionWrapper) {
-        try {
-            String pongMessage = objectMapper.writeValueAsString(Map.of(
-                    "type", "pong",
-                    "timestamp", Instant.now().toString()
-            ));
-            sessionWrapper.sendMessage(new TextMessage(pongMessage));
-        } catch (Exception e) {
-            log.warn("Failed to send pong to session {}: {}",
-                    sessionWrapper.getSessionId(), e.getMessage());
-        }
-    }
-
-    private void sendErrorMessage(WebSocketSession session, String errorMessage) {
-        try {
-            String json = objectMapper.writeValueAsString(Map.of(
-                    "type", "error",
-                    "message", errorMessage,
-                    "timestamp", Instant.now().toString()
-            ));
-            session.sendMessage(new TextMessage(json));
-        } catch (Exception e) {
-            log.error("Failed to send error message: {}", e.getMessage());
+            default:
+                return true;
         }
     }
 
@@ -369,6 +344,7 @@ public class VehiclePositionHandler extends TextWebSocketHandler {
         return new VehiclePositionWebSocketMessage(
                 vehicle.getVehicleId(),
                 vehicle.getLicensePlate(),
+                vehicle.getRouteNumber(),
                 vehicle.getCurrentLatitude(),
                 vehicle.getCurrentLongitude(),
                 vehicle.getSpeedKmh(),
@@ -377,3 +353,4 @@ public class VehiclePositionHandler extends TextWebSocketHandler {
         );
     }
 }
+

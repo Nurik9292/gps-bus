@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.transport.application.usecase;
 
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.transport.application.dto.BusInfoDTO;
+import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import lombok.extern.slf4j.Slf4j;
@@ -17,9 +18,11 @@ import java.util.List;
 public class SyncBusRouteAssignmentsUseCase implements UseCase<List<BusInfoDTO>, Mono<SyncBusRouteAssignmentsUseCase.BusRouteAssignmentResult>> {
 
     private final VehicleRepository vehicleRepository;
+    private final BusRouteRepository busRouteRepository;
 
-    public SyncBusRouteAssignmentsUseCase(VehicleRepository vehicleRepository) {
+    public SyncBusRouteAssignmentsUseCase(VehicleRepository vehicleRepository, BusRouteRepository busRouteRepository) {
         this.vehicleRepository = vehicleRepository;
+        this.busRouteRepository = busRouteRepository;
     }
 
     @Override
@@ -35,28 +38,38 @@ public class SyncBusRouteAssignmentsUseCase implements UseCase<List<BusInfoDTO>,
 
     private Mono<AssignmentStatus> assignBusToRoute(BusInfoDTO busInfo) {
         return vehicleRepository.findByLicensePlate(busInfo.getCarNumber())
-                .flatMap(vehicle -> {
-                    try {
-                        BusRouteId routeId = BusRouteId.of(busInfo.getRouteNumber());
+                .flatMap(vehicle ->
+                        busRouteRepository.findByRouteNumber(busInfo.getRouteNumber())
+                                .flatMap(busRoute -> {
+                                    try {
+                                        BusRouteId routeId = busRoute.getId();
 
-                        if (routeId.equals(vehicle.getAssignedRouteId())) {
-                            return Mono.just(AssignmentStatus.unchanged(vehicle.getLicensePlate(), routeId.getValue()));
-                        }
+                                        if (routeId.equals(vehicle.getAssignedRouteId()) &&
+                                                busInfo.getRouteNumber().equals(vehicle.getRouteNumber())) {
+                                            return Mono.just(AssignmentStatus.unchanged(vehicle.getLicensePlate(), routeId.getValue()));
+                                        }
 
-                        vehicle.assignToRoute(routeId);
+                                        vehicle.assignToRoute(routeId);
+                                        vehicle.updateCachedRouteNumber(busInfo.getRouteNumber());
 
-                        return vehicleRepository.save(vehicle)
-                                .map(savedVehicle -> AssignmentStatus.assigned(
-                                        savedVehicle.getLicensePlate(),
-                                        routeId.getValue()
-                                ));
+                                        return vehicleRepository.save(vehicle)
+                                                .map(savedVehicle -> AssignmentStatus.assigned(
+                                                        savedVehicle.getLicensePlate(),
+                                                        busInfo.getRouteNumber()
+                                                ));
 
-                    } catch (Exception e) {
-                        log.warn("Failed to assign vehicle {} to route {}: {}",
-                                busInfo.getCarNumber(), busInfo.getRouteNumber(), e.getMessage());
-                        return Mono.just(AssignmentStatus.failed(busInfo.getCarNumber(), e.getMessage()));
-                    }
-                })
+                                    } catch (Exception e) {
+                                        log.warn("Failed to assign vehicle {} to route {}: {}",
+                                                busInfo.getCarNumber(), busInfo.getRouteNumber(), e.getMessage());
+                                        return Mono.just(AssignmentStatus.failed(busInfo.getCarNumber(), e.getMessage()));
+                                    }
+                                })
+                                .switchIfEmpty(Mono.fromCallable(() -> {
+                                    log.warn("Route {} not found in system for vehicle {}",
+                                            busInfo.getRouteNumber(), busInfo.getCarNumber());
+                                    return AssignmentStatus.routeNotFound(busInfo.getCarNumber(), busInfo.getRouteNumber());
+                                }))
+                )
                 .switchIfEmpty(Mono.just(AssignmentStatus.vehicleNotFound(busInfo.getCarNumber())));
     }
 
@@ -64,10 +77,12 @@ public class SyncBusRouteAssignmentsUseCase implements UseCase<List<BusInfoDTO>,
         long assigned = statuses.stream().mapToLong(s -> s.isAssigned() ? 1 : 0).sum();
         long unchanged = statuses.stream().mapToLong(s -> s.isUnchanged() ? 1 : 0).sum();
         long failed = statuses.stream().mapToLong(s -> s.isFailed() ? 1 : 0).sum();
-        long notFound = statuses.stream().mapToLong(s -> s.isVehicleNotFound() ? 1 : 0).sum();
+        long vehicleNotFound = statuses.stream().mapToLong(s -> s.isVehicleNotFound() ? 1 : 0).sum();
+        long routeNotFound = statuses.stream().mapToLong(s -> s.isRouteNotFound() ? 1 : 0).sum();
 
-        return new BusRouteAssignmentResult(assigned, unchanged, failed, notFound, Instant.now());
+        return new BusRouteAssignmentResult(assigned, unchanged, failed, vehicleNotFound, routeNotFound, Instant.now());
     }
+
 
 
     public record BusRouteAssignmentResult(
@@ -75,24 +90,26 @@ public class SyncBusRouteAssignmentsUseCase implements UseCase<List<BusInfoDTO>,
             long unchangedCount,
             long failedCount,
             long vehicleNotFoundCount,
+            long routeNotFoundCount,
             Instant processedAt) {
-        }
+
+    }
 
     public static class AssignmentStatus {
         private final String licensePlate;
-        private final String routeId;
+        private final String routeInfo; //
         private final String errorMessage;
         private final AssignmentType type;
 
-        private AssignmentStatus(String licensePlate, String routeId, String errorMessage, AssignmentType type) {
+        private AssignmentStatus(String licensePlate, String routeInfo, String errorMessage, AssignmentType type) {
             this.licensePlate = licensePlate;
-            this.routeId = routeId;
+            this.routeInfo = routeInfo;
             this.errorMessage = errorMessage;
             this.type = type;
         }
 
-        public static AssignmentStatus assigned(String licensePlate, String routeId) {
-            return new AssignmentStatus(licensePlate, routeId, null, AssignmentType.ASSIGNED);
+        public static AssignmentStatus assigned(String licensePlate, String routeNumber) {
+            return new AssignmentStatus(licensePlate, routeNumber, null, AssignmentType.ASSIGNED);
         }
 
         public static AssignmentStatus unchanged(String licensePlate, String routeId) {
@@ -107,13 +124,18 @@ public class SyncBusRouteAssignmentsUseCase implements UseCase<List<BusInfoDTO>,
             return new AssignmentStatus(licensePlate, null, "Vehicle not found", AssignmentType.VEHICLE_NOT_FOUND);
         }
 
+        public static AssignmentStatus routeNotFound(String licensePlate, String routeNumber) {
+            return new AssignmentStatus(licensePlate, routeNumber, "Route not found in system", AssignmentType.ROUTE_NOT_FOUND);
+        }
+
         public boolean isAssigned() { return type == AssignmentType.ASSIGNED; }
         public boolean isUnchanged() { return type == AssignmentType.UNCHANGED; }
         public boolean isFailed() { return type == AssignmentType.FAILED; }
         public boolean isVehicleNotFound() { return type == AssignmentType.VEHICLE_NOT_FOUND; }
+        public boolean isRouteNotFound() { return type == AssignmentType.ROUTE_NOT_FOUND; } // ✅ НОВЫЙ
 
         private enum AssignmentType {
-            ASSIGNED, UNCHANGED, FAILED, VEHICLE_NOT_FOUND
+            ASSIGNED, UNCHANGED, FAILED, VEHICLE_NOT_FOUND, ROUTE_NOT_FOUND
         }
     }
 }

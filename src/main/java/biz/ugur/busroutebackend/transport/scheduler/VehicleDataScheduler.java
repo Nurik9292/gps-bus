@@ -17,9 +17,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-@Component
+
 @Slf4j
-@ConditionalOnProperty(name = "app.scheduling.enabled", havingValue = "true", matchIfMissing = true)
+@Component
+@ConditionalOnProperty(prefix = "app.scheduling", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class VehicleDataScheduler {
 
     private final GpsApiClient gpsApiClient;
@@ -213,7 +214,6 @@ public class VehicleDataScheduler {
 
     private boolean isOlderThanDays(String key, int days) {
         try {
-            // Извлекаем timestamp из ключа вида "gps:update:stats:1234567890"
             String[] parts = key.split(":");
             long timestamp = Long.parseLong(parts[parts.length - 1]);
             long cutoff = Instant.now().minus(Duration.ofDays(days)).getEpochSecond();
@@ -235,7 +235,7 @@ public class VehicleDataScheduler {
         public boolean successful;
         public String errorMessage;
 
-        public GpsUpdateStats() {} // Для Jackson
+        public GpsUpdateStats() {}
 
         public GpsUpdateStats(long updatedCount, long createdCount, long failedCount,
                               long invalidCount, long conflictCount, long durationMs,

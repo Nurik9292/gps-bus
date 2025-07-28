@@ -43,5 +43,8 @@ public class GpsPositionDTO {
 
         @JsonProperty("motion")
         private Boolean motion;
+
+        @JsonProperty("ignition")
+        private Boolean ignition;
     }
 }

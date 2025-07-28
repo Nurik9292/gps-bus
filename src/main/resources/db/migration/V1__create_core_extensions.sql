@@ -1,6 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- Функция для автоматического обновления updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -9,7 +8,6 @@ RETURN NEW;
 END;
 $$ language 'plpgsql';
 
--- Функция для поиска остановок в радиусе
 CREATE OR REPLACE FUNCTION find_stops_within_radius(
     center_lat DOUBLE PRECISION,
     center_lon DOUBLE PRECISION,

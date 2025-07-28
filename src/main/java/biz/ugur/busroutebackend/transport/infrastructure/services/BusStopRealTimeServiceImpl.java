@@ -24,20 +24,15 @@ import java.time.LocalDateTime;
 @Slf4j
 public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
 
-    private final VehicleRepository vehicleRepository;
     private final BusStopRepository busStopRepository;
-    private final BusRouteRepository busRouteRepository;
     private final DatabaseClient databaseClient;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
 
-    public BusStopRealTimeServiceImpl(VehicleRepository vehicleRepository,
+    public BusStopRealTimeServiceImpl(
                                   BusStopRepository busStopRepository,
-                                  BusRouteRepository busRouteRepository,
                                   DatabaseClient databaseClient,
                                   ReactiveRedisTemplate<String, Object> redisTemplate) {
-        this.vehicleRepository = vehicleRepository;
         this.busStopRepository = busStopRepository;
-        this.busRouteRepository = busRouteRepository;
         this.databaseClient = databaseClient;
         this.redisTemplate = redisTemplate;
     }

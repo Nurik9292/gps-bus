@@ -4,6 +4,10 @@ import biz.ugur.busroutebackend.admin.application.usecase.GetCurrentAdminUseCase
 import biz.ugur.busroutebackend.admin.application.usecase.LoginUseCase;
 import biz.ugur.busroutebackend.admin.application.usecase.LogoutUseCase;
 import biz.ugur.busroutebackend.admin.application.usecase.RefreshTokenUseCase;
+import biz.ugur.busroutebackend.interfaces.rest.admin.dto.request.LoginRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.dto.request.RefreshTokenRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.dto.response.AdminProfileResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.dto.response.AuthResponse;
 import biz.ugur.busroutebackend.shared.infrastructure.security.AdminPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +33,7 @@ public class AuthController {
     public Mono<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         log.info("Login attempt for username: {}", request.username());
 
-        return loginUseCase.execute(new LoginUseCase.Command(
+        return loginUseCase.execute(new LoginUseCase.Request(
                         request.username(),
                         request.password()
                 ))
@@ -56,7 +60,7 @@ public class AuthController {
     public Mono<AuthResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
         log.debug("Token refresh attempt");
 
-        return refreshTokenUseCase.execute(new RefreshTokenUseCase.Command(
+        return refreshTokenUseCase.execute(new RefreshTokenUseCase.Request(
                         request.refreshToken()
                 ))
                 .map(result -> new AuthResponse(
@@ -87,7 +91,7 @@ public class AuthController {
 
         String token = extractTokenFromHeader(authHeader);
 
-        return logoutUseCase.execute(new LogoutUseCase.Command(
+        return logoutUseCase.execute(new LogoutUseCase.Request(
                         principal.id(),
                         token
                 ))

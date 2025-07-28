@@ -4,6 +4,7 @@ import io.r2dbc.spi.ConnectionFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.r2dbc.config.AbstractR2dbcConfiguration;
 import org.springframework.data.r2dbc.config.EnableR2dbcAuditing;
 import org.springframework.data.r2dbc.repository.config.EnableR2dbcRepositories;
@@ -28,16 +29,17 @@ public class DatabaseConfig extends AbstractR2dbcConfiguration {
     @Value("${spring.r2dbc.password:bus_route_pass}")
     private String password;
 
-    @Value("${DB_HOST:localhost}")
+    @Value("${spring.r2dbc.host:localhost}")
     private String host;
 
-    @Value("${DB_PORT:5432}")
+    @Value("${spring.r2dbc.port:5432}")
     private int port;
 
-    @Value("${DB_NAME:bus_route_db}")
+    @Value("${spring.r2dbc.database:bus_route_db}")
     private String database;
 
     @Bean
+    @Primary
     @Override
     public ConnectionFactory connectionFactory() {
         return new PostgresqlConnectionFactory(

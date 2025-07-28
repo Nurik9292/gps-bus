@@ -46,6 +46,9 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     @Column("assigned_route_id")
     private BusRouteId assignedRouteId;
 
+    @Column("route_number")
+    private String routeNumber;
+
     @Column("is_active")
     private Boolean isActive;
 
@@ -69,6 +72,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                    Double currentLatitude, Double currentLongitude,
                    Double speedKmh, Boolean isInMotion,
                    Instant lastPositionUpdate, BusRouteId assignedRouteId,
+                   String routeNumber,
                    Boolean isActive) {
         this.id = id;
         this.deviceId = deviceId;
@@ -80,10 +84,10 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         this.lastPositionUpdate = lastPositionUpdate;
         this.assignedRouteId = assignedRouteId;
         this.isActive = isActive;
+        this.routeNumber = routeNumber;
     }
 
-    public void updatePosition(Double latitude, Double longitude,
-                               Double speed, Instant fixTime) {
+    public void updatePosition(Double latitude, Double longitude, Double speed, Instant fixTime) {
 
         validateCoordinates(latitude, longitude);
 
@@ -92,7 +96,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         this.currentLatitude = latitude;
         this.currentLongitude = longitude;
         this.speedKmh = speed != null ? speed : 0.0;
-        this.isInMotion = this.speedKmh > 1.0; // Считаем в движении если > 1 км/ч
+        this.isInMotion = this.speedKmh > 1.0;
         this.lastPositionUpdate = fixTime != null ? fixTime : Instant.now();
 
         if (positionChanged) {
@@ -100,6 +104,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                     this.id.getValue(),
                     this.deviceId,
                     this.licensePlate,
+                    this.routeNumber,
                     latitude,
                     longitude,
                     this.speedKmh,
@@ -108,6 +113,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
             ));
         }
     }
+
 
     public void assignToRoute(BusRouteId routeId) {
         if (routeId == null) {
@@ -129,6 +135,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         if (this.assignedRouteId != null) {
             BusRouteId previousRoute = this.assignedRouteId;
             this.assignedRouteId = null;
+            this.routeNumber = null;
 
             registerEvent(new VehicleAssignedToRouteEvent(
                     this.id.getValue(),
@@ -145,6 +152,14 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         this.assignedRouteId = null;
     }
 
+    public void updateCachedRouteNumber(String routeNumber) {
+        this.routeNumber = routeNumber;
+    }
+
+    public String getDisplayRouteNumber() {
+        return this.routeNumber != null ? this.routeNumber : "UNASSIGNED";
+    }
+
     public boolean hasRecentPosition() {
         if (lastPositionUpdate == null) return false;
         return lastPositionUpdate.isAfter(Instant.now().minusSeconds(300));
@@ -158,7 +173,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     }
 
     public boolean hasAssignedRoute() {
-        return assignedRouteId != null;
+        return assignedRouteId != null && this.routeNumber != null && !this.routeNumber.isEmpty();
     }
 
     @Override
@@ -166,7 +181,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         return id;
     }
 
-    // Приватные методы валидации
 
     private String validateDeviceId(String deviceId) {
         if (deviceId == null || deviceId.trim().isEmpty()) {

@@ -5,18 +5,16 @@ import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositi
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.reactive.socket.WebSocketMessage;
+import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.Disposable;
+import reactor.core.publisher.Mono;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Wrapper для WebSocket сессии с дополнительными возможностями
- */
+
 @Slf4j
 @Getter
 @Setter
@@ -27,10 +25,9 @@ public class WebSocketSessionWrapper {
     private final Instant connectedAt;
     private final AtomicLong messageCount = new AtomicLong(0);
 
-    private String subscriptionType = "all"; // "all", "bounds", "routes"
+    private String subscriptionType = "all";
     private Set<String> routeFilter;
 
-    // Для geographical bounds подписки
     private Double minLat;
     private Double minLon;
     private Double maxLat;
@@ -44,16 +41,19 @@ public class WebSocketSessionWrapper {
         this.connectedAt = Instant.now();
     }
 
+
     public boolean isActive() {
         return session.isOpen();
     }
 
-    public void sendMessage(TextMessage message) throws IOException {
-        if (session.isOpen()) {
-            synchronized (session) {
-                session.sendMessage(message);
-            }
+
+    public Mono<Void> sendMessage(String payload) {
+        if (!isActive()) {
+            return Mono.empty();
         }
+        WebSocketMessage message = session.textMessage(payload);
+        incrementMessageCount();
+        return session.send(Mono.just(message)).then();
     }
 
     public void incrementMessageCount() {
@@ -67,69 +67,46 @@ public class WebSocketSessionWrapper {
         this.maxLon = maxLon;
     }
 
-    /**
-     * Проверяет, заинтересована ли сессия в обновлениях этого автобуса
-     */
+
     public boolean isInterestedInVehicle(VehiclePositionWebSocketMessage message) {
-        switch (subscriptionType) {
-            case "all":
-                return true;
-
-            case "routes":
-                return routeFilter != null && routeFilter.contains(getRouteFromMessage(message));
-
-            case "bounds":
-                return isWithinBounds(message.getLatitude(), message.getLongitude());
-
-            default:
-                return false;
-        }
+        return switch (subscriptionType) {
+            case "all" -> true;
+            case "routes" -> routeFilter != null && routeFilter.contains(getRouteFromMessage(message));
+            case "bounds" -> isWithinBounds(message.getLatitude(), message.getLongitude());
+            default -> false;
+        };
     }
 
-    /**
-     * Для VehiclePositionDTO (начальная загрузка)
-     */
+
     public boolean isInterestedInVehicle(VehiclePositionDTO vehicle) {
-        switch (subscriptionType) {
-            case "all":
-                return true;
-
-            case "routes":
-                return routeFilter != null && routeFilter.contains(vehicle.getRouteNumber());
-
-            case "bounds":
-                return isWithinBounds(vehicle.getCurrentLatitude(), vehicle.getCurrentLongitude());
-
-            default:
-                return false;
-        }
+        return switch (subscriptionType) {
+            case "all" -> true;
+            case "routes" -> routeFilter != null && routeFilter.contains(vehicle.getRouteNumber());
+            case "bounds" -> isWithinBounds(vehicle.getCurrentLatitude(), vehicle.getCurrentLongitude());
+            default -> false;
+        };
     }
 
     private boolean isWithinBounds(Double lat, Double lon) {
         if (lat == null || lon == null || minLat == null || minLon == null || maxLat == null || maxLon == null) {
             return false;
         }
-
         return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
     }
 
     private String getRouteFromMessage(VehiclePositionWebSocketMessage message) {
         // В реальной реализации нужно получить номер маршрута из базы данных по vehicleId
-        // Для простоты возвращаем пустую строку - это можно улучшить
         return "";
     }
 
-    public void dispose() {
+
+    public Mono<Void> dispose() {
         if (updateSubscription != null && !updateSubscription.isDisposed()) {
             updateSubscription.dispose();
         }
-
-        if (session.isOpen()) {
-            try {
-                session.close();
-            } catch (IOException e) {
-                log.warn("Failed to close WebSocket session {}: {}", sessionId, e.getMessage());
-            }
-        }
+        return session.close().onErrorResume(e -> {
+            log.warn("Failed to close WebSocket session {}: {}", sessionId, e.getMessage());
+            return Mono.empty();
+        });
     }
 }
