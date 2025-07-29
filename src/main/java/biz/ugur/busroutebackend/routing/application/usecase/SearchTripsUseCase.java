@@ -15,13 +15,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
-
 
 @Service
 @Slf4j
@@ -31,6 +32,13 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
     private final FindRoutesWithTransfersUseCase findRoutesWithTransfersUseCase;
     private final TripPlanRepository tripPlanRepository;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
+
+    // Конфигурируемые таймауты
+    private static final Duration CACHE_TIMEOUT = Duration.ofSeconds(2);
+    private static final Duration DIRECT_ROUTES_TIMEOUT = Duration.ofSeconds(8);
+    private static final Duration TRANSFER_ROUTES_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration TOTAL_SEARCH_TIMEOUT = Duration.ofSeconds(20);
+    private static final Duration SAVE_TIMEOUT = Duration.ofSeconds(3);
 
     public SearchTripsUseCase(FindDirectRoutesUseCase findDirectRoutesUseCase,
                               FindRoutesWithTransfersUseCase findRoutesWithTransfersUseCase,
@@ -44,11 +52,16 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
 
     @Override
     public Mono<TripSearchResponse> execute(TripSearchRequest request) {
-        log.info("Trip search request: from ({},{}) to ({},{})",
-                request.getFrom().getLatitude(), request.getFrom().getLongitude(),
+        long startTime = System.currentTimeMillis();
+        String searchId = generateSearchId(request);
+
+        log.info("[{}] Trip search started: from ({},{}) to ({},{})",
+                searchId, request.getFrom().getLatitude(), request.getFrom().getLongitude(),
                 request.getTo().getLatitude(), request.getTo().getLongitude());
 
+        // Быстрая валидация
         if (!isValidRequest(request)) {
+            log.warn("[{}] Invalid search parameters", searchId);
             return Mono.just(new TripSearchResponse("error", "Invalid search parameters", List.of()));
         }
 
@@ -58,49 +71,104 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
 
         String cacheKey = createCacheKey(fromLocation, toLocation, searchCriteria);
 
-        return checkCachedResults(cacheKey)
+        return checkCachedResults(cacheKey, searchId)
+                .timeout(CACHE_TIMEOUT)
+                .doOnError(error -> log.warn("[{}] Cache check failed: {}", searchId, error.getMessage()))
+                .onErrorResume(error -> Mono.empty()) // Продолжаем поиск если cache недоступен
                 .switchIfEmpty(
-                        performTripSearch(fromLocation, toLocation, searchCriteria)
+                        performTripSearchWithDiagnostics(fromLocation, toLocation, searchCriteria, searchId, startTime)
                                 .flatMap(response -> {
                                     if ("success".equals(response.getStatus()) &&
                                             response.getTripOptions() != null &&
                                             !response.getTripOptions().isEmpty()) {
 
-                                        return cacheSearchResult(cacheKey, response)
+                                        return cacheSearchResult(cacheKey, response, searchId)
+                                                .timeout(Duration.ofSeconds(1))
+                                                .onErrorResume(error -> {
+                                                    log.warn("[{}] Failed to cache result: {}", searchId, error.getMessage());
+                                                    return Mono.just(false);
+                                                })
                                                 .thenReturn(response);
                                     }
                                     return Mono.just(response);
                                 })
                 )
-                .timeout(Duration.ofSeconds(10))
-                .doOnSuccess(response -> logSearchResult(request, response))
-                .doOnError(error -> log.error("Trip search failed", error))
-                .onErrorReturn(new TripSearchResponse("error", "Trip search timeout or error", List.of()));
+                .timeout(TOTAL_SEARCH_TIMEOUT)
+                .doOnSuccess(response -> {
+                    long duration = System.currentTimeMillis() - startTime;
+                    logSearchResult(request, response, searchId, duration);
+                })
+                .doOnError(error -> {
+                    long duration = System.currentTimeMillis() - startTime;
+                    log.error("[{}] Trip search failed after {}ms: {}", searchId, duration, error.getMessage(), error);
+                })
+                .onErrorResume(error -> {
+                    if (error instanceof TimeoutException) {
+                        log.error("[{}] Trip search timeout after {}ms", searchId, System.currentTimeMillis() - startTime);
+                        return Mono.just(new TripSearchResponse(
+                                "timeout",
+                                "Search took too long, please try again",
+                                List.of()
+                        ));
+                    }
+                    log.error("[{}] Trip search error: {}", searchId, error.getMessage());
+                    return Mono.just(new TripSearchResponse(
+                            "error",
+                            "Search failed: " + error.getMessage(),
+                            List.of()
+                    ));
+                });
     }
 
+    private Mono<TripSearchResponse> performTripSearchWithDiagnostics(Location fromLocation, Location toLocation,
+                                                                      TripSearchCriteria searchCriteria,
+                                                                      String searchId, long startTime) {
 
-    private Mono<TripSearchResponse> performTripSearch(Location fromLocation, Location toLocation,
-                                                       TripSearchCriteria searchCriteria) {
+        log.info("[{}] Starting direct routes search", searchId);
 
         return findDirectRoutesUseCase.execute(
                         new FindDirectRoutesUseCase.Command(fromLocation, toLocation, searchCriteria)
                 )
+                .timeout(DIRECT_ROUTES_TIMEOUT)
+                .doOnNext(directPlan -> {
+                    long elapsed = System.currentTimeMillis() - startTime;
+                    log.info("[{}] Direct routes search completed in {}ms: {} options found",
+                            searchId, elapsed, directPlan.getDirectOptions().size());
+                })
+                .doOnError(error -> log.error("[{}] Direct routes search failed: {}", searchId, error.getMessage()))
+                .onErrorResume(error -> {
+                    log.error("[{}] Direct routes search error, creating empty plan: {}", searchId, error.getMessage());
+                    return Mono.just(TripPlan.empty(fromLocation, toLocation, searchCriteria));
+                })
                 .flatMap(directPlan -> {
                     int directOptionsCount = directPlan.getDirectOptions().size();
 
                     // Если найдено достаточно прямых маршрутов (3+), возвращаем их
                     if (directOptionsCount >= 3) {
-                        log.info("Found {} direct routes, sufficient options available", directOptionsCount);
+                        log.info("[{}] Found {} direct routes, sufficient options available", searchId, directOptionsCount);
                         return savePlanAndCreateResponse(directPlan,
-                                String.format("Found %d direct route options", directOptionsCount));
+                                String.format("Found %d direct route options", directOptionsCount),
+                                searchId);
                     }
 
                     // Иначе ищем дополнительно маршруты с пересадками
-                    log.info("Found only {} direct routes, searching for transfer options", directOptionsCount);
+                    log.info("[{}] Found only {} direct routes, searching for transfer options", searchId, directOptionsCount);
 
                     return findRoutesWithTransfersUseCase.execute(
                                     new FindRoutesWithTransfersUseCase.Command(fromLocation, toLocation, searchCriteria, directPlan)
                             )
+                            .timeout(TRANSFER_ROUTES_TIMEOUT)
+                            .doOnNext(finalPlan -> {
+                                long elapsed = System.currentTimeMillis() - startTime;
+                                log.info("[{}] Transfer routes search completed in {}ms: {} total options",
+                                        searchId, elapsed, finalPlan.getTripOptions().size());
+                            })
+                            .doOnError(error -> log.error("[{}] Transfer routes search failed: {}", searchId, error.getMessage()))
+                            .onErrorResume(error -> {
+                                log.warn("[{}] Transfer routes search failed, returning direct routes only: {}",
+                                        searchId, error.getMessage());
+                                return Mono.just(directPlan); // Возвращаем только прямые маршруты при ошибке
+                            })
                             .flatMap(finalPlan -> {
                                 int totalOptions = finalPlan.getTripOptions().size();
                                 int transferOptions = finalPlan.getTransferOptions().size();
@@ -113,7 +181,7 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                                             totalOptions, directOptionsCount, transferOptions);
                                 }
 
-                                return savePlanAndCreateResponse(finalPlan, message);
+                                return savePlanAndCreateResponse(finalPlan, message, searchId);
                             });
                 });
     }
@@ -121,36 +189,48 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
     /**
      * Проверить кэшированные результаты
      */
-    private Mono<TripSearchResponse> checkCachedResults(String cacheKey) {
+    private Mono<TripSearchResponse> checkCachedResults(String cacheKey, String searchId) {
         return redisTemplate.opsForValue()
                 .get(cacheKey)
                 .cast(TripSearchResponse.class)
                 .doOnNext(cachedResponse -> {
-                    log.debug("Found cached trip search result");
+                    log.info("[{}] Found cached trip search result", searchId);
                     // Обновляем время поиска для кэшированного результата
                     cachedResponse.setSearchTime(LocalDateTime.now());
-                });
+                })
+                .doOnError(error -> log.warn("[{}] Cache read error: {}", searchId, error.getMessage()));
     }
 
     /**
      * Кэшировать результат поиска
      */
-    private Mono<Boolean> cacheSearchResult(String cacheKey, TripSearchResponse response) {
+    private Mono<Boolean> cacheSearchResult(String cacheKey, TripSearchResponse response, String searchId) {
         // Кэшируем на 30 минут для популярных направлений
         return redisTemplate.opsForValue()
                 .set(cacheKey, response, Duration.ofMinutes(30))
                 .doOnSuccess(success -> {
                     if (Boolean.TRUE.equals(success)) {
-                        log.debug("Cached trip search result");
+                        log.debug("[{}] Cached trip search result", searchId);
+                    } else {
+                        log.warn("[{}] Failed to cache search result", searchId);
                     }
-                });
+                })
+                .doOnError(error -> log.warn("[{}] Cache write error: {}", searchId, error.getMessage()));
     }
 
     /**
      * Сохранить план и создать ответ
      */
-    private Mono<TripSearchResponse> savePlanAndCreateResponse(TripPlan tripPlan, String message) {
+    private Mono<TripSearchResponse> savePlanAndCreateResponse(TripPlan tripPlan, String message, String searchId) {
+        log.info("[{}] Saving trip plan with {} options", searchId, tripPlan.getTripOptions().size());
+
         return tripPlanRepository.save(tripPlan)
+                .timeout(SAVE_TIMEOUT)
+                .doOnError(error -> log.error("[{}] Failed to save trip plan: {}", searchId, error.getMessage()))
+                .onErrorResume(error -> {
+                    log.warn("[{}] Continuing without saving trip plan due to error: {}", searchId, error.getMessage());
+                    return Mono.just(tripPlan); // Продолжаем без сохранения
+                })
                 .then(Mono.fromCallable(() -> {
                     // Берем лучшие 5 вариантов с интеллектуальной сортировкой
                     List<TripOptionDTO> options = selectBestOptions(tripPlan)
@@ -159,10 +239,12 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                             .collect(Collectors.toList());
 
                     String status = options.isEmpty() ? "no_routes" : "success";
+                    log.info("[{}] Created response with {} options", searchId, options.size());
                     return new TripSearchResponse(status, message, options);
                 }))
-                .doOnSuccess(response -> log.info("Trip search completed: {} options returned",
-                        response.getTripOptions().size()));
+                .subscribeOn(Schedulers.boundedElastic()) // Выполняем конвертацию в отдельном thread pool
+                .doOnSuccess(response -> log.info("[{}] Trip search response created: {} options returned",
+                        searchId, response.getTripOptions().size()));
     }
 
     /**
@@ -274,6 +356,12 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
 
     // Вспомогательные методы
 
+    private String generateSearchId(TripSearchRequest request) {
+        return String.format("SEARCH_%d_%s",
+                System.currentTimeMillis() % 100000,
+                Integer.toHexString(request.hashCode()).substring(0, 4).toUpperCase());
+    }
+
     private boolean isValidRequest(TripSearchRequest request) {
         if (request.getFrom() == null || request.getTo() == null) {
             return false;
@@ -346,11 +434,13 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                 criteria.isPrioritizeFewerTransfers());
     }
 
-    private void logSearchResult(TripSearchRequest request, TripSearchResponse response) {
+    private void logSearchResult(TripSearchRequest request, TripSearchResponse response, String searchId, long duration) {
         if (response.getTripOptions() != null) {
-            log.info("Trip search from ({},{}) to ({},{}) completed: {} - {} options found",
+            log.info("[{}] Trip search from ({},{}) to ({},{}) completed in {}ms: {} - {} options found",
+                    searchId,
                     request.getFrom().getLatitude(), request.getFrom().getLongitude(),
                     request.getTo().getLatitude(), request.getTo().getLongitude(),
+                    duration,
                     response.getStatus(),
                     response.getTripOptions().size());
         }

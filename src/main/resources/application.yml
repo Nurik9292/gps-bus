@@ -63,7 +63,7 @@ spring:
 
 app:
   scheduling:
-    enabled: true
+    enabled: false
   admin:
     default-username: ${ADMIN_DEFAULT_USERNAME:admin}
     default-password: ${ADMIN_DEFAULT_PASSWORD:admin123}

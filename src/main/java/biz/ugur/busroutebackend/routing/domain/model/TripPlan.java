@@ -10,6 +10,7 @@ import biz.ugur.busroutebackend.routing.domain.volumeojects.TripSearchCriteria;
 import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
@@ -22,7 +23,6 @@ import java.util.stream.Collectors;
 @Table("trip_plans")
 public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
 
-
     @Id
     private TripPlanId tripPlanId;
 
@@ -32,7 +32,30 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
     private final LocalDateTime searchTime;
     private final TripSearchCriteria searchCriteria;
 
-    // Конструктор для создания нового плана поездки
+    @Column("origin_latitude")
+    private final Double originLatitude;
+
+    @Column("origin_longitude")
+    private final Double originLongitude;
+
+    @Column("destination_latitude")
+    private final Double destinationLatitude;
+
+    @Column("destination_longitude")
+    private final Double destinationLongitude;
+
+    @Column("search_time")
+    private final LocalDateTime searchTimeDb;
+
+    @Column("options_count")
+    private final Integer optionsCount;
+
+    @Column("max_transfers")
+    private final Integer maxTransfers;
+
+    @Column("max_walking_distance_meters")
+    private final Integer maxWalkingDistanceMeters;
+
     public TripPlan(TripPlanId tripPlanId, Location originLocation, Location destinationLocation,
                     TripSearchCriteria searchCriteria) {
         this.tripPlanId = tripPlanId != null ? tripPlanId : TripPlanId.generate();
@@ -42,7 +65,15 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         this.searchTime = LocalDateTime.now();
         this.searchCriteria = searchCriteria != null ? searchCriteria : TripSearchCriteria.defaultCriteria();
 
-        // Проверяем что точки не слишком близко (минимум 100м)
+        this.originLatitude = originLocation.getLatitude();
+        this.originLongitude = originLocation.getLongitude();
+        this.destinationLatitude = destinationLocation.getLatitude();
+        this.destinationLongitude = destinationLocation.getLongitude();
+        this.searchTimeDb = this.searchTime;
+        this.optionsCount = 0;
+        this.maxTransfers = this.searchCriteria.getMaxTransfers();
+        this.maxWalkingDistanceMeters = this.searchCriteria.getMaxWalkingDistanceMeters();
+
         if (originLocation.distanceTo(destinationLocation) < 100) {
             throw new IllegalArgumentException("Origin and destination are too close. Minimum distance: 100m");
         }
@@ -56,33 +87,51 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         ));
     }
 
-    // Convenience constructor с дефолтными критериями
+    public TripPlan(TripPlanId tripPlanId,
+                    Double originLatitude, Double originLongitude,
+                    Double destinationLatitude, Double destinationLongitude,
+                    LocalDateTime searchTime, Integer optionsCount,
+                    Integer maxTransfers, Integer maxWalkingDistanceMeters) {
+        this.tripPlanId = tripPlanId;
+        this.originLatitude = originLatitude;
+        this.originLongitude = originLongitude;
+        this.destinationLatitude = destinationLatitude;
+        this.destinationLongitude = destinationLongitude;
+        this.searchTimeDb = searchTime;
+        this.optionsCount = optionsCount;
+        this.maxTransfers = maxTransfers;
+        this.maxWalkingDistanceMeters = maxWalkingDistanceMeters;
+
+        this.originLocation = new Location(originLatitude, originLongitude, "Origin");
+        this.destinationLocation = new Location(destinationLatitude, destinationLongitude, "Destination");
+        this.searchTime = searchTime;
+        this.searchCriteria = new TripSearchCriteria(
+                maxWalkingDistanceMeters != null ? maxWalkingDistanceMeters : 800,
+                maxTransfers != null ? maxTransfers : 2,
+                true, true
+        );
+        this.tripOptions = new ArrayList<>();
+    }
+
     public TripPlan(Location originLocation, Location destinationLocation) {
         this(TripPlanId.generate(), originLocation, destinationLocation, TripSearchCriteria.defaultCriteria());
     }
 
-    /**
-     * Добавить вариант поездки в план
-     * Business Rule: максимум 10 вариантов для производительности
-     */
+
     public void addTripOption(TripOption option) {
         if (option == null) {
             throw new IllegalArgumentException("Trip option cannot be null");
         }
 
-        // Валидация что вариант подходит для данного плана
         if (!option.isValidForTrip(originLocation, destinationLocation)) {
             throw new IllegalArgumentException("Trip option is not valid for this trip plan");
         }
 
-        // Проверяем соответствие критериям поиска
         if (!isOptionAcceptable(option)) {
-            return; // Молча отвергаем неподходящие варианты
+            return;
         }
 
-        // Ограничиваем количество вариантов
         if (tripOptions.size() >= 10) {
-            // Заменяем худший вариант если новый лучше
             TripOption worstOption = findWorstOption();
             if (worstOption != null && isOptionBetter(option, worstOption)) {
                 tripOptions.remove(worstOption);
@@ -100,9 +149,7 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         ));
     }
 
-    /**
-     * Получить лучшие варианты поездки отсортированные по качеству
-     */
+
     public List<TripOption> getBestOptions(int maxCount) {
         return tripOptions.stream()
                 .sorted(this::compareOptions)
@@ -110,18 +157,13 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Получить самый быстрый вариант
-     */
+
     public TripOption getFastestOption() {
         return tripOptions.stream()
                 .min(Comparator.comparing(TripOption::getTotalTravelMinutes))
                 .orElse(null);
     }
 
-    /**
-     * Получить вариант с наименьшим количеством пересадок
-     */
     public TripOption getOptionWithFewestTransfers() {
         return tripOptions.stream()
                 .min(Comparator.comparing(TripOption::getTransfersCount)
@@ -129,25 +171,16 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
                 .orElse(null);
     }
 
-    /**
-     * Получить самый дешевый вариант
-     */
     public TripOption getCheapestOption() {
         return tripOptions.stream()
                 .min(Comparator.comparing(option -> (option.getTransfersCount() + 1) * 1.0)) // 1 манат за поездку
                 .orElse(null);
     }
 
-    /**
-     * Проверить есть ли подходящие варианты
-     */
     public boolean hasViableOptions() {
         return !tripOptions.isEmpty();
     }
 
-    /**
-     * Получить только прямые маршруты (без пересадок)
-     */
     public List<TripOption> getDirectOptions() {
         return tripOptions.stream()
                 .filter(option -> option.getTripType() == TripType.DIRECT)
@@ -155,9 +188,6 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Получить варианты с пересадками
-     */
     public List<TripOption> getTransferOptions() {
         return tripOptions.stream()
                 .filter(option -> option.getTripType() != TripType.DIRECT)
@@ -165,9 +195,6 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Получить статистику по найденным вариантам
-     */
     public TripPlanStatistics getStatistics() {
         if (tripOptions.isEmpty()) {
             return new TripPlanStatistics(0, 0, 0, 0, 0);
@@ -182,17 +209,11 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         return new TripPlanStatistics(directCount, transferCount, fastestTime, averageTime, averageCost);
     }
 
-    /**
-     * Проверить достижима ли поездка пешком (для очень коротких расстояний)
-     */
     public boolean isWalkable() {
         double distanceMeters = originLocation.distanceTo(destinationLocation);
         return distanceMeters <= searchCriteria.getMaxWalkingDistanceMeters();
     }
 
-    /**
-     * Рассчитать время пешком до пункта назначения
-     */
     public int getWalkingTimeMinutes() {
         if (!isWalkable()) return -1;
 
@@ -240,7 +261,7 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
 
     private TripOption findWorstOption() {
         return tripOptions.stream()
-                .max(this::compareOptions) // Максимум = худший при данной сортировке
+                .max(this::compareOptions)
                 .orElse(null);
     }
 
@@ -248,10 +269,6 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         return compareOptions(option1, option2) < 0;
     }
 
-    /**
-     * Основная логика сравнения вариантов поездки
-     * Приоритет: 1) меньше пересадок, 2) быстрее, 3) меньше ходьбы
-     */
     private int compareOptions(TripOption a, TripOption b) {
         if (searchCriteria.isPrioritizeFewerTransfers()) {
             int transfersComparison = Integer.compare(a.getTransfersCount(), b.getTransfersCount());
@@ -274,6 +291,15 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         }
 
         return Integer.compare(a.getTotalWalkingMinutes(), b.getTotalWalkingMinutes());
+    }
+
+    public static TripPlan empty(Location fromLocation, Location toLocation, TripSearchCriteria searchCriteria) {
+        return new TripPlan(
+                TripPlanId.generate(),
+                fromLocation,
+                toLocation,
+                searchCriteria
+        );
     }
 
     public record TripPlanStatistics(

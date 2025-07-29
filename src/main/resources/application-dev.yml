@@ -62,7 +62,7 @@ external:
 
 app:
   scheduling:
-    enabled: true
+    enabled: false
 
 business:
   vehicle-tracking:

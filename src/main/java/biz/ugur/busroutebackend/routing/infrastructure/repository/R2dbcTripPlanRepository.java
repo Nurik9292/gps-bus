@@ -26,13 +26,30 @@ public class R2dbcTripPlanRepository implements TripPlanRepository {
 
     @Override
     public Mono<TripPlan> save(TripPlan tripPlan) {
-        // Store only basic trip plan info for analytics
-        // Full trip options are typically not persisted, just returned to client
 
         String sql = """
-            INSERT INTO trip_plans (id, origin_latitude, origin_longitude, destination_latitude, 
-                                   destination_longitude, search_time, options_count, created_at)
-            VALUES (:id, :originLat, :originLon, :destLat, :destLon, :searchTime, :optionsCount, :createdAt)
+            INSERT INTO trip_plans (
+                                    id, 
+                                    origin_latitude, 
+                                    origin_longitude, 
+                                    destination_latitude, 
+                                    destination_longitude, 
+                                    search_time, 
+                                    options_count, 
+                                    max_transfers, 
+                                    max_walking_distance_meters,
+                                    created_at)
+            VALUES (
+                    :id, 
+                    :originLat, 
+                    :originLon, 
+                    :destLat, 
+                    :destLon,
+                    :searchTime, 
+                    :optionsCount, 
+                    :maxTransfers, 
+                    :maxWalkingDistance, 
+                    :createdAt)
             ON CONFLICT (id) DO UPDATE SET
                 options_count = :optionsCount,
                 updated_at = CURRENT_TIMESTAMP
@@ -40,23 +57,44 @@ public class R2dbcTripPlanRepository implements TripPlanRepository {
 
         return databaseClient.sql(sql)
                 .bind("id", tripPlan.getId().getValue())
-                .bind("originLat", tripPlan.getOriginLocation().getLatitude())
-                .bind("originLon", tripPlan.getOriginLocation().getLongitude())
-                .bind("destLat", tripPlan.getDestinationLocation().getLatitude())
-                .bind("destLon", tripPlan.getDestinationLocation().getLongitude())
-                .bind("searchTime", tripPlan.getSearchTime())
-                .bind("optionsCount", tripPlan.getTripOptions().size())
+                .bind("originLat", tripPlan.getOriginLatitude())
+                .bind("originLon", tripPlan.getOriginLongitude())
+                .bind("destLat", tripPlan.getDestinationLatitude())
+                .bind("destLon", tripPlan.getDestinationLongitude())
+                .bind("searchTime", tripPlan.getSearchTimeDb())
+                .bind("optionsCount", tripPlan.getOptionsCount())
+                .bind("maxTransfers", tripPlan.getMaxTransfers())
+                .bind("maxWalkingDistance", tripPlan.getMaxWalkingDistanceMeters())
                 .bind("createdAt", LocalDateTime.now())
                 .then()
                 .thenReturn(tripPlan)
-                .doOnSuccess(plan -> log.debug("Saved trip plan: {}", plan.getId()));
+                .doOnSuccess(plan -> log.debug("Saved trip plan: {}", plan.getId().getValue()))
+                .doOnError(error -> log.error("Failed to save trip plan: {}", error.getMessage()));
     }
 
     @Override
     public Mono<TripPlan> findById(TripPlanId tripPlanId) {
-        // In this simplified implementation, we don't reconstruct full trip plans
-        // This would require storing and deserializing trip options
-        return Mono.empty();
+        String sql = """
+            SELECT id, origin_latitude, origin_longitude, destination_latitude, destination_longitude,
+                   search_time, options_count, max_transfers, max_walking_distance_meters
+            FROM trip_plans 
+            WHERE id = :id
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("id", tripPlanId.getValue())
+                .map((row, metadata) -> new TripPlan(
+                        TripPlanId.of(row.get("id", String.class)),
+                        row.get("origin_latitude", Double.class),
+                        row.get("origin_longitude", Double.class),
+                        row.get("destination_latitude", Double.class),
+                        row.get("destination_longitude", Double.class),
+                        row.get("search_time", LocalDateTime.class),
+                        row.get("options_count", Integer.class),
+                        row.get("max_transfers", Integer.class),
+                        row.get("max_walking_distance_meters", Integer.class)
+                ))
+                .first();
     }
 
     @Override
@@ -107,8 +145,8 @@ public class R2dbcTripPlanRepository implements TripPlanRepository {
                         row.get("total_searches", Long.class),
                         row.get("successful_searches", Long.class),
                         row.get("avg_options_found", Double.class),
-                        0.0, // average travel time - would need more data
-                        "Unknown" // most popular route - would need more analysis
+                        0.0,
+                        "Unknown" //
                 ))
                 .all();
     }

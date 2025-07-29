@@ -19,17 +19,7 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * FindDirectRoutesUseCase - поиск прямых маршрутов без пересадок
- *
- * Алгоритм:
- * 1. Найти ближайшие остановки к точке отправления (радиус 800м)
- * 2. Найти ближайшие остановки к пункту назначения (радиус 800м)
- * 3. Для каждой пары остановок найти прямые автобусные соединения
- * 4. Рассчитать время: ходьба до остановки + поездка + ходьба от остановки
- * 5. Отсортировать по общему времени поездки
- * 6. Вернуть лучшие варианты
- */
+
 @Service
 @Slf4j
 public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.Command, Mono<TripPlan>> {
@@ -56,21 +46,18 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
         TripSearchCriteria criteria = command.searchCriteria != null ?
                 command.searchCriteria : TripSearchCriteria.defaultCriteria();
 
-        // Создаем новый план поездки
         return Mono.fromCallable(() -> new TripPlan(TripPlanId.generate(), fromLocation, toLocation, criteria))
                 .flatMap(tripPlan -> {
 
-                    // Проверяем можно ли дойти пешком
                     if (tripPlan.isWalkable()) {
                         log.debug("Destination is within walking distance: {}m",
                                 fromLocation.distanceTo(toLocation));
                         addWalkingOption(tripPlan, fromLocation, toLocation);
                     }
 
-                    // Параллельно ищем ближайшие остановки для обеих точек
                     return Mono.zip(
-                            findNearbyStopsWithLimit(fromLocation, 0.8, 8), // Максимум 8 остановок отправления
-                            findNearbyStopsWithLimit(toLocation, 0.8, 8)   // Максимум 8 остановок назначения
+                            findNearbyStopsWithLimit(fromLocation, 0.8, 8),
+                            findNearbyStopsWithLimit(toLocation, 0.8, 8)
                     ).flatMap(tuple -> {
                         List<BusStop> fromStops = tuple.getT1();
                         List<BusStop> toStops = tuple.getT2();
