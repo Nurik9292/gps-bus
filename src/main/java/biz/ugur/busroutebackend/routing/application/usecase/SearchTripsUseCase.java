@@ -22,24 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * SearchTripsUseCase - главный координатор поиска поездок
- *
- * Это главная точка входа для пользователей системы.
- * Координирует работу различных алгоритмов поиска и оптимизирует результаты.
- *
- * Стратегия поиска:
- * 1. Сначала ищем прямые маршруты (самые удобные)
- * 2. Если прямых маршрутов мало (< 3), добавляем варианты с пересадками
- * 3. Кэшируем популярные поиски для производительности
- * 4. Возвращаем топ-5 лучших вариантов
- *
- * Performance optimizations:
- * - Redis кэширование результатов поиска
- * - Параллельный поиск прямых и transfer маршрутов
- * - Интеллектуальная фильтрация неразумных вариантов
- * - Ограничение времени поиска (timeout 10 секунд)
- */
+
 @Service
 @Slf4j
 public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripSearchResponse>> {
@@ -65,25 +48,20 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                 request.getFrom().getLatitude(), request.getFrom().getLongitude(),
                 request.getTo().getLatitude(), request.getTo().getLongitude());
 
-        // Валидация входных данных
         if (!isValidRequest(request)) {
             return Mono.just(new TripSearchResponse("error", "Invalid search parameters", List.of()));
         }
 
-        // Конвертируем DTO в domain objects
         Location fromLocation = createLocationFromDTO(request.getFrom());
         Location toLocation = createLocationFromDTO(request.getTo());
         TripSearchCriteria searchCriteria = createSearchCriteria(request.getPreferences());
 
-        // Проверяем кэш для популярных поисков
         String cacheKey = createCacheKey(fromLocation, toLocation, searchCriteria);
 
         return checkCachedResults(cacheKey)
                 .switchIfEmpty(
-                        // Если нет в кэше, выполняем поиск
                         performTripSearch(fromLocation, toLocation, searchCriteria)
                                 .flatMap(response -> {
-                                    // Кэшируем результат если поиск успешный
                                     if ("success".equals(response.getStatus()) &&
                                             response.getTripOptions() != null &&
                                             !response.getTripOptions().isEmpty()) {
@@ -94,19 +72,16 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                                     return Mono.just(response);
                                 })
                 )
-                .timeout(Duration.ofSeconds(10)) // Максимум 10 секунд на поиск
+                .timeout(Duration.ofSeconds(10))
                 .doOnSuccess(response -> logSearchResult(request, response))
                 .doOnError(error -> log.error("Trip search failed", error))
                 .onErrorReturn(new TripSearchResponse("error", "Trip search timeout or error", List.of()));
     }
 
-    /**
-     * Основная логика поиска поездок
-     */
+
     private Mono<TripSearchResponse> performTripSearch(Location fromLocation, Location toLocation,
                                                        TripSearchCriteria searchCriteria) {
 
-        // СТРАТЕГИЯ: Сначала прямые маршруты, потом с пересадками если нужно
         return findDirectRoutesUseCase.execute(
                         new FindDirectRoutesUseCase.Command(fromLocation, toLocation, searchCriteria)
                 )

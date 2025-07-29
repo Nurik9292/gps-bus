@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("/api/admin/cities")
+@RequestMapping("/admin/cities")
 @Slf4j
 @CrossOrigin(origins = "*")
 public class AdminCityController {

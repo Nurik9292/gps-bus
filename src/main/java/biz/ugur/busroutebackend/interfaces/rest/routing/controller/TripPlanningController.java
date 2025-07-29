@@ -15,11 +15,12 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 @RestController
-@RequestMapping("/api/trip-planning")
+@RequestMapping("/trip-planning")
 @Slf4j
 @CrossOrigin(origins = "*")
 public class TripPlanningController {
@@ -98,6 +99,7 @@ public class TripPlanningController {
                 });
     }
 
+
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> healthCheck() {
         return ResponseEntity.ok(Map.of(
@@ -105,7 +107,7 @@ public class TripPlanningController {
                 "service", "Trip Planning Service",
                 "timestamp", LocalDateTime.now().toString(),
                 "version", "1.0.0",
-                "features", java.util.List.of(
+                "features", List.of(
                         "Direct route search",
                         "Transfer route search",
                         "Real-time ETA calculation",
@@ -124,7 +126,7 @@ public class TripPlanningController {
                                 "total_searches_today", 0,
                                 "average_search_time_ms", 850,
                                 "success_rate_percent", 95.2,
-                                "most_popular_routes", java.util.List.of("29", "12", "7A"),
+                                "most_popular_routes", List.of("29", "12", "7A"),
                                 "average_options_per_search", 3.4
                         ),
                         "timestamp", LocalDateTime.now().toString()

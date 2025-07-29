@@ -19,7 +19,7 @@ import reactor.core.publisher.Mono;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/admin/auth")
+@RequestMapping("/admin/auth")
 @RequiredArgsConstructor
 public class AuthController {
 

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 @Data
@@ -29,8 +30,8 @@ public class TripSearchResponse {
         this.status = status;
         this.message = message;
         this.searchTime = LocalDateTime.now();
-        this.tripOptions = tripOptions;
-        this.summary = new SearchSummary(tripOptions);
+        this.tripOptions = tripOptions != null ? tripOptions : Collections.emptyList();
+        this.summary = new SearchSummary(this.tripOptions);
     }
 
     @Data
@@ -51,13 +52,20 @@ public class TripSearchResponse {
         private Integer optionWithFewestTransfers;
 
         public SearchSummary(List<TripOptionDTO> options) {
-            this.totalOptions = options.size();
-            this.directRoutes = (int) options.stream().filter(o -> "direct".equals(o.getTripType())).count();
+            List<TripOptionDTO> safeOptions = options != null ? options : Collections.emptyList();
+
+            this.totalOptions = safeOptions.size();
+            this.directRoutes = (int) safeOptions.stream()
+                    .filter(o -> o.getTripType() != null && "direct".equals(o.getTripType()))
+                    .count();
             this.transferRoutes = totalOptions - directRoutes;
-            this.fastestOptionMinutes = options.stream()
+
+
+            this.fastestOptionMinutes = safeOptions.stream()
                     .mapToInt(TripOptionDTO::getTotalTravelMinutes)
                     .min().orElse(0);
-            this.optionWithFewestTransfers = options.stream()
+
+            this.optionWithFewestTransfers = safeOptions.stream()
                     .mapToInt(TripOptionDTO::getTransfersCount)
                     .min().orElse(0);
         }

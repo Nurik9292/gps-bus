@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("/api/admin/routes")
+@RequestMapping("/admin/routes")
 @Slf4j
 @CrossOrigin(origins = "*")
 public class AdminRouteController {

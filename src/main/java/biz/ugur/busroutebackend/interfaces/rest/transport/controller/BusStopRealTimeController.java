@@ -10,7 +10,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("/api/stops")
+@RequestMapping("/stops")
 @Slf4j
 public class BusStopRealTimeController {
 

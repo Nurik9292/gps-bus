@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("/api/admin/users")
+@RequestMapping("/admin/users")
 @Slf4j
 @CrossOrigin(origins = "*")
 public class AdminUserController {

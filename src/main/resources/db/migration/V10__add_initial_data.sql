@@ -6,7 +6,6 @@ INSERT INTO cities (id, name, name_tm, display_order) VALUES
                                                           ('city-005', 'Мары', 'Mary', 5)
     ON CONFLICT (id) DO NOTHING;
 
--- Создание супер-администратора
 INSERT INTO admins (id, username, password_hash, full_name, is_super_admin, is_active)
 VALUES (
            'admin-00001',

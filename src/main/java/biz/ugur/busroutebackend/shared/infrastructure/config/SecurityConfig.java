@@ -60,33 +60,36 @@ public class SecurityConfig {
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.GET, "/actuator/health").permitAll()
                         .pathMatchers(HttpMethod.GET, "/actuator/info").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/trip-planning/health").permitAll()
 
-                        .pathMatchers(HttpMethod.POST, "/api/admin/auth/login").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/admin/auth/refresh").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/admin/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/admin/auth/refresh").permitAll()
 
-                        .pathMatchers(HttpMethod.GET, "/api/public/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/api/routes/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/api/stops/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/api/trips/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/api/vehicles/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/public/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/routes/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/stops/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/trips/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/vehicles/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/trip-planning/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/trip-planning/**").permitAll()
 
                         .pathMatchers("/ws/**").permitAll()
 
-                        .pathMatchers(HttpMethod.GET, "/api/admin/auth/me").hasRole("ADMIN")
-                        .pathMatchers(HttpMethod.PUT, "/api/admin/profile").hasRole("ADMIN")
-                        .pathMatchers(HttpMethod.POST, "/api/admin/auth/logout").hasRole("ADMIN")
-                        .pathMatchers(HttpMethod.POST, "/api/admin/auth/change-password").hasRole("ADMIN")
+                        .pathMatchers(HttpMethod.GET, "/admin/auth/me").hasRole("ADMIN")
+                        .pathMatchers(HttpMethod.PUT, "/admin/profile").hasRole("ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/admin/auth/logout").hasRole("ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/admin/auth/change-password").hasRole("ADMIN")
 
-                        .pathMatchers("/api/admin/routes/**").hasRole("ADMIN")
-                        .pathMatchers("/api/admin/stops/**").hasRole("ADMIN")
-                        .pathMatchers("/api/admin/buses/**").hasRole("ADMIN")
-                        .pathMatchers("/api/admin/banners/**").hasRole("ADMIN")
-                        .pathMatchers("/api/admin/cities/**").hasRole("ADMIN")
+                        .pathMatchers("/admin/routes/**").hasRole("ADMIN")
+                        .pathMatchers("/admin/stops/**").hasRole("ADMIN")
+                        .pathMatchers("/admin/buses/**").hasRole("ADMIN")
+                        .pathMatchers("/admin/banners/**").hasRole("ADMIN")
+                        .pathMatchers("/admin/cities/**").hasRole("ADMIN")
 
-                        .pathMatchers("/api/admin/admins/**").hasRole("SUPER_ADMIN")
-                        .pathMatchers("/api/admin/system/**").hasRole("SUPER_ADMIN")
-                        .pathMatchers(HttpMethod.GET, "/api/admin/logs/**").hasRole("SUPER_ADMIN")
-                        .pathMatchers(HttpMethod.GET, "/api/admin/stats/**").hasRole("SUPER_ADMIN")
+                        .pathMatchers("/admin/admins/**").hasRole("SUPER_ADMIN")
+                        .pathMatchers("/admin/system/**").hasRole("SUPER_ADMIN")
+                        .pathMatchers(HttpMethod.GET, "/admin/logs/**").hasRole("SUPER_ADMIN")
+                        .pathMatchers(HttpMethod.GET, "/admin/stats/**").hasRole("SUPER_ADMIN")
 
                         .pathMatchers("/actuator/**").hasRole("SUPER_ADMIN")
 
@@ -98,22 +101,17 @@ public class SecurityConfig {
                 .build();
     }
 
-    /**
-     * JWT Authentication Filter Bean с Token Blacklist поддержкой
-     */
+
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
         return new JwtAuthenticationFilter(jwtService, tokenBlacklistService);
     }
 
-    /**
-     * CORS Configuration
-     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(List.of());
+        configuration.setAllowedOrigins(List.of("*"));
 
         configuration.setAllowedHeaders(List.of(
                 "Authorization",

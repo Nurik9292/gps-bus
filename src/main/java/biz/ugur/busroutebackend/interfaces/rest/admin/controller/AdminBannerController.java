@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("/api/admin/banners")
+@RequestMapping("/admin/banners")
 @Slf4j
 @CrossOrigin(origins = "*")
 public class AdminBannerController {
