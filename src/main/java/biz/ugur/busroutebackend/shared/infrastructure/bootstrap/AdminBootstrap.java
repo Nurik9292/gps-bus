@@ -40,7 +40,7 @@ public class AdminBootstrap {
         Admin defaultAdmin = new Admin(
                 defaultUsername,
                 defaultPassword,
-                "Default System Administrator",
+                "Super Administrator ",
                 true
         );
 

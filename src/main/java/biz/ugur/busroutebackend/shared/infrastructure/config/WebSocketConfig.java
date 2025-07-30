@@ -29,6 +29,7 @@ public class WebSocketConfig {
         SimpleUrlHandlerMapping mapping = new SimpleUrlHandlerMapping();
         mapping.setUrlMap(map);
         mapping.setOrder(10);
+
         return mapping;
     }
 

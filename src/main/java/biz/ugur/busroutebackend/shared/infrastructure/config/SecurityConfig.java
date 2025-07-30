@@ -64,6 +64,7 @@ public class SecurityConfig {
 
                         .pathMatchers(HttpMethod.POST, "/admin/auth/login").permitAll()
                         .pathMatchers(HttpMethod.POST, "/admin/auth/refresh").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/admin/users").permitAll()
 
                         .pathMatchers(HttpMethod.GET, "/public/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/routes/**").permitAll()
