@@ -7,6 +7,8 @@ CREATE TABLE bus_stops (
                            stop_code VARCHAR(20) UNIQUE,
                            is_active BOOLEAN DEFAULT true,
                            city_id VARCHAR(36),
+                           is_major_stop BOOLEAN DEFAULT false,
+                           has_shelter BOOLEAN DEFAULT false,
                            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                            version BIGINT DEFAULT 0

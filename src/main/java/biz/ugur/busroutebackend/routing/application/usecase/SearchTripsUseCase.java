@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.routing.application.dto.RouteSegmentDTO;
 import biz.ugur.busroutebackend.routing.application.dto.TripOptionDTO;
 import biz.ugur.busroutebackend.interfaces.rest.routing.dto.request.TripSearchRequest;
 import biz.ugur.busroutebackend.interfaces.rest.routing.dto.response.TripSearchResponse;
+import biz.ugur.busroutebackend.routing.domain.enums.SegmentType;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.repository.TripPlanRepository;
 import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;
@@ -33,7 +34,6 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
     private final TripPlanRepository tripPlanRepository;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
 
-    // Конфигурируемые таймауты
     private static final Duration CACHE_TIMEOUT = Duration.ofSeconds(2);
     private static final Duration DIRECT_ROUTES_TIMEOUT = Duration.ofSeconds(8);
     private static final Duration TRANSFER_ROUTES_TIMEOUT = Duration.ofSeconds(15);
@@ -59,7 +59,6 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                 searchId, request.getFrom().getLatitude(), request.getFrom().getLongitude(),
                 request.getTo().getLatitude(), request.getTo().getLongitude());
 
-        // Быстрая валидация
         if (!isValidRequest(request)) {
             log.warn("[{}] Invalid search parameters", searchId);
             return Mono.just(new TripSearchResponse("error", "Invalid search parameters", List.of()));
@@ -70,11 +69,10 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
         TripSearchCriteria searchCriteria = createSearchCriteria(request.getPreferences());
 
         String cacheKey = createCacheKey(fromLocation, toLocation, searchCriteria);
-
         return checkCachedResults(cacheKey, searchId)
                 .timeout(CACHE_TIMEOUT)
                 .doOnError(error -> log.warn("[{}] Cache check failed: {}", searchId, error.getMessage()))
-                .onErrorResume(error -> Mono.empty()) // Продолжаем поиск если cache недоступен
+                .onErrorResume(error -> Mono.empty())
                 .switchIfEmpty(
                         performTripSearchWithDiagnostics(fromLocation, toLocation, searchCriteria, searchId, startTime)
                                 .flatMap(response -> {
@@ -151,7 +149,6 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                                 searchId);
                     }
 
-                    // Иначе ищем дополнительно маршруты с пересадками
                     log.info("[{}] Found only {} direct routes, searching for transfer options", searchId, directOptionsCount);
 
                     return findRoutesWithTransfersUseCase.execute(
@@ -167,7 +164,7 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                             .onErrorResume(error -> {
                                 log.warn("[{}] Transfer routes search failed, returning direct routes only: {}",
                                         searchId, error.getMessage());
-                                return Mono.just(directPlan); // Возвращаем только прямые маршруты при ошибке
+                                return Mono.just(directPlan);
                             })
                             .flatMap(finalPlan -> {
                                 int totalOptions = finalPlan.getTripOptions().size();
@@ -186,24 +183,19 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                 });
     }
 
-    /**
-     * Проверить кэшированные результаты
-     */
+
     private Mono<TripSearchResponse> checkCachedResults(String cacheKey, String searchId) {
         return redisTemplate.opsForValue()
                 .get(cacheKey)
                 .cast(TripSearchResponse.class)
                 .doOnNext(cachedResponse -> {
                     log.info("[{}] Found cached trip search result", searchId);
-                    // Обновляем время поиска для кэшированного результата
                     cachedResponse.setSearchTime(LocalDateTime.now());
                 })
                 .doOnError(error -> log.warn("[{}] Cache read error: {}", searchId, error.getMessage()));
     }
 
-    /**
-     * Кэшировать результат поиска
-     */
+
     private Mono<Boolean> cacheSearchResult(String cacheKey, TripSearchResponse response, String searchId) {
         // Кэшируем на 30 минут для популярных направлений
         return redisTemplate.opsForValue()
@@ -218,9 +210,7 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                 .doOnError(error -> log.warn("[{}] Cache write error: {}", searchId, error.getMessage()));
     }
 
-    /**
-     * Сохранить план и создать ответ
-     */
+
     private Mono<TripSearchResponse> savePlanAndCreateResponse(TripPlan tripPlan, String message, String searchId) {
         log.info("[{}] Saving trip plan with {} options", searchId, tripPlan.getTripOptions().size());
 
@@ -229,10 +219,9 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                 .doOnError(error -> log.error("[{}] Failed to save trip plan: {}", searchId, error.getMessage()))
                 .onErrorResume(error -> {
                     log.warn("[{}] Continuing without saving trip plan due to error: {}", searchId, error.getMessage());
-                    return Mono.just(tripPlan); // Продолжаем без сохранения
+                    return Mono.just(tripPlan);
                 })
                 .then(Mono.fromCallable(() -> {
-                    // Берем лучшие 5 вариантов с интеллектуальной сортировкой
                     List<TripOptionDTO> options = selectBestOptions(tripPlan)
                             .stream()
                             .map(this::convertToDTO)
@@ -247,9 +236,7 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                         searchId, response.getTripOptions().size()));
     }
 
-    /**
-     * Выбрать лучшие варианты с разнообразием
-     */
+
     private List<TripOption> selectBestOptions(TripPlan tripPlan) {
         List<TripOption> allOptions = tripPlan.getTripOptions();
 
@@ -257,15 +244,12 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
             return tripPlan.getBestOptions(5);
         }
 
-        // Интеллектуальный отбор: разнообразие типов маршрутов
         List<TripOption> selectedOptions = new ArrayList<>();
 
-        // 1. Обязательно включаем лучший прямой маршрут (если есть)
         tripPlan.getDirectOptions().stream()
                 .findFirst()
                 .ifPresent(selectedOptions::add);
 
-        // 2. Обязательно включаем лучший с пересадками (если есть)
         tripPlan.getTransferOptions().stream()
                 .findFirst()
                 .ifPresent(option -> {
@@ -274,25 +258,21 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                     }
                 });
 
-        // 3. Добавляем самый быстрый
         TripOption fastest = tripPlan.getFastestOption();
         if (fastest != null && !selectedOptions.contains(fastest)) {
             selectedOptions.add(fastest);
         }
 
-        // 4. Добавляем с наименьшими пересадками
         TripOption fewestTransfers = tripPlan.getOptionWithFewestTransfers();
         if (fewestTransfers != null && !selectedOptions.contains(fewestTransfers)) {
             selectedOptions.add(fewestTransfers);
         }
 
-        // 5. Добавляем самый дешевый
         TripOption cheapest = tripPlan.getCheapestOption();
         if (cheapest != null && !selectedOptions.contains(cheapest)) {
             selectedOptions.add(cheapest);
         }
 
-        // 6. Дополняем до 5 лучшими оставшимися
         tripPlan.getBestOptions(10).stream()
                 .filter(option -> !selectedOptions.contains(option))
                 .limit(5 - selectedOptions.size())
@@ -301,9 +281,7 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
         return selectedOptions;
     }
 
-    /**
-     * Конвертировать domain object в DTO
-     */
+
     private TripOptionDTO convertToDTO(TripOption tripOption) {
         List<RouteSegmentDTO> segments = tripOption.getRouteSegments()
                 .stream()
@@ -320,16 +298,13 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                 segments
         );
 
-        // Добавляем дополнительную информацию
         dto.setEstimatedDeparture(tripOption.getEstimatedDeparture());
         dto.setEstimatedArrival(tripOption.getEstimatedArrival());
 
         return dto;
     }
 
-    /**
-     * Конвертировать segment в DTO
-     */
+
     private RouteSegmentDTO convertSegmentToDTO(RouteSegment segment) {
         RouteSegmentDTO dto = new RouteSegmentDTO(
                 segment.getType().name().toLowerCase(),
@@ -350,11 +325,38 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
                 segment.getToLocation().getLongitude(),
                 segment.getToLocation().getDescription()
         ));
+        log.info("🔍 BUS SEGMENT type: {} ", segment.getType());
+        if (segment.getType() == SegmentType.BUS_RIDE) {
+            log.info("🔍 BUS SEGMENT DEBUG: route={}, hasWKT={}, wkt={}",
+                    segment.getRouteNumber(),
+                    segment.getRouteGeometryWkt() != null,
+                    segment.getRouteGeometryWkt() != null ?
+                            segment.getRouteGeometryWkt().substring(0, Math.min(50, segment.getRouteGeometryWkt().length())) + "..."
+                            : "NULL");
+
+            if (segment.getRouteGeometryWkt() != null) {
+                RouteSegmentDTO.RouteGeometryDTO geometry =
+                        RouteSegmentDTO.RouteGeometryDTO.fromRouteSegment(segment);
+
+                if (geometry != null) {
+                    dto.setRouteGeometry(geometry);
+                    dto.setTotalDistanceMeters(segment.getTotalDistanceMeters());
+
+                    log.info("✅ GEOMETRY ADDED: route={}, coordinates={}, distance={}",
+                            segment.getRouteNumber(),
+                            geometry.getCoordinates().size(),
+                            segment.getTotalDistanceMeters());
+                } else {
+                    log.warn("❌ GEOMETRY PARSING FAILED: route={}", segment.getRouteNumber());
+                }
+            } else {
+                log.warn("❌ NO WKT GEOMETRY: route={}", segment.getRouteNumber());
+            }
+        }
 
         return dto;
     }
 
-    // Вспомогательные методы
 
     private String generateSearchId(TripSearchRequest request) {
         return String.format("SEARCH_%d_%s",
@@ -367,24 +369,21 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
             return false;
         }
 
-        // Проверяем границы Туркменистана
-        if (!isLocationInTurkmenistan(request.getFrom()) || !isLocationInTurkmenistan(request.getTo())) {
+        if (isLocationInTurkmenistan(request.getFrom()) || isLocationInTurkmenistan(request.getTo())) {
             return false;
         }
 
-        // Проверяем что точки не совпадают
         double distance = calculateDistance(request.getFrom(), request.getTo());
         return distance >= 100; // Минимум 100 метров
     }
 
     private boolean isLocationInTurkmenistan(TripSearchRequest.LocationDTO location) {
-        return location.getLatitude() >= 35.0 && location.getLatitude() <= 43.0 &&
-                location.getLongitude() >= 52.0 && location.getLongitude() <= 67.0;
+        return !(location.getLatitude() >= 35.0) || !(location.getLatitude() <= 43.0) ||
+                !(location.getLongitude() >= 52.0) || !(location.getLongitude() <= 67.0);
     }
 
     private double calculateDistance(TripSearchRequest.LocationDTO from, TripSearchRequest.LocationDTO to) {
-        // Haversine formula для расчета расстояния
-        final int R = 6371000; // Радиус Земли в метрах
+        final int R = 6371000;
 
         double lat1Rad = Math.toRadians(from.getLatitude());
         double lat2Rad = Math.toRadians(to.getLatitude());

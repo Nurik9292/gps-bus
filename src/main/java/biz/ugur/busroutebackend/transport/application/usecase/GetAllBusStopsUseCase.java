@@ -5,6 +5,9 @@ import biz.ugur.busroutebackend.transport.application.dto.BusStopListResponse;
 import biz.ugur.busroutebackend.transport.application.dto.BusStopResponse;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
+import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
+import io.r2dbc.spi.Row;
+import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
@@ -69,16 +72,15 @@ public class GetAllBusStopsUseCase implements UseCase<GetAllBusStopsUseCase.Requ
                 .one();
     }
 
-    private BusStop mapRowToBusStop(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
+    private BusStop mapRowToBusStop(Row row, RowMetadata metadata) {
         return new BusStop(
-                biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId.of(row.get("id", String.class)),
+                BusStopId.of(row.get("id", String.class)),
                 row.get("stop_name", String.class),
                 row.get("stop_code", String.class),
                 row.get("latitude", java.math.BigDecimal.class),
                 row.get("longitude", java.math.BigDecimal.class),
                 row.get("is_active", Boolean.class),
-                row.get("is_major_stop", Boolean.class),
-                row.get("has_shelter", Boolean.class)
+                row.get("is_major_stop", Boolean.class)
         );
     }
 
@@ -91,7 +93,6 @@ public class GetAllBusStopsUseCase implements UseCase<GetAllBusStopsUseCase.Requ
                 busStop.getLongitude(),
                 busStop.getIsActive(),
                 busStop.getIsMajorStop(),
-                busStop.getHasShelter(),
                 busStop.getServingRoutesCount()
         );
     }

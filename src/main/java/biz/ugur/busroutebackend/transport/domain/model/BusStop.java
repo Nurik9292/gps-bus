@@ -35,10 +35,7 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
     @Column("is_major_stop")
     private Boolean isMajorStop;
 
-    @Column("has_shelter")
-    private Boolean hasShelter;
 
-    // Constructor для создания нового BusStop
     public BusStop(String stopName, String stopCode, BigDecimal latitude, BigDecimal longitude) {
         this.id = BusStopId.generate();
         this.stopName = validateStopName(stopName);
@@ -47,12 +44,10 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
         this.longitude = longitude;
         this.isActive = true;
         this.isMajorStop = false;
-        this.hasShelter = false;
     }
 
-    // Constructor для R2DBC mapping
     public BusStop(BusStopId id, String stopName, String stopCode, BigDecimal latitude,
-                   BigDecimal longitude, Boolean isActive, Boolean isMajorStop, Boolean hasShelter) {
+                   BigDecimal longitude, Boolean isActive, Boolean isMajorStop) {
         this.id = id;
         this.stopName = stopName;
         this.stopCode = stopCode;
@@ -60,11 +55,10 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
         this.longitude = longitude;
         this.isActive = isActive;
         this.isMajorStop = isMajorStop;
-        this.hasShelter = hasShelter;
     }
 
     public int getServingRoutesCount() {
-        // Заглушка - в реальности нужен подсчет через репозиторий
+
         return isMajorStop ? 5 : 2;
     }
 

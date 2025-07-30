@@ -73,7 +73,6 @@ public class TripPlanningController {
                         "latitude", stop.getLatitude().doubleValue(),
                         "longitude", stop.getLongitude().doubleValue(),
                         "is_major_stop", stop.getIsMajorStop(),
-                        "has_shelter", stop.getHasShelter(),
                         "distance_meters", Math.round(calculateDistance(lat, lon,
                                 stop.getLatitude().doubleValue(), stop.getLongitude().doubleValue()))
                 ))

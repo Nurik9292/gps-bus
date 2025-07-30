@@ -75,18 +75,15 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
                             return Mono.just(tripPlan);
                         }
 
-                        // Ищем прямые маршруты между парами остановок
                         return routeCalculationService.findDirectRoutes(fromStops, toStops)
                                 .filter(directRoute -> isRouteReasonable(directRoute, criteria))
                                 .flatMap(directRoute -> createDirectTripOption(directRoute, fromLocation, toLocation))
-                                .filter(option -> option != null) // Убираем null варианты
-                                .take(10) // Ограничиваем количество для производительности
+                                .filter(Objects::nonNull)
+                                .take(10)
                                 .collectList()
                                 .map(tripOptions -> {
-                                    // Добавляем все найденные варианты в план
                                     tripOptions.forEach(tripPlan::addTripOption);
 
-                                    // Публикуем domain events
                                     tripPlan.getUncommittedEvents().forEach(eventBus::publish);
                                     tripPlan.markEventsAsCommitted();
 
@@ -107,9 +104,7 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
                 .doOnError(error -> log.error("Error finding direct routes", error));
     }
 
-    /**
-     * Найти ближайшие остановки с ограничением количества
-     */
+
     private Mono<List<BusStop>> findNearbyStopsWithLimit(Location location, double radiusKm, int maxStops) {
         return routeCalculationService.findNearbyStops(location, radiusKm)
                 .take(maxStops) // Ограничиваем количество остановок
@@ -118,7 +113,6 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
                             stop.getLatitude().doubleValue(),
                             stop.getLongitude().doubleValue()
                     );
-                    // Фильтруем слишком далекие остановки (больше 1км)
                     return distance <= 1000;
                 })
                 .sort((stop1, stop2) -> {
@@ -156,18 +150,14 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
         }
     }
 
-    /**
-     * Проверить разумность маршрута
-     */
+
     private boolean isRouteReasonable(RouteCalculationService.DirectRouteResult directRoute,
                                       TripSearchCriteria criteria) {
 
-        // Слишком долгая поездка (больше 2 часов)
         if (directRoute.estimatedTravelMinutes() > 120) {
             return false;
         }
 
-        // Слишком короткая поездка (меньше 2 минут) - лучше пешком
         if (directRoute.estimatedTravelMinutes() < 2) {
             return false;
         }
@@ -175,12 +165,14 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
         return true;
     }
 
-    /**
-     * Создать TripOption для прямого маршрута
-     */
+
     private Mono<TripOption> createDirectTripOption(RouteCalculationService.DirectRouteResult directRoute,
                                                     Location originalFrom, Location originalTo) {
 
+        log.info("🎯 STARTING createDirectTripOption for route: {}", directRoute.route().getRouteNumber());
+        log.info("🔍 GEOMETRY CHECK: hasGeometry={}, distance={}",
+                directRoute.route().getRouteGeometryForward() != null,
+                directRoute.route().getTotalDistanceForwardMeters());
         Location fromStopLocation = new Location(
                 directRoute.fromStop().getLatitude().doubleValue(),
                 directRoute.fromStop().getLongitude().doubleValue(),
@@ -217,10 +209,59 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
                         return null;
                     }
 
+                    log.info("🔍 ROUTE DEBUG: number={}, hasGeometry={}, distance={}",
+                            directRoute.route().getRouteNumber(),
+                            directRoute.route().getRouteGeometryForward() != null,
+                            directRoute.route().getTotalDistanceForwardMeters());
+
+//                    List<RouteSegment> segments = List.of(
+//                            RouteSegment.walkingSegment(originalFrom, fromStopLocation, walkingToStop),
+//
+//
+//                            RouteSegment.busRideSegmentWithGeometry(
+//                                    fromStopLocation,
+//                                    toStopLocation,
+//                                    busRideTime,
+//                                    directRoute.route().getRouteNumber(),
+//                                    directRoute.route().getRouteGeometryForward(),
+//                                    directRoute.route().getTotalDistanceForwardMeters()
+//                            ),
+//
+//                            RouteSegment.walkingSegment(toStopLocation, originalTo, walkingFromStop)
+//                    );
+
+                    String routeGeometry = directRoute.route().getRouteGeometryForward();
+                    Integer totalDistance = directRoute.route().getTotalDistanceForwardMeters();
+
+                    log.info("🔍 CREATING ROUTE SEGMENT: route={}, hasGeometry={}, distance={}",
+                            directRoute.route().getRouteNumber(),
+                            routeGeometry != null,
+                            totalDistance);
+
+                    RouteSegment busSegment;
+                    if (routeGeometry != null) {
+                        log.info("✅ USING busRideSegmentWithGeometry for route {}", directRoute.route().getRouteNumber());
+                        busSegment = RouteSegment.busRideSegmentWithGeometry(
+                                fromStopLocation,  // ✅ Эти переменные уже определены выше в методе
+                                toStopLocation,    // ✅ Эти переменные уже определены выше в методе
+                                busRideTime,
+                                directRoute.route().getRouteNumber(),
+                                routeGeometry,
+                                totalDistance
+                        );
+                    } else {
+                        log.warn("❌ NO GEOMETRY - using basic busRideSegment for route {}", directRoute.route().getRouteNumber());
+                        busSegment = RouteSegment.busRideSegment(
+                                fromStopLocation,
+                                toStopLocation,
+                                busRideTime,
+                                directRoute.route().getRouteNumber()
+                        );
+                    }
+
                     List<RouteSegment> segments = List.of(
                             RouteSegment.walkingSegment(originalFrom, fromStopLocation, walkingToStop),
-                            RouteSegment.busRideSegment(fromStopLocation, toStopLocation, busRideTime,
-                                    directRoute.route().getRouteNumber()),
+                            busSegment,  // ✅ Используем созданный сегмент с геометрией
                             RouteSegment.walkingSegment(toStopLocation, originalTo, walkingFromStop)
                     );
 
@@ -231,13 +272,10 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
                         directRoute.route().getRouteNumber(), option.getTotalTravelMinutes()));
     }
 
-    /**
-     * Улучшенная версия создания TripOption с асинхронным расчетом ETA
-     */
+
     private Mono<TripOption> createDirectTripOptionAsync(RouteCalculationService.DirectRouteResult directRoute,
                                                          Location originalFrom, Location originalTo) {
 
-        // Создаем локации остановок
         Location busStopLocation = new Location(
                 directRoute.fromStop().getLatitude().doubleValue(),
                 directRoute.fromStop().getLongitude().doubleValue(),
@@ -250,7 +288,6 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
                 directRoute.toStop().getStopName()
         );
 
-        // Параллельно рассчитываем время
         Mono<Integer> walkingToStopMono = Mono.fromCallable(() ->
                 etaCalculationService.calculateWalkingTimeMinutes(originalFrom, busStopLocation));
 
@@ -269,7 +306,6 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
                     int busRideTime = tuple.getT2();
                     int walkingFromStop = tuple.getT3();
 
-                    // Проверяем разумность времени ходьбы
                     if (walkingToStop > 15 || walkingFromStop > 15) {
                         log.debug("Walking time too long for route {}: {}+{} minutes",
                                 directRoute.route().getRouteNumber(), walkingToStop, walkingFromStop);
@@ -278,8 +314,16 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
 
                     List<RouteSegment> segments = List.of(
                             RouteSegment.walkingSegment(originalFrom, busStopLocation, walkingToStop),
-                            RouteSegment.busRideSegment(busStopLocation, destinationStopLocation,
-                                    busRideTime, directRoute.route().getRouteNumber()),
+
+                            RouteSegment.busRideSegmentWithGeometry(
+                                    busStopLocation,
+                                    destinationStopLocation,
+                                    busRideTime,
+                                    directRoute.route().getRouteNumber(),
+                                    directRoute.route().getRouteGeometryForward(),
+                                    directRoute.route().getTotalDistanceForwardMeters()
+                            ),
+
                             RouteSegment.walkingSegment(destinationStopLocation, originalTo, walkingFromStop)
                     );
 
@@ -293,10 +337,8 @@ public class FindDirectRoutesUseCase implements UseCase<FindDirectRoutesUseCase.
                 });
     }
 
-    // Command class
     public record Command(Location fromLocation, Location toLocation, TripSearchCriteria searchCriteria) {
 
-        // Convenience constructor с дефолтными критериями
         public Command(Location fromLocation, Location toLocation) {
             this(fromLocation, toLocation, TripSearchCriteria.defaultCriteria());
         }

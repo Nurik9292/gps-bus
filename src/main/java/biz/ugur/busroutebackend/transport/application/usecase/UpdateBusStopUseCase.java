@@ -42,9 +42,8 @@ public class UpdateBusStopUseCase implements UseCase<UpdateBusStopUseCase.Reques
                             request.updateRequest.getIsActive() != null ?
                                     request.updateRequest.getIsActive() : busStop.getIsActive(),
                             request.updateRequest.getIsMajorStop() != null ?
-                                    request.updateRequest.getIsMajorStop() : busStop.getIsMajorStop(),
-                            request.updateRequest.getHasShelter() != null ?
-                                    request.updateRequest.getHasShelter() : busStop.getHasShelter()
+                                    request.updateRequest.getIsMajorStop() : busStop.getIsMajorStop()
+
                     );
 
                     return busStopRepository.save(updatedStop);
@@ -67,7 +66,6 @@ public class UpdateBusStopUseCase implements UseCase<UpdateBusStopUseCase.Reques
                 busStop.getLongitude(),
                 busStop.getIsActive(),
                 busStop.getIsMajorStop(),
-                busStop.getHasShelter(),
                 busStop.getServingRoutesCount()
         );
     }

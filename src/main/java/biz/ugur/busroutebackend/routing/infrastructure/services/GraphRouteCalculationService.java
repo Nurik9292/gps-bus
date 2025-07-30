@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
+import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,15 +25,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-/**
- * Улучшенная версия сервиса поиска маршрутов с оптимизированными алгоритмами
- *
- * Основные улучшения:
- * - Кэширование результатов поиска в Redis
- * - Оптимизированные SQL запросы с индексами
- * - Интеллектуальная фильтрация маршрутов
- * - Параллельный поиск для производительности
- */
+
 @Service
 @Slf4j
 public class GraphRouteCalculationService implements RouteCalculationService {
@@ -103,10 +96,10 @@ public class GraphRouteCalculationService implements RouteCalculationService {
             return Flux.empty();
         }
 
-        // Оптимизированный SQL запрос с индексами
         String sql = """
             SELECT DISTINCT 
                 br.id as route_id, br.route_number, br.route_name, br.route_color,
+                br.route_geometry_forward, br.total_distance_forward_meters,
                 rs1.stop_id as from_stop_id, bs1.stop_name as from_stop_name,
                 bs1.latitude as from_lat, bs1.longitude as from_lon,
                 rs2.stop_id as to_stop_id, bs2.stop_name as to_stop_name,
@@ -130,6 +123,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
             AND bs1.is_active = true 
             AND bs2.is_active = true
             GROUP BY br.id, br.route_number, br.route_name, br.route_color,
+                     br.route_geometry_forward, br.total_distance_forward_meters,
                      rs1.stop_id, bs1.stop_name, bs1.latitude, bs1.longitude,
                      rs2.stop_id, bs2.stop_name, bs2.latitude, bs2.longitude,
                      rs1.stop_sequence, rs2.stop_sequence, rs1.direction,
@@ -149,16 +143,28 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                 .bind("fromStopIds", fromStopIds)
                 .bind("toStopIds", toStopIds)
                 .map(row -> {
-                    // Создаем BusRoute с дополнительной информацией
+
                     BusRoute route = new BusRoute(
+                            BusRouteId.of(row.get("route_id", String.class)),
                             row.get("route_number", String.class),
                             row.get("route_name", String.class),
                             null,
                             row.get("route_color", String.class) != null ?
-                                    row.get("route_color", String.class) : "#1976D2"
+                                    row.get("route_color", String.class) : "#1976D2",
+                            true,
+                            new BigDecimal("1.00"),
+                            null,
+                            row.get("route_geometry_forward", String.class),
+                            null,
+                            row.get("total_distance_forward_meters", Integer.class),
+                            null
                     );
 
-                    // Создаем BusStops с координатами
+                    log.info("🔥 ROUTE CREATED: number={}, hasGeometry={}, distance={}",
+                            route.getRouteNumber(),
+                            route.getRouteGeometryForward() != null,
+                            route.getTotalDistanceForwardMeters());
+
                     BusStop fromStop = new BusStop(
                             row.get("from_stop_name", String.class),
                             row.get("from_stop_id", String.class),
@@ -176,7 +182,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                     Integer estimatedMinutes = row.get("estimated_travel_minutes", Integer.class);
                     Long activeVehicles = row.get("active_vehicles_count", Long.class);
 
-                    // Корректируем время на основе количества активных автобусов
                     int adjustedMinutes = adjustTravelTimeByVehicleCount(estimatedMinutes, activeVehicles);
 
                     return new DirectRouteResult(
@@ -184,8 +189,8 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                             fromStop,
                             toStop,
                             adjustedMinutes,
-                            0.0, // Walking distance будет рассчитано отдельно
-                            0.0  // Walking distance будет рассчитано отдельно
+                            0.0,
+                            0.0
                     );
                 })
                 .all()
@@ -201,7 +206,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
             return Flux.empty();
         }
 
-        // Улучшенный SQL для поиска пересадок с геопространственными функциями
         String sql = """
             WITH potential_transfers AS (
                 SELECT DISTINCT
@@ -281,7 +285,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                 .bind("fromStopIds", fromStopIds)
                 .bind("toStopIds", toStopIds)
                 .map(row -> {
-                    // Создаем первый маршрут
                     BusRoute firstRoute = new BusRoute(
                             row.get("first_route_number", String.class),
                             row.get("first_route_name", String.class),
@@ -299,7 +302,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                                     row.get("second_route_color", String.class) : "#1976D2"
                     );
 
-                    // Создаем остановки
                     BusStop fromStop = new BusStop(
                             row.get("from_stop_name", String.class),
                             row.get("from_stop_id", String.class),
@@ -314,16 +316,14 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                             row.get("transfer_lon", BigDecimal.class)
                     );
 
-                    // Устанавливаем свойства остановки пересадки
                     transferStop = new BusStop(
                             transferStop.getId(),
                             transferStop.getStopName(),
                             transferStop.getStopCode(),
                             transferStop.getLatitude(),
                             transferStop.getLongitude(),
-                            true, // is_active
-                            row.get("transfer_is_major", Boolean.class), // is_major_stop
-                            false // has_shelter
+                            true,
+                            row.get("transfer_is_major", Boolean.class)
                     );
 
                     BusStop toStop = new BusStop(
@@ -407,23 +407,19 @@ public class GraphRouteCalculationService implements RouteCalculationService {
     }
 
 
-    /**
-     * Type-safe получение результатов из кэша с JSON десериализацией
-     */
+
     private Flux<TwoTransferRouteResult> getCachedTwoTransferResults(String cacheKey) {
         return redisTemplate.opsForValue()
                 .get(cacheKey)
-                .cast(String.class) // Кэшируем как JSON строку
+                .cast(String.class)
                 .flatMapMany(jsonString -> {
                     try {
                         log.debug("Found cached two-transfer routes");
 
-                        // Десериализуем JSON в типизированный список
                         ObjectMapper objectMapper = new ObjectMapper();
                         TypeReference<List<TwoTransferRouteResultDTO>> typeRef = new TypeReference<>() {};
                         List<TwoTransferRouteResultDTO> dtoList = objectMapper.readValue(jsonString, typeRef);
 
-                        // Конвертируем DTO обратно в domain objects
                         List<TwoTransferRouteResult> results = dtoList.stream()
                                 .map(this::convertDTOToTwoTransferResult)
                                 .filter(Objects::nonNull)
@@ -443,9 +439,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                 });
     }
 
-    /**
-     * Type-safe сохранение результатов в кэш с JSON сериализацией
-     */
+
     private Mono<Boolean> cacheTwoTransferResults(String cacheKey, List<TwoTransferRouteResult> results) {
         if (results.isEmpty()) {
             return Mono.just(false);
@@ -453,12 +447,10 @@ public class GraphRouteCalculationService implements RouteCalculationService {
 
         return Mono.fromCallable(() -> {
                     try {
-                        // Конвертируем domain objects в DTO для сериализации
                         List<TwoTransferRouteResultDTO> dtoList = results.stream()
                                 .map(this::convertTwoTransferResultToDTO)
                                 .collect(Collectors.toList());
 
-                        // Сериализуем в JSON
                         ObjectMapper objectMapper = new ObjectMapper();
                         return objectMapper.writeValueAsString(dtoList);
 
@@ -484,7 +476,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
     private Flux<TwoTransferRouteResult> performTwoTransferSearch(List<BusStop> fromStops, List<BusStop> toStops,
                                                                   double maxTransferDistanceKm) {
 
-        // Сложный SQL с тремя уровнями CTE для оптимизации
         String sql = """
         WITH 
         -- Первый уровень: находим все возможные первые сегменты (A → transfer1)
@@ -687,16 +678,14 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                                 row.get("first_transfer_lon", BigDecimal.class)
                         );
 
-                        // Устанавливаем is_major_stop для первой пересадки
                         firstTransferStop = new BusStop(
                                 firstTransferStop.getId(),
                                 firstTransferStop.getStopName(),
                                 firstTransferStop.getStopCode(),
                                 firstTransferStop.getLatitude(),
                                 firstTransferStop.getLongitude(),
-                                true, // is_active
-                                row.get("first_transfer_is_major", Boolean.class), // is_major_stop
-                                false // has_shelter
+                                true,
+                                row.get("first_transfer_is_major", Boolean.class)
                         );
 
                         BusStop secondTransferStop = new BusStop(
@@ -706,16 +695,14 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                                 row.get("second_transfer_lon", BigDecimal.class)
                         );
 
-                        // Устанавливаем is_major_stop для второй пересадки
                         secondTransferStop = new BusStop(
                                 secondTransferStop.getId(),
                                 secondTransferStop.getStopName(),
                                 secondTransferStop.getStopCode(),
                                 secondTransferStop.getLatitude(),
                                 secondTransferStop.getLongitude(),
-                                true, // is_active
-                                row.get("second_transfer_is_major", Boolean.class), // is_major_stop
-                                false // has_shelter
+                                true,
+                                row.get("second_transfer_is_major", Boolean.class)
                         );
 
                         BusStop toStop = new BusStop(
@@ -753,7 +740,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                                 adjustedSecondMinutes,
                                 secondTransferWaitTime,
                                 adjustedThirdMinutes,
-                                0.0, 0.0 // Walking distances будут рассчитаны отдельно
+                                0.0, 0.0
                         );
 
                     } catch (Exception e) {
@@ -822,7 +809,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                 .all();
     }
 
-    // Приватные вспомогательные методы
 
     private Mono<Boolean> checkStopsConnectionInDatabase(BusStop stop1, BusStop stop2) {
         String sql = """
@@ -840,9 +826,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                 .defaultIfEmpty(false);
     }
 
-    /**
-     * Корректирует время поездки на основе количества активных автобусов на маршруте
-     */
+
     private int adjustTravelTimeByVehicleCount(Integer baseMinutes, Long vehicleCount) {
         if (baseMinutes == null) return 20; // Дефолтное время
         if (vehicleCount == null || vehicleCount == 0) return baseMinutes + 10; // Добавляем время ожидания
@@ -855,28 +839,23 @@ public class GraphRouteCalculationService implements RouteCalculationService {
         return baseMinutes + 10; // Очень редкий сервис
     }
 
-    /**
-     * Рассчитывает время ожидания на пересадке
-     */
+
     private int calculateTransferWaitTime(Boolean isMajorStop, Long fromRouteVehicles, Long toRouteVehicles) {
-        // Базовое время пересадки
         int baseTransferTime = Boolean.TRUE.equals(isMajorStop) ? 3 : 5;
 
-        // Учитываем частоту исходящего маршрута (с которого пересаживаемся)
         long fromVehicleCount = fromRouteVehicles != null ? fromRouteVehicles : 0;
 
-        // Учитываем частоту целевого маршрута (на который пересаживаемся)
         long toVehicleCount = toRouteVehicles != null ? toRouteVehicles : 0;
 
         int waitTime;
         if (toVehicleCount >= 5) {
-            waitTime = 4; // Очень частый сервис
+            waitTime = 4;
         } else if (toVehicleCount >= 3) {
-            waitTime = 7; // Хороший сервис
+            waitTime = 7;
         } else if (toVehicleCount >= 1) {
-            waitTime = 12; // Редкий сервис
+            waitTime = 12;
         } else {
-            waitTime = 18; // Очень редкий сервис
+            waitTime = 18;
         }
 
         // Корректировка в зависимости от частоты исходящего маршрута

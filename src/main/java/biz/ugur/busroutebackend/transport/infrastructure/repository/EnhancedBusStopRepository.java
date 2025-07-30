@@ -42,7 +42,6 @@ public class EnhancedBusStopRepository extends R2dbcBusStopRepository {
                 .bind("longitude", busStop.getLongitude())
                 .bind("isActive", busStop.getIsActive())
                 .bind("isMajorStop", busStop.getIsMajorStop())
-                .bind("hasShelter", busStop.getHasShelter())
                 .bind("createdAt", now)
                 .bind("updatedAt", now)
                 .bind("version", 0L)
@@ -67,7 +66,6 @@ public class EnhancedBusStopRepository extends R2dbcBusStopRepository {
                 .bind("longitude", busStop.getLongitude())
                 .bind("isActive", busStop.getIsActive())
                 .bind("isMajorStop", busStop.getIsMajorStop())
-                .bind("hasShelter", busStop.getHasShelter())
                 .bind("updatedAt", Instant.now())
                 .then()
                 .thenReturn(busStop);

@@ -40,7 +40,6 @@ public class R2dbcBusStopRepository implements BusStopRepository {
                 .doOnNext(stop -> log.debug("Found bus stop by ID: {}", stopId.getValue()));
     }
 
-    // ГЛАВНЫЙ МЕТОД ДЛЯ TRIP PLANNING
     @Override
     public Flux<BusStop> findStopsWithinRadius(Double centerLat, Double centerLon, Double radiusKm) {
         String sql = """
@@ -131,15 +130,33 @@ public class R2dbcBusStopRepository implements BusStopRepository {
     }
 
     private BusStop mapRowToBusStop(Row row, RowMetadata metadata) {
+        String id = row.get("id", String.class);
+        String stopName = row.get("stop_name", String.class);
+        String stopCode = row.get("stop_code", String.class);
+        BigDecimal latitude = row.get("latitude", BigDecimal.class);
+        BigDecimal longitude = row.get("longitude", BigDecimal.class);
+        Boolean isActive = row.get("is_active", Boolean.class);
+
+        Boolean isMajorStop = safeGet(row, "is_major_stop", Boolean.class, false);
+
         return new BusStop(
-                BusStopId.of(row.get("id", String.class)),
-                row.get("stop_name", String.class),
-                row.get("stop_code", String.class),
-                row.get("latitude", BigDecimal.class),
-                row.get("longitude", BigDecimal.class),
-                row.get("is_active", Boolean.class),
-                row.get("is_major_stop", Boolean.class),
-                row.get("has_shelter", Boolean.class)
+                BusStopId.of(id),
+                stopName,
+                stopCode,
+                latitude,
+                longitude,
+                isActive,
+                isMajorStop
         );
+    }
+
+    private <T> T safeGet(Row row, String columnName, Class<T> type, T defaultValue) {
+        try {
+            T value = row.get(columnName, type);
+            return value != null ? value : defaultValue;
+        } catch (Exception e) {
+            log.debug("Column '{}' not found, using default value: {}", columnName, defaultValue);
+            return defaultValue;
+        }
     }
 }

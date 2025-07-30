@@ -55,8 +55,7 @@ public class CreateBusStopUseCase implements UseCase<BusStopCreateRequest, Mono<
                     busStop.getLatitude(),
                     busStop.getLongitude(),
                     request.getIsActive(),
-                    request.getIsMajorStop(),
-                    request.getHasShelter()
+                    request.getIsMajorStop()
             );
         }
 
@@ -79,7 +78,6 @@ public class CreateBusStopUseCase implements UseCase<BusStopCreateRequest, Mono<
                 busStop.getLongitude(),
                 busStop.getIsActive(),
                 busStop.getIsMajorStop(),
-                busStop.getHasShelter(),
                 busStop.getServingRoutesCount()
         );
     }

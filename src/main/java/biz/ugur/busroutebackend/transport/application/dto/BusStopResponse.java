@@ -42,9 +42,14 @@ public class BusStopResponse {
     @JsonProperty("updated_at")
     private Instant updatedAt;
 
-    public BusStopResponse(String id, String stopName, String stopCode, BigDecimal latitude,
-                           BigDecimal longitude, Boolean isActive, Boolean isMajorStop,
-                           Boolean hasShelter, Integer servingRoutesCount) {
+    public BusStopResponse(String id,
+                           String stopName,
+                           String stopCode,
+                           BigDecimal latitude,
+                           BigDecimal longitude,
+                           Boolean isActive,
+                           Boolean isMajorStop,
+                          Integer servingRoutesCount) {
         this.id = id;
         this.stopName = stopName;
         this.stopCode = stopCode;
@@ -52,7 +57,6 @@ public class BusStopResponse {
         this.longitude = longitude;
         this.isActive = isActive;
         this.isMajorStop = isMajorStop;
-        this.hasShelter = hasShelter;
         this.servingRoutesCount = servingRoutesCount;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
