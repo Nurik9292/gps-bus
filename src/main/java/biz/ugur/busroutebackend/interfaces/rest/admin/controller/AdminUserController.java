@@ -18,7 +18,6 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/admin/users")
 @Slf4j
-@CrossOrigin(origins = "*")
 public class AdminUserController {
 
     private final CreateAdminUseCase createAdminUseCase;

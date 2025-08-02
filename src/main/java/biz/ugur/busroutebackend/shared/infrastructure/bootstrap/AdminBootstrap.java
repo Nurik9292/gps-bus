@@ -27,10 +27,13 @@ public class AdminBootstrap {
     public void createDefaultAdminIfNotExists() {
         log.info("Checking for default admin user...");
 
+
         adminRepository.findByUsername(defaultUsername)
                 .switchIfEmpty(createDefaultAdmin())
                 .doOnSuccess(admin -> log.info("Default admin user ensured: {}", admin.getUsername()))
-                .doOnError(error -> log.error("Failed to create default admin: {}", error.getMessage()))
+                .doOnError(error -> {
+                    log.error("Failed to create default admin: {}", error.getMessage(), error);
+                })
                 .subscribe();
     }
 
@@ -40,7 +43,7 @@ public class AdminBootstrap {
         Admin defaultAdmin = new Admin(
                 defaultUsername,
                 defaultPassword,
-                "Super Administrator ",
+                "Super Administrator",
                 true
         );
 

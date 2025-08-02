@@ -60,8 +60,4 @@ public class DatabaseConfig extends AbstractR2dbcConfiguration {
         return new R2dbcTransactionManager(connectionFactory);
     }
 
-    @Bean
-    public DatabaseClient databaseClient(ConnectionFactory connectionFactory) {
-        return DatabaseClient.create(connectionFactory);
-    }
 }

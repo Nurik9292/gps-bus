@@ -17,6 +17,7 @@ CREATE TABLE admins (
                         is_active BOOLEAN DEFAULT true,
                         is_super_admin BOOLEAN DEFAULT false,
                         last_login_at TIMESTAMP WITH TIME ZONE,
+                        avatar TEXT,
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                         version BIGINT DEFAULT 0
@@ -43,3 +44,7 @@ CREATE INDEX idx_admins_username ON admins(username);
 CREATE INDEX idx_admins_active ON admins(is_active);
 CREATE INDEX idx_banners_active ON banners(is_active);
 CREATE INDEX idx_banners_display_order ON banners(display_order);
+CREATE INDEX CONCURRENTLY idx_admins_has_avatar ON admins (id, username) WHERE avatar IS NOT NULL;
+
+
+COMMENT ON COLUMN admins.avatar IS 'Base64 encoded avatar image or file path';

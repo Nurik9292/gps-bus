@@ -11,6 +11,9 @@ public class AdminUpdateRequest {
     @JsonProperty("full_name")
     private String fullName;
 
+    @JsonProperty("avatar")
+    private String avatar;
+
     @Size(min = 8, message = "Password must be at least 8 characters")
     @JsonProperty("new_password")
     private String newPassword;

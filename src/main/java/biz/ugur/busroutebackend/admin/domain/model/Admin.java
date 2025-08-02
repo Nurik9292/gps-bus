@@ -2,15 +2,18 @@ package biz.ugur.busroutebackend.admin.domain.model;
 
 import biz.ugur.busroutebackend.admin.domain.events.AdminCreatedEvent;
 import biz.ugur.busroutebackend.admin.domain.events.AdminPasswordChangedEvent;
+import biz.ugur.busroutebackend.admin.domain.events.AdminProfileUpdatedEvent;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.Instant;
+import java.util.Objects;
 
 @Getter
 @Table("admins")
@@ -29,6 +32,9 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     @Column("full_name")
     private String fullName;
 
+    @Column("avatar")
+    private String avatar;
+
     @Column("is_active")
     private Boolean isActive;
 
@@ -37,6 +43,15 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
 
     @Column("last_login_at")
     private Instant lastLoginAt;
+
+    @Column("created_at")
+    private Instant createdAt;
+
+    @Column("updated_at")
+    private Instant updatedAt;
+
+    @Transient
+    private boolean isNew;
 
     private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -48,6 +63,9 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         this.isActive = true;
         this.isSuperAdmin = isSuperAdmin != null ? isSuperAdmin : false;
         this.lastLoginAt = Instant.now();
+        this.avatar = null;
+
+        this.isNew = true;
 
         registerEvent(new AdminCreatedEvent(
                 this.id.getValue(),
@@ -57,8 +75,31 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         ));
     }
 
-    public Admin(AdminId id, String username, String passwordHash, String fullName,
-                 Boolean isActive, Boolean isSuperAdmin, java.time.Instant lastLoginAt) {
+    public Admin(AdminId id,
+                 String username,
+                 String passwordHash,
+                 String fullName,
+                 String avatar,
+                 Boolean isActive,
+                 Boolean isSuperAdmin,
+                 Instant lastLoginAt) {
+        this.id = id;
+        this.username = username;
+        this.passwordHash = passwordHash;
+        this.fullName = fullName;
+        this.avatar = avatar;
+        this.isActive = isActive;
+        this.isSuperAdmin = isSuperAdmin;
+        this.lastLoginAt = lastLoginAt;
+    }
+
+    public Admin(AdminId id,
+                 String username,
+                 String passwordHash,
+                 String fullName,
+                 Boolean isActive,
+                 Boolean isSuperAdmin,
+                 Instant lastLoginAt) {
         this.id = id;
         this.username = username;
         this.passwordHash = passwordHash;
@@ -82,7 +123,7 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     }
 
     public void updateLastLogin() {
-        this.lastLoginAt = java.time.Instant.now();
+        this.lastLoginAt = Instant.now();
     }
 
     public void deactivate() {
@@ -93,10 +134,69 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         this.isActive = true;
     }
 
+    public void updateAvatar(String avatar) {
+
+        if (!Objects.equals(avatar, this.avatar)) {
+            this.avatar = avatar;
+
+            registerEvent(new AdminProfileUpdatedEvent(
+                    this.id.getValue(),
+                    this.username,
+                    this.fullName,
+                    this.avatar,
+                    true
+            ));
+        }
+    }
+
+    public void removeAvatar() {
+        if (this.avatar != null) {
+            this.avatar = null;
+
+            registerEvent(new AdminProfileUpdatedEvent(
+                    this.id.getValue(),
+                    this.username,
+                    this.fullName,
+                    null,
+                    true
+            ));
+        }
+    }
+
     public void updateProfile(String fullName) {
         if (fullName != null && !fullName.trim().isEmpty()) {
             this.fullName = fullName.trim();
         }
+    }
+
+    public void updateProfile(String fullName, String avatar) {
+        String originalAvatar = this.avatar;
+
+        boolean changed = false;
+
+        if (fullName != null && !fullName.trim().isEmpty() && !fullName.equals(this.fullName)) {
+            this.fullName = fullName.trim();
+            changed = true;
+        }
+
+        if (!Objects.equals(avatar, this.avatar)) {
+            this.avatar = avatar;
+            changed = true;
+        }
+
+        if (changed) {
+            registerEvent(new AdminProfileUpdatedEvent(
+                    this.id.getValue(),
+                    this.username,
+                    this.fullName,
+                    this.avatar,
+                    !Objects.equals(originalAvatar, this.avatar)
+            ));
+        }
+    }
+
+    public void markAsExisting() {
+        isNew = false;
     }
 
     @Override
@@ -114,5 +214,19 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
             throw new IllegalArgumentException("Username must be 3-20 characters, alphanumeric and underscore only");
         }
         return cleaned;
+    }
+
+
+    @Override
+    public String toString() {
+        return "Admin{" +
+                "id=" + id +
+                ", username='" + username + '\'' +
+                ", passwordHash='" + passwordHash + '\'' +
+                ", fullName='" + fullName + '\'' +
+                ", isActive=" + isActive +
+                ", isSuperAdmin=" + isSuperAdmin +
+                ", lastLoginAt=" + lastLoginAt +
+                '}';
     }
 }

@@ -8,13 +8,16 @@ import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 
+
 @Repository
 @Slf4j
+@Transactional(readOnly = true)
 public class R2dbcAdminRepository implements AdminRepository {
 
     private final DatabaseClient databaseClient;
@@ -24,9 +27,11 @@ public class R2dbcAdminRepository implements AdminRepository {
     }
 
     @Override
+    @Transactional
     public Mono<Admin> save(Admin admin) {
-        if (admin.getId() == null) {
-            return insert(admin);
+        log.info("Saving admin: {}", admin);
+        if (admin.isNew()) {
+            return insert(admin).doOnSuccess(Admin::markAsExisting);
         } else {
             return update(admin);
         }
@@ -36,17 +41,18 @@ public class R2dbcAdminRepository implements AdminRepository {
         Instant now = Instant.now();
         return databaseClient.sql("INSERT INTO admins (id, username, password_hash, full_name, is_active, " +
                         "is_super_admin, last_login_at, created_at, updated_at, version) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                .bind(0, admin.getId().getValue())
-                .bind(1, admin.getUsername())
-                .bind(2, admin.getPasswordHash())
-                .bind(3, admin.getFullName())
-                .bind(4, admin.getIsActive())
-                .bind(5, admin.getIsSuperAdmin())
-                .bind(6, admin.getLastLoginAt())
-                .bind(7, now)
-                .bind(8, now)
-                .bind(9, 1L)
+                        "VALUES (:id, :username, :passwordHash, :fullName, :isActive, " +
+                        ":isSuperAdmin, :lastLoginAt, :createdAt, :updatedAt, :version)")
+                .bind("id",  admin.getId().toString())
+                .bind("username", admin.getUsername())
+                .bind("passwordHash", admin.getPasswordHash())
+                .bind("fullName", admin.getFullName())
+                .bind("isActive", admin.getIsActive())
+                .bind("isSuperAdmin", admin.getIsSuperAdmin())
+                .bind("lastLoginAt", admin.getLastLoginAt())
+                .bind("createdAt", now)
+                .bind("updatedAt", now)
+                .bind("version", 1L)
                 .fetch()
                 .rowsUpdated()
                 .flatMap(rows -> rows > 0
@@ -56,20 +62,20 @@ public class R2dbcAdminRepository implements AdminRepository {
                 .doOnError(e -> log.error("Error inserting admin", e));
     }
 
+
     private Mono<Admin> update(Admin admin) {
-        return databaseClient.sql(" UPDATE admins \n" +
-                        "SET username = ?, password_hash = ?, full_name = ?, " +
-                        "is_active = ?, is_super_admin = ?, last_login_at = ?, " +
-                        "updated_at = ?, version = version + 1 " +
-                        "WHERE id = ?")
-                .bind(0, admin.getUsername())
-                .bind(1, admin.getPasswordHash())
-                .bind(2, admin.getFullName())
-                .bind(3, admin.getIsActive())
-                .bind(4, admin.getIsSuperAdmin())
-                .bind(5, admin.getLastLoginAt())
-                .bind(6, Instant.now())
-                .bind(7, admin.getId().getValue())
+        return databaseClient.sql(" UPDATE admins " +
+                        "SET username = :username, password_hash = :passwordHash, full_name = :fullName, " +
+                        "is_active = :isActive, is_super_admin = :isSuperAdmin, last_login_at = :lastLoginAt, " +
+                        "updated_at = :updatedAt, version = version + 1 WHERE id = :id")
+                .bind("username", admin.getUsername())
+                .bind("passwordHash", admin.getPasswordHash())
+                .bind("fullName", admin.getFullName())
+                .bind("isActive", admin.getIsActive())
+                .bind("isSuperAdmin", admin.getIsSuperAdmin())
+                .bind("lastLoginAt", admin.getLastLoginAt())
+                .bind("updatedAt", Instant.now())
+                .bind("id", admin.getId().getValue())
                 .fetch()
                 .rowsUpdated()
                 .thenReturn(admin)
@@ -78,8 +84,8 @@ public class R2dbcAdminRepository implements AdminRepository {
 
     @Override
     public Mono<Admin> findById(AdminId adminId) {
-        return databaseClient.sql("SELECT * FROM admins WHERE id = ?")
-                .bind(0, adminId.getValue())
+        return databaseClient.sql("SELECT * FROM admins WHERE id = :id")
+                .bind("id", adminId.getValue())
                 .map(this::mapRowToAdmin)
                 .one()
                 .doOnNext(a -> log.debug("Found admin by ID: {}", adminId.getValue()));
@@ -87,10 +93,10 @@ public class R2dbcAdminRepository implements AdminRepository {
 
     @Override
     public Mono<Admin> findByUsername(String username) {
-        return databaseClient.sql("SELECT * FROM admins WHERE username = ?")
-                .bind(0, username)
+        return databaseClient.sql("SELECT * FROM admins WHERE username = :username")
+                .bind("username", username)
                 .map(this::mapRowToAdmin)
-                .one()
+                .first()
                 .doOnNext(a -> log.debug("Found admin by username: {}", username));
     }
 
@@ -112,8 +118,9 @@ public class R2dbcAdminRepository implements AdminRepository {
 
     @Override
     public Mono<Boolean> existsByUsername(String username) {
-        return databaseClient.sql("SELECT COUNT(*) FROM admins WHERE username = ?")
-                .bind(0, username)
+        log.info("Checking if admin exists: {}", username);
+        return databaseClient.sql("SELECT COUNT(*) FROM admins WHERE username = :username")
+                .bind("username", username)
                 .map(row -> row.get(0, Long.class))
                 .one()
                 .map(count -> count > 0);
@@ -121,8 +128,8 @@ public class R2dbcAdminRepository implements AdminRepository {
 
     @Override
     public Mono<Void> deleteById(AdminId adminId) {
-        return databaseClient.sql("DELETE FROM admins WHERE id = ?")
-                .bind(0, adminId.getValue())
+        return databaseClient.sql("DELETE FROM admins WHERE id = :id")
+                .bind("id", adminId.getValue())
                 .then()
                 .doOnSuccess(v -> log.debug("Deleted admin: {}", adminId.getValue()));
     }

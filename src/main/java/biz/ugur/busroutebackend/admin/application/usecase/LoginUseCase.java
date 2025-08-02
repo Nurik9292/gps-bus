@@ -42,7 +42,6 @@ public class LoginUseCase implements UseCase<LoginUseCase.Request, Mono<LoginUse
                 .filter(admin -> admin.checkPassword(request.password()))
                 .switchIfEmpty(Mono.error(new AuthenticationException("Invalid username or password")))
                 .flatMap(admin -> {
-                    // Update last login
                     admin.updateLastLogin();
                     return adminRepository.save(admin);
                 })

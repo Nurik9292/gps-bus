@@ -3,7 +3,7 @@
     "1": {
       "Name": "Bus Route DB",
       "Group": "Servers",
-      "Host": "postgres",
+      "Host": "db-route",
       "Port": 5432,
       "MaintenanceDB": "bus_route_db",
       "Username": "bus_route_user",

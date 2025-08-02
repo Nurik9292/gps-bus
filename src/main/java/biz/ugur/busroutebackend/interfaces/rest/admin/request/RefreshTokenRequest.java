@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.interfaces.rest.admin.dto.request;
+package biz.ugur.busroutebackend.interfaces.rest.admin.request;
 
 import jakarta.validation.constraints.NotBlank;
 

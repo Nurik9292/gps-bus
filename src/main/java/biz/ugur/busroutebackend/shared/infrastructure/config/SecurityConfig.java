@@ -58,6 +58,7 @@ public class SecurityConfig {
                 )
 
                 .authorizeExchange(exchanges -> exchanges
+                        .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/actuator/health").permitAll()
                         .pathMatchers(HttpMethod.GET, "/actuator/info").permitAll()
                         .pathMatchers(HttpMethod.GET, "/trip-planning/health").permitAll()
@@ -112,7 +113,11 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(List.of("*"));
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:5173",
+                "http://127.0.0.1:5173"
+//                "*"
+        ));
 
         configuration.setAllowedHeaders(List.of(
                 "Authorization",
