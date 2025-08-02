@@ -64,6 +64,7 @@ public class R2dbcAdminRepository implements AdminRepository {
 
 
     private Mono<Admin> update(Admin admin) {
+        log.info("Updating admin repository : {}", admin);
         return databaseClient.sql(" UPDATE admins " +
                         "SET username = :username, password_hash = :passwordHash, full_name = :fullName, " +
                         "is_active = :isActive, is_super_admin = :isSuperAdmin, last_login_at = :lastLoginAt, " +
@@ -127,6 +128,7 @@ public class R2dbcAdminRepository implements AdminRepository {
     }
 
     @Override
+    @Transactional
     public Mono<Void> deleteById(AdminId adminId) {
         return databaseClient.sql("DELETE FROM admins WHERE id = :id")
                 .bind("id", adminId.getValue())

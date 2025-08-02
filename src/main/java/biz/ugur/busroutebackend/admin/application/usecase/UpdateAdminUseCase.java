@@ -1,7 +1,8 @@
 package biz.ugur.busroutebackend.admin.application.usecase;
 
-import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResponse;
-import biz.ugur.busroutebackend.admin.application.dto.admin.AdminUpdateRequest;
+import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
+import biz.ugur.busroutebackend.admin.application.dto.admin.UpdateCommand;
+import biz.ugur.busroutebackend.admin.domain.exceptions.AdminNotFoundException;
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
@@ -13,7 +14,7 @@ import reactor.core.publisher.Mono;
 
 @Service
 @Slf4j
-public class UpdateAdminUseCase implements UseCase<UpdateAdminUseCase.Request, Mono<AdminResponse>> {
+public class UpdateAdminUseCase implements UseCase<Mono<UpdateAdminUseCase.Request>, Mono<AdminResult>> {
 
     private final AdminRepository adminRepository;
     private final EventBus eventBus;
@@ -24,49 +25,40 @@ public class UpdateAdminUseCase implements UseCase<UpdateAdminUseCase.Request, M
     }
 
     @Override
-    public Mono<AdminResponse> execute(Request request) {
-        log.info("Updating admin: {}", request.adminId);
-
-        return adminRepository.findById(AdminId.of(request.adminId))
-                .switchIfEmpty(Mono.error(new IllegalArgumentException("Admin not found: " + request.adminId)))
-                .flatMap(admin -> {
-                    admin.updateProfile(request.updateRequest.getFullName());
-
-                    if (request.updateRequest.getNewPassword() != null && !request.updateRequest.getNewPassword().trim().isEmpty()) {
-                        admin.changePassword(request.updateRequest.getNewPassword());
-                    }
-
-                    if (request.updateRequest.getIsActive() != null) {
-                        if (request.updateRequest.getIsActive()) {
-                            admin.activate();
-                        } else {
-                            admin.deactivate();
-                        }
-                    }
-
-                    return adminRepository.save(admin)
-                            .doOnNext(savedAdmin -> {
-                                savedAdmin.getUncommittedEvents().forEach(eventBus::publish);
-                                savedAdmin.markEventsAsCommitted();
-                            });
-                })
-                .map(this::toResponse)
-                .doOnSuccess(response -> log.info("Admin updated successfully: {}", response.getUsername()))
-                .doOnError(error -> log.error("Failed to update admin: {}", request.adminId, error));
-    }
-
-    private AdminResponse toResponse(Admin admin) {
-        return new AdminResponse(
-                admin.getId().getValue(),
-                admin.getUsername(),
-                admin.getFullName(),
-                admin.getIsActive(),
-                admin.getIsSuperAdmin(),
-                admin.getLastLoginAt()
+    public Mono<AdminResult> execute(Mono<Request> requestMono) {
+        return requestMono.flatMap(request ->
+                adminRepository.findById(AdminId.of(request.adminId()))
+                        .switchIfEmpty(Mono.error(new AdminNotFoundException("Admin not found: " + request.adminId())))
+                        .flatMap(admin -> applyUpdates(admin, request.command())
+                                .flatMap(adminRepository::save)
+                                .doOnNext(this::publishDomainEvents))
+                        .map(AdminResult::fromDomain)
+                        .doOnSuccess(result -> log.info("Admin updated successfully: {}", result.username()))
+                        .doOnError(error -> log.error("Failed to update admin: {}", request.adminId(), error))
         );
     }
 
-    public record Request(String adminId, AdminUpdateRequest updateRequest) {}
+    private Mono<Admin> applyUpdates(Admin admin, UpdateCommand command) {
+        admin.updateProfile(command.username(), command.fullName());
+
+        if (command.newPassword() != null && !command.newPassword().trim().isEmpty()) {
+            admin.changePassword(command.newPassword());
+        }
+
+        if (command.isActive() != null) {
+            if (command.isActive()) admin.activate();
+            else admin.deactivate();
+        }
+
+        return Mono.just(admin);
+    }
+
+    private void publishDomainEvents(Admin admin) {
+        admin.getUncommittedEvents().forEach(eventBus::publish);
+        admin.markEventsAsCommitted();
+    }
+
+    public record Request(String adminId, UpdateCommand command) {}
 }
 
 

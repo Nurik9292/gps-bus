@@ -1,5 +1,7 @@
-package biz.ugur.busroutebackend.admin.application.dto.admin;
+package biz.ugur.busroutebackend.interfaces.rest.admin.response;
 
+import biz.ugur.busroutebackend.admin.application.dto.admin.AdminList;
+import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -21,5 +23,14 @@ public class AdminListResponse {
         this.admins = admins;
         this.totalCount = admins.size();
         this.activeCount = activeCount;
+    }
+
+    public static AdminListResponse fromResult(AdminList result) {
+        return new AdminListResponse(
+                result.getAdmins()
+                        .stream()
+                        .map(AdminResponse::fromResult)
+                        .toList(),
+                result.getActiveCount());
     }
 }

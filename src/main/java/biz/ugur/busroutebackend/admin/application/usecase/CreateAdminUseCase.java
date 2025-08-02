@@ -1,8 +1,7 @@
 package biz.ugur.busroutebackend.admin.application.usecase;
 
-import biz.ugur.busroutebackend.admin.application.dto.admin.AdminCreateRequest;
-import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResponse;
-import biz.ugur.busroutebackend.admin.domain.model.Admin;
+import biz.ugur.busroutebackend.admin.application.dto.admin.CreateCommand;
+import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
@@ -12,7 +11,7 @@ import reactor.core.publisher.Mono;
 
 @Service
 @Slf4j
-public class CreateAdminUseCase implements UseCase<AdminCreateRequest, Mono<AdminResponse>> {
+public class CreateAdminUseCase implements UseCase<CreateCommand, Mono<AdminResult>> {
 
     private final AdminRepository adminRepository;
     private final EventBus eventBus;
@@ -23,41 +22,24 @@ public class CreateAdminUseCase implements UseCase<AdminCreateRequest, Mono<Admi
     }
 
     @Override
-    public Mono<AdminResponse> execute(AdminCreateRequest request) {
-        log.info("Creating new admin: {}", request.getUsername());
+    public Mono<AdminResult> execute(CreateCommand command) {
+        log.info("Creating new admin: {}", command.username());
 
-        return adminRepository.existsByUsername(request.getUsername())
+        return adminRepository.existsByUsername(command.username())
                 .flatMap(exists -> {
                     if (exists) {
-                        return Mono.error(new IllegalArgumentException("Username already exists: " + request.getUsername()));
+                        return Mono.error(new IllegalArgumentException("Username already exists: " + command.username()));
                     }
-
-                    Admin admin = new Admin(
-                            request.getUsername(),
-                            request.getPassword(),
-                            request.getFullName(),
-                            request.getIsSuperAdmin()
-                    );
-
-                    return adminRepository.save(admin)
+                    return adminRepository.save(command.toDomain())
                             .doOnNext(savedAdmin -> {
                                 savedAdmin.getUncommittedEvents().forEach(eventBus::publish);
                                 savedAdmin.markEventsAsCommitted();
                             })
-                            .map(this::toResponse);
+                            .map(AdminResult::fromDomain);
                 })
-                .doOnSuccess(response -> log.info("Admin created successfully: {}", response.getUsername()))
-                .doOnError(error -> log.error("Failed to create admin: {}", request.getUsername(), error));
+                .doOnSuccess(response -> log.info("Admin created successfully: {}", response.username()))
+                .doOnError(error -> log.error("Failed to create admin: {}", command.username(), error));
     }
 
-    private AdminResponse toResponse(Admin admin) {
-        return new AdminResponse(
-                admin.getId().getValue(),
-                admin.getUsername(),
-                admin.getFullName(),
-                admin.getIsActive(),
-                admin.getIsSuperAdmin(),
-                admin.getLastLoginAt()
-        );
-    }
+
 }

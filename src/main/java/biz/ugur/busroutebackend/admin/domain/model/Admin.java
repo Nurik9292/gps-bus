@@ -55,6 +55,27 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
 
     private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
+    public Admin(String username, String password, String fullName, Boolean isSuperAdmin, Boolean isActive) {
+        this.id = AdminId.generate();
+        this.username = validateUsername(username);
+        this.passwordHash = passwordEncoder.encode(password);
+        this.fullName = fullName;
+        this.isActive = isActive;
+        this.isSuperAdmin = isSuperAdmin != null ? isSuperAdmin : false;
+        this.lastLoginAt = Instant.now();
+        this.avatar = null;
+
+        this.isNew = true;
+
+        registerEvent(new AdminCreatedEvent(
+                this.id.getValue(),
+                this.username,
+                this.fullName,
+                this.isSuperAdmin
+        ));
+    }
+
+
     public Admin(String username, String password, String fullName, Boolean isSuperAdmin) {
         this.id = AdminId.generate();
         this.username = validateUsername(username);
@@ -163,16 +184,25 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         }
     }
 
-    public void updateProfile(String fullName) {
+    public void updateProfile(String username, String fullName) {
+        if (username != null && !username.trim().isEmpty()) {
+            this.username = username.trim();
+        }
+
         if (fullName != null && !fullName.trim().isEmpty()) {
             this.fullName = fullName.trim();
         }
     }
 
-    public void updateProfile(String fullName, String avatar) {
+    public void updateProfile(String username, String fullName, String avatar) {
         String originalAvatar = this.avatar;
 
         boolean changed = false;
+
+        if (username != null && !username.trim().isEmpty()) {
+            this.username = username.trim();
+            changed = true;
+        }
 
         if (fullName != null && !fullName.trim().isEmpty() && !fullName.equals(this.fullName)) {
             this.fullName = fullName.trim();

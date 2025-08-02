@@ -30,7 +30,6 @@ public record AdminPrincipal(
             throw new IllegalArgumentException("Admin must have at least one role");
         }
 
-        // Делаем роли immutable
         roles = Collections.unmodifiableSet(roles);
 
         log.debug("Created AdminPrincipal for user: {} with roles: {}", username, roles);
@@ -114,13 +113,11 @@ public record AdminPrincipal(
             return false;
         }
 
-        // Супер-админ может модифицировать любого
         if (canPerformSuperAdminOperations()) {
             log.trace("Super admin {} can modify admin {}", username, targetAdminId.getValue());
             return true;
         }
 
-        // Обычный админ может модифицировать только себя
         boolean canModify = this.id.equals(targetAdminId);
         log.trace("Admin {} can modify admin {}: {}", username, targetAdminId.getValue(), canModify);
         return canModify;
@@ -159,7 +156,7 @@ public record AdminPrincipal(
 
     public static AdminPrincipal forTesting(String username, Set<String> roles, boolean isSuperAdmin) {
         return new AdminPrincipal(
-                AdminId.generate(), // Генерируем случайный ID для тестов
+                AdminId.generate(),
                 username,
                 roles,
                 isSuperAdmin

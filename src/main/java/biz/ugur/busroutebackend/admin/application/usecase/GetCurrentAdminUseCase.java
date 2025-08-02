@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.admin.application.usecase;
 
+import biz.ugur.busroutebackend.admin.domain.exceptions.AdminNotFoundException;
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
@@ -30,9 +31,5 @@ public class GetCurrentAdminUseCase implements UseCase<GetCurrentAdminUseCase.Qu
                 .doOnError(error -> log.warn("Failed to get current admin info for {}: {}", query.adminId().getValue(), error.getMessage()));
     }
 
-    public static class AdminNotFoundException extends RuntimeException {
-        public AdminNotFoundException(String message) {
-            super(message);
-        }
-    }
+
 }

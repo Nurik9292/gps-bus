@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.interfaces.rest.admin.exception;
 import biz.ugur.busroutebackend.admin.application.usecase.GetCurrentAdminUseCase;
 import biz.ugur.busroutebackend.admin.application.usecase.LoginUseCase;
 import biz.ugur.busroutebackend.admin.application.usecase.RefreshTokenUseCase;
+import biz.ugur.busroutebackend.admin.domain.exceptions.AdminNotFoundException;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -72,9 +73,9 @@ public class SecurityExceptionHandler {
         return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body));
     }
 
-    @ExceptionHandler(GetCurrentAdminUseCase.AdminNotFoundException.class)
+    @ExceptionHandler(AdminNotFoundException.class)
     public Mono<ResponseEntity<Map<String, Object>>> handleAdminNotFoundException(
-            GetCurrentAdminUseCase.AdminNotFoundException ex,
+            AdminNotFoundException ex,
             ServerWebExchange exchange
     ) {
         log.warn("Admin not found: {}", ex.getMessage());
