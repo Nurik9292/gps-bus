@@ -1,13 +1,12 @@
 package biz.ugur.busroutebackend.transport.infrastructure.services;
 
+import biz.ugur.busroutebackend.admin.domain.exceptions.BusStopException;
+import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.BusStopArrivalsResponse;
 import biz.ugur.busroutebackend.shared.domain.DomainException;
 import biz.ugur.busroutebackend.transport.application.dto.BusArrivalInfo;
-import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.BusStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.application.dto.NearbyStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
-import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
-import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.services.BusStopRealTimeService;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 import lombok.extern.slf4j.Slf4j;
@@ -57,7 +56,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
 
     private Mono<BusStopArrivalsResponse> calculateStopArrivals(String stopId) {
         return busStopRepository.findById(BusStopId.of(stopId))
-                .switchIfEmpty(Mono.error(new DomainException("DOMAIN_EXCEPTION", "Stop not found: " + stopId) {
+                .switchIfEmpty(Mono.error(new BusStopException("BUS_STOP_EXCEPTION", "Stop not found: " + stopId) {
                 }))
                 .flatMap(busStop -> {
                     // Находим все автобусы, которые едут к этой остановке
@@ -228,7 +227,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
 
     public Flux<NearbyStopArrivalsResponse> getNearbyStopArrivals(Double lat, Double lon, Integer radiusMeters) {
         return busStopRepository.findStopsWithinRadius(lat, lon, radiusMeters / 1000.0)
-                .switchIfEmpty(Mono.error(new DomainException("STOP_NOT_FOUND", "No stops found nearby") {
+                .switchIfEmpty(Mono.error(new BusStopException("BUS_STOP_NOT_FOUND", "No stops found nearby") {
                 }))
                 .flatMap(nearestStop ->
                         getStopArrivals(nearestStop.getId().getValue())
@@ -244,15 +243,15 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
     }
 
     public Flux<BusStopArrivalsResponse> streamStopArrivals(String stopId) {
-        return Flux.interval(Duration.ofSeconds(15)) // Обновления каждые 15 секунд
+        return Flux.interval(Duration.ofSeconds(15))
                 .flatMap(tick -> getStopArrivals(stopId))
-                .distinctUntilChanged() // Отправляем только при изменениях
+                .distinctUntilChanged()
                 .doOnNext(arrivals -> log.trace("Streaming update for stop {}: {} buses",
                         stopId, arrivals.getArrivals().size()));
     }
 
     private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-        final int R = 6371; // Радиус Земли в км
+        final int R = 6371;
         double latDistance = Math.toRadians(lat2 - lat1);
         double lonDistance = Math.toRadians(lon2 - lon1);
         double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)

@@ -44,12 +44,6 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     @Column("last_login_at")
     private Instant lastLoginAt;
 
-    @Column("created_at")
-    private Instant createdAt;
-
-    @Column("updated_at")
-    private Instant updatedAt;
-
     @Transient
     private boolean isNew;
 

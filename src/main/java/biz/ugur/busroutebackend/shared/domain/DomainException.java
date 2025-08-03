@@ -1,20 +1,28 @@
 package biz.ugur.busroutebackend.shared.domain;
 
-import lombok.Getter;
+import java.time.Instant;
 
-@Getter
-public abstract class DomainException extends RuntimeException {
+public interface DomainException {
+    String getErrorCode();
+    String getMessage();
+    Instant getTimestamp();
+    CorrelationId getCorrelationId();
+    Severity getSeverity();
 
-    private final String errorCode;
+    enum Severity {
+        INFO("Info"),
+        WARNING("Warning"),
+        ERROR("Error"),
+        CRITICAL("Critical");
 
-    protected DomainException(String errorCode, String message) {
-        super(message);
-        this.errorCode = errorCode;
+        private final String value;
+
+        Severity(String value) {
+            this.value = value;
+        }
+
+        public String getDisplayName() {
+            return value;
+        }
     }
-
-    protected DomainException(String errorCode, String message, Throwable cause) {
-        super(message, cause);
-        this.errorCode = errorCode;
-    }
-
 }

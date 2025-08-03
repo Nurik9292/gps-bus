@@ -173,7 +173,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .one();
     }
 
-    // Приватные методы для маппинга
 
     private RouteWithGeometryDTO mapToRouteWithGeometryDTO(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
         RouteWithGeometryDTO dto = new RouteWithGeometryDTO();
@@ -182,7 +181,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
         dto.setRouteName(row.get("route_name", String.class));
         dto.setRouteColor(row.get("route_color", String.class));
 
-        // Парсим GeoJSON геометрию
         String forwardGeometry = row.get("route_geometry_forward", String.class);
         String backwardGeometry = row.get("route_geometry_backward", String.class);
 

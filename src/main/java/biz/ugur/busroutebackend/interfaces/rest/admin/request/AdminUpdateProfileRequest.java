@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.request;
 
+import biz.ugur.busroutebackend.admin.application.usecase.UpdateCurrentAdminProfileUseCase;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -12,4 +13,5 @@ public class AdminUpdateProfileRequest {
 
     @JsonProperty("avatar")
     private String avatar;
+
 }

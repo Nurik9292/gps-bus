@@ -1,6 +1,9 @@
 package biz.ugur.busroutebackend.admin.application.dto.admin;
 
+import biz.ugur.busroutebackend.shared.infrastructure.validation.OptionalSize;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.annotation.Nullable;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record AdminUpdateRequest(
@@ -13,7 +16,8 @@ public record AdminUpdateRequest(
     @JsonProperty("full_name")
     String fullName,
 
-    @Size(min = 8, message = "Password must be at least 8 characters")
+//    @OptionalSize(min = 8, message = "Password must be at least 8 characters")
+    @Nullable
     @JsonProperty("new_password")
     String newPassword,
 

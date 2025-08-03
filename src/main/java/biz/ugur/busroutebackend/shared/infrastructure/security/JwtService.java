@@ -51,24 +51,34 @@ public class JwtService {
                         .compact();
 
             } catch (JsonProcessingException e) {
-                throw new JwtTokenException("Failed to serialize roles", e);
+                log.error("Failed to serialize roles for admin: {}", username, e);
+                throw JwtTokenException.tokenGenerationError("Failed to serialize roles", e);
+            } catch (Exception e) {
+                log.error("Failed to generate access token for admin: {}", username, e);
+                throw JwtTokenException.tokenGenerationError("Failed to generate access token", e);
             }
         });
     }
 
     public Mono<String> generateRefreshToken(AdminId adminId) {
         return Mono.fromCallable(() -> {
-            Instant now = Instant.now();
-            Instant expiration = now.plus(jwtProperties.refreshTokenExpiration());
+            try {
+                Instant now = Instant.now();
+                Instant expiration = now.plus(jwtProperties.refreshTokenExpiration());
 
-            return Jwts.builder()
-                    .subject(adminId.getValue())
-                    .claim("type", "refresh")
-                    .issuer(jwtProperties.issuer())
-                    .issuedAt(Date.from(now))
-                    .expiration(Date.from(expiration))
-                    .signWith(getSigningKey())
-                    .compact();
+                return Jwts.builder()
+                        .subject(adminId.getValue())
+                        .claim("type", "refresh")
+                        .issuer(jwtProperties.issuer())
+                        .issuedAt(Date.from(now))
+                        .expiration(Date.from(expiration))
+                        .signWith(getSigningKey())
+                        .compact();
+
+            } catch (Exception e) {
+                log.error("Failed to generate refresh token for admin: {}", adminId.getValue(), e);
+                throw JwtTokenException.tokenGenerationError("Failed to generate refresh token", e);
+            }
         });
     }
 
@@ -83,20 +93,20 @@ public class JwtService {
                         .getPayload();
 
             } catch (ExpiredJwtException e) {
-                log.warn("JWT token expired: {}", e.getMessage());
-                throw new JwtTokenException("Token expired", e);
+                log.warn("JWT token expired for subject: {}", e.getClaims().getSubject());
+                throw JwtTokenException.fromExpiredJwtException(e, token);
             } catch (UnsupportedJwtException e) {
                 log.warn("Unsupported JWT token: {}", e.getMessage());
-                throw new JwtTokenException("Unsupported token", e);
+                throw JwtTokenException.fromUnsupportedJwtException(e, token);
             } catch (MalformedJwtException e) {
                 log.warn("Malformed JWT token: {}", e.getMessage());
-                throw new JwtTokenException("Malformed token", e);
+                throw JwtTokenException.fromMalformedJwtException(e, token);
             } catch (SecurityException e) {
                 log.warn("Invalid JWT signature: {}", e.getMessage());
-                throw new JwtTokenException("Invalid signature", e);
+                throw JwtTokenException.fromSecurityException(e, token);
             } catch (IllegalArgumentException e) {
-                log.warn("JWT token compact of handler are invalid: {}", e.getMessage());
-                throw new JwtTokenException("Invalid token", e);
+                log.warn("JWT token compact handler are invalid: {}", e.getMessage());
+                throw JwtTokenException.invalidToken(token);
             }
         });
     }
@@ -112,7 +122,7 @@ public class JwtService {
                         String tokenType = claims.get("type", String.class);
 
                         if (!"access".equals(tokenType)) {
-                            sink.error(new JwtTokenException("Invalid token type: " + tokenType));
+                            sink.error(JwtTokenException.invalidTokenType("access", tokenType));
                             return;
                         }
 
@@ -127,7 +137,11 @@ public class JwtService {
                         ));
 
                     } catch (JsonProcessingException e) {
-                        sink.error(new JwtTokenException("Failed to parse token claims", e));
+                        log.warn("Failed to parse roles from token claims: {}", e.getMessage());
+                        sink.error(JwtTokenException.claimsParsingError("Failed to parse roles from token", e));
+                    } catch (Exception e) {
+                        log.warn("Failed to extract admin principal from token: {}", e.getMessage());
+                        sink.error(JwtTokenException.claimsParsingError("Failed to extract admin principal", e));
                     }
                 });
     }
@@ -144,13 +158,16 @@ public class JwtService {
                 .onErrorReturn(true);
     }
 
-    public static class JwtTokenException extends RuntimeException {
-        public JwtTokenException(String message) {
-            super(message);
-        }
-
-        public JwtTokenException(String message, Throwable cause) {
-            super(message, cause);
-        }
+    public Mono<String> extractUsernameFromToken(String token) {
+        return validateAndExtractClaims(token)
+                .map(claims -> claims.get("username", String.class))
+                .doOnNext(username -> log.trace("Extracted username from token: {}", username));
     }
+
+    public Mono<AdminId> extractAdminIdFromToken(String token) {
+        return validateAndExtractClaims(token)
+                .map(claims -> AdminId.of(claims.getSubject()))
+                .doOnNext(adminId -> log.trace("Extracted admin ID from token: {}", adminId.getValue()));
+    }
+
 }

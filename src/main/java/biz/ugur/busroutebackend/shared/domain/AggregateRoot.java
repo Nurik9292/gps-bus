@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.shared.domain;
 
+import lombok.Getter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.annotation.Version;
@@ -12,17 +13,18 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+@Getter
 public abstract class AggregateRoot<T extends AggregateRoot<T, ID>, ID> extends AbstractAggregateRoot<T> {
 
     private final List<DomainEvent> uncommittedEvents = new ArrayList<>();
 
     @CreatedDate
     @Column("created_at")
-    private Instant createdAt;
+    protected Instant createdAt;
 
     @LastModifiedDate
     @Column("updated_at")
-    private Instant updatedAt;
+    protected Instant updatedAt;
 
     @Version
     @Column("version")
