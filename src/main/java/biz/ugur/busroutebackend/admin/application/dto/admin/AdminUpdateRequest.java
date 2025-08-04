@@ -16,8 +16,7 @@ public record AdminUpdateRequest(
     @JsonProperty("full_name")
     String fullName,
 
-//    @OptionalSize(min = 8, message = "Password must be at least 8 characters")
-    @Nullable
+    @OptionalSize(min = 8, message = "Password must be at least 8 characters")
     @JsonProperty("new_password")
     String newPassword,
 
@@ -31,4 +30,5 @@ public record AdminUpdateRequest(
    public UpdateCommand toCommand() {
        return new UpdateCommand(username, fullName, newPassword, isSuperAdmin, isActive);
    }
+
 }

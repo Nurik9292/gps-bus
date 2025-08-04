@@ -8,7 +8,11 @@ public record UpdateCommand(
         String newPassword,
         Boolean isSuperAdmin,
         Boolean isActive
+
 ) {
+
+
+
 
     public Admin toDomain() {
         return  new Admin(

@@ -76,6 +76,7 @@ public class JwtAuthenticationFilter implements WebFilter {
     }
 
     private Mono<String> validateTokenNotBlacklisted(String token) {
+        System.out.println(token);
         return tokenBlacklistService.isAccessTokenBlacklisted(token)
                 .flatMap(isBlacklisted -> {
                     if (isBlacklisted) {

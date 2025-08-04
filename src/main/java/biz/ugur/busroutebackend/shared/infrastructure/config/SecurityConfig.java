@@ -68,25 +68,24 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/vehicles/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/trip-planning/**").permitAll()
                         .pathMatchers(HttpMethod.POST, "/trip-planning/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/admin/**").permitAll()
 
                         .pathMatchers("/ws/**").permitAll()
 
 
-                        .pathMatchers(HttpMethod.GET, "/admin/auth/me").hasRole("ADMIN")
-                        .pathMatchers(HttpMethod.PATCH, "/admin/auth/profile").hasRole("ADMIN")
-                        .pathMatchers(HttpMethod.POST, "/admin/auth/logout").hasRole("ADMIN")
-                        .pathMatchers(HttpMethod.POST, "/admin/auth/change-password").hasRole("ADMIN")
-
-                        .pathMatchers("/admin/routes/**").hasRole("ADMIN")
-                        .pathMatchers("/admin/stops/**").hasRole("ADMIN")
-                        .pathMatchers("/admin/buses/**").hasRole("ADMIN")
-                        .pathMatchers("/admin/banners/**").hasRole("ADMIN")
-                        .pathMatchers("/admin/cities/**").hasRole("ADMIN")
-
-                        .pathMatchers("/admin/users/**").hasRole("SUPER_ADMIN")
-                        .pathMatchers("/admin/system/**").hasRole("SUPER_ADMIN")
-                        .pathMatchers(HttpMethod.GET, "/admin/logs/**").hasRole("SUPER_ADMIN")
+//                        .pathMatchers(HttpMethod.GET, "/admin/auth/me").hasRole("ADMIN")
+//                        .pathMatchers(HttpMethod.PATCH, "/admin/auth/profile").hasRole("ADMIN")
+//                        .pathMatchers(HttpMethod.POST, "/admin/auth/logout").hasRole("ADMIN")
+//                        .pathMatchers(HttpMethod.POST, "/admin/auth/change-password").hasRole("ADMIN")
+//
+//                        .pathMatchers("/admin/routes/**").hasRole("ADMIN")
+//                        .pathMatchers("/admin/stops/**").hasRole("ADMIN")
+//                        .pathMatchers("/admin/buses/**").hasRole("ADMIN")
+//                        .pathMatchers("/admin/banners/**").hasRole("ADMIN")
+//                        .pathMatchers("/admin/cities/**").hasRole("ADMIN")
+//
+//                        .pathMatchers("/admin/users/**").hasRole("SUPER_ADMIN")
+//                        .pathMatchers("/admin/system/**").hasRole("SUPER_ADMIN")
+//                        .pathMatchers(HttpMethod.GET, "/admin/logs/**").hasRole("SUPER_ADMIN")
 
                         .anyExchange().authenticated()
                 )

@@ -76,6 +76,7 @@ app:
           min-longitude: 52.0
           max-longitude: 67.0
 
+
   security:
     jwt:
       secret:  ${JWT_SECRET:at-least-32-characters-long-secret-key-here}

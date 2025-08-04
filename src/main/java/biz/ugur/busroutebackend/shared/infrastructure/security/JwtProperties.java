@@ -15,8 +15,9 @@ public class JwtProperties {
     private Duration refreshTokenExpiration;
     private String issuer;
 
-    // Default constructor (обязательно д Spring)
     public JwtProperties() {}
+
+
 
     public String secret() { return secret; }
     public Duration accessTokenExpiration() { return accessTokenExpiration; }
@@ -51,7 +52,6 @@ public class JwtProperties {
         this.issuer = issuer != null ? issuer.trim() : null;
     }
 
-    // Validation после полной инициализации
     @jakarta.annotation.PostConstruct
     public void validate() {
         if (secret == null) {

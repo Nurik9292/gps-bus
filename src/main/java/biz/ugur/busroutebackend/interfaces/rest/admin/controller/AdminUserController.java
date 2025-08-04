@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
 import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
+import biz.ugur.busroutebackend.admin.application.usecase.*;
 import biz.ugur.busroutebackend.admin.domain.exceptions.AdminAlreadyExistsException;
 import biz.ugur.busroutebackend.admin.domain.exceptions.AdminDeleteException;
 import biz.ugur.busroutebackend.admin.domain.exceptions.AdminNotFoundException;
@@ -8,10 +9,6 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.request.AdminCreateRequest
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.AdminListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.AdminResponse;
 import biz.ugur.busroutebackend.admin.application.dto.admin.AdminUpdateRequest;
-import biz.ugur.busroutebackend.admin.application.usecase.CreateAdminUseCase;
-import biz.ugur.busroutebackend.admin.application.usecase.DeleteAdminUseCase;
-import biz.ugur.busroutebackend.admin.application.usecase.GetAllAdminsUseCase;
-import biz.ugur.busroutebackend.admin.application.usecase.UpdateAdminUseCase;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -28,15 +25,18 @@ public class AdminUserController {
     private final GetAllAdminsUseCase getAllAdminsUseCase;
     private final UpdateAdminUseCase updateAdminUseCase;
     private final DeleteAdminUseCase deleteAdminUseCase;
+    private final UpdateAdminStatusUseCase updateAdminStatusUseCase;
 
     public AdminUserController(CreateAdminUseCase createAdminUseCase,
                                GetAllAdminsUseCase getAllAdminsUseCase,
                                UpdateAdminUseCase updateAdminUseCase,
-                               DeleteAdminUseCase deleteAdminUseCase) {
+                               DeleteAdminUseCase deleteAdminUseCase,
+                               UpdateAdminStatusUseCase updateAdminStatusUseCase) {
         this.createAdminUseCase = createAdminUseCase;
         this.getAllAdminsUseCase = getAllAdminsUseCase;
         this.updateAdminUseCase = updateAdminUseCase;
         this.deleteAdminUseCase = deleteAdminUseCase;
+        this.updateAdminStatusUseCase = updateAdminStatusUseCase;
     }
 
     @GetMapping
@@ -92,6 +92,28 @@ public class AdminUserController {
                         adminId, error.getMessage(), error));
     }
 
+
+    @PostMapping("/{id}/deactivate")
+    public Mono<ResponseEntity<AdminResponse>> deactivateAdmin(@PathVariable String id) {
+        log.info("Deactivating admin - ID: {}", id);
+
+        return Mono.just(new UpdateAdminStatusUseCase.Request(id, false))
+                .as(updateAdminStatusUseCase::execute)
+                .map(this::toAdminResponseEntity)
+                .doOnSuccess(resp -> log.info("Admin update status - ID: {}", id))
+                .doOnError(error -> log.error("Failed update status admin - ID: {}: {}", id, error.getMessage(), error));
+    }
+
+    @PostMapping("/{id}/activate")
+    public Mono<ResponseEntity<AdminResponse>> activateAdmin(@PathVariable String id) {
+        log.info("Activate admin - ID: {}", id);
+
+        return Mono.just(new UpdateAdminStatusUseCase.Request(id, true))
+                .as(updateAdminStatusUseCase::execute)
+                .map(this::toAdminResponseEntity)
+                .doOnSuccess(resp -> log.info("Admin update status - ID: {}", id))
+                .doOnError(error -> log.error("Failed update status admin - ID: {}: {}", id, error.getMessage(), error));
+    }
 
 
     private ResponseEntity<AdminResponse> toAdminResponseEntity(AdminResult result) {
