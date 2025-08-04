@@ -13,7 +13,7 @@ import reactor.core.publisher.Mono;
 
 @Service
 @Slf4j
-public class DeleteAdminUseCase implements UseCase<Mono<String>, Mono<Void>> {
+public class DeleteAdminUseCase implements UseCase<Mono<DeleteAdminUseCase.Request>, Mono<Void>> {
 
     private final AdminRepository adminRepository;
     private final CorrelationContextService correlationService;
@@ -24,18 +24,19 @@ public class DeleteAdminUseCase implements UseCase<Mono<String>, Mono<Void>> {
     }
 
     @Override
-    public Mono<Void> execute(Mono<String> adminId) {
+    public Mono<Void> execute(Mono<Request> request) {
         return correlationService.executeWithCorrelation(
-                adminId.flatMap(this::executeWithCorrelation), "admin");
+                request.flatMap(this::executeWithCorrelation), "admin");
     }
 
-    private Mono<Void> executeWithCorrelation(String adminId) {
+    private Mono<Void> executeWithCorrelation(Request request) {
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
-                    log.info("Delete admin  - CorrelationId: {} - AdminId: {}", correlationId.value(), adminId);
+                    String idValue = request.adminId;
+                    log.info("Delete admin  - CorrelationId: {} - AdminId: {}", correlationId.value(), idValue);
 
-                    return adminRepository.findById(AdminId.of(adminId))
-                            .switchIfEmpty(Mono.error(new AdminNotFoundException(adminId, "id", correlationId)))
+                    return adminRepository.findById(AdminId.of(idValue))
+                            .switchIfEmpty(Mono.error(new AdminNotFoundException(idValue, "id", correlationId)))
                             .flatMap(admin -> {
                                 if (admin.getIsSuperAdmin()) {
                                     return adminRepository.countActiveAdmins()
@@ -44,18 +45,20 @@ public class DeleteAdminUseCase implements UseCase<Mono<String>, Mono<Void>> {
                                                     return Mono.error(new AdminDeleteException(
                                                             "NOT_DELETED",
                                                             "Cannot delete the last super admin",
-                                                            adminId,
+                                                            idValue,
                                                             correlationId));
                                                 }
-                                                return adminRepository.deleteById(AdminId.of(adminId));
+                                                return adminRepository.deleteById(AdminId.of(idValue));
                                             });
                                 } else {
-                                    return adminRepository.deleteById(AdminId.of(adminId));
+                                    return adminRepository.deleteById(AdminId.of(idValue));
                                 }
                             })
-                            .doOnSuccess(v -> log.info("Admin deleted successfully: {}", adminId))
-                            .doOnError(error -> log.error("Failed to delete admin: {}", adminId, error));
+                            .doOnSuccess(v -> log.info("Admin deleted successfully: {}", idValue))
+                            .doOnError(error -> log.error("Failed to delete admin: {}", idValue, error));
 
                 });
     }
+
+    public record Request(String adminId) {}
 }

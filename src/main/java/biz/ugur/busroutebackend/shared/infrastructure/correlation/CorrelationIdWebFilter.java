@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import org.springframework.web.bind.support.WebExchangeBindException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
@@ -26,12 +27,16 @@ public class CorrelationIdWebFilter implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         CorrelationId correlationId = correlationIdGenerator.extractOrGenerate(exchange);
-
         correlationIdGenerator.addToResponse(exchange, correlationId);
 
         String method = exchange.getRequest().getMethod().name();
         String path = exchange.getRequest().getPath().value();
         String clientIp = getClientIp(exchange);
+
+        if (shouldSkipDetailedLogging(path)) {
+            return chain.filter(exchange)
+                    .contextWrite(Context.of(CORRELATION_ID_CONTEXT_KEY, correlationId));
+        }
 
         log.info("Request started - {} {} - Client: {} - CorrelationId: {}",
                 method, path, clientIp, correlationId.value());
@@ -40,12 +45,27 @@ public class CorrelationIdWebFilter implements WebFilter {
                 .contextWrite(Context.of(CORRELATION_ID_CONTEXT_KEY, correlationId))
                 .doOnSuccess(result ->
                         log.info("Request completed successfully - CorrelationId: {}", correlationId.value()))
-                .doOnError(error ->
-                        log.error("Request failed - CorrelationId: {} - Error: {}",
-                                correlationId.value(), error.getMessage()))
+                .doOnError(error -> {
+                    log.error("Request failed - {} {} - CorrelationId: {} - Error: {} - Client: {}",
+                            method, path, correlationId.value(), error.getMessage(), clientIp);
+
+                    if (log.isDebugEnabled() && !(error instanceof WebExchangeBindException)) {
+                        log.debug("Request error details", error);
+                    }
+                })
                 .doFinally(signalType ->
                         log.debug("Request finished - Signal: {} - CorrelationId: {}",
                                 signalType, correlationId.value()));
+    }
+
+    private boolean shouldSkipDetailedLogging(String path) {
+        return path.startsWith("/actuator") ||
+                path.startsWith("/health") ||
+                path.contains("/favicon.ico") ||
+                path.contains("/static/") ||
+                path.contains("/css/") ||
+                path.contains("/js/") ||
+                path.contains("/images/");
     }
 
     private String getClientIp(ServerWebExchange exchange) {
@@ -57,6 +77,11 @@ public class CorrelationIdWebFilter implements WebFilter {
         String xRealIp = exchange.getRequest().getHeaders().getFirst("X-Real-IP");
         if (xRealIp != null && !xRealIp.isEmpty()) {
             return xRealIp;
+        }
+
+        String cfConnectingIp = exchange.getRequest().getHeaders().getFirst("CF-Connecting-IP");
+        if (cfConnectingIp != null && !cfConnectingIp.isEmpty()) {
+            return cfConnectingIp;
         }
 
         return exchange.getRequest().getRemoteAddress() != null

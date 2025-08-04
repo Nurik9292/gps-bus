@@ -11,6 +11,7 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -18,6 +19,17 @@ import java.util.stream.Collectors;
 public class JwtAuthenticationFilter implements WebFilter {
 
     private static final String TOKEN_PREFIX = "Bearer ";
+    private static final Set<String> PUBLIC_PATHS = Set.of(
+            "/admin/auth/login",
+            "/admin/auth/refresh",
+            "/public",
+            "/routes",
+            "/stops",
+            "/trips",
+            "/vehicles",
+            "/trip-planning",
+            "/ws"
+    );
 
     private final JwtService jwtService;
     private final TokenBlacklistService tokenBlacklistService;
@@ -27,6 +39,7 @@ public class JwtAuthenticationFilter implements WebFilter {
         String path = exchange.getRequest().getPath().value();
 
         if (isPublicPath(path)) {
+            log.debug("Skipping JWT validation for public path: {}", path);
             return chain.filter(exchange);
         }
 
@@ -34,14 +47,25 @@ public class JwtAuthenticationFilter implements WebFilter {
                 .flatMap(this::validateTokenNotBlacklisted)
                 .flatMap(jwtService::extractAdminPrincipal)
                 .map(this::createAuthentication)
-                .flatMap(auth -> chain.filter(exchange)
-                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth)))
+                .flatMap(auth -> {
+                    log.debug("JWT authentication successful for path: {} - User: {}",
+                            path, auth.getName());
+                    return chain.filter(exchange)
+                            .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth));
+                })
                 .onErrorResume(throwable -> {
                     log.debug("JWT authentication failed for path {}: {}", path, throwable.getMessage());
+
                     return chain.filter(exchange);
                 });
     }
 
+    private boolean isPublicPath(String path) {
+        return PUBLIC_PATHS.stream().anyMatch(path::startsWith) ||
+                path.startsWith("/actuator") ||
+                path.startsWith("/swagger") ||
+                path.startsWith("/api-docs");
+    }
 
     private Mono<String> extractToken(ServerWebExchange exchange) {
         return Mono.justOrEmpty(exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION))
@@ -50,7 +74,6 @@ public class JwtAuthenticationFilter implements WebFilter {
                 .filter(token -> !token.trim().isEmpty())
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("No valid token found")));
     }
-
 
     private Mono<String> validateTokenNotBlacklisted(String token) {
         return tokenBlacklistService.isAccessTokenBlacklisted(token)
@@ -62,45 +85,20 @@ public class JwtAuthenticationFilter implements WebFilter {
                     return Mono.just(token);
                 })
                 .onErrorResume(error -> {
-                    // Если произошла ошибка при проверке blacklist, логируем и отклоняем токен
-                    log.warn("Error checking token blacklist status, rejecting token: {}", error.getMessage());
+                    log.warn("Error checking token blacklist: {}", error.getMessage());
                     return Mono.error(new IllegalArgumentException("Token validation failed"));
                 });
     }
 
-
     private UsernamePasswordAuthenticationToken createAuthentication(AdminPrincipal principal) {
-        var authorities = principal.roles().stream()
+        var authorities = principal.getRoles().stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-                .collect(Collectors.toSet());
+                .collect(Collectors.toList());
 
-        authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
-
-        if (principal.isSuperAdmin()) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
-        }
-
-        var authentication = new UsernamePasswordAuthenticationToken(
+        return new UsernamePasswordAuthenticationToken(
                 principal,
                 null,
                 authorities
         );
-
-        authentication.setDetails(principal);
-        return authentication;
-    }
-
-
-    private boolean isPublicPath(String path) {
-        return path.startsWith("/actuator/health") ||
-                path.startsWith("/actuator/info") ||
-                path.startsWith("/api/public/") ||
-                path.startsWith("/api/routes/") ||
-                path.startsWith("/api/stops/") ||
-                path.startsWith("/api/trips/") ||
-                path.startsWith("/api/vehicles/") ||
-                path.startsWith("/api/admin/auth/login") ||
-                path.startsWith("/api/admin/auth/refresh") ||
-                path.startsWith("/ws/");
     }
 }

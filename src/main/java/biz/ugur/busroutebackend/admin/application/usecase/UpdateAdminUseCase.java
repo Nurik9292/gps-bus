@@ -30,7 +30,7 @@ public class UpdateAdminUseCase implements UseCase<Mono<UpdateAdminUseCase.Reque
 
     @Override
     public Mono<AdminResult> execute(Mono<Request> request) {
-        return correlationService.executeWithCorrelation(request.flatMap(this::executeWithCorrelation), "admin-update");
+        return correlationService.executeWithCorrelation(request.flatMap(this::executeWithCorrelation), "admin");
     }
 
     public Mono<AdminResult> executeWithCorrelation(Request request) {

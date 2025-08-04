@@ -3,25 +3,27 @@ package biz.ugur.busroutebackend.shared.infrastructure.config;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtAuthenticationFilter;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtService;
 import biz.ugur.busroutebackend.shared.infrastructure.security.TokenBlacklistService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
-import org.springframework.security.web.server.authentication.HttpStatusServerEntryPoint;
-import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
+import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
+import org.springframework.security.web.server.authorization.ServerAccessDeniedHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 
 
@@ -29,40 +31,33 @@ import java.util.List;
 @Configuration
 @EnableWebFluxSecurity
 @EnableReactiveMethodSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtService jwtService;
     private final TokenBlacklistService tokenBlacklistService;
 
+    public SecurityConfig(JwtService jwtService, TokenBlacklistService tokenBlacklistService) {
+        this.jwtService = jwtService;
+        this.tokenBlacklistService = tokenBlacklistService;
+    }
+
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .logout(ServerHttpSecurity.LogoutSpec::disable)
 
-                .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
-
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
                 .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED))
-                        .accessDeniedHandler((exchange, denied) -> {
-                            log.warn("Access denied for path: {} - {}",
-                                    exchange.getRequest().getPath().value(), denied.getMessage());
-                            exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
-                            return exchange.getResponse().setComplete();
-                        })
+                        .authenticationEntryPoint(customAuthenticationEntryPoint())
+                        .accessDeniedHandler(customAccessDeniedHandler())
                 )
 
-                .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/actuator/health").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/actuator/info").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/trip-planning/health").permitAll()
+                .addFilterAfter(jwtAuthenticationFilter(), SecurityWebFiltersOrder.AUTHENTICATION)
 
+                .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.POST, "/admin/auth/login").permitAll()
                         .pathMatchers(HttpMethod.POST, "/admin/auth/refresh").permitAll()
 
@@ -73,11 +68,13 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/vehicles/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/trip-planning/**").permitAll()
                         .pathMatchers(HttpMethod.POST, "/trip-planning/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/admin/**").permitAll()
 
                         .pathMatchers("/ws/**").permitAll()
 
+
                         .pathMatchers(HttpMethod.GET, "/admin/auth/me").hasRole("ADMIN")
-                        .pathMatchers(HttpMethod.PUT, "/admin/profile").hasRole("ADMIN")
+                        .pathMatchers(HttpMethod.PATCH, "/admin/auth/profile").hasRole("ADMIN")
                         .pathMatchers(HttpMethod.POST, "/admin/auth/logout").hasRole("ADMIN")
                         .pathMatchers(HttpMethod.POST, "/admin/auth/change-password").hasRole("ADMIN")
 
@@ -87,21 +84,14 @@ public class SecurityConfig {
                         .pathMatchers("/admin/banners/**").hasRole("ADMIN")
                         .pathMatchers("/admin/cities/**").hasRole("ADMIN")
 
-                        .pathMatchers("/admin/admins/**").hasRole("SUPER_ADMIN")
+                        .pathMatchers("/admin/users/**").hasRole("SUPER_ADMIN")
                         .pathMatchers("/admin/system/**").hasRole("SUPER_ADMIN")
                         .pathMatchers(HttpMethod.GET, "/admin/logs/**").hasRole("SUPER_ADMIN")
-                        .pathMatchers(HttpMethod.GET, "/admin/stats/**").hasRole("SUPER_ADMIN")
 
-                        .pathMatchers("/actuator/**").hasRole("SUPER_ADMIN")
-
-                        .anyExchange().permitAll()
+                        .anyExchange().authenticated()
                 )
-
-                .addFilterBefore(jwtAuthenticationFilter(), SecurityWebFiltersOrder.AUTHENTICATION)
-
                 .build();
     }
-
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
@@ -111,46 +101,62 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:5173",
-                "http://127.0.0.1:5173"
-//                "*"
-        ));
-
-        configuration.setAllowedHeaders(List.of(
-                "Authorization",
-                "Content-Type",
-                "X-Requested-With",
-                "Accept",
-                "Origin",
-                "Cache-Control",
-                "X-Admin-Id"
-        ));
-
-        configuration.setAllowedMethods(List.of(
-                "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"
-        ));
-
+        configuration.setAllowedOriginPatterns(List.of("*"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
-
         configuration.setMaxAge(3600L);
-
-        configuration.setExposedHeaders(List.of(
-                "X-Total-Count",
-                "X-Page-Count",
-                "Authorization"
-        ));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
-
         return source;
     }
 
+    @Bean
+    public ServerAuthenticationEntryPoint customAuthenticationEntryPoint() {
+        return (exchange, ex) -> {
+            ServerHttpResponse response = exchange.getResponse();
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            response.getHeaders().add("Content-Type", "application/json");
+
+            String body = """
+                {
+                    "error": "unauthorized",
+                    "message": "Authentication required",
+                    "timestamp": "%s",
+                    "path": "%s"
+                }
+                """.formatted(
+                    Instant.now(),
+                    exchange.getRequest().getPath().value()
+            );
+
+            DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
+            return response.writeWith(Mono.just(buffer));
+        };
+    }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12);
+    public ServerAccessDeniedHandler customAccessDeniedHandler() {
+        return (exchange, denied) -> {
+            ServerHttpResponse response = exchange.getResponse();
+            response.setStatusCode(HttpStatus.FORBIDDEN);
+            response.getHeaders().add("Content-Type", "application/json");
+
+            String body = """
+                {
+                    "error": "access_denied",
+                    "message": "Insufficient permissions",
+                    "timestamp": "%s",
+                    "path": "%s"
+                }
+                """.formatted(
+                    Instant.now(),
+                    exchange.getRequest().getPath().value()
+            );
+
+            DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
+            return response.writeWith(Mono.just(buffer));
+        };
     }
 }

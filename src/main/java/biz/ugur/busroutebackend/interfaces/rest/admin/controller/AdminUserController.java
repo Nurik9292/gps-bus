@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
 import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
+import biz.ugur.busroutebackend.admin.domain.exceptions.AdminAlreadyExistsException;
 import biz.ugur.busroutebackend.admin.domain.exceptions.AdminDeleteException;
 import biz.ugur.busroutebackend.admin.domain.exceptions.AdminNotFoundException;
 import biz.ugur.busroutebackend.interfaces.rest.admin.request.AdminCreateRequest;
@@ -13,6 +14,7 @@ import biz.ugur.busroutebackend.admin.application.usecase.GetAllAdminsUseCase;
 import biz.ugur.busroutebackend.admin.application.usecase.UpdateAdminUseCase;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -46,64 +48,51 @@ public class AdminUserController {
     }
 
     @PostMapping
-    public Mono<ResponseEntity<AdminResponse>> createAdmin(@Valid @RequestBody Mono<AdminCreateRequest> request) {
-        return request.flatMap(req -> {
-                    String username = req.username();
-                    return Mono.just(req.toCommand())
-                            .as(createAdminUseCase::execute)
-                            .map(this::toAdminResponseEntity)
-                            .doOnSuccess(response -> {
-                                if (response.getStatusCode().is2xxSuccessful()) {
-                                    log.info("Admin created successfully: {}", username);
-                                }
-                            })
-                            .doOnError(error -> log.error("Failed to create admin: {}", username, error));
-                })
-                .onErrorReturn(IllegalArgumentException.class, ResponseEntity.badRequest().build());
-    }
+    public Mono<ResponseEntity<AdminResponse>> createAdmin(@Valid @RequestBody AdminCreateRequest request) {
+        String username = request.username();
+        log.info("Creating admin: {}", username);
 
+        return Mono.just(request.toCommand())
+                .as(createAdminUseCase::execute)
+                .map(this::toAdminResponseEntity)
+                .doOnSuccess(response -> {
+                    if (response.getStatusCode().is2xxSuccessful()) {
+                        log.info("Admin created successfully: {}", username);
+                    }
+                })
+                .doOnError(error -> log.error("Failed to create admin: {}", username, error));
+    }
 
     @PutMapping("/{adminId}")
     public Mono<ResponseEntity<AdminResponse>> updateAdmin(@PathVariable String adminId,
-                                                           @Valid @RequestBody Mono<AdminUpdateRequest> requestMono) {
-        return requestMono.flatMap(req -> {
-                    String username = req.username();
-                    System.out.println(req);
-                    System.out.println(adminId);
-                    return Mono.just(new UpdateAdminUseCase.Request(adminId, req.toCommand()))
-                            .as(updateAdminUseCase::execute)
-                            .map(this::toAdminResponseEntity)
-                            .doOnSuccess(resp -> {
-                                if (resp.getStatusCode().is2xxSuccessful()) {
-                                    log.info("Admin '{}' (ID: {}) updated successfully", username, adminId);
-                                }
-                            })
-                            .doOnError(err -> log.error("Failed to update admin '{}' (ID: {}): {}",
-                                    username, adminId, err.getMessage(), err));
-                })
-                .onErrorResume(AdminNotFoundException.class,e -> {
-                            log.warn("Admin with ID {} not found for update", adminId);
-                            return Mono.just(ResponseEntity.notFound().build());
-                });
-    }
+                                                           @Valid @RequestBody AdminUpdateRequest request) {
+        String username = request.username();
+        log.info("Updating admin - ID: {} - Username: {}", adminId, username);
 
+        return Mono.just(new UpdateAdminUseCase.Request(adminId, request.toCommand()))
+                .as(updateAdminUseCase::execute)
+                .map(this::toAdminResponseEntity)
+                .doOnSuccess(resp -> {
+                    if (resp.getStatusCode().is2xxSuccessful()) {
+                        log.info("Admin '{}' (ID: {}) updated successfully", username, adminId);
+                    }
+                })
+                .doOnError(error -> log.error("Failed to update admin '{}' (ID: {}): {}",
+                        username, adminId, error.getMessage(), error));
+    }
 
     @DeleteMapping("/{adminId}")
     public Mono<ResponseEntity<Void>> deleteAdmin(@PathVariable String adminId) {
-        log.info("Deleting admin: {}", adminId);
-        return deleteAdminUseCase.execute(Mono.just(adminId))
+        log.info("Deleting admin - ID: {}", adminId);
+
+        return deleteAdminUseCase.execute(Mono.just(new DeleteAdminUseCase.Request(adminId)))
                 .then(Mono.just(ResponseEntity.noContent().<Void>build()))
-                .onErrorReturn(AdminDeleteException.class,
-                        ResponseEntity.notFound().build())
-                .onErrorReturn(AdminDeleteException.class,
-                        ResponseEntity.badRequest().build())
-                .doOnSuccess(response -> {
-                    if (response.getStatusCode().is2xxSuccessful()) {
-                        log.info("Admin deleted successfully: {}", adminId);
-                    }
-                })
-                .doOnError(error -> log.error("Failed to delete admin: {}", adminId, error));
+                .doOnSuccess(resp -> log.info("Admin deleted successfully - ID: {}", adminId))
+                .doOnError(error -> log.error("Failed to delete admin - ID: {}: {}",
+                        adminId, error.getMessage(), error));
     }
+
+
 
     private ResponseEntity<AdminResponse> toAdminResponseEntity(AdminResult result) {
         return ResponseEntity.ok(AdminResponse.fromResult(result));
