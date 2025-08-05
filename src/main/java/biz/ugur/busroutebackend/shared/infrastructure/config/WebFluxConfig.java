@@ -7,6 +7,7 @@ import org.springframework.http.codec.ServerCodecConfigurer;
 import org.springframework.http.codec.multipart.DefaultPartHttpMessageReader;
 import org.springframework.http.codec.multipart.MultipartHttpMessageReader;
 import org.springframework.web.reactive.config.EnableWebFlux;
+import org.springframework.web.reactive.config.ResourceHandlerRegistry;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 
 @Slf4j
@@ -26,5 +27,11 @@ public class WebFluxConfig implements WebFluxConfigurer {
     @Bean
     public MultipartHttpMessageReader multipartReader() {
         return new MultipartHttpMessageReader(new DefaultPartHttpMessageReader());
+    }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/avatars/**")
+                .addResourceLocations("file:/home/developer/projects/bus/ugur_v4/app/data/avatars/");
     }
 }

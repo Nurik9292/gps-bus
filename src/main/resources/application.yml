@@ -69,6 +69,7 @@ spring:
 app:
   scheduling:
     enabled: false
+
   admin:
     default-username: ${ADMIN_DEFAULT_USERNAME:admin}
     default-password: ${ADMIN_DEFAULT_PASSWORD:admin123}
@@ -88,6 +89,19 @@ app:
       access-token-expiration: "PT1H"    # 1 hour
       refresh-token-expiration: "P7D"    # 7 days
       issuer: "bus-route-system"
+
+  storage:
+    avatars:
+      base-path: ${AVATAR_STORAGE_PATH:/home/developer/projects/bus/ugur_v4/app/data/avatars}
+      base-url: ${AVATAR_BASE_URL:http://localhost:8080/uploads/avatars}
+      max-size-mb: ${AVATAR_MAX_SIZE_MB:2}
+      allowed-formats: jpg,jpeg,png,webp,gif
+      create-thumbnails: ${AVATAR_CREATE_THUMBNAILS:false}
+      thumbnail-size: ${AVATAR_THUMBNAIL_SIZE:150}
+      jpeg-quality: ${AVATAR_JPEG_QUALITY:0.85}
+      cleanup-temp-files-days: ${AVATAR_CLEANUP_DAYS:7}
+      enable-metrics: ${AVATAR_ENABLE_METRICS:true}
+
 
 external:
   api:

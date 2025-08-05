@@ -17,7 +17,7 @@ CREATE TABLE admins (
                         is_active BOOLEAN DEFAULT true,
                         is_super_admin BOOLEAN DEFAULT false,
                         last_login_at TIMESTAMP WITH TIME ZONE,
-                        avatar TEXT,
+                        avatar VARCHAR(255),
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                         version BIGINT DEFAULT 0

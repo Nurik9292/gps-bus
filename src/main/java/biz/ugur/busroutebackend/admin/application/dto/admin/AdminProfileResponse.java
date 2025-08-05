@@ -25,6 +25,9 @@ public record AdminProfileResponse(
 ) {
 
         public static AdminProfileResponse fromDomain(Admin admin) {
+                System.out.println("test test test test");
+                System.out.println(admin.toString());
+                System.out.println("AVATAR " +  admin.getAvatar());
                 return new AdminProfileResponse(
                         admin.getId().getValue(),
                         admin.getUsername(),

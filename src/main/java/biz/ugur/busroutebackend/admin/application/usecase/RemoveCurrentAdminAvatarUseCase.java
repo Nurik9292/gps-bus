@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.infrastructure.storage.AvatarStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ public class RemoveCurrentAdminAvatarUseCase implements UseCase<Mono<AdminId>, M
     private final AdminRepository adminRepository;
     private final EventBus eventBus;
     private final CorrelationContextService correlationService;
+    private final AvatarStorageService avatarStorageService;
 
     @Override
     public Mono<Admin> execute(Mono<AdminId> adminId) {
@@ -38,16 +40,22 @@ public class RemoveCurrentAdminAvatarUseCase implements UseCase<Mono<AdminId>, M
                             .switchIfEmpty(Mono.error(new AdminNotFoundException(idValue, "id", correlationId)))
                             .flatMap(admin -> {
                                 admin.removeAvatar();
+                               return avatarStorageService.deleteAvatar(admin.getAvatar())
+                                       .then(updateAvatarInDatabase(admin));
 
-                                return adminRepository.save(admin)
-                                        .doOnNext(savedAdmin -> {
-                                            savedAdmin.getUncommittedEvents().forEach(eventBus::publish);
-                                            savedAdmin.markEventsAsCommitted();
-                                        });
                             })
                             .doOnSuccess(admin -> log.info("Avatar removed successfully for admin: {}", admin.getUsername()))
                             .doOnError(error -> log.error("Failed to remove avatar for admin: {}: {}",
                                     idValue, error.getMessage()));
+                });
+    }
+
+
+    private Mono<Admin> updateAvatarInDatabase(Admin admin) {
+        return adminRepository.updateAvatar(admin.getId(), null)
+                .doOnNext(savedAdmin -> {
+                    savedAdmin.getUncommittedEvents().forEach(eventBus::publish);
+                    savedAdmin.markEventsAsCommitted();
                 });
     }
 }

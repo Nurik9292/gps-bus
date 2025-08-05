@@ -26,12 +26,16 @@ public class CorrelationIdWebFilter implements WebFilter {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-        CorrelationId correlationId = correlationIdGenerator.extractOrGenerate(exchange);
-        correlationIdGenerator.addToResponse(exchange, correlationId);
-
         String method = exchange.getRequest().getMethod().name();
         String path = exchange.getRequest().getPath().value();
         String clientIp = getClientIp(exchange);
+        System.out.println("path path " + path);
+        if (method.equalsIgnoreCase("HEAD") || path.contains("/avatars/")) {
+            return chain.filter(exchange);
+        }
+
+        CorrelationId correlationId = correlationIdGenerator.extractOrGenerate(exchange);
+        correlationIdGenerator.addToResponse(exchange, correlationId);
 
         if (shouldSkipDetailedLogging(path)) {
             return chain.filter(exchange)
@@ -65,7 +69,7 @@ public class CorrelationIdWebFilter implements WebFilter {
                 path.contains("/static/") ||
                 path.contains("/css/") ||
                 path.contains("/js/") ||
-                path.contains("/images/");
+                path.contains("/avatars/");
     }
 
     private String getClientIp(ServerWebExchange exchange) {

@@ -187,6 +187,7 @@ public class R2dbcAdminRepository implements AdminRepository {
                 row.get("username", String.class),
                 row.get("password_hash", String.class),
                 row.get("full_name", String.class),
+                row.get("avatar", String.class),
                 row.get("is_active", Boolean.class),
                 row.get("is_super_admin", Boolean.class),
                 row.get("last_login_at", Instant.class)

@@ -160,7 +160,6 @@ public class AdminUserController {
     @PatchMapping("/profile/avatar")
     @ResponseStatus(HttpStatus.OK)
     public Mono<AdminProfileResponse> updateAvatar(@Valid @RequestBody AvatarUpdateRequest request) {
-        System.out.println("test " + request.avatar());
         return getCurrentPrincipal().flatMap(principal -> {
             log.debug("Обновление аватара для админа: {}", principal.username());
 
@@ -183,6 +182,7 @@ public class AdminUserController {
     public Mono<AdminProfileResponse> removeAvatar() {
         return getCurrentPrincipal().flatMap(principal -> {
             log.debug("Удаление аватара для админа: {}", principal.username());
+            log.debug("Удаление аватара для админа: {}", principal.id());
 
             return removeCurrentAdminAvatarUseCase.execute(Mono.just(principal.id()))
                     .map(AdminProfileResponse::fromDomain)

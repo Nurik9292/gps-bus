@@ -35,8 +35,6 @@ public class GetCurrentAdminUseCase implements UseCase<Mono<GetCurrentAdminUseCa
 
                     return adminRepository.findById(query.adminId())
                             .switchIfEmpty(Mono.error(new AdminNotFoundException(adminId, "id", correlationId)))
-                            .filter(Admin::getIsActive)
-                            .switchIfEmpty(Mono.error(new AdminNotFoundException(adminId, "id", correlationId)))
                             .doOnSuccess(admin -> log.debug("Current admin info retrieved: {}", admin.getUsername()))
                             .doOnError(error -> log.warn("Failed to get current admin info for {}: {}",adminId, error.getMessage()));
                 });
