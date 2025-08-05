@@ -1,9 +1,8 @@
-package biz.ugur.busroutebackend.admin.application.dto.admin;
+package biz.ugur.busroutebackend.interfaces.rest.admin.request;
 
+import biz.ugur.busroutebackend.admin.application.dto.admin.UpdateCommand;
 import biz.ugur.busroutebackend.shared.infrastructure.validation.OptionalSize;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.annotation.Nullable;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record AdminUpdateRequest(

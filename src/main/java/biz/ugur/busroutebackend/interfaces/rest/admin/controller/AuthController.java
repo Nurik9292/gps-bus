@@ -92,9 +92,12 @@ public class AuthController {
 
         return getCurrentPrincipal().flatMap(principal -> {
             log.debug("Обновление профиля для админа: {}", principal.username());
+            log.debug("Обновление профиля для админа2: {}", request.getUsername());
+            log.debug("Обновление профиля для админа3: {}", request.getFullName());
 
              UpdateCurrentAdminProfileUseCase.Request req = new UpdateCurrentAdminProfileUseCase.Request(
                     principal.id(),
+                    request.getUsername(),
                     request.getFullName(),
                     request.getAvatar()
             );

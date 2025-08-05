@@ -2,16 +2,12 @@ package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
 import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
 import biz.ugur.busroutebackend.admin.application.usecase.*;
-import biz.ugur.busroutebackend.admin.domain.exceptions.AdminAlreadyExistsException;
-import biz.ugur.busroutebackend.admin.domain.exceptions.AdminDeleteException;
-import biz.ugur.busroutebackend.admin.domain.exceptions.AdminNotFoundException;
 import biz.ugur.busroutebackend.interfaces.rest.admin.request.AdminCreateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.AdminListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.AdminResponse;
-import biz.ugur.busroutebackend.admin.application.dto.admin.AdminUpdateRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.request.AdminUpdateRequest;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;

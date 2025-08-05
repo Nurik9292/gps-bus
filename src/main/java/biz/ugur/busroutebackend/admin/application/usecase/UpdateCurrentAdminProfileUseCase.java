@@ -21,7 +21,7 @@ public class UpdateCurrentAdminProfileUseCase implements UseCase<Mono<UpdateCurr
     private final EventBus eventBus;
     private final CorrelationContextService correlationService;
 
-    public record Request(AdminId adminId, String fullName, String avatar) {}
+    public record Request(AdminId adminId, String username, String fullName, String avatar) {}
 
     @Override
     public Mono<Admin> execute(Mono<UpdateCurrentAdminProfileUseCase.Request> request) {
@@ -36,11 +36,8 @@ public class UpdateCurrentAdminProfileUseCase implements UseCase<Mono<UpdateCurr
 
                     return adminRepository.findById(request.adminId())
                             .switchIfEmpty(Mono.error(new AdminNotFoundException(adminId, "id", correlationId)))
-                            .filter(Admin::getIsActive)
-                            .switchIfEmpty(Mono.error(new AdminNotFoundException(adminId, "id", correlationId)))
                             .flatMap(admin -> {
-                                admin.updateProfile(request.fullName(), request.avatar());
-
+                                admin.updateProfile(request.username(), request.fullName(), request.avatar());
                                 return adminRepository.save(admin)
                                         .doOnNext(savedAdmin -> {
                                             savedAdmin.getUncommittedEvents().forEach(eventBus::publish);
