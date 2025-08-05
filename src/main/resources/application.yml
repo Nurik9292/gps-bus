@@ -49,6 +49,10 @@ spring:
 
   webflux:
     base-path: /api/v1
+    multipart:
+      max-in-memory-size: 5MB
+      max-disk-usage-per-part: 10MB
+      max-parts: 10
 
   jackson:
     serialization:
@@ -58,6 +62,7 @@ spring:
       fail-on-unknown-properties: false
     time-zone: UTC
     default-property-inclusion: non_null
+
 
 
 
@@ -182,9 +187,9 @@ server:
   port: ${SERVER_PORT:8080}
   compression:
     enabled: true
-    mime-types: application/json,application/xml,text/html,text/xml,text/plain
   http2:
     enabled: true
   error:
     include-message: always
     include-binding-errors: always
+  max-http-request-header-size: 1MB

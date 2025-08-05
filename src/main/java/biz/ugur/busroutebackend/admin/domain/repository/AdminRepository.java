@@ -22,4 +22,6 @@ public interface AdminRepository {
     Mono<Void> deleteById(AdminId adminId);
 
     Mono<Long> countActiveAdmins();
+
+    Mono<Admin> updateAvatar(AdminId adminId, String avatar);
 }

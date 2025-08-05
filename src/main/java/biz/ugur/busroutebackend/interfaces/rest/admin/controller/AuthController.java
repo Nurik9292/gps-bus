@@ -34,9 +34,8 @@ public class AuthController {
     private final LogoutUseCase logoutUseCase;
     private final GetCurrentAdminUseCase getCurrentAdminUseCase;
 
-    private final UpdateCurrentAdminProfileUseCase updateCurrentAdminProfileUseCase;
-    private final UpdateCurrentAdminAvatarUseCase updateCurrentAdminAvatarUseCase;
-    private final RemoveCurrentAdminAvatarUseCase removeCurrentAdminAvatarUseCase;
+
+
 
     @PostMapping("/login")
     @ResponseStatus(HttpStatus.OK)
@@ -75,6 +74,7 @@ public class AuthController {
                 .doOnError(error -> log.warn("Logout failed for admin {}: {}", principal.username(), error.getMessage()));
     }
 
+
     @GetMapping("/me")
     @ResponseStatus(HttpStatus.OK)
     public Mono<AdminProfileResponse> getCurrentAdmin() {
@@ -86,65 +86,7 @@ public class AuthController {
                 });
     }
 
-    @PatchMapping("/profile")
-    @ResponseStatus(HttpStatus.OK)
-    public Mono<AdminProfileResponse> updateProfile(@Valid @RequestBody AdminUpdateProfileRequest request) {
 
-        return getCurrentPrincipal().flatMap(principal -> {
-            log.debug("Обновление профиля для админа: {}", principal.username());
-            log.debug("Обновление профиля для админа2: {}", request.getUsername());
-            log.debug("Обновление профиля для админа3: {}", request.getFullName());
-
-             UpdateCurrentAdminProfileUseCase.Request req = new UpdateCurrentAdminProfileUseCase.Request(
-                    principal.id(),
-                    request.getUsername(),
-                    request.getFullName(),
-                    request.getAvatar()
-            );
-
-           return updateCurrentAdminProfileUseCase.execute(Mono.just(req))
-                    .map(AdminProfileResponse::fromDomain)
-                    .doOnSuccess(response -> log.info("✅ Профиль обновлен для: {}", principal.username()))
-                    .doOnError(error -> log.error("❌ Ошибка обновления профиля: {}", error.getMessage()));
-        });
-
-    }
-
-    @PatchMapping("/profile/avatar")
-    @ResponseStatus(HttpStatus.OK)
-    public Mono<AdminProfileResponse> updateAvatar(@Valid @RequestBody AvatarUpdateRequest request) {
-
-        return getCurrentPrincipal().flatMap(principal -> {
-            log.debug("Обновление аватара для админа: {}", principal.username());
-
-            UpdateCurrentAdminAvatarUseCase.Request req = new UpdateCurrentAdminAvatarUseCase.Request(
-                    principal.id(),
-                    request.avatar()
-            );
-
-            return updateCurrentAdminAvatarUseCase.execute(req)
-                    .map(AdminProfileResponse::fromDomain)
-                    .doOnSuccess(response -> log.info("✅ Аватар обновлен для: {}", principal.username()))
-                    .doOnError(error -> log.error("❌ Ошибка обновления аватара: {}", error.getMessage()));
-        });
-
-
-    }
-
-    @DeleteMapping("/profile/avatar")
-    @ResponseStatus(HttpStatus.OK)
-    public Mono<AdminProfileResponse> removeAvatar() {
-        return getCurrentPrincipal().flatMap(principal -> {
-            log.debug("Удаление аватара для админа: {}", principal.username());
-
-            return removeCurrentAdminAvatarUseCase.execute(Mono.just(principal.id()))
-                    .map(AdminProfileResponse::fromDomain)
-                    .doOnSuccess(response -> log.info("✅ Аватар удален для: {}", principal.username()))
-                    .doOnError(error -> log.error("❌ Ошибка удаления аватара: {}", error.getMessage()));
-        });
-
-
-    }
 
     private String extractTokenFromHeader(String authHeader) {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {

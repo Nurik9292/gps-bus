@@ -87,7 +87,7 @@ public class SecurityConfig {
 //                        .pathMatchers("/admin/system/**").hasRole("SUPER_ADMIN")
 //                        .pathMatchers(HttpMethod.GET, "/admin/logs/**").hasRole("SUPER_ADMIN")
 
-                        .anyExchange().authenticated()
+                        .anyExchange().permitAll()
                 )
                 .build();
     }

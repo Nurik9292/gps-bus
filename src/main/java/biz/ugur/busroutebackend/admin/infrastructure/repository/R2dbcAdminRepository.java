@@ -13,6 +13,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.Objects;
 
 
 @Repository
@@ -142,6 +143,42 @@ public class R2dbcAdminRepository implements AdminRepository {
                 .map(row -> row.get(0, Long.class))
                 .one()
                 .doOnNext(count -> log.debug("Active admins count: {}", count));
+    }
+
+    @Override
+    @Transactional
+    public Mono<Admin> updateAvatar(AdminId adminId, String avatar) {
+        log.info("🖼️ Updating avatar for admin ID: {}", adminId.getValue());
+        log.info("   Avatar data: {}", avatar != null ? "EXISTS (" + avatar.length() + " chars)" : "NULL");
+
+        return databaseClient.sql("""
+                UPDATE admins 
+                SET avatar = :avatar,
+                    updated_at = :updatedAt,
+                    version = version + 1 
+                WHERE id = :id
+            """)
+                .bind("avatar", Objects.requireNonNull(avatar))
+                .bind("updatedAt", Instant.now())
+                .bind("id", adminId.getValue())
+                .fetch()
+                .rowsUpdated()
+                .doOnNext(rowsUpdated -> {
+                    log.info("📊 Avatar update result: {} rows affected", rowsUpdated);
+                })
+                .flatMap(rowsUpdated -> {
+                    if (rowsUpdated == 0) {
+                        return Mono.error(new IllegalArgumentException("Admin not found: " + adminId.getValue()));
+                    }
+                    return findById(adminId);
+                })
+                .doOnSuccess(admin -> {
+                    log.info("✅ Avatar updated successfully for: {}", admin.getUsername());
+                })
+                .doOnError(error -> {
+                    log.error("❌ Avatar update failed for admin ID: {}", adminId.getValue());
+                    log.error("   Error: {}", error.getMessage());
+                });
     }
 
     private Admin mapRowToAdmin(Row row, RowMetadata metadata) {

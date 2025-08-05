@@ -24,7 +24,7 @@ public class UpdateCurrentAdminAvatarUseCase implements UseCase<UpdateCurrentAdm
     public Mono<Admin> execute(Request request) {
         log.info("Updating avatar for admin: {}", request.adminId().getValue());
 
-        if (request.avatar() != null && request.avatar().length() > 2_000_000) { // 2MB limit
+        if (request.avatar() != null && request.avatar().length() > 2_000_000) {
             return Mono.error(new IllegalArgumentException("Avatar too large (max 2MB)"));
         }
 
@@ -37,9 +37,8 @@ public class UpdateCurrentAdminAvatarUseCase implements UseCase<UpdateCurrentAdm
                 .filter(Admin::getIsActive)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Account is disabled")))
                 .flatMap(admin -> {
-                    admin.updateAvatar(request.avatar());
-
-                    return adminRepository.save(admin)
+                    log.info("💾 Saving avatar to database...");
+                    return adminRepository.updateAvatar(admin.getId(), request.avatar())
                             .doOnNext(savedAdmin -> {
                                 savedAdmin.getUncommittedEvents().forEach(eventBus::publish);
                                 savedAdmin.markEventsAsCommitted();
