@@ -25,7 +25,9 @@ public class RemoveCurrentAdminAvatarUseCase implements UseCase<Mono<AdminId>, M
 
     @Override
     public Mono<Admin> execute(Mono<AdminId> adminId) {
-        return correlationService.executeWithCorrelation(adminId.flatMap(this::executeWithCorrelation), "admin-avatar");
+        log.info("🚀 USECASE STEP 1: Execute called");
+        return correlationService
+                .executeWithCorrelation(adminId.flatMap(this::executeWithCorrelation), "admin");
     }
 
     private Mono<Admin> executeWithCorrelation(AdminId adminId) {
@@ -36,11 +38,11 @@ public class RemoveCurrentAdminAvatarUseCase implements UseCase<Mono<AdminId>, M
 
                     return adminRepository.findById(adminId)
                             .switchIfEmpty(Mono.error(new AdminNotFoundException(idValue, "id", correlationId)))
-                            .filter(Admin::getIsActive)
-                            .switchIfEmpty(Mono.error(new AdminNotFoundException(idValue, "id", correlationId)))
                             .flatMap(admin -> {
+                                String oldAvatar = admin.getAvatar();
+                                System.out.println("Removing avatar for admin  - OldAvatar: " + oldAvatar);
                                 admin.removeAvatar();
-                               return avatarStorageService.deleteAvatar(admin.getAvatar())
+                               return avatarStorageService.deleteAvatar(oldAvatar)
                                        .then(updateAvatarInDatabase(admin));
 
                             })

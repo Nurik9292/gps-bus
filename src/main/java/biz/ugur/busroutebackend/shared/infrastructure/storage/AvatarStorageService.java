@@ -76,7 +76,8 @@ public class AvatarStorageService {
 
         return Mono.fromRunnable(() -> {
             try {
-                Path originalPath = Paths.get(basePath + avatarPath);
+                Path originalPath = Paths.get(basePath + avatarPath.replace("avatars/", ""));
+                System.out.println("originalPath: " + originalPath.toString());
                 if (Files.exists(originalPath)) {
                     Files.delete(originalPath);
                     log.info("🗑️ Deleted original avatar: {}", avatarPath);

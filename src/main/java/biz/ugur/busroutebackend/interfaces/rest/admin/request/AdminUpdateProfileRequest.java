@@ -1,7 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.request;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.annotation.Nullable;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -16,10 +15,6 @@ public class AdminUpdateProfileRequest {
     @Size(max = 100, message = "Full name must not exceed 100 characters")
     private String fullName;
 
-    @JsonProperty("avatar")
-    private String avatar;
-
-    @Nullable
     @Size(min = 8, message = "Password must be at least 8 characters")
     private String newPassword;
 

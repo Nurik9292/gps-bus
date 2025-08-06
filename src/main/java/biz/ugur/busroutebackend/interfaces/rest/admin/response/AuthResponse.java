@@ -1,6 +1,5 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.response;
 
-import biz.ugur.busroutebackend.admin.application.dto.admin.AdminProfileResponse;
 import biz.ugur.busroutebackend.admin.application.usecase.auth.LoginUseCase;
 import biz.ugur.busroutebackend.admin.application.usecase.auth.RefreshTokenUseCase;
 import com.fasterxml.jackson.annotation.JsonProperty;

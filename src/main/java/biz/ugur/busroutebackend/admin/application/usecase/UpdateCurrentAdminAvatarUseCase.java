@@ -31,13 +31,16 @@ public class UpdateCurrentAdminAvatarUseCase implements UseCase<UpdateCurrentAdm
                 .filter(Admin::getIsActive)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Account is disabled")))
                 .flatMap(admin -> {
+                    String oldAvatarPath = admin.getAvatar();
                     if (request.avatar() == null) {
-                        return avatarStorageService.deleteAvatar(admin.getAvatar())
+                        admin.removeAvatar();
+                        return avatarStorageService.deleteAvatar(oldAvatarPath)
                                 .then(updateAvatarInDatabase(admin, null));
                     } else if (request.avatar().startsWith("data:image/")) {
                         return avatarStorageService.saveAvatar(admin.getId().getValue(), request.avatar())
                                 .flatMap(result -> {
-                                    return avatarStorageService.deleteAvatar(admin.getAvatar())
+                                    admin.updateAvatar(result.originalPath());
+                                    return avatarStorageService.deleteAvatar(oldAvatarPath)
                                             .then(updateAvatarInDatabase(admin, result.originalPath()));
                                 });
                     } else {

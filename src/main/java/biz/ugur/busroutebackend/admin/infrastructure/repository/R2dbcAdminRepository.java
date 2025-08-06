@@ -151,17 +151,22 @@ public class R2dbcAdminRepository implements AdminRepository {
         log.info("🖼️ Updating avatar for admin ID: {}", adminId.getValue());
         log.info("   Avatar data: {}", avatar != null ? "EXISTS (" + avatar.length() + " chars)" : "NULL");
 
-        return databaseClient.sql("""
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql("""
                 UPDATE admins 
                 SET avatar = :avatar,
                     updated_at = :updatedAt,
                     version = version + 1 
                 WHERE id = :id
-            """)
-                .bind("avatar", Objects.requireNonNull(avatar))
-                .bind("updatedAt", Instant.now())
-                .bind("id", adminId.getValue())
-                .fetch()
+            """).bind("updatedAt", Instant.now())
+                .bind("id", adminId.getValue());
+
+        if (avatar == null) {
+            spec = spec.bindNull("avatar", String.class);
+        } else {
+            spec = spec.bind("avatar", avatar);
+        }
+
+        return spec.fetch()
                 .rowsUpdated()
                 .doOnNext(rowsUpdated -> {
                     log.info("📊 Avatar update result: {} rows affected", rowsUpdated);

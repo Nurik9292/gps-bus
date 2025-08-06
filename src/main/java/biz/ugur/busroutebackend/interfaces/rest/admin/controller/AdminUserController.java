@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
-import biz.ugur.busroutebackend.admin.application.dto.admin.AdminProfileResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.AdminProfileResponse;
 import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
 import biz.ugur.busroutebackend.admin.application.usecase.*;
 import biz.ugur.busroutebackend.interfaces.rest.admin.request.AdminCreateRequest;
@@ -13,9 +13,7 @@ import biz.ugur.busroutebackend.shared.infrastructure.security.AdminPrincipal;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.codec.multipart.Part;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.web.bind.annotation.*;
@@ -144,8 +142,7 @@ public class AdminUserController {
             UpdateCurrentAdminProfileUseCase.Request req = new UpdateCurrentAdminProfileUseCase.Request(
                     principal.id(),
                     request.getUsername(),
-                    request.getFullName(),
-                    request.getAvatar()
+                    request.getFullName()
             );
 
             return updateCurrentAdminProfileUseCase.execute(Mono.just(req))
@@ -181,8 +178,8 @@ public class AdminUserController {
     @ResponseStatus(HttpStatus.OK)
     public Mono<AdminProfileResponse> removeAvatar() {
         return getCurrentPrincipal().flatMap(principal -> {
-            log.debug("Удаление аватара для админа: {}", principal.username());
-            log.debug("Удаление аватара для админа: {}", principal.id());
+            log.info("🔥 STEP 1: Удаление аватара для админа: {}", principal.username());
+            log.info("🔥 STEP 2: Admin ID: {}", principal.id());
 
             return removeCurrentAdminAvatarUseCase.execute(Mono.just(principal.id()))
                     .map(AdminProfileResponse::fromDomain)
