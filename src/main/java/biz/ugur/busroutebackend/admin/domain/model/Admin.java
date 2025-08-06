@@ -10,6 +10,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.Instant;
@@ -49,7 +50,11 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
 
     private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public Admin(String username, String password, String fullName, Boolean isSuperAdmin, Boolean isActive) {
+    public Admin(String username,
+                 String password,
+                 String fullName,
+                 Boolean isSuperAdmin,
+                 Boolean isActive) {
         this.id = AdminId.generate();
         this.username = validateUsername(username);
         this.passwordHash = passwordEncoder.encode(password);
@@ -90,7 +95,7 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         ));
     }
 
-    public Admin(AdminId id,
+    public Admin(AdminId adminId,
                  String username,
                  String passwordHash,
                  String fullName,
@@ -98,30 +103,16 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                  Boolean isActive,
                  Boolean isSuperAdmin,
                  Instant lastLoginAt) {
-        this.id = id;
+        this.id = adminId;
         this.username = username;
         this.passwordHash = passwordHash;
         this.fullName = fullName;
         this.avatar = avatar;
-        this.isActive = isActive;
-        this.isSuperAdmin = isSuperAdmin;
+        this.isActive = isActive != null ? isActive : true;
+        this.isSuperAdmin = isSuperAdmin != null ? isSuperAdmin : false;
         this.lastLoginAt = lastLoginAt;
-    }
+        this.isNew = false;
 
-    public Admin(AdminId id,
-                 String username,
-                 String passwordHash,
-                 String fullName,
-                 Boolean isActive,
-                 Boolean isSuperAdmin,
-                 Instant lastLoginAt) {
-        this.id = id;
-        this.username = username;
-        this.passwordHash = passwordHash;
-        this.fullName = fullName;
-        this.isActive = isActive;
-        this.isSuperAdmin = isSuperAdmin;
-        this.lastLoginAt = lastLoginAt;
     }
 
     public void changePassword(String newPassword) {
@@ -240,16 +231,38 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         return cleaned;
     }
 
+    private String encodePassword(String password) {
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalArgumentException("Password cannot be empty");
+        }
+        if (password.trim().length() < 8) {
+            throw new IllegalArgumentException("Password must be at least 8 characters long");
+        }
+        return BCrypt.hashpw(password,
+                BCrypt.gensalt());
+    }
+
+    @Override
+    public Instant getCreatedAt() {
+        return super.getCreatedAt();
+    }
+
+    @Override
+    public Instant getUpdatedAt() {
+        return super.getUpdatedAt();
+    }
+
 
     @Override
     public String toString() {
         return "Admin{" +
                 "id=" + id +
                 ", username='" + username + '\'' +
-                ", passwordHash='" + passwordHash + '\'' +
                 ", fullName='" + fullName + '\'' +
                 ", isActive=" + isActive +
                 ", isSuperAdmin=" + isSuperAdmin +
+                ", createdAt=" + getCreatedAt() +
+                ", updatedAt=" + getUpdatedAt() +
                 ", lastLoginAt=" + lastLoginAt +
                 '}';
     }

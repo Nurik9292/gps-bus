@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.shared.domain;
 
 import lombok.Getter;
+import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.annotation.Version;
@@ -13,6 +14,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+@Setter
 @Getter
 public abstract class AggregateRoot<T extends AggregateRoot<T, ID>, ID> extends AbstractAggregateRoot<T> {
 
@@ -26,11 +28,13 @@ public abstract class AggregateRoot<T extends AggregateRoot<T, ID>, ID> extends 
     @Column("updated_at")
     protected Instant updatedAt;
 
+
     @Version
     @Column("version")
     private Long version;
 
     public abstract ID getId();
+
 
     @Override
     public boolean equals(Object obj) {

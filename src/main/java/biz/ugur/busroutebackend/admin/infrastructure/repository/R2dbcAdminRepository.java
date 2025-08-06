@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.admin.infrastructure.repository;
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
+import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -187,15 +189,27 @@ public class R2dbcAdminRepository implements AdminRepository {
     }
 
     private Admin mapRowToAdmin(Row row, RowMetadata metadata) {
-        return new Admin(
-                AdminId.of(row.get("id", String.class)),
-                row.get("username", String.class),
-                row.get("password_hash", String.class),
-                row.get("full_name", String.class),
-                row.get("avatar", String.class),
-                row.get("is_active", Boolean.class),
-                row.get("is_super_admin", Boolean.class),
-                row.get("last_login_at", Instant.class)
-        );
+        AdminId adminId = AdminId.of(row.get("id", String.class));
+        String username = row.get("username", String.class);
+        String passwordHash = row.get("password_hash", String.class);
+        String fullName = row.get("full_name", String.class);
+        String avatar = row.get("avatar", String.class);
+        Boolean isActive = row.get("is_active", Boolean.class);
+        Boolean isSuperAdmin = row.get("is_super_admin", Boolean.class);
+        Instant lastLoginAt = row.get("last_login_at", Instant.class);
+
+        Admin admin = new Admin(adminId, username, passwordHash, fullName, avatar,
+                isActive, isSuperAdmin, lastLoginAt);
+
+        admin.setCreatedAt(row.get("created_at", Instant.class));
+        admin.setUpdatedAt(row.get("updated_at", Instant.class));
+        admin.setVersion(row.get("version", Long.class));
+
+        admin.markAsExisting();
+
+        log.debug("✅ Mapped admin from DB: {} (created: {}, updated: {})",
+                admin.getUsername(), admin.getCreatedAt(), admin.getUpdatedAt());
+
+        return admin;
     }
 }
