@@ -60,14 +60,16 @@ public class AuthController {
 
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public Mono<Void> logout(@AuthenticationPrincipal AdminPrincipal principal,
-                             @RequestHeader("Authorization") String authHeader) {
-        log.info("Logout request from admin: {}", principal.username());
-        String token = extractTokenFromHeader(authHeader);
+    public Mono<Void> logout(@RequestHeader("Authorization") String authHeader) {
+        return getCurrentPrincipal().flatMap(principal -> {
+            log.info("Logout request from admin: {}", principal.username());
+            String token = extractTokenFromHeader(authHeader);
+            return logoutUseCase.execute(Mono.just(new LogoutUseCase.Request(principal.id(), token)))
+                    .doOnSuccess(v -> log.info("Logout successful for admin: {}", principal.username()))
+                    .doOnError(error -> log.warn("Logout failed for admin {}: {}", principal.username(), error.getMessage()));
+        });
 
-        return logoutUseCase.execute(Mono.just(new LogoutUseCase.Request(principal.id(), token)))
-                .doOnSuccess(v -> log.info("Logout successful for admin: {}", principal.username()))
-                .doOnError(error -> log.warn("Logout failed for admin {}: {}", principal.username(), error.getMessage()));
+
     }
 
 
