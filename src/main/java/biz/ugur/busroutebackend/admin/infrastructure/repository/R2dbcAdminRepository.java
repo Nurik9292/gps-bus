@@ -32,7 +32,6 @@ public class R2dbcAdminRepository implements AdminRepository {
     @Override
     @Transactional
     public Mono<Admin> save(Admin admin) {
-        log.info("Saving admin: {}", admin);
         if (admin.isNew()) {
             return insert(admin).doOnSuccess(Admin::markAsExisting);
         } else {

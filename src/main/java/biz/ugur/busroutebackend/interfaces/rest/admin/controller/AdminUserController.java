@@ -1,14 +1,14 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
-import biz.ugur.busroutebackend.interfaces.rest.admin.response.AdminProfileResponse;
+import biz.ugur.busroutebackend.admin.application.usecase.admin.*;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.admin.AdminProfileResponse;
 import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
-import biz.ugur.busroutebackend.admin.application.usecase.*;
-import biz.ugur.busroutebackend.interfaces.rest.admin.request.AdminCreateRequest;
-import biz.ugur.busroutebackend.interfaces.rest.admin.request.AdminUpdateProfileRequest;
-import biz.ugur.busroutebackend.interfaces.rest.admin.request.AvatarUpdateRequest;
-import biz.ugur.busroutebackend.interfaces.rest.admin.response.AdminListResponse;
-import biz.ugur.busroutebackend.interfaces.rest.admin.response.AdminResponse;
-import biz.ugur.busroutebackend.interfaces.rest.admin.request.AdminUpdateRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.request.admin.AdminCreateRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.request.admin.AdminUpdateProfileRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.request.admin.AvatarUpdateRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.admin.AdminListResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.admin.AdminResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.request.admin.AdminUpdateRequest;
 import biz.ugur.busroutebackend.shared.infrastructure.security.AdminPrincipal;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -175,9 +175,6 @@ public class AdminUserController {
     @ResponseStatus(HttpStatus.OK)
     public Mono<AdminProfileResponse> removeAvatar() {
         return getCurrentPrincipal().flatMap(principal -> {
-            log.info("🔥 STEP 1: Удаление аватара для админа: {}", principal.username());
-            log.info("🔥 STEP 2: Admin ID: {}", principal.id());
-
             return removeCurrentAdminAvatarUseCase.execute(Mono.just(principal.id()))
                     .map(AdminProfileResponse::fromDomain)
                     .doOnSuccess(response -> log.info("✅ Аватар удален для: {}", principal.username()))

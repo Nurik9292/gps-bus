@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.interfaces.rest.admin.request;
+package biz.ugur.busroutebackend.interfaces.rest.admin.request.admin;
 
 import biz.ugur.busroutebackend.admin.application.usecase.auth.LoginUseCase;
 import jakarta.validation.constraints.NotBlank;

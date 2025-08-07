@@ -29,7 +29,7 @@ public class CorrelationIdWebFilter implements WebFilter {
         String method = exchange.getRequest().getMethod().name();
         String path = exchange.getRequest().getPath().value();
         String clientIp = getClientIp(exchange);
-        System.out.println("path path " + path);
+
         if (method.equalsIgnoreCase("HEAD") || path.contains("/avatars/")) {
             return chain.filter(exchange);
         }

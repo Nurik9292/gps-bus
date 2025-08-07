@@ -1,7 +1,6 @@
-package biz.ugur.busroutebackend.admin.application.usecase;
+package biz.ugur.busroutebackend.admin.application.usecase.admin;
 
 import biz.ugur.busroutebackend.admin.domain.exceptions.AdminDeleteException;
-import biz.ugur.busroutebackend.admin.domain.exceptions.AdminDomainException;
 import biz.ugur.busroutebackend.admin.domain.exceptions.AdminNotFoundException;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;

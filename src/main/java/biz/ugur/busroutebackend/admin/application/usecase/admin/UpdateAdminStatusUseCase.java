@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.admin.application.usecase;
+package biz.ugur.busroutebackend.admin.application.usecase.admin;
 
 import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
 import biz.ugur.busroutebackend.admin.domain.exceptions.AdminNotFoundException;

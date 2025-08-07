@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.admin.domain.valueobjects.CityId;
 import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
@@ -27,12 +28,17 @@ public class City extends AggregateRoot<City, CityId> {
     @Column("display_order")
     private Integer displayOrder;
 
+    @Transient
+    private boolean isNew;
+
     public City(String name, String nameTm, Integer displayOrder) {
         this.id = CityId.generate();
         this.name = validateName(name);
         this.nameTm = nameTm;
         this.isActive = true;
         this.displayOrder = displayOrder != null ? displayOrder : 0;
+
+        this.isNew = true;
     }
 
     public City(CityId id, String name, String nameTm, Boolean isActive, Integer displayOrder) {
@@ -41,6 +47,8 @@ public class City extends AggregateRoot<City, CityId> {
         this.nameTm = nameTm;
         this.isActive = isActive;
         this.displayOrder = displayOrder;
+
+        this.isNew = false;
     }
 
     public void updateCity(String name, String nameTm, Integer displayOrder) {
@@ -61,6 +69,10 @@ public class City extends AggregateRoot<City, CityId> {
 
     public void activate() {
         this.isActive = true;
+    }
+
+    public void markAsExisting() {
+        isNew = false;
     }
 
     @Override

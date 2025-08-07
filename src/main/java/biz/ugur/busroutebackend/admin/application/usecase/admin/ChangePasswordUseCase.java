@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.admin.application.usecase;
+package biz.ugur.busroutebackend.admin.application.usecase.admin;
 
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;

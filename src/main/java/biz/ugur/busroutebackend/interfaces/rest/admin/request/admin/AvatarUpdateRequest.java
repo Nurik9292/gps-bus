@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.interfaces.rest.admin.request;
+package biz.ugur.busroutebackend.interfaces.rest.admin.request.admin;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 

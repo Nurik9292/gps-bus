@@ -1,5 +1,6 @@
-package biz.ugur.busroutebackend.admin.application.dto.city;
+package biz.ugur.busroutebackend.interfaces.rest.admin.request.city;
 
+import biz.ugur.busroutebackend.admin.application.dto.city.CreateCity;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -19,4 +20,8 @@ public class CityCreateRequest {
 
     @JsonProperty("display_order")
     private Integer displayOrder = 0;
+
+    public CreateCity toCommand() {
+        return new CreateCity(this.name, this.nameTm, this.displayOrder);
+    }
 }

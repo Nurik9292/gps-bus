@@ -1,5 +1,6 @@
-package biz.ugur.busroutebackend.admin.application.dto.city;
+package biz.ugur.busroutebackend.interfaces.rest.admin.response.city;
 
+import biz.ugur.busroutebackend.admin.application.dto.city.CityResult;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -27,6 +28,16 @@ public class CityResponse {
         this.nameTm = nameTm;
         this.isActive = isActive;
         this.displayOrder = displayOrder;
+    }
+
+    public static CityResponse fromResult(CityResult result) {
+        return new CityResponse(
+                result.id(),
+                result.name(),
+                result.nameTm(),
+                result.isActive(),
+                result.displayOrder()
+        );
     }
 }
 

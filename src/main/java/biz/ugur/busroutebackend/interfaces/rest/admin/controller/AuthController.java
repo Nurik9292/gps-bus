@@ -1,19 +1,18 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
-import biz.ugur.busroutebackend.admin.application.usecase.*;
+import biz.ugur.busroutebackend.admin.application.usecase.admin.GetCurrentAdminUseCase;
 import biz.ugur.busroutebackend.admin.application.usecase.auth.LoginUseCase;
 import biz.ugur.busroutebackend.admin.application.usecase.auth.LogoutUseCase;
 import biz.ugur.busroutebackend.admin.application.usecase.auth.RefreshTokenUseCase;
-import biz.ugur.busroutebackend.interfaces.rest.admin.request.LoginRequest;
-import biz.ugur.busroutebackend.interfaces.rest.admin.request.RefreshTokenRequest;
-import biz.ugur.busroutebackend.interfaces.rest.admin.response.AdminProfileResponse;
-import biz.ugur.busroutebackend.interfaces.rest.admin.response.AuthResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.request.admin.LoginRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.request.admin.RefreshTokenRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.admin.AdminProfileResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.admin.AuthResponse;
 import biz.ugur.busroutebackend.shared.infrastructure.security.AdminPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.web.bind.annotation.*;

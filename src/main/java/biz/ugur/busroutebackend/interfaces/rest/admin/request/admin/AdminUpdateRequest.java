@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.interfaces.rest.admin.request;
+package biz.ugur.busroutebackend.interfaces.rest.admin.request.admin;
 
 import biz.ugur.busroutebackend.admin.application.dto.admin.UpdateCommand;
 import biz.ugur.busroutebackend.shared.infrastructure.validation.OptionalSize;

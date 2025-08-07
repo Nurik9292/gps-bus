@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.interfaces.rest.admin.response;
+package biz.ugur.busroutebackend.interfaces.rest.admin.response.admin;
 
 import biz.ugur.busroutebackend.admin.application.usecase.auth.LoginUseCase;
 import biz.ugur.busroutebackend.admin.application.usecase.auth.RefreshTokenUseCase;

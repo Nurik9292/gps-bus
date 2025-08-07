@@ -64,6 +64,7 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/public/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/routes/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/stops/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/cities/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/trips/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/vehicles/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/trip-planning/**").permitAll()
