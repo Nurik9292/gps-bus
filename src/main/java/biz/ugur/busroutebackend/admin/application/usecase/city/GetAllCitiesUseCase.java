@@ -9,6 +9,7 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -37,11 +38,7 @@ public class GetAllCitiesUseCase implements UseCase<Mono<GetAllCitiesInput>, Mon
             log.debug("Getting cities with pagination Correlation - {}: page={}, size={}, sort={}, order={}, active={}",
                     correlationId, input.getPage(), input.getSize(), input.getSort(), input.getOrder(), input.getActive());
 
-            Sort.Direction direction = "desc".equalsIgnoreCase(input.getOrder()) ?
-                    Sort.Direction.DESC : Sort.Direction.ASC;
-            Sort sort = Sort.by(direction, input.getSort());
-
-            PageRequest pageRequest = PageRequest.of(input.getPage() - 1, input.getSize(), sort);
+            Pageable pageRequest = createPageable(input);
 
             return cityRepository.findAllPaged(input.getActive(), pageRequest)
                     .collectList()
@@ -61,4 +58,11 @@ public class GetAllCitiesUseCase implements UseCase<Mono<GetAllCitiesInput>, Mon
         });
     }
 
+    private Pageable createPageable(GetAllCitiesInput input) {
+        Sort.Direction direction = "desc".equalsIgnoreCase(input.getOrder()) ?
+                Sort.Direction.DESC : Sort.Direction.ASC;
+        Sort sort = Sort.by(direction, input.getSort());
+
+        return PageRequest.of(input.getPage() - 1, input.getSize(), sort);
+    }
 }

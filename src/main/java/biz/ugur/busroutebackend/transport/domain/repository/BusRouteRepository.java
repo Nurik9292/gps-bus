@@ -15,7 +15,6 @@ public interface BusRouteRepository {
 
     Mono<BusRoute> findByRouteNumber(String routeNumber);
 
-    // Новые методы для работы с геометрией
     Mono<RouteWithGeometryDTO> findByRouteNumberWithGeometry(String routeNumber);
 
     Flux<RouteWithGeometryDTO> findAllActiveWithBasicInfo();

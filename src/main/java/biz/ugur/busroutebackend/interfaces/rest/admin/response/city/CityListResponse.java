@@ -1,7 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.response.city;
 
 import biz.ugur.busroutebackend.admin.application.dto.city.CityList;
-import biz.ugur.busroutebackend.admin.application.dto.city.CityResult;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 

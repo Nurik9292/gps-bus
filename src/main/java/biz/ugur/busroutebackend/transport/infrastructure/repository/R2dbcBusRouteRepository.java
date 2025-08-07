@@ -195,7 +195,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
             log.warn("Failed to parse route geometry for route {}: {}", dto.getRouteNumber(), e.getMessage());
         }
 
-        // Конвертируем расстояния в километры
         Integer forwardMeters = row.get("total_distance_forward_meters", Integer.class);
         Integer backwardMeters = row.get("total_distance_backward_meters", Integer.class);
 
@@ -258,23 +257,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 lon != null ? lon : 0.0, // Временная заглушка
                 row.get("distance_to_center", Double.class),
                 0L // Пока без подсчета автобусов
-        );
-    }
-
-    private BusRoute mapRowToBusRoute(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
-        return new BusRoute(
-                BusRouteId.of(row.get("id", String.class)),
-                row.get("route_number", String.class),
-                row.get("route_name", String.class),
-                row.get("route_name_tm", String.class),
-                row.get("route_color", String.class),
-                row.get("is_active", Boolean.class),
-                row.get("fare_price", BigDecimal.class),
-                row.get("estimated_duration_minutes", Integer.class),
-                row.get("route_geometry_forward", String.class),
-                row.get("route_geometry_backward", String.class),
-                row.get("total_distance_forward_meters", Integer.class),
-                row.get("total_distance_backward_meters", Integer.class)
         );
     }
 
@@ -446,5 +428,20 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                         latitude, longitude, radiusMeters));
     }
 
-
+    private BusRoute mapRowToBusRoute(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
+        return new BusRoute(
+                BusRouteId.of(row.get("id", String.class)),
+                row.get("route_number", String.class),
+                row.get("route_name", String.class),
+                row.get("route_name_tm", String.class),
+                row.get("route_color", String.class),
+                row.get("is_active", Boolean.class),
+                row.get("fare_price", BigDecimal.class),
+                row.get("estimated_duration_minutes", Integer.class),
+                row.get("route_geometry_forward", String.class),
+                row.get("route_geometry_backward", String.class),
+                row.get("total_distance_forward_meters", Integer.class),
+                row.get("total_distance_backward_meters", Integer.class)
+        );
+    }
 }

@@ -1,0 +1,72 @@
+package biz.ugur.busroutebackend.transport.application.usecase.stop;
+
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.transport.application.dto.stop.GetAllStopPaginationQuery;
+import biz.ugur.busroutebackend.transport.application.dto.stop.StopList;
+import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
+import biz.ugur.busroutebackend.transport.domain.model.BusStop;
+import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+
+import java.util.List;
+
+
+@Service
+@Slf4j
+public class GetAllBusStopsUseCase implements UseCase<Mono<GetAllStopPaginationQuery>, Mono<StopList>> {
+
+    private final BusStopRepository busStopRepository;
+    private final CorrelationContextService correlationService;
+
+    public GetAllBusStopsUseCase(BusStopRepository busStopRepository, CorrelationContextService correlationService) {
+        this.busStopRepository = busStopRepository;
+        this.correlationService = correlationService;
+    }
+
+    @Override
+    public Mono<StopList> execute(Mono<GetAllStopPaginationQuery> query) {
+        return correlationService.executeWithCorrelation(query.flatMap(this::executeWithCorrelation), "admin");
+    }
+
+    private Mono<StopList> executeWithCorrelation(GetAllStopPaginationQuery query) {
+        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
+            log.debug("Getting stops with pagination Correlation - {}: page={}, size={}, sort={}, order={}, active={}",
+                    correlationId, query.page(), query.size(), query.size(), query.sortField(), query.page());
+
+            Pageable pageable = createPageable(query);
+
+            return busStopRepository.findAllWithPagination(pageable)
+                    .collectList()
+                    .zipWith(busStopRepository.countActiveStops())
+                    .map(tuple -> {
+                        List<BusStop> busStops = tuple.getT1();
+                        Long activeCount = tuple.getT2();
+                        List<StopResult> stopLists = busStops.stream()
+                                .map(StopResult::fromDomain)
+                                .toList();
+
+                        return new StopList(stopLists, activeCount);
+                    }).doOnSuccess(response -> log.debug("Retrieved {} stops ({} active)",
+                            response.getStops().size(), response.getActiveCount()));
+        });
+    }
+
+
+    private Pageable createPageable(GetAllStopPaginationQuery query) {
+        Sort sort = Sort.by(
+                query.sortOrder().equalsIgnoreCase("desc") ?
+                        Sort.Direction.DESC : Sort.Direction.ASC,
+                query.sortField()
+        );
+
+        return PageRequest.of(query.page() - 1, query.size(), sort);
+    }
+
+
+}
