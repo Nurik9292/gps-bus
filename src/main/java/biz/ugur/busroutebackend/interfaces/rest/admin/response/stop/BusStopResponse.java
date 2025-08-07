@@ -7,14 +7,14 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-
 @Data
 public class BusStopResponse {
 
     @JsonProperty("id")
     private String id;
+
+    @JsonProperty("city_id")
+    private String cityId;
 
     @JsonProperty("stop_name")
     private String stopName;
@@ -60,7 +60,8 @@ public class BusStopResponse {
                            Boolean isMajorStop,
                            Integer servingRoutesCount,
                            Instant createdAt,
-                           Instant updatedAt
+                           Instant updatedAt,
+                           String cityId
     ) {
         this.id = id;
         this.stopName = stopName;
@@ -74,6 +75,7 @@ public class BusStopResponse {
         this.servingRoutesCount = servingRoutesCount;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.cityId = cityId;
     }
 
     public String getDisplayName(String language) {
@@ -97,7 +99,8 @@ public class BusStopResponse {
                 result.isMajorStop(),
                 result.servingRouteCount(),
                 result.createdAt(),
-                result.updatedAt()
+                result.updatedAt(),
+                result.cityId()
         );
     }
 }

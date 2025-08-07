@@ -74,9 +74,9 @@ public class R2dbcBusStopRepository implements BusStopRepository {
     private Mono<BusStop> insertNew(BusStop busStop) {
         String sql = """
             INSERT INTO bus_stops (id, stop_name, name_en, name_tm, stop_code, latitude, longitude, 
-                                  is_active, is_major_stop, created_at, updated_at, version)
+                                  is_active, is_major_stop, created_at, updated_at, version, city_id)
             VALUES (:id, :stopName, :nameEn, :nameTm, :stopCode, :latitude, :longitude, 
-                   :isActive, :isMajorStop, NOW(), NOW(), 0)
+                   :isActive, :isMajorStop, NOW(), NOW(), 0, :cityId)
             """;
 
         return databaseClient.sql(sql)
@@ -89,6 +89,7 @@ public class R2dbcBusStopRepository implements BusStopRepository {
                 .bind("longitude", busStop.getLongitude())
                 .bind("isActive", busStop.getIsActive())
                 .bind("isMajorStop", busStop.getIsMajorStop())
+                .bind("cityId", busStop.getCityId())
                 .then()
                 .thenReturn(busStop);
     }
@@ -253,6 +254,7 @@ public class R2dbcBusStopRepository implements BusStopRepository {
     private BusStop mapRowToBusStop(Row row, RowMetadata metadata) {
         String id = row.get("id", String.class);
         String stopName = row.get("stop_name", String.class);
+        String cityId = row.get("city_id", String.class);
         String nameEn = safeGet(row, "name_en", String.class, null);
         String nameTm = safeGet(row, "name_tm", String.class, null);
         String stopCode = row.get("stop_code", String.class);
@@ -270,7 +272,8 @@ public class R2dbcBusStopRepository implements BusStopRepository {
                 latitude,
                 longitude,
                 isActive,
-                isMajorStop
+                isMajorStop,
+                cityId
         );
     }
 
@@ -287,6 +290,8 @@ public class R2dbcBusStopRepository implements BusStopRepository {
     private String mapSortField(String sortField) {
         return switch (sortField != null ? sortField.toLowerCase() : "stop_name") {
             case "stopname", "name" -> "stop_name";
+            case "nametm" -> "name_tm";
+            case "nameen" -> "name_en";
             case "stopcode", "code" -> "stop_code";
             case "latitude" -> "latitude";
             case "longitude" -> "longitude";

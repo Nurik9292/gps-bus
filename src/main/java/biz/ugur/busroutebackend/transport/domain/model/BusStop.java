@@ -27,6 +27,8 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
     @Column("name_tm")
     private String nameTm;
 
+    @Column("city_id")
+    private String cityId;
 
     @Column("stop_code")
     private String stopCode;
@@ -50,7 +52,8 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
                    String stopCode,
                    BigDecimal latitude,
                    BigDecimal longitude,
-                   Boolean isMajorStop
+                   Boolean isMajorStop,
+                   String cityId
     ) {
         this.id = BusStopId.generate();
         this.stopName = validateStopName(stopName);
@@ -61,6 +64,7 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
         this.longitude = longitude;
         this.isActive = true;
         this.isMajorStop = isMajorStop;
+        this.cityId = cityId;
 
         generateCreationEvents();
     }
@@ -72,7 +76,8 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
                    BigDecimal latitude,
                    BigDecimal longitude,
                    Boolean isActive,
-                   Boolean isMajorStop) {
+                   Boolean isMajorStop,
+                   String cityId) {
         this.id = id;
         this.stopName = stopName;
         this.nameEn = nameEn;
@@ -82,6 +87,7 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
         this.longitude = longitude;
         this.isActive = isActive;
         this.isMajorStop = isMajorStop;
+        this.cityId = cityId;
     }
 
     public BusStop(String stopName, String id, BigDecimal latitude, BigDecimal longitude) {

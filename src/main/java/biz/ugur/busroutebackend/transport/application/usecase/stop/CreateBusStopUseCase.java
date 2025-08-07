@@ -62,7 +62,8 @@ public class CreateBusStopUseCase implements UseCase<Mono<CreateStop>, Mono<Stop
                     resolvedCode,
                     command.latitude(),
                     command.longitude(),
-                    command.isMajorStop()
+                    command.isMajorStop(),
+                    command.cityId()
             );
 
             return busStopRepository.save(busStop)

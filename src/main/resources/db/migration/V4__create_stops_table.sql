@@ -1,7 +1,7 @@
 CREATE TABLE bus_stops (
                            id VARCHAR(36) PRIMARY KEY,
                            stop_name VARCHAR(200) NOT NULL,
-                           stop_name_tm VARCHAR(200),
+                           name_tm VARCHAR(200),
                            latitude DOUBLE PRECISION NOT NULL,
                            longitude DOUBLE PRECISION NOT NULL,
                            stop_code VARCHAR(20) UNIQUE,

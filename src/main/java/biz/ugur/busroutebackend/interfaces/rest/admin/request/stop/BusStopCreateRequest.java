@@ -45,6 +45,10 @@ public class BusStopCreateRequest {
     @JsonProperty("is_active")
     private Boolean isActive = true;
 
+    @JsonProperty("city_id")
+    @NotBlank(message = "City id is required")
+    private String cityId;
+
     public CreateStop toInput() {
         return new CreateStop(
                 stopName,
@@ -54,7 +58,8 @@ public class BusStopCreateRequest {
                 latitude,
                 longitude,
                 isMajorStop,
-                isActive
+                isActive,
+                cityId
         );
     }
 }

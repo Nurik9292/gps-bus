@@ -17,7 +17,8 @@ public record StopResult(
         Boolean isMajorStop,
         Integer servingRouteCount,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String cityId
 
 ) {
     public static StopResult fromDomain(BusStop stop) {
@@ -33,7 +34,8 @@ public record StopResult(
                 stop.getIsMajorStop(),
                 stop.getServingRoutesCount(),
                 stop.getCreatedAt(),
-                stop.getUpdatedAt()
+                stop.getUpdatedAt(),
+                stop.getCityId()
         );
     }
 }

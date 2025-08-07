@@ -10,5 +10,7 @@ public record CreateStop(
         BigDecimal latitude,
         BigDecimal longitude,
         Boolean isMajorStop,
-        Boolean isActive) {
+        Boolean isActive,
+        String cityId
+) {
 }
