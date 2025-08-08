@@ -27,10 +27,13 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
     private String routeNumber; // "29", "7A"
 
     @Column("route_name")
-    private String routeName; // "Центральный рынок - Гипподром"
+    private String routeName;
 
-    @Column("route_name_tm")
-    private String routeNameTm; // "Merkezi bazar - Ýaryş meýdany"
+    @Column("name_tm")
+    private String nameTm;
+
+    @Column("name_en")
+    private String nameEn;
 
     @Column("route_color")
     private String routeColor; // "#E53935" - HEX цвет для карты
@@ -59,26 +62,40 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
     @Transient
     private List<BusStop> busStops = new ArrayList<>();
 
-    public BusRoute(String routeNumber, String routeName, String routeNameTm, String routeColor) {
+    public BusRoute(String routeNumber,
+                    String routeName,
+                    String nameTm,
+                    String nameEn,
+                    String routeColor) {
         this.id = BusRouteId.generate();
         this.routeNumber = validateRouteNumber(routeNumber);
         this.routeName = validateRouteName(routeName);
-        this.routeNameTm = routeNameTm;
+        this.nameTm = nameTm;
+        this.nameEn = nameEn;
         this.routeColor = validateRouteColor(routeColor);
         this.isActive = true;
         this.farePrice = new BigDecimal("1.00");
         this.estimatedDurationMinutes = 60;
     }
 
-    public BusRoute(BusRouteId id, String routeNumber, String routeName, String routeNameTm,
-                    String routeColor, Boolean isActive, BigDecimal farePrice,
-                    Integer estimatedDurationMinutes, String routeGeometryForward,
-                    String routeGeometryBackward, Integer totalDistanceForwardMeters,
+    public BusRoute(BusRouteId id,
+                    String routeNumber,
+                    String routeName,
+                    String nameTm,
+                    String nameEn,
+                    String routeColor,
+                    Boolean isActive,
+                    BigDecimal farePrice,
+                    Integer estimatedDurationMinutes,
+                    String routeGeometryForward,
+                    String routeGeometryBackward,
+                    Integer totalDistanceForwardMeters,
                     Integer totalDistanceBackwardMeters) {
         this.id = id;
         this.routeNumber = routeNumber;
         this.routeName = routeName;
-        this.routeNameTm = routeNameTm;
+        this.nameEn = nameEn;
+        this.nameTm = nameTm;
         this.routeColor = routeColor;
         this.isActive = isActive;
         this.farePrice = farePrice;
@@ -139,15 +156,19 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         };
     }
 
-    // Обновление информации о маршруте
-    public void updateRouteInfo(String routeName, String routeNameTm,
+    public void updateRouteInfo(String routeName, String nameTm, String nameEn,
                                 BigDecimal farePrice, Integer estimatedDuration) {
         if (routeName != null && !routeName.trim().isEmpty()) {
             this.routeName = routeName.trim();
         }
-        if (routeNameTm != null && !routeNameTm.trim().isEmpty()) {
-            this.routeNameTm = routeNameTm.trim();
+        if (nameTm != null && !nameTm.trim().isEmpty()) {
+            this.nameTm = nameTm.trim();
         }
+
+        if (nameEn != null && !nameEn.trim().isEmpty()) {
+            this.nameEn = nameEn.trim();
+        }
+
         if (farePrice != null && farePrice.compareTo(BigDecimal.ZERO) > 0) {
             this.farePrice = farePrice;
         }

@@ -17,8 +17,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("/api/routes")
+@RequestMapping("/routes")
 @Slf4j
+@CrossOrigin("*")
 public class RouteController {
 
     private final GetRouteWithGeometryUseCase getRouteWithGeometryUseCase;

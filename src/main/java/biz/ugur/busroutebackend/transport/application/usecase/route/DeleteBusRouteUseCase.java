@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.transport.application.usecase;
+package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;

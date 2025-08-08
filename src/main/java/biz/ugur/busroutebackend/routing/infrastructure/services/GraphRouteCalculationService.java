@@ -149,6 +149,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                             row.get("route_number", String.class),
                             row.get("route_name", String.class),
                             null,
+                            null,
                             row.get("route_color", String.class) != null ?
                                     row.get("route_color", String.class) : "#1976D2",
                             true,
@@ -289,14 +290,15 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                             row.get("first_route_number", String.class),
                             row.get("first_route_name", String.class),
                             null,
+                            null,
                             row.get("first_route_color", String.class) != null ?
-                                    row.get("first_route_color", String.class) : "#1976D2"
+                            row.get("first_route_color", String.class) : "#1976D2"
                     );
 
-                    // Создаем второй маршрут
                     BusRoute secondRoute = new BusRoute(
                             row.get("second_route_number", String.class),
                             row.get("second_route_name", String.class),
+                            null,
                             null,
                             row.get("second_route_color", String.class) != null ?
                                     row.get("second_route_color", String.class) : "#1976D2"
@@ -333,7 +335,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                             row.get("to_lon", BigDecimal.class)
                     );
 
-                    // Корректируем время на основе количества автобусов
                     Integer firstRouteMinutes = row.get("first_route_minutes", Integer.class);
                     Integer secondRouteMinutes = row.get("second_route_minutes", Integer.class);
                     Long firstRouteVehicles = row.get("first_route_vehicles", Long.class);
@@ -342,7 +343,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                     int adjustedFirstMinutes = adjustTravelTimeByVehicleCount(firstRouteMinutes, firstRouteVehicles);
                     int adjustedSecondMinutes = adjustTravelTimeByVehicleCount(secondRouteMinutes, secondRouteVehicles);
 
-                    // Рассчитываем время ожидания на пересадке
                     int transferWaitTime = calculateTransferWaitTime(transferStop.getIsMajorStop(),
                             firstRouteVehicles, secondRouteVehicles);
 
@@ -643,6 +643,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                                 row.get("first_route_number", String.class),
                                 row.get("first_route_name", String.class),
                                 null,
+                                null,
                                 row.get("first_route_color", String.class) != null ?
                                         row.get("first_route_color", String.class) : "#1976D2"
                         );
@@ -651,6 +652,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                                 row.get("second_route_number", String.class),
                                 row.get("second_route_name", String.class),
                                 null,
+                                null,
                                 row.get("second_route_color", String.class) != null ?
                                         row.get("second_route_color", String.class) : "#4CAF50"
                         );
@@ -658,6 +660,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                         BusRoute thirdRoute = new BusRoute(
                                 row.get("third_route_number", String.class),
                                 row.get("third_route_name", String.class),
+                                null,
                                 null,
                                 row.get("third_route_color", String.class) != null ?
                                         row.get("third_route_color", String.class) : "#FF9800"
@@ -803,7 +806,8 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                 .map(row -> new BusRoute(
                         row.get("route_number", String.class),
                         row.get("route_name", String.class),
-                        row.get("route_name_tm", String.class),
+                        row.get("name_tm", String.class),
+                        row.get("name_en", String.class),
                         row.get("route_color", String.class)
                 ))
                 .all();
@@ -1160,14 +1164,13 @@ public class GraphRouteCalculationService implements RouteCalculationService {
         return dto;
     }
 
-    /**
-     * Конвертер DTO → Domain Object
-     */
+
     private TwoTransferRouteResult convertDTOToTwoTransferResult(TwoTransferRouteResultDTO dto) {
         try {
             BusRoute firstRoute = new BusRoute(
                     dto.firstRoute.routeNumber,
                     dto.firstRoute.routeName,
+                    null,
                     null,
                     dto.firstRoute.routeColor
             );
@@ -1176,12 +1179,14 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                     dto.secondRoute.routeNumber,
                     dto.secondRoute.routeName,
                     null,
+                    null,
                     dto.secondRoute.routeColor
             );
 
             BusRoute thirdRoute = new BusRoute(
                     dto.thirdRoute.routeNumber,
                     dto.thirdRoute.routeName,
+                    null,
                     null,
                     dto.thirdRoute.routeColor
             );

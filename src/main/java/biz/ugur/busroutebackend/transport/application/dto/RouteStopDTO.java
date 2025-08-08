@@ -13,7 +13,7 @@ public class RouteStopDTO {
     private String stopName;
 
     @JsonProperty("stop_code")
-    private String stopCode; // Код для пассажиров "ASH001"
+    private String stopCode;
 
     @JsonProperty("latitude")
     private Double latitude;
@@ -22,31 +22,32 @@ public class RouteStopDTO {
     private Double longitude;
 
     @JsonProperty("stop_sequence")
-    private Integer stopSequence; // Порядок в маршруте (1, 2, 3...)
+    private Integer stopSequence;
 
     @JsonProperty("estimated_travel_time_minutes")
-    private Integer estimatedTravelTimeMinutes; // Время до следующей остановки
+    private Integer estimatedTravelTimeMinutes;
 
     @JsonProperty("distance_from_start_meters")
-    private Integer distanceFromStartMeters; // Расстояние от начала маршрута
+    private Integer distanceFromStartMeters;
 
     @JsonProperty("is_major_stop")
-    private Boolean isMajorStop; // Крупная остановка (транспортный узел)
-
-    @JsonProperty("has_shelter")
-    private Boolean hasShelter; // Есть ли навес
+    private Boolean isMajorStop;
 
     @JsonProperty("is_accessible")
-    private Boolean isAccessible; // Доступность для инвалидов
+    private Boolean isAccessible;
 
-    // Дополнительная информация для клиента
     @JsonProperty("cumulative_travel_time_minutes")
-    private Integer cumulativeTravelTimeMinutes; // Время от начала маршрута
+    private Integer cumulativeTravelTimeMinutes;
 
-    public RouteStopDTO(String stopId, String stopName, String stopCode,
-                        Double latitude, Double longitude, Integer stopSequence,
-                        Integer estimatedTravelTimeMinutes, Integer distanceFromStartMeters,
-                        Boolean isMajorStop, Boolean hasShelter) {
+    public RouteStopDTO(String stopId,
+                        String stopName,
+                        String stopCode,
+                        Double latitude,
+                        Double longitude,
+                        Integer stopSequence,
+                        Integer estimatedTravelTimeMinutes,
+                        Integer distanceFromStartMeters,
+                        Boolean isMajorStop) {
         this.stopId = stopId;
         this.stopName = stopName;
         this.stopCode = stopCode;
@@ -56,8 +57,7 @@ public class RouteStopDTO {
         this.estimatedTravelTimeMinutes = estimatedTravelTimeMinutes;
         this.distanceFromStartMeters = distanceFromStartMeters;
         this.isMajorStop = isMajorStop;
-        this.hasShelter = hasShelter;
-        this.isAccessible = false; // По умолчанию
+        this.isAccessible = false;
     }
 
     public String getDistanceFromStartText() {

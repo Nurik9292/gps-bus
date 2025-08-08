@@ -13,18 +13,18 @@ public class RouteGeometryRequest {
     @JsonProperty("forward_coordinates")
     @NotNull(message = "Forward coordinates are required")
     @Size(min = 2, message = "Route must have at least 2 coordinate points")
-    private List<Double[]> forwardCoordinates; // [[lat, lon], [lat, lon], ...]
+    private List<Double[]> forwardCoordinates;
 
     @JsonProperty("backward_coordinates")
-    private List<Double[]> backwardCoordinates; // Опционально для односторонних маршрутов
+    private List<Double[]> backwardCoordinates;
 
     @JsonProperty("update_reason")
-    private String updateReason; // Причина обновления для аудита
+    private String updateReason;
 
     @JsonProperty("updated_by")
-    private String updatedBy; // Кто обновил (для аудита)
+    private String updatedBy;
 
-    // Валидация координат
+
     public boolean isValidCoordinates() {
         if (forwardCoordinates == null || forwardCoordinates.isEmpty()) {
             return false;

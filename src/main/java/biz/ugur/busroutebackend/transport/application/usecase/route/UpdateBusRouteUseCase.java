@@ -1,10 +1,10 @@
-package biz.ugur.busroutebackend.transport.application.usecase;
+package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.transport.application.dto.BusRouteCreateRequest;
-import biz.ugur.busroutebackend.transport.application.dto.BusRouteResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteResponse;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
@@ -35,15 +35,14 @@ public class UpdateBusRouteUseCase implements UseCase<UpdateBusRouteUseCase.Requ
         return busRouteRepository.findById(BusRouteId.of(request.routeId))
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Bus route not found: " + request.routeId)))
                 .flatMap(busRoute -> {
-                    // Обновляем основную информацию
                     busRoute.updateRouteInfo(
                             request.updateRequest.getRouteName(),
+                            request.updateRequest.getRouteNameTm(),
                             request.updateRequest.getRouteNameTm(),
                             request.updateRequest.getFarePrice(),
                             request.updateRequest.getEstimatedDurationMinutes()
                     );
 
-                    // Обновляем статус активности
                     if (request.updateRequest.getIsActive() != null) {
                         if (request.updateRequest.getIsActive()) {
                             busRoute.activate();
@@ -52,7 +51,6 @@ public class UpdateBusRouteUseCase implements UseCase<UpdateBusRouteUseCase.Requ
                         }
                     }
 
-                    // Обновляем геометрию если передана
                     if (request.updateRequest.getForwardGeometry() != null && !request.updateRequest.getForwardGeometry().isEmpty()) {
                         RouteGeometry forwardGeometry = createRouteGeometry(request.updateRequest.getForwardGeometry());
                         RouteGeometry backwardGeometry = null;
@@ -87,7 +85,8 @@ public class UpdateBusRouteUseCase implements UseCase<UpdateBusRouteUseCase.Requ
                 busRoute.getId().getValue(),
                 busRoute.getRouteNumber(),
                 busRoute.getRouteName(),
-                busRoute.getRouteNameTm(),
+                busRoute.getNameTm(),
+                busRoute.getNameEn(),
                 busRoute.getRouteColor(),
                 busRoute.getIsActive(),
                 busRoute.getFarePrice(),
@@ -98,7 +97,9 @@ public class UpdateBusRouteUseCase implements UseCase<UpdateBusRouteUseCase.Requ
                         new BigDecimal(busRoute.getTotalDistanceForwardMeters()).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
                 busRoute.getTotalDistanceBackwardMeters() != null ?
                         new BigDecimal(busRoute.getTotalDistanceBackwardMeters()).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
-                0L // active vehicles count
+                0L, // active vehicles count
+                busRoute.getCreatedAt(),
+                busRoute.getUpdatedAt()
         );
     }
 

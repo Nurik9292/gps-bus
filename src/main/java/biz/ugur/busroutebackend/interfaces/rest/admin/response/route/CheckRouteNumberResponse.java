@@ -1,0 +1,8 @@
+package biz.ugur.busroutebackend.interfaces.rest.admin.response.route;
+
+public record CheckRouteNumberResponse(Boolean available) {
+
+    public static CheckRouteNumberResponse of(Boolean available) {
+        return new CheckRouteNumberResponse(available);
+    }
+}

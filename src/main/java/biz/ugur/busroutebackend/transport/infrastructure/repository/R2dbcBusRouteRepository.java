@@ -6,13 +6,18 @@ import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.r2dbc.spi.Row;
+import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 
 @Repository
@@ -25,6 +30,113 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
     public R2dbcBusRouteRepository(DatabaseClient databaseClient, ObjectMapper objectMapper) {
         this.databaseClient = databaseClient;
         this.objectMapper = objectMapper;
+    }
+
+    @Override
+    public Mono<BusRoute> save(BusRoute busRoute) {
+        return findById(busRoute.getId())
+                .flatMap(existing -> update(busRoute))
+                .switchIfEmpty(insert(busRoute))
+                .doOnSuccess(saved -> log.debug("Bus stop saved: {}", saved.getRouteName()))
+                .doOnError(error -> log.error("Failed to save bus stop: {}", busRoute.getRouteName(), error));
+
+    }
+
+
+    private Mono<BusRoute> insert(BusRoute busRoute) {
+        String sql = """
+            INSERT INTO bus_routes (id, 
+                                    route_number, 
+                                    route_name, 
+                                    name_tm, 
+                                    name_en, 
+                                    route_color,
+                                    is_active, 
+                                    fare_price, 
+                                    estimated_duration_minutes,
+                                   route_geometry_forward, 
+                                    route_geometry_backward,
+                                   total_distance_forward_meters, 
+                                    total_distance_backward_meters,
+                                    created_at, 
+                                    updated_at, 
+                                    version)
+            VALUES (:id, 
+                    :routeNumber, 
+                    :routeName, 
+                    :routeNameTm, 
+                    :routeColor,
+                   :isActive, 
+                    :farePrice, 
+                    :estimatedDurationMinutes,
+                   :routeGeometryForward, 
+                    :routeGeometryBackward,
+                   :totalDistanceForwardMeters, 
+                    :totalDistanceBackwardMeters,
+                   :createdAt, 
+                    :updatedAt, 
+                    :version)
+            """;
+
+        Instant now = Instant.now();
+        return databaseClient.sql(sql)
+                .bind("id", busRoute.getId().getValue())
+                .bind("routeNumber", busRoute.getRouteNumber())
+                .bind("routeName", busRoute.getRouteName())
+                .bind("nameTm", busRoute.getNameTm())
+                .bind("nameEn", busRoute.getNameEn())
+                .bind("routeColor", busRoute.getRouteColor())
+                .bind("isActive", busRoute.getIsActive())
+                .bind("farePrice", busRoute.getFarePrice())
+                .bind("estimatedDurationMinutes", busRoute.getEstimatedDurationMinutes())
+                .bind("routeGeometryForward", busRoute.getRouteGeometryForward())
+                .bind("routeGeometryBackward", busRoute.getRouteGeometryBackward())
+                .bind("totalDistanceForwardMeters", busRoute.getTotalDistanceForwardMeters())
+                .bind("totalDistanceBackwardMeters", busRoute.getTotalDistanceBackwardMeters())
+                .bind("createdAt", now)
+                .bind("updatedAt", now)
+                .bind("version", 0L)
+                .then()
+                .thenReturn(busRoute);
+    }
+
+    private Mono<BusRoute> update(BusRoute busRoute) {
+        String sql = """
+            UPDATE bus_routes 
+            SET route_number = :routeNumber, 
+                route_name = :routeName, 
+                name_tm = :nameTm,
+                name_en = :nameEn,
+                route_color = :routeColor, 
+                is_active = :isActive, 
+                fare_price = :farePrice,
+                estimated_duration_minutes = :estimatedDurationMinutes,
+                route_geometry_forward = :routeGeometryForward, 
+                route_geometry_backward = :routeGeometryBackward,
+                total_distance_forward_meters = :totalDistanceForwardMeters, 
+                total_distance_backward_meters = :totalDistanceBackwardMeters,
+                updated_at = :updatedAt, 
+                version = version + 1
+            WHERE id = :id
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("id", busRoute.getId().getValue())
+                .bind("routeNumber", busRoute.getRouteNumber())
+                .bind("routeName", busRoute.getRouteName())
+                .bind("nameTm", busRoute.getNameTm())
+                .bind("nameEn", busRoute.getNameEn())
+                .bind("routeColor", busRoute.getRouteColor())
+                .bind("isActive", busRoute.getIsActive())
+                .bind("farePrice", busRoute.getFarePrice())
+                .bind("estimatedDurationMinutes", busRoute.getEstimatedDurationMinutes())
+                .bind("routeGeometryForward", busRoute.getRouteGeometryForward())
+                .bind("routeGeometryBackward", busRoute.getRouteGeometryBackward())
+                .bind("totalDistanceForwardMeters", busRoute.getTotalDistanceForwardMeters())
+                .bind("totalDistanceBackwardMeters", busRoute.getTotalDistanceBackwardMeters())
+                .bind("updatedAt", Instant.now())
+                .then()
+                .thenReturn(busRoute);
     }
 
     @Override
@@ -61,6 +173,33 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
         return databaseClient.sql(sql)
                 .map(this::mapToBasicRouteDTO)
                 .all();
+    }
+
+    @Override
+    public Flux<BusRoute> getRoutesWithPagination(Pageable pageable) {
+        StringBuilder sqlBuilder = new StringBuilder("SELECT br.* FROM bus_routes br ");
+        sqlBuilder.append("WHERE (:activeOnly = false OR br.is_active = true) ");
+
+        sqlBuilder.append(" ORDER BY ");
+        if (pageable.getSort().isSorted()) {
+            Sort.Order order = pageable.getSort().iterator().next();
+            String sortField = mapSortField(order.getProperty());
+            String direction = order.getDirection().name();
+            sqlBuilder.append(sortField).append(" ").append(direction);
+        } else {
+            sqlBuilder.append("route_number ASC");
+        }
+
+        sqlBuilder.append(" LIMIT :limit OFFSET :offset");
+
+        return databaseClient.sql(sqlBuilder.toString())
+                .bind("activeOnly", true)
+                .bind("limit", pageable.getPageSize())
+                .bind("offset", pageable.getOffset())
+                .map(this::mapRowToBusRoute)
+                .all()
+                .doOnComplete(() -> log.debug("Found routes with pagination: page={}, size={}",
+                        pageable.getPageNumber(), pageable.getPageSize()));
     }
 
     @Override
@@ -106,14 +245,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .one();
     }
 
-    @Override
-    public Mono<BusRoute> save(BusRoute busRoute) {
-        if (busRoute.getId() == null) {
-            return insert(busRoute);
-        } else {
-            return update(busRoute);
-        }
-    }
+
 
     @Override
     public Mono<BusRoute> findById(BusRouteId routeId) {
@@ -173,72 +305,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .one();
     }
 
-
-    private RouteWithGeometryDTO mapToRouteWithGeometryDTO(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
-        RouteWithGeometryDTO dto = new RouteWithGeometryDTO();
-        dto.setRouteId(row.get("id", String.class));
-        dto.setRouteNumber(row.get("route_number", String.class));
-        dto.setRouteName(row.get("route_name", String.class));
-        dto.setRouteColor(row.get("route_color", String.class));
-
-        String forwardGeometry = row.get("route_geometry_forward", String.class);
-        String backwardGeometry = row.get("route_geometry_backward", String.class);
-
-        try {
-            if (forwardGeometry != null) {
-                dto.setGeometryForward(objectMapper.readValue(forwardGeometry, Object.class));
-            }
-            if (backwardGeometry != null) {
-                dto.setGeometryBackward(objectMapper.readValue(backwardGeometry, Object.class));
-            }
-        } catch (Exception e) {
-            log.warn("Failed to parse route geometry for route {}: {}", dto.getRouteNumber(), e.getMessage());
-        }
-
-        Integer forwardMeters = row.get("total_distance_forward_meters", Integer.class);
-        Integer backwardMeters = row.get("total_distance_backward_meters", Integer.class);
-
-        if (forwardMeters != null) {
-            dto.setTotalDistanceForwardKm(new BigDecimal(forwardMeters).divide(new BigDecimal(1000), 2, BigDecimal.ROUND_HALF_UP));
-        }
-        if (backwardMeters != null) {
-            dto.setTotalDistanceBackwardKm(new BigDecimal(backwardMeters).divide(new BigDecimal(1000), 2, BigDecimal.ROUND_HALF_UP));
-        }
-
-        return dto;
-    }
-
-    private RouteWithGeometryDTO mapToBasicRouteDTO(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
-        RouteWithGeometryDTO dto = new RouteWithGeometryDTO();
-        dto.setRouteId(row.get("id", String.class));
-        dto.setRouteNumber(row.get("route_number", String.class));
-        dto.setRouteName(row.get("route_name", String.class));
-        dto.setRouteColor(row.get("route_color", String.class));
-        dto.setActiveVehiclesCount(row.get("active_vehicles_count", Long.class));
-
-        Integer forwardMeters = row.get("total_distance_forward_meters", Integer.class);
-        if (forwardMeters != null) {
-            dto.setTotalDistanceForwardKm(new BigDecimal(forwardMeters).divide(new BigDecimal(1000), 2, BigDecimal.ROUND_HALF_UP));
-        }
-
-        return dto;
-    }
-
-    private RouteStopDTO mapToRouteStopDTO(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
-        return new RouteStopDTO(
-                row.get("id", String.class),
-                row.get("stop_name", String.class),
-                row.get("stop_code", String.class),
-                row.get("latitude", Double.class),
-                row.get("longitude", Double.class),
-                row.get("stop_sequence", Integer.class),
-                row.get("estimated_travel_time_minutes", Integer.class),
-                row.get("distance_from_start_meters", Integer.class),
-                row.get("is_major_stop", Boolean.class),
-                row.get("has_shelter", Boolean.class)
-        );
-    }
-
     private RouteInAreaResult mapToRouteInAreaResult(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
         // Извлекаем координаты из PostGIS Point геометрии
         Object intersectionPoint = row.get("intersection_point");
@@ -260,70 +326,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
         );
     }
 
-    private Mono<BusRoute> insert(BusRoute busRoute) {
-        String sql = """
-            INSERT INTO bus_routes (id, route_number, route_name, route_name_tm, route_color,
-                                   is_active, fare_price, estimated_duration_minutes,
-                                   route_geometry_forward, route_geometry_backward,
-                                   total_distance_forward_meters, total_distance_backward_meters,
-                                   created_at, updated_at, version)
-            VALUES (:id, :routeNumber, :routeName, :routeNameTm, :routeColor,
-                   :isActive, :farePrice, :estimatedDurationMinutes,
-                   :routeGeometryForward, :routeGeometryBackward,
-                   :totalDistanceForwardMeters, :totalDistanceBackwardMeters,
-                   :createdAt, :updatedAt, :version)
-            """;
 
-        Instant now = Instant.now();
-        return databaseClient.sql(sql)
-                .bind("id", busRoute.getId().getValue())
-                .bind("routeNumber", busRoute.getRouteNumber())
-                .bind("routeName", busRoute.getRouteName())
-                .bind("routeNameTm", busRoute.getRouteNameTm())
-                .bind("routeColor", busRoute.getRouteColor())
-                .bind("isActive", busRoute.getIsActive())
-                .bind("farePrice", busRoute.getFarePrice())
-                .bind("estimatedDurationMinutes", busRoute.getEstimatedDurationMinutes())
-                .bind("routeGeometryForward", busRoute.getRouteGeometryForward())
-                .bind("routeGeometryBackward", busRoute.getRouteGeometryBackward())
-                .bind("totalDistanceForwardMeters", busRoute.getTotalDistanceForwardMeters())
-                .bind("totalDistanceBackwardMeters", busRoute.getTotalDistanceBackwardMeters())
-                .bind("createdAt", now)
-                .bind("updatedAt", now)
-                .bind("version", 0L)
-                .then()
-                .thenReturn(busRoute);
-    }
-
-    private Mono<BusRoute> update(BusRoute busRoute) {
-        String sql = """
-            UPDATE bus_routes 
-            SET route_number = :routeNumber, route_name = :routeName, route_name_tm = :routeNameTm,
-                route_color = :routeColor, is_active = :isActive, fare_price = :farePrice,
-                estimated_duration_minutes = :estimatedDurationMinutes,
-                route_geometry_forward = :routeGeometryForward, route_geometry_backward = :routeGeometryBackward,
-                total_distance_forward_meters = :totalDistanceForwardMeters, total_distance_backward_meters = :totalDistanceBackwardMeters,
-                updated_at = :updatedAt, version = version + 1
-            WHERE id = :id
-            """;
-
-        return databaseClient.sql(sql)
-                .bind("id", busRoute.getId().getValue())
-                .bind("routeNumber", busRoute.getRouteNumber())
-                .bind("routeName", busRoute.getRouteName())
-                .bind("routeNameTm", busRoute.getRouteNameTm())
-                .bind("routeColor", busRoute.getRouteColor())
-                .bind("isActive", busRoute.getIsActive())
-                .bind("farePrice", busRoute.getFarePrice())
-                .bind("estimatedDurationMinutes", busRoute.getEstimatedDurationMinutes())
-                .bind("routeGeometryForward", busRoute.getRouteGeometryForward())
-                .bind("routeGeometryBackward", busRoute.getRouteGeometryBackward())
-                .bind("totalDistanceForwardMeters", busRoute.getTotalDistanceForwardMeters())
-                .bind("totalDistanceBackwardMeters", busRoute.getTotalDistanceBackwardMeters())
-                .bind("updatedAt", Instant.now())
-                .then()
-                .thenReturn(busRoute);
-    }
 
     @Override
     public Flux<RouteWithGeometryDTO> searchRoutesByNameOrNumber(String query, Integer limit) {
@@ -428,20 +431,101 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                         latitude, longitude, radiusMeters));
     }
 
-    private BusRoute mapRowToBusRoute(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
+
+
+    private BusRoute mapRowToBusRoute(Row row, RowMetadata metadata) {
         return new BusRoute(
                 BusRouteId.of(row.get("id", String.class)),
                 row.get("route_number", String.class),
                 row.get("route_name", String.class),
-                row.get("route_name_tm", String.class),
+                row.get("name_tm", String.class),
+                row.get("name_en", String.class),
                 row.get("route_color", String.class),
                 row.get("is_active", Boolean.class),
-                row.get("fare_price", BigDecimal.class),
+                row.get("fare_price", java.math.BigDecimal.class),
                 row.get("estimated_duration_minutes", Integer.class),
                 row.get("route_geometry_forward", String.class),
                 row.get("route_geometry_backward", String.class),
                 row.get("total_distance_forward_meters", Integer.class),
                 row.get("total_distance_backward_meters", Integer.class)
         );
+    }
+    private RouteStopDTO mapToRouteStopDTO(Row row, RowMetadata metadata) {
+        return new RouteStopDTO(
+                row.get("id", String.class),
+                row.get("stop_name", String.class),
+                row.get("stop_code", String.class),
+                row.get("latitude", Double.class),
+                row.get("longitude", Double.class),
+                row.get("stop_sequence", Integer.class),
+                row.get("estimated_travel_time_minutes", Integer.class),
+                row.get("distance_from_start_meters", Integer.class),
+                row.get("is_major_stop", Boolean.class)
+        );
+    }
+
+    private RouteWithGeometryDTO mapToBasicRouteDTO(Row row, RowMetadata metadata) {
+        RouteWithGeometryDTO dto = new RouteWithGeometryDTO();
+        dto.setRouteId(row.get("id", String.class));
+        dto.setRouteNumber(row.get("route_number", String.class));
+        dto.setRouteName(row.get("route_name", String.class));
+        dto.setRouteColor(row.get("route_color", String.class));
+        dto.setActiveVehiclesCount(row.get("active_vehicles_count", Long.class));
+
+        Integer forwardMeters = row.get("total_distance_forward_meters", Integer.class);
+        if (forwardMeters != null) {
+            dto.setTotalDistanceForwardKm(new BigDecimal(forwardMeters).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP));
+        }
+
+        return dto;
+    }
+
+    private RouteWithGeometryDTO mapToRouteWithGeometryDTO(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
+        RouteWithGeometryDTO dto = new RouteWithGeometryDTO();
+        dto.setRouteId(row.get("id", String.class));
+        dto.setRouteNumber(row.get("route_number", String.class));
+        dto.setRouteName(row.get("route_name", String.class));
+        dto.setRouteColor(row.get("route_color", String.class));
+
+        String forwardGeometry = row.get("route_geometry_forward", String.class);
+        String backwardGeometry = row.get("route_geometry_backward", String.class);
+
+        try {
+            if (forwardGeometry != null) {
+                dto.setGeometryForward(objectMapper.readValue(forwardGeometry, Object.class));
+            }
+            if (backwardGeometry != null) {
+                dto.setGeometryBackward(objectMapper.readValue(backwardGeometry, Object.class));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse route geometry for route {}: {}", dto.getRouteNumber(), e.getMessage());
+        }
+
+        Integer forwardMeters = row.get("total_distance_forward_meters", Integer.class);
+        Integer backwardMeters = row.get("total_distance_backward_meters", Integer.class);
+
+        if (forwardMeters != null) {
+            dto.setTotalDistanceForwardKm(new BigDecimal(forwardMeters).divide(new BigDecimal(1000), 2, BigDecimal.ROUND_HALF_UP));
+        }
+        if (backwardMeters != null) {
+            dto.setTotalDistanceBackwardKm(new BigDecimal(backwardMeters).divide(new BigDecimal(1000), 2, BigDecimal.ROUND_HALF_UP));
+        }
+
+        return dto;
+    }
+
+
+    private String mapSortField(String sortField) {
+        return switch (sortField != null ? sortField.toLowerCase() : "stop_name") {
+            case "routename", "name" -> "route_name";
+            case "nametm" -> "name_tm";
+            case "nameen" -> "name_en";
+            case "latitude" -> "latitude";
+            case "longitude" -> "longitude";
+            case "isactive", "active" -> "is_active";
+            case "createdat", "created" -> "created_at";
+            case "updatedat", "updated" -> "updated_at";
+            default -> "route_name";
+        };
     }
 }

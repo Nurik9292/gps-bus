@@ -7,9 +7,9 @@ import java.util.List;
 @Data
 public class StopList {
 
-    List<StopResult> stops;
-    Integer totalCount;
-    Long activeCount;
+    private List<StopResult> stops;
+    private Integer totalCount;
+    private Long activeCount;
 
     public StopList(List<StopResult> stops, Long activeCount) {
         this.stops = stops;

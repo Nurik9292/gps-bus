@@ -1,12 +1,11 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.CheckRouteNumberResponse;
 import biz.ugur.busroutebackend.transport.application.dto.BusRouteCreateRequest;
-import biz.ugur.busroutebackend.transport.application.dto.BusRouteListResponse;
-import biz.ugur.busroutebackend.transport.application.dto.BusRouteResponse;
-import biz.ugur.busroutebackend.transport.application.usecase.CreateBusRouteUseCase;
-import biz.ugur.busroutebackend.transport.application.usecase.DeleteBusRouteUseCase;
-import biz.ugur.busroutebackend.transport.application.usecase.GetAllBusRoutesUseCase;
-import biz.ugur.busroutebackend.transport.application.usecase.UpdateBusRouteUseCase;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteListResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteResponse;
+import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
+import biz.ugur.busroutebackend.transport.application.usecase.route.*;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -24,15 +23,36 @@ public class AdminRouteController {
     private final GetAllBusRoutesUseCase getAllBusRoutesUseCase;
     private final UpdateBusRouteUseCase updateBusRouteUseCase;
     private final DeleteBusRouteUseCase deleteBusRouteUseCase;
+    private final CheckRouteNumberUseCase checkRouteNumberUseCase;
 
     public AdminRouteController(CreateBusRouteUseCase createBusRouteUseCase,
                                 GetAllBusRoutesUseCase getAllBusRoutesUseCase,
                                 UpdateBusRouteUseCase updateBusRouteUseCase,
-                                DeleteBusRouteUseCase deleteBusRouteUseCase) {
+                                DeleteBusRouteUseCase deleteBusRouteUseCase,
+                                CheckRouteNumberUseCase checkRouteNumberUseCase) {
         this.createBusRouteUseCase = createBusRouteUseCase;
         this.getAllBusRoutesUseCase = getAllBusRoutesUseCase;
         this.updateBusRouteUseCase = updateBusRouteUseCase;
         this.deleteBusRouteUseCase = deleteBusRouteUseCase;
+        this.checkRouteNumberUseCase = checkRouteNumberUseCase;
+    }
+
+
+    @GetMapping
+    public Mono<ResponseEntity<BusRouteListResponse>> getAllRoutes(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String order,
+            @RequestParam(required = false) Boolean active) {
+
+        log.debug("Fetching bus routes (page: {}, size: {}, active: {})", page, size, active);
+
+        return Mono.just(GetAllRoutePaginationQuery.fromParams(page, size, sort, order, active))
+                .as(getAllBusRoutesUseCase::execute)
+                .map(BusRouteListResponse::fromResult)
+                .doOnNext(response -> log.debug("Retrieved {} routes", response.getTotalCount()))
+                .map(ResponseEntity::ok);
     }
 
     @PostMapping
@@ -49,26 +69,10 @@ public class AdminRouteController {
                 .doOnError(error -> log.error("Failed to create bus route: {}", request.getRouteNumber(), error));
     }
 
-    @GetMapping
-    public Mono<ResponseEntity<BusRouteListResponse>> getAllRoutes(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size,
-            @RequestParam(required = false) Boolean active) {
 
-        log.debug("Fetching bus routes (page: {}, size: {}, active: {})", page, size, active);
-
-        return getAllBusRoutesUseCase.execute(new GetAllBusRoutesUseCase.Request(page, size, active))
-                .map(ResponseEntity::ok)
-                .doOnSuccess(response -> {
-                    if (response.getBody() != null) {
-                        log.debug("Retrieved {} bus routes", response.getBody().getTotalCount());
-                    }
-                });
-    }
 
     @PutMapping("/{routeId}")
-    public Mono<ResponseEntity<BusRouteResponse>> updateRoute(
-            @PathVariable String routeId,
+    public Mono<ResponseEntity<BusRouteResponse>> updateRoute(@PathVariable String routeId,
             @Valid @RequestBody BusRouteCreateRequest request) {
 
         log.info("Updating bus route: {}", routeId);
@@ -99,5 +103,15 @@ public class AdminRouteController {
                     }
                 })
                 .doOnError(error -> log.error("Failed to delete bus route: {}", routeId, error));
+    }
+
+    @GetMapping("/check-availability")
+    public Mono<ResponseEntity<CheckRouteNumberResponse>> checkRouteAvailability(
+            @RequestParam(required = false) String routeNumber) {
+        return Mono.just(routeNumber)
+                .as(checkRouteNumberUseCase::execute)
+                .map(CheckRouteNumberResponse::of)
+                .map(ResponseEntity::ok);
+
     }
 }

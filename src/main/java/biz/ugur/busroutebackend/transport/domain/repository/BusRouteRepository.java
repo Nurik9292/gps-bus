@@ -4,8 +4,10 @@ import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.RouteWithGeometryDTO;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
+import org.springframework.data.domain.Pageable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
 
 public interface BusRouteRepository {
 
@@ -32,6 +34,8 @@ public interface BusRouteRepository {
     Mono<Void> deleteById(BusRouteId routeId);
 
     Mono<Long> countActiveRoutes();
+
+    Flux<BusRoute> getRoutesWithPagination(Pageable pageable);
 
     Flux<RouteWithGeometryDTO> searchRoutesByNameOrNumber(String query, Integer limit);
 

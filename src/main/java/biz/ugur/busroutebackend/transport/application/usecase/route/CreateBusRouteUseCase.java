@@ -1,9 +1,9 @@
-package biz.ugur.busroutebackend.transport.application.usecase;
+package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.transport.application.dto.BusRouteCreateRequest;
-import biz.ugur.busroutebackend.transport.application.dto.BusRouteResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteResponse;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
@@ -41,11 +41,13 @@ public class CreateBusRouteUseCase implements UseCase<BusRouteCreateRequest, Mon
                             request.getRouteNumber(),
                             request.getRouteName(),
                             request.getRouteNameTm(),
+                            request.getRouteNameTm(),
                             request.getRouteColor()
                     );
 
                     busRoute.updateRouteInfo(
                             request.getRouteName(),
+                            request.getRouteNameTm(),
                             request.getRouteNameTm(),
                             request.getFarePrice(),
                             request.getEstimatedDurationMinutes()
@@ -85,7 +87,8 @@ public class CreateBusRouteUseCase implements UseCase<BusRouteCreateRequest, Mon
                 busRoute.getId().getValue(),
                 busRoute.getRouteNumber(),
                 busRoute.getRouteName(),
-                busRoute.getRouteNameTm(),
+                busRoute.getNameTm(),
+                busRoute.getNameEn(),
                 busRoute.getRouteColor(),
                 busRoute.getIsActive(),
                 busRoute.getFarePrice(),
@@ -93,10 +96,12 @@ public class CreateBusRouteUseCase implements UseCase<BusRouteCreateRequest, Mon
                 0,
                 0, // backward stops count - будет вычислено отдельно
                 busRoute.getTotalDistanceForwardMeters() != null ?
-                        new BigDecimal(busRoute.getTotalDistanceForwardMeters()).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
+                        new BigDecimal(busRoute.getTotalDistanceForwardMeters()).divide(new BigDecimal(1000), 2 , RoundingMode.HALF_UP) : null,
                 busRoute.getTotalDistanceBackwardMeters() != null ?
                         new BigDecimal(busRoute.getTotalDistanceBackwardMeters()).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
-                0L // active vehicles count - будет вычислено отдельно
+                0L ,// active vehicles count - будет вычислено отдельно,
+                busRoute.getCreatedAt(),
+                busRoute.getUpdatedAt()
         );
     }
 }
