@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.transport.domain.model;
 import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
 import biz.ugur.busroutebackend.transport.domain.event.*;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.StopCode;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
@@ -31,7 +32,7 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
     private String cityId;
 
     @Column("stop_code")
-    private String stopCode;
+    private StopCode stopCode;
 
     @Column("latitude")
     private BigDecimal latitude;
@@ -49,7 +50,7 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
     public BusStop(String stopName,
                    String nameEn,
                    String nameTm,
-                   String stopCode,
+                   StopCode stopCode,
                    BigDecimal latitude,
                    BigDecimal longitude,
                    Boolean isMajorStop,
@@ -72,7 +73,7 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
                    String stopName,
                    String nameEn,
                    String nameTm,
-                   String stopCode,
+                   StopCode stopCode,
                    BigDecimal latitude,
                    BigDecimal longitude,
                    Boolean isActive,
@@ -100,7 +101,7 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
     public BusStop(
             BusStopId id,
             String stopName,
-            String stopCode,
+            StopCode stopCode,
             BigDecimal latitude,
             BigDecimal longitude,
             Boolean isActive,
@@ -156,7 +157,7 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
         };
     }
 
-    public void updateInfo(String stopName, String nameEn, String nameTm, String stopCode,
+    public void updateInfo(String stopName, String nameEn, String nameTm,
                            BigDecimal latitude, BigDecimal longitude, Boolean isActive, Boolean isMajorStop) {
         boolean hasLocationChanged = !this.latitude.equals(latitude) || !this.longitude.equals(longitude);
         boolean hasNameChanged = !this.stopName.equals(stopName);
@@ -164,7 +165,6 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
         this.stopName = validateStopName(stopName);
         this.nameEn = nameEn;
         this.nameTm = nameTm;
-        this.stopCode = stopCode;
         this.latitude = latitude;
         this.longitude = longitude;
         this.isActive = isActive != null ? isActive : true;

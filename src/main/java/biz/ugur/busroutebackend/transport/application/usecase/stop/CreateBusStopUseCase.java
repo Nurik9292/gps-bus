@@ -7,11 +7,13 @@ import biz.ugur.busroutebackend.transport.application.dto.stop.CreateStop;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
+import biz.ugur.busroutebackend.transport.domain.valueobject.StopCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.util.Random;
 
 @Service
 @Slf4j
@@ -41,7 +43,6 @@ public class CreateBusStopUseCase implements UseCase<Mono<CreateStop>, Mono<Stop
                             command.stopName(), command.nameEn(), command.nameTm(), correlationId);
 
                     return validateUniqueStopName(command.stopName())
-                            .then(validateUniqueStopCode(command.stopCode()))
                             .then(createBusStop(command))
                             .map(StopResult::fromDomain)
                             .doOnSuccess(result -> log.info("Bus stop created: {}", result.stopName()))
@@ -53,13 +54,11 @@ public class CreateBusStopUseCase implements UseCase<Mono<CreateStop>, Mono<Stop
         try {
             validateCoordinates(command.latitude(), command.longitude());
 
-            String resolvedCode = resolveStopCode(command);
-
             BusStop busStop = new BusStop(
                     command.stopName(),
                     command.nameEn(),
                     command.nameTm(),
-                    resolvedCode,
+                    StopCode.generate(command.cityId(), new Random().nextInt(1000)),
                     command.latitude(),
                     command.longitude(),
                     command.isMajorStop(),
@@ -76,29 +75,12 @@ public class CreateBusStopUseCase implements UseCase<Mono<CreateStop>, Mono<Stop
         }
     }
 
-    private String resolveStopCode(CreateStop command) {
-        return command.stopCode() != null
-                ? command.stopCode()
-                : generateStopCode(command.stopName());
-    }
 
     private Mono<Void> validateUniqueStopName(String stopName) {
         return busStopRepository.existsByStopName(stopName)
                 .flatMap(exists -> {
                     if (exists) {
                         return Mono.error(new IllegalArgumentException("Bus stop with this name already exists"));
-                    }
-                    return Mono.empty();
-                });
-    }
-
-    private Mono<Void> validateUniqueStopCode(String stopCode) {
-        if (stopCode == null) return Mono.empty();
-
-        return busStopRepository.existsByStopCode(stopCode)
-                .flatMap(exists -> {
-                    if (exists) {
-                        return Mono.error(new IllegalArgumentException("Bus stop with this code already exists"));
                     }
                     return Mono.empty();
                 });
@@ -116,9 +98,5 @@ public class CreateBusStopUseCase implements UseCase<Mono<CreateStop>, Mono<Stop
         }
     }
 
-    private String generateStopCode(String stopName) {
-        return stopName.replaceAll("\\s+", "_")
-                .replaceAll("[^a-zA-Z0-9_]", "")
-                .toUpperCase() + "_" + System.currentTimeMillis() % 10000;
-    }
+
 }

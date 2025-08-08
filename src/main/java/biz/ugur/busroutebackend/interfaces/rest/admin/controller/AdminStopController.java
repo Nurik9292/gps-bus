@@ -58,7 +58,7 @@ public class AdminStopController {
     @PostMapping
     public Mono<ResponseEntity<BusStopResponse>> createStop(@Valid @RequestBody BusStopCreateRequest request) {
         log.info("Creating bus stop: {}", request.getStopName());
-
+        System.out.println("log log " + request);
         return Mono.just(request.toInput())
                 .as(createBusStopUseCase::execute)
                 .map(this::toStopResponseEntity)
@@ -75,8 +75,9 @@ public class AdminStopController {
     @PutMapping("/{stopId}")
     public Mono<ResponseEntity<BusStopResponse>> updateStop(@PathVariable String stopId,
             @Valid @RequestBody BusStopUpdateRequest request) {
-
         log.info("Updating bus stop: {}", stopId);
+
+        System.out.println("test test test updateStop: " + request);
 
         return Mono.just(request.toInput(stopId))
                 .as(updateBusStopUseCase::execute)

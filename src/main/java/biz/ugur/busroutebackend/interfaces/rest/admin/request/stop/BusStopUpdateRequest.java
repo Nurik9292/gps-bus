@@ -24,10 +24,6 @@ public class BusStopUpdateRequest {
     @JsonProperty("name_tm")
     private String nameTm;
 
-    @Size(max = 20, message = "Stop code must not exceed 20 characters")
-    @JsonProperty("stop_code")
-    private String stopCode;
-
     @NotNull(message = "Latitude is required")
     @DecimalMin(value = "35.1", message = "Latitude must be within Turkmenistan bounds (35.1-42.8)")
     @DecimalMax(value = "42.8", message = "Latitude must be within Turkmenistan bounds (35.1-42.8)")
@@ -52,11 +48,10 @@ public class BusStopUpdateRequest {
                 stopName,
                 nameEn,
                 nameTm,
-                stopCode,
                 latitude,
                 longitude,
-                isMajorStop,
-                isActive
+                isActive,
+                isMajorStop
         );
     }
 }

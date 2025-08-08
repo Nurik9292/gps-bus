@@ -52,7 +52,6 @@ public class UpdateBusStopUseCase implements UseCase<Mono<UpdateStop>, Mono<Stop
 
     private Mono<BusStop> validateAndUpdate(BusStop existingStop, UpdateStop command) {
         return validateUniqueStopNameIfChanged(existingStop, command.stopName())
-                .then(validateUniqueStopCodeIfChanged(existingStop, command.stopCode()))
                 .then(updateBusStop(existingStop, command));
     }
 
@@ -61,12 +60,11 @@ public class UpdateBusStopUseCase implements UseCase<Mono<UpdateStop>, Mono<Stop
             if (coordinatesChanged(existingStop, command)) {
                 validateCoordinates(command.latitude(), command.longitude());
             }
-
+            System.out.println("Updating bus stop: " + command);
             existingStop.updateInfo(
                     command.stopName(),
                     command.nameEn(),
                     command.nameTm(),
-                    command.stopCode(),
                     command.latitude(),
                     command.longitude(),
                     command.isActive(),
@@ -97,21 +95,6 @@ public class UpdateBusStopUseCase implements UseCase<Mono<UpdateStop>, Mono<Stop
                 .flatMap(exists -> {
                     if (exists) {
                         return Mono.error(new IllegalArgumentException("Bus stop with this name already exists"));
-                    }
-                    return Mono.empty();
-                });
-    }
-
-    private Mono<Void> validateUniqueStopCodeIfChanged(BusStop existingStop, String newStopCode) {
-        if (newStopCode == null ||
-                (existingStop.getStopCode() != null && existingStop.getStopCode().equals(newStopCode))) {
-            return Mono.empty();
-        }
-
-        return busStopRepository.existsByStopCode(newStopCode)
-                .flatMap(exists -> {
-                    if (exists) {
-                        return Mono.error(new IllegalArgumentException("Bus stop with this code already exists"));
                     }
                     return Mono.empty();
                 });

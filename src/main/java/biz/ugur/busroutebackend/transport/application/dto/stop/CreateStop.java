@@ -6,7 +6,6 @@ public record CreateStop(
         String stopName,
         String nameEn,
         String nameTm,
-        String stopCode,
         BigDecimal latitude,
         BigDecimal longitude,
         Boolean isMajorStop,

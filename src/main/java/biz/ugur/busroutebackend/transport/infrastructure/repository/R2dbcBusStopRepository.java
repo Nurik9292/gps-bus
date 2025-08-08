@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.repository;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.StopCode;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
@@ -84,7 +85,7 @@ public class R2dbcBusStopRepository implements BusStopRepository {
                 .bind("stopName", busStop.getStopName())
                 .bind("nameEn", busStop.getNameEn())
                 .bind("nameTm", busStop.getNameTm())
-                .bind("stopCode", busStop.getStopCode())
+                .bind("stopCode", busStop.getStopCode().getValue())
                 .bind("latitude", busStop.getLatitude())
                 .bind("longitude", busStop.getLongitude())
                 .bind("isActive", busStop.getIsActive())
@@ -105,15 +106,15 @@ public class R2dbcBusStopRepository implements BusStopRepository {
             """;
 
         return databaseClient.sql(sql)
-                .bind("id", busStop.getId().getValue())
                 .bind("stopName", busStop.getStopName())
                 .bind("nameEn", busStop.getNameEn())
                 .bind("nameTm", busStop.getNameTm())
-                .bind("stopCode", busStop.getStopCode())
+                .bind("stopCode", busStop.getStopCode().getValue())
                 .bind("latitude", busStop.getLatitude())
                 .bind("longitude", busStop.getLongitude())
                 .bind("isActive", busStop.getIsActive())
                 .bind("isMajorStop", busStop.getIsMajorStop())
+                .bind("id", busStop.getId().getValue())
                 .then()
                 .thenReturn(busStop);
     }
@@ -268,7 +269,7 @@ public class R2dbcBusStopRepository implements BusStopRepository {
                 stopName,
                 nameEn,
                 nameTm,
-                stopCode,
+                StopCode.of(stopCode),
                 latitude,
                 longitude,
                 isActive,

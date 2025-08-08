@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.transport.domain.event;
 
 import biz.ugur.busroutebackend.shared.domain.DomainEvent;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.StopCode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -11,7 +12,7 @@ public record BusStopCreatedEvent(
         String stopName,
         String nameEn,
         String nameTm,
-        String stopCode,
+        StopCode stopCode,
         BigDecimal latitude,
         BigDecimal longitude,
         Boolean isMajorStop,
@@ -19,7 +20,7 @@ public record BusStopCreatedEvent(
 ) implements DomainEvent {
 
     public BusStopCreatedEvent(BusStopId stopId, String stopName, String nameEn, String nameTm,
-                               String stopCode, BigDecimal latitude, BigDecimal longitude, Boolean isMajorStop) {
+                               StopCode stopCode, BigDecimal latitude, BigDecimal longitude, Boolean isMajorStop) {
         this(stopId, stopName, nameEn, nameTm, stopCode, latitude, longitude, isMajorStop, Instant.now());
     }
 

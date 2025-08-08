@@ -27,7 +27,7 @@ public record StopResult(
                 stop.getStopName(),
                 stop.getNameEn(),
                 stop.getNameTm(),
-                stop.getStopCode(),
+                stop.getStopCode().getValue(),
                 stop.getLatitude(),
                 stop.getLongitude(),
                 stop.getIsActive(),
