@@ -66,6 +66,7 @@ public class CreateBusRouteUseCase implements UseCase<Mono<CreateRoute>, Mono<Ro
                 command.nameTm(),
                 command.nameEn(),
                 command.routeColor(),
+                command.cityId(),
                 command.estimatedDurationMinutes()
         );
 

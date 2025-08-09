@@ -28,6 +28,9 @@ public class BusRouteResponse {
     @JsonProperty("route_color")
     private String routeColor;
 
+    @JsonProperty("city_id")
+    private String cityId;
+
     @JsonProperty("is_active")
     private Boolean isActive;
 
@@ -61,6 +64,7 @@ public class BusRouteResponse {
                             String nameTm,
                             String nameEn,
                             String routeColor,
+                            String cityId,
                             Boolean isActive,
                             Integer estimatedDurationMinutes,
                             Integer forwardStopsCount,
@@ -77,6 +81,7 @@ public class BusRouteResponse {
         this.nameEn = nameEn;
         this.routeColor = routeColor;
         this.isActive = isActive;
+        this.cityId = cityId;
         this.estimatedDurationMinutes = estimatedDurationMinutes;
         this.forwardStopsCount = forwardStopsCount;
         this.backwardStopsCount = backwardStopsCount;
@@ -95,6 +100,7 @@ public class BusRouteResponse {
                 result.nameTm(),
                 result.nameEn(),
                 result.routeColor(),
+                result.cityId(),
                 result.isActive(),
                 result.estimatedDurationMinutes(),
                 result.forwardStopsCount(),

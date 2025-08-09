@@ -152,6 +152,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                             null,
                             row.get("route_color", String.class) != null ?
                             row.get("route_color", String.class) : "#1976D2",
+                            null,
                             true,
                             null,
                             row.get("route_geometry_forward", String.class),

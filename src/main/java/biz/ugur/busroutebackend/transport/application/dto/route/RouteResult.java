@@ -13,6 +13,7 @@ public record RouteResult(
         String nameTm,
         String nameEn,
         String routeColor,
+        String cityId,
         Boolean isActive,
         Integer estimatedDurationMinutes,
         Integer forwardStopsCount,
@@ -32,6 +33,7 @@ public record RouteResult(
                 busRoute.getNameTm(),
                 busRoute.getNameEn(),
                 busRoute.getRouteColor(),
+                busRoute.getCityId(),
                 busRoute.getIsActive(),
                 busRoute.getEstimatedDurationMinutes(),
                 0,  // forward stops count - будет вычислено отдельно

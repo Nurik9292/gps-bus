@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.interfaces.rest.admin.request.route.BusRouteCreateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteResponse;
+import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
@@ -79,7 +80,7 @@ public class UpdateBusRouteUseCase implements UseCase<UpdateBusRouteUseCase.Requ
         return new RouteGeometry(points);
     }
 
-    private BusRouteResponse toResponse(biz.ugur.busroutebackend.transport.domain.model.BusRoute busRoute) {
+    private BusRouteResponse toResponse(BusRoute busRoute) {
         return new BusRouteResponse(
                 busRoute.getId().getValue(),
                 busRoute.getRouteNumber(),
@@ -87,6 +88,7 @@ public class UpdateBusRouteUseCase implements UseCase<UpdateBusRouteUseCase.Requ
                 busRoute.getNameTm(),
                 busRoute.getNameEn(),
                 busRoute.getRouteColor(),
+                "1",
                 busRoute.getIsActive(),
                 busRoute.getEstimatedDurationMinutes(),
                 0, // forward stops count

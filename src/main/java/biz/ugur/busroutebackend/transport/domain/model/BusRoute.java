@@ -41,6 +41,8 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
     @Column("is_active")
     private Boolean isActive;
 
+    @Column("city_id")
+    private String cityId;
 
     @Column("estimated_duration_minutes")
     private Integer estimatedDurationMinutes;
@@ -66,6 +68,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
                     String nameTm,
                     String nameEn,
                     String routeColor,
+                    String cityId,
                     Integer estimatedDurationMinutes) {
         this.id = BusRouteId.generate();
         this.routeNumber = validateRouteNumber(routeNumber);
@@ -73,6 +76,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         this.nameTm = nameTm;
         this.nameEn = nameEn;
         this.routeColor = validateRouteColor(routeColor);
+        this.cityId = cityId;
         this.isActive = true;
         this.estimatedDurationMinutes = estimatedDurationMinutes;
     }
@@ -99,6 +103,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
                     String nameTm,
                     String nameEn,
                     String routeColor,
+                    String cityId,
                     Boolean isActive,
                     Integer estimatedDurationMinutes,
                     String routeGeometryForward,
@@ -111,6 +116,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         this.nameEn = nameEn;
         this.nameTm = nameTm;
         this.routeColor = routeColor;
+        this.cityId = cityId;
         this.isActive = isActive;
         this.estimatedDurationMinutes = estimatedDurationMinutes;
         this.routeGeometryForward = routeGeometryForward;

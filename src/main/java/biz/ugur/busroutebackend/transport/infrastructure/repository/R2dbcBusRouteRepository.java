@@ -51,6 +51,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                                     name_tm, 
                                     name_en, 
                                     route_color,
+                                    city_id,
                                     is_active, 
                                     estimated_duration_minutes,
                                     route_geometry_forward, 
@@ -66,6 +67,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                     :nameTm, 
                     :nameEn, 
                     :routeColor,
+                    :cityId,
                     :isActive, 
                     :estimatedDurationMinutes,
                     :routeGeometryForward, 
@@ -85,6 +87,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .bind("nameTm", busRoute.getNameTm())
                 .bind("nameEn", busRoute.getNameEn())
                 .bind("routeColor", busRoute.getRouteColor())
+                .bind("cityId", busRoute.getCityId())
                 .bind("isActive", busRoute.getIsActive())
                 .bind("estimatedDurationMinutes", busRoute.getEstimatedDurationMinutes())
                 .bind("routeGeometryForward", busRoute.getRouteGeometryForward())
@@ -106,6 +109,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 name_tm = :nameTm,
                 name_en = :nameEn,
                 route_color = :routeColor, 
+                city_id = :cityId, 
                 is_active = :isActive, 
                 estimated_duration_minutes = :estimatedDurationMinutes,
                 route_geometry_forward = :routeGeometryForward, 
@@ -124,6 +128,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .bind("nameTm", busRoute.getNameTm())
                 .bind("nameEn", busRoute.getNameEn())
                 .bind("routeColor", busRoute.getRouteColor())
+                .bind("cityId", busRoute.getCityId())
                 .bind("isActive", busRoute.getIsActive())
                 .bind("estimatedDurationMinutes", busRoute.getEstimatedDurationMinutes())
                 .bind("routeGeometryForward", busRoute.getRouteGeometryForward())
@@ -437,6 +442,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 row.get("name_tm", String.class),
                 row.get("name_en", String.class),
                 row.get("route_color", String.class),
+                row.get("city_id", String.class),
                 row.get("is_active", Boolean.class),
                 row.get("estimated_duration_minutes", Integer.class),
                 row.get("route_geometry_forward", String.class),
