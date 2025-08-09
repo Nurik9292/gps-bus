@@ -52,11 +52,10 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                                     name_en, 
                                     route_color,
                                     is_active, 
-                                    fare_price, 
                                     estimated_duration_minutes,
-                                   route_geometry_forward, 
+                                    route_geometry_forward, 
                                     route_geometry_backward,
-                                   total_distance_forward_meters, 
+                                    total_distance_forward_meters, 
                                     total_distance_backward_meters,
                                     created_at, 
                                     updated_at, 
@@ -64,16 +63,16 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
             VALUES (:id, 
                     :routeNumber, 
                     :routeName, 
-                    :routeNameTm, 
+                    :nameTm, 
+                    :nameEn, 
                     :routeColor,
-                   :isActive, 
-                    :farePrice, 
+                    :isActive, 
                     :estimatedDurationMinutes,
-                   :routeGeometryForward, 
+                    :routeGeometryForward, 
                     :routeGeometryBackward,
-                   :totalDistanceForwardMeters, 
+                    :totalDistanceForwardMeters, 
                     :totalDistanceBackwardMeters,
-                   :createdAt, 
+                    :createdAt, 
                     :updatedAt, 
                     :version)
             """;
@@ -87,7 +86,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .bind("nameEn", busRoute.getNameEn())
                 .bind("routeColor", busRoute.getRouteColor())
                 .bind("isActive", busRoute.getIsActive())
-                .bind("farePrice", busRoute.getFarePrice())
                 .bind("estimatedDurationMinutes", busRoute.getEstimatedDurationMinutes())
                 .bind("routeGeometryForward", busRoute.getRouteGeometryForward())
                 .bind("routeGeometryBackward", busRoute.getRouteGeometryBackward())
@@ -109,7 +107,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 name_en = :nameEn,
                 route_color = :routeColor, 
                 is_active = :isActive, 
-                fare_price = :farePrice,
                 estimated_duration_minutes = :estimatedDurationMinutes,
                 route_geometry_forward = :routeGeometryForward, 
                 route_geometry_backward = :routeGeometryBackward,
@@ -128,7 +125,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .bind("nameEn", busRoute.getNameEn())
                 .bind("routeColor", busRoute.getRouteColor())
                 .bind("isActive", busRoute.getIsActive())
-                .bind("farePrice", busRoute.getFarePrice())
                 .bind("estimatedDurationMinutes", busRoute.getEstimatedDurationMinutes())
                 .bind("routeGeometryForward", busRoute.getRouteGeometryForward())
                 .bind("routeGeometryBackward", busRoute.getRouteGeometryBackward())
@@ -207,7 +203,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
         String sql = """
             SELECT bs.id, bs.stop_name, bs.stop_code, bs.latitude, bs.longitude,
                    rs.stop_sequence, rs.estimated_travel_time_minutes, rs.distance_from_start_meters,
-                   bs.is_major_stop, bs.has_shelter
+                   bs.is_major_stop
             FROM route_stops rs
             JOIN bus_stops bs ON rs.stop_id = bs.id
             JOIN bus_routes br ON rs.route_id = br.id
@@ -442,7 +438,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 row.get("name_en", String.class),
                 row.get("route_color", String.class),
                 row.get("is_active", Boolean.class),
-                row.get("fare_price", java.math.BigDecimal.class),
                 row.get("estimated_duration_minutes", Integer.class),
                 row.get("route_geometry_forward", String.class),
                 row.get("route_geometry_backward", String.class),
@@ -450,6 +445,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 row.get("total_distance_backward_meters", Integer.class)
         );
     }
+
     private RouteStopDTO mapToRouteStopDTO(Row row, RowMetadata metadata) {
         return new RouteStopDTO(
                 row.get("id", String.class),
@@ -505,10 +501,10 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
         Integer backwardMeters = row.get("total_distance_backward_meters", Integer.class);
 
         if (forwardMeters != null) {
-            dto.setTotalDistanceForwardKm(new BigDecimal(forwardMeters).divide(new BigDecimal(1000), 2, BigDecimal.ROUND_HALF_UP));
+            dto.setTotalDistanceForwardKm(new BigDecimal(forwardMeters).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP));
         }
         if (backwardMeters != null) {
-            dto.setTotalDistanceBackwardKm(new BigDecimal(backwardMeters).divide(new BigDecimal(1000), 2, BigDecimal.ROUND_HALF_UP));
+            dto.setTotalDistanceBackwardKm(new BigDecimal(backwardMeters).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP));
         }
 
         return dto;
@@ -517,6 +513,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
 
     private String mapSortField(String sortField) {
         return switch (sortField != null ? sortField.toLowerCase() : "stop_name") {
+            case "routnumber" -> "rout_number";
             case "routename", "name" -> "route_name";
             case "nametm" -> "name_tm";
             case "nameen" -> "name_en";

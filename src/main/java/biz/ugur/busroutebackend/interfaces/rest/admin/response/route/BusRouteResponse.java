@@ -31,9 +31,6 @@ public class BusRouteResponse {
     @JsonProperty("is_active")
     private Boolean isActive;
 
-    @JsonProperty("fare_price")
-    private BigDecimal farePrice;
-
     @JsonProperty("estimated_duration_minutes")
     private Integer estimatedDurationMinutes;
 
@@ -65,7 +62,6 @@ public class BusRouteResponse {
                             String nameEn,
                             String routeColor,
                             Boolean isActive,
-                            BigDecimal farePrice,
                             Integer estimatedDurationMinutes,
                             Integer forwardStopsCount,
                             Integer backwardStopsCount,
@@ -81,7 +77,6 @@ public class BusRouteResponse {
         this.nameEn = nameEn;
         this.routeColor = routeColor;
         this.isActive = isActive;
-        this.farePrice = farePrice;
         this.estimatedDurationMinutes = estimatedDurationMinutes;
         this.forwardStopsCount = forwardStopsCount;
         this.backwardStopsCount = backwardStopsCount;
@@ -101,7 +96,6 @@ public class BusRouteResponse {
                 result.nameEn(),
                 result.routeColor(),
                 result.isActive(),
-                result.farePrice(),
                 result.estimatedDurationMinutes(),
                 result.forwardStopsCount(),
                 result.backwardStopsCount(),

@@ -1,10 +1,10 @@
-package biz.ugur.busroutebackend.transport.application.dto;
+package biz.ugur.busroutebackend.interfaces.rest.admin.request.route;
 
+import biz.ugur.busroutebackend.transport.application.dto.route.CreateRoute;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -16,24 +16,23 @@ public class BusRouteCreateRequest {
     private String routeNumber;
 
     @NotBlank(message = "Route name is required")
-    @Size(min = 5, max = 200, message = "Route name must be between 5 and 200 characters")
+    @Size(min = 2, max = 200, message = "Route name must be between 5 and 200 characters")
     @JsonProperty("route_name")
     private String routeName;
 
     @Size(max = 200, message = "Turkmen route name must not exceed 200 characters")
-    @JsonProperty("route_name_tm")
-    private String routeNameTm;
+    @JsonProperty("name_tm")
+    private String nameTm;
+
+    @Size(max = 200, message = "English route name must not exceed 200 characters")
+    @JsonProperty("name_en")
+    private String nameEn;
 
     @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "Route color must be a valid hex color")
     @JsonProperty("route_color")
     private String routeColor = "#1976D2";
 
-    @DecimalMin(value = "0.5", message = "Fare price must be at least 0.5 manat")
-    @DecimalMax(value = "10.0", message = "Fare price must not exceed 10 manat")
-    @JsonProperty("fare_price")
-    private BigDecimal farePrice = new BigDecimal("1.00");
-
-    @Min(value = 10, message = "Estimated duration must be at least 10 minutes")
+    @Min(value = 2, message = "Estimated duration must be at least 10 minutes")
     @Max(value = 300, message = "Estimated duration must not exceed 300 minutes")
     @JsonProperty("estimated_duration_minutes")
     private Integer estimatedDurationMinutes = 60;
@@ -41,18 +40,35 @@ public class BusRouteCreateRequest {
     @JsonProperty("is_active")
     private Boolean isActive = true;
 
-    // Остановки для прямого направления
+    @JsonProperty("city_id")
+    private String cityId;
+
     @JsonProperty("forward_stops")
     private List<String> forwardStopIds;
 
-    // Остановки для обратного направления
     @JsonProperty("backward_stops")
     private List<String> backwardStopIds;
 
-    // Геометрия маршрута (опционально)
     @JsonProperty("forward_geometry")
     private List<List<Double>> forwardGeometry; // [[lat, lon], [lat, lon], ...]
 
     @JsonProperty("backward_geometry")
     private List<List<Double>> backwardGeometry;
+
+    public CreateRoute toCommand() {
+        return new CreateRoute(
+                routeNumber,
+                routeName,
+                nameTm,
+                nameEn,
+                routeColor,
+                estimatedDurationMinutes,
+                isActive,
+                cityId,
+                forwardStopIds,
+                backwardStopIds,
+                forwardGeometry,
+                backwardGeometry
+        );
+    }
 }

@@ -151,9 +151,8 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                             null,
                             null,
                             row.get("route_color", String.class) != null ?
-                                    row.get("route_color", String.class) : "#1976D2",
+                            row.get("route_color", String.class) : "#1976D2",
                             true,
-                            new BigDecimal("1.00"),
                             null,
                             row.get("route_geometry_forward", String.class),
                             null,

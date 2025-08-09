@@ -58,7 +58,6 @@ public class AdminStopController {
     @PostMapping
     public Mono<ResponseEntity<BusStopResponse>> createStop(@Valid @RequestBody BusStopCreateRequest request) {
         log.info("Creating bus stop: {}", request.getStopName());
-        System.out.println("log log " + request);
         return Mono.just(request.toInput())
                 .as(createBusStopUseCase::execute)
                 .map(this::toStopResponseEntity)

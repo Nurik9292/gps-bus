@@ -3,7 +3,7 @@ package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
-import biz.ugur.busroutebackend.transport.application.dto.BusRouteCreateRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.request.route.BusRouteCreateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteResponse;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
@@ -37,9 +37,8 @@ public class UpdateBusRouteUseCase implements UseCase<UpdateBusRouteUseCase.Requ
                 .flatMap(busRoute -> {
                     busRoute.updateRouteInfo(
                             request.updateRequest.getRouteName(),
-                            request.updateRequest.getRouteNameTm(),
-                            request.updateRequest.getRouteNameTm(),
-                            request.updateRequest.getFarePrice(),
+                            request.updateRequest.getNameTm(),
+                            request.updateRequest.getNameEn(),
                             request.updateRequest.getEstimatedDurationMinutes()
                     );
 
@@ -89,7 +88,6 @@ public class UpdateBusRouteUseCase implements UseCase<UpdateBusRouteUseCase.Requ
                 busRoute.getNameEn(),
                 busRoute.getRouteColor(),
                 busRoute.getIsActive(),
-                busRoute.getFarePrice(),
                 busRoute.getEstimatedDurationMinutes(),
                 0, // forward stops count
                 0, // backward stops count

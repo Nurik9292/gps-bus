@@ -6,7 +6,6 @@ CREATE TABLE bus_routes (
                             name_en VARCHAR(200),
                             route_color VARCHAR(7) DEFAULT '#1976D2',
                             is_active BOOLEAN DEFAULT true,
-                            fare_price DECIMAL(8,2) DEFAULT 1.00,
                             estimated_duration_minutes INTEGER,
                             route_geometry_forward TEXT,
                             route_geometry_backward TEXT,

@@ -41,8 +41,6 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
     @Column("is_active")
     private Boolean isActive;
 
-    @Column("fare_price")
-    private BigDecimal farePrice;
 
     @Column("estimated_duration_minutes")
     private Integer estimatedDurationMinutes;
@@ -62,6 +60,24 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
     @Transient
     private List<BusStop> busStops = new ArrayList<>();
 
+
+    public BusRoute(String routeNumber,
+                    String routeName,
+                    String nameTm,
+                    String nameEn,
+                    String routeColor,
+                    Integer estimatedDurationMinutes) {
+        this.id = BusRouteId.generate();
+        this.routeNumber = validateRouteNumber(routeNumber);
+        this.routeName = validateRouteName(routeName);
+        this.nameTm = nameTm;
+        this.nameEn = nameEn;
+        this.routeColor = validateRouteColor(routeColor);
+        this.isActive = true;
+        this.estimatedDurationMinutes = estimatedDurationMinutes;
+    }
+
+
     public BusRoute(String routeNumber,
                     String routeName,
                     String nameTm,
@@ -74,7 +90,6 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         this.nameEn = nameEn;
         this.routeColor = validateRouteColor(routeColor);
         this.isActive = true;
-        this.farePrice = new BigDecimal("1.00");
         this.estimatedDurationMinutes = 60;
     }
 
@@ -85,7 +100,6 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
                     String nameEn,
                     String routeColor,
                     Boolean isActive,
-                    BigDecimal farePrice,
                     Integer estimatedDurationMinutes,
                     String routeGeometryForward,
                     String routeGeometryBackward,
@@ -98,7 +112,6 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         this.nameTm = nameTm;
         this.routeColor = routeColor;
         this.isActive = isActive;
-        this.farePrice = farePrice;
         this.estimatedDurationMinutes = estimatedDurationMinutes;
         this.routeGeometryForward = routeGeometryForward;
         this.routeGeometryBackward = routeGeometryBackward;
@@ -156,8 +169,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         };
     }
 
-    public void updateRouteInfo(String routeName, String nameTm, String nameEn,
-                                BigDecimal farePrice, Integer estimatedDuration) {
+    public void updateRouteInfo(String routeName, String nameTm, String nameEn, Integer estimatedDuration) {
         if (routeName != null && !routeName.trim().isEmpty()) {
             this.routeName = routeName.trim();
         }
@@ -169,9 +181,6 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
             this.nameEn = nameEn.trim();
         }
 
-        if (farePrice != null && farePrice.compareTo(BigDecimal.ZERO) > 0) {
-            this.farePrice = farePrice;
-        }
         if (estimatedDuration != null && estimatedDuration > 0) {
             this.estimatedDurationMinutes = estimatedDuration;
         }

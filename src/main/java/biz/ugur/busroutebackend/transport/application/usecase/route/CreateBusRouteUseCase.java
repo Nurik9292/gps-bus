@@ -1,107 +1,86 @@
 package biz.ugur.busroutebackend.transport.application.usecase.route;
 
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
-import biz.ugur.busroutebackend.transport.application.dto.BusRouteCreateRequest;
-import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteResponse;
+import biz.ugur.busroutebackend.transport.application.dto.route.CreateRoute;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.List;
 
 @Service
 @Slf4j
-public class CreateBusRouteUseCase implements UseCase<BusRouteCreateRequest, Mono<BusRouteResponse>> {
+public class CreateBusRouteUseCase implements UseCase<Mono<CreateRoute>, Mono<RouteResult>> {
 
     private final BusRouteRepository busRouteRepository;
     private final EventBus eventBus;
+    private final CorrelationContextService correlationService;
 
-    public CreateBusRouteUseCase(BusRouteRepository busRouteRepository, EventBus eventBus) {
+    public CreateBusRouteUseCase(BusRouteRepository busRouteRepository,
+                                 EventBus eventBus,
+                                 CorrelationContextService correlationService) {
         this.busRouteRepository = busRouteRepository;
         this.eventBus = eventBus;
+        this.correlationService = correlationService;
     }
 
     @Override
-    public Mono<BusRouteResponse> execute(BusRouteCreateRequest request) {
-        log.info("Creating bus route: {}", request.getRouteNumber());
+    public Mono<RouteResult> execute(Mono<CreateRoute> command) {
 
-        return busRouteRepository.existsByRouteNumber(request.getRouteNumber())
-                .flatMap(exists -> {
-                    if (exists) {
-                        return Mono.error(new IllegalArgumentException("Route number already exists: " + request.getRouteNumber()));
-                    }
-
-                    BusRoute busRoute = new BusRoute(
-                            request.getRouteNumber(),
-                            request.getRouteName(),
-                            request.getRouteNameTm(),
-                            request.getRouteNameTm(),
-                            request.getRouteColor()
-                    );
-
-                    busRoute.updateRouteInfo(
-                            request.getRouteName(),
-                            request.getRouteNameTm(),
-                            request.getRouteNameTm(),
-                            request.getFarePrice(),
-                            request.getEstimatedDurationMinutes()
-                    );
-
-                    if (request.getForwardGeometry() != null && !request.getForwardGeometry().isEmpty()) {
-                        RouteGeometry forwardGeometry = createRouteGeometry(request.getForwardGeometry());
-                        RouteGeometry backwardGeometry = null;
-
-                        if (request.getBackwardGeometry() != null && !request.getBackwardGeometry().isEmpty()) {
-                            backwardGeometry = createRouteGeometry(request.getBackwardGeometry());
-                        }
-
-                        busRoute.updateRouteGeometry(forwardGeometry, backwardGeometry);
-                    }
-
-                    return busRouteRepository.save(busRoute);
-                })
-                .doOnNext(savedRoute -> {
-                    savedRoute.getUncommittedEvents().forEach(eventBus::publish);
-                    savedRoute.markEventsAsCommitted();
-                })
-                .map(this::toResponse)
-                .doOnSuccess(response -> log.info("Bus route created successfully: {}", response.getRouteNumber()))
-                .doOnError(error -> log.error("Failed to create bus route: {}", request.getRouteNumber(), error));
+        return correlationService.executeWithCorrelation(command.flatMap(this::executeWithCorrelation), "admin");
     }
 
     private RouteGeometry createRouteGeometry(List<List<Double>> coordinates) {
-        List<biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint> points = coordinates.stream()
-                .map(coord -> new biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint(coord.get(0), coord.get(1)))
+        List<RoutePoint> points = coordinates.stream()
+                .map(coord -> new biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint(coord.getFirst(), coord.get(1)))
                 .toList();
         return new RouteGeometry(points);
     }
 
-    private BusRouteResponse toResponse(BusRoute busRoute) {
-        return new BusRouteResponse(
-                busRoute.getId().getValue(),
-                busRoute.getRouteNumber(),
-                busRoute.getRouteName(),
-                busRoute.getNameTm(),
-                busRoute.getNameEn(),
-                busRoute.getRouteColor(),
-                busRoute.getIsActive(),
-                busRoute.getFarePrice(),
-                busRoute.getEstimatedDurationMinutes(),
-                0,
-                0, // backward stops count - будет вычислено отдельно
-                busRoute.getTotalDistanceForwardMeters() != null ?
-                        new BigDecimal(busRoute.getTotalDistanceForwardMeters()).divide(new BigDecimal(1000), 2 , RoundingMode.HALF_UP) : null,
-                busRoute.getTotalDistanceBackwardMeters() != null ?
-                        new BigDecimal(busRoute.getTotalDistanceBackwardMeters()).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
-                0L ,// active vehicles count - будет вычислено отдельно,
-                busRoute.getCreatedAt(),
-                busRoute.getUpdatedAt()
-        );
+    private Mono<RouteResult> executeWithCorrelation(CreateRoute command) {
+        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
+            log.info("Creating bus route: Correlation - {} RouteNumber - {}", correlationId, command.routeNumber());
+
+            return createBusRoute(command)
+                    .doOnNext(savedRoute -> {
+                        savedRoute.getUncommittedEvents().forEach(eventBus::publish);
+                        savedRoute.markEventsAsCommitted();
+                    })
+                    .map(RouteResult::fromDomain)
+                    .doOnSuccess(response -> log.info("Bus route created successfully: {}", response.routeNumber()))
+                    .doOnError(error -> log.error("Failed to create bus route: {}",command.routeNumber(), error));
+        });
     }
+
+    private Mono<BusRoute> createBusRoute(CreateRoute command) {
+        BusRoute busRoute = new BusRoute(
+                command.routeNumber(),
+                command.routeName(),
+                command.nameTm(),
+                command.nameEn(),
+                command.routeColor(),
+                command.estimatedDurationMinutes()
+        );
+
+        if (command.forwardGeometry() != null && !command.forwardGeometry().isEmpty()) {
+            RouteGeometry forwardGeometry = createRouteGeometry(command.forwardGeometry());
+            RouteGeometry backwardGeometry = null;
+
+            if (command.backwardGeometry() != null && !command.backwardGeometry().isEmpty()) {
+                backwardGeometry = createRouteGeometry(command.backwardGeometry());
+            }
+
+            busRoute.updateRouteGeometry(forwardGeometry, backwardGeometry);
+        }
+
+        return busRouteRepository.save(busRoute);
+    }
+
 }

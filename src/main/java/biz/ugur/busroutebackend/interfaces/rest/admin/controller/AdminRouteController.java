@@ -1,10 +1,11 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
-import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.CheckRouteNumberResponse;
-import biz.ugur.busroutebackend.transport.application.dto.BusRouteCreateRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.request.route.BusRouteCreateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.CheckRouteNumberResponse;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.application.usecase.route.*;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -59,16 +60,18 @@ public class AdminRouteController {
     public Mono<ResponseEntity<BusRouteResponse>> createRoute(@Valid @RequestBody BusRouteCreateRequest request) {
         log.info("Creating bus route: {}", request.getRouteNumber());
 
-        return createBusRouteUseCase.execute(request)
-                .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
+        return Mono.just(request.toCommand())
+                .as(createBusRouteUseCase::execute)
+                .map(this::toRouteResponseEntity)
                 .doOnSuccess(response -> {
                     if (response.getStatusCode().is2xxSuccessful()) {
                         log.info("Bus route created successfully: {}", request.getRouteNumber());
                     }
                 })
                 .doOnError(error -> log.error("Failed to create bus route: {}", request.getRouteNumber(), error));
-    }
 
+
+    }
 
 
     @PutMapping("/{routeId}")
@@ -114,4 +117,9 @@ public class AdminRouteController {
                 .map(ResponseEntity::ok);
 
     }
+
+    private ResponseEntity<BusRouteResponse> toRouteResponseEntity(RouteResult result) {
+        return ResponseEntity.ok().body(BusRouteResponse.fromResult(result));
+    }
+
 }
