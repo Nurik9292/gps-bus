@@ -110,6 +110,6 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteWi
     }
 
     private RouteGeometry createRouteGeometry(List<Double[]> coordinates) {
-        return RouteGeometry.fromCoordinates(coordinates);
+        return RouteGeometry.fromCoordinateArrays(coordinates);
     }
 }

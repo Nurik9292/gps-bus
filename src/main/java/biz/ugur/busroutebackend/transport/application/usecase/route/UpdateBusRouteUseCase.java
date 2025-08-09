@@ -97,6 +97,8 @@ public class UpdateBusRouteUseCase implements UseCase<UpdateBusRouteUseCase.Requ
                         new BigDecimal(busRoute.getTotalDistanceForwardMeters()).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
                 busRoute.getTotalDistanceBackwardMeters() != null ?
                         new BigDecimal(busRoute.getTotalDistanceBackwardMeters()).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
+                null,
+                null,
                 0L, // active vehicles count
                 busRoute.getCreatedAt(),
                 busRoute.getUpdatedAt()

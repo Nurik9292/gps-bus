@@ -45,41 +45,32 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
 
     private Mono<BusRoute> insert(BusRoute busRoute) {
         String sql = """
-            INSERT INTO bus_routes (id, 
-                                    route_number, 
-                                    route_name, 
-                                    name_tm, 
-                                    name_en, 
-                                    route_color,
-                                    city_id,
-                                    is_active, 
-                                    estimated_duration_minutes,
-                                    route_geometry_forward, 
-                                    route_geometry_backward,
-                                    total_distance_forward_meters, 
-                                    total_distance_backward_meters,
-                                    created_at, 
-                                    updated_at, 
-                                    version)
-            VALUES (:id, 
-                    :routeNumber, 
-                    :routeName, 
-                    :nameTm, 
-                    :nameEn, 
-                    :routeColor,
-                    :cityId,
-                    :isActive, 
-                    :estimatedDurationMinutes,
-                    :routeGeometryForward, 
-                    :routeGeometryBackward,
-                    :totalDistanceForwardMeters, 
-                    :totalDistanceBackwardMeters,
-                    :createdAt, 
-                    :updatedAt, 
-                    :version)
-            """;
+        INSERT INTO bus_routes (
+            id, route_number, route_name, name_tm, name_en, route_color, 
+            is_active, city_id, estimated_duration_minutes,
+            route_geometry_forward, route_geometry_backward,
+            geometry_forward, geometry_backward,
+            total_distance_forward_meters, total_distance_backward_meters,
+            created_at, updated_at
+        ) VALUES (
+            :id, :routeNumber, :routeName, :nameTm, :nameEn, :routeColor,
+            :isActive, :cityId, :estimatedDurationMinutes,
+            :routeGeometryForward, :routeGeometryBackward,
+            CASE 
+                WHEN :routeGeometryForward IS NOT NULL 
+                THEN ST_GeomFromText(:routeGeometryForward, 4326)::geometry
+                ELSE NULL
+            END,
+            CASE 
+                WHEN :routeGeometryBackward IS NOT NULL 
+                THEN ST_GeomFromText(:routeGeometryBackward, 4326)::geometry
+                ELSE NULL
+            END,
+            :totalDistanceForwardMeters, :totalDistanceBackwardMeters,
+            :createdAt, :updatedAt
+        )
+        """;
 
-        Instant now = Instant.now();
         return databaseClient.sql(sql)
                 .bind("id", busRoute.getId().getValue())
                 .bind("routeNumber", busRoute.getRouteNumber())
@@ -87,48 +78,54 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .bind("nameTm", busRoute.getNameTm())
                 .bind("nameEn", busRoute.getNameEn())
                 .bind("routeColor", busRoute.getRouteColor())
-                .bind("cityId", busRoute.getCityId())
                 .bind("isActive", busRoute.getIsActive())
+                .bind("cityId", busRoute.getCityId())
                 .bind("estimatedDurationMinutes", busRoute.getEstimatedDurationMinutes())
                 .bind("routeGeometryForward", busRoute.getRouteGeometryForward())
                 .bind("routeGeometryBackward", busRoute.getRouteGeometryBackward())
                 .bind("totalDistanceForwardMeters", busRoute.getTotalDistanceForwardMeters())
                 .bind("totalDistanceBackwardMeters", busRoute.getTotalDistanceBackwardMeters())
-                .bind("createdAt", now)
-                .bind("updatedAt", now)
-                .bind("version", 0L)
+                .bind("createdAt", busRoute.getCreatedAt())
+                .bind("updatedAt", busRoute.getUpdatedAt())
                 .then()
-                .thenReturn(busRoute);
+                .thenReturn(busRoute)
+                .doOnSuccess(route -> log.info("New route {} created successfully with geometry", route.getRouteNumber()))
+                .doOnError(error -> log.error("Failed to create route {}: {}", busRoute.getRouteNumber(), error.getMessage()));
     }
 
     private Mono<BusRoute> update(BusRoute busRoute) {
         String sql = """
-            UPDATE bus_routes 
-            SET route_number = :routeNumber, 
-                route_name = :routeName, 
-                name_tm = :nameTm,
-                name_en = :nameEn,
-                route_color = :routeColor, 
-                city_id = :cityId, 
-                is_active = :isActive, 
-                estimated_duration_minutes = :estimatedDurationMinutes,
-                route_geometry_forward = :routeGeometryForward, 
-                route_geometry_backward = :routeGeometryBackward,
-                total_distance_forward_meters = :totalDistanceForwardMeters, 
-                total_distance_backward_meters = :totalDistanceBackwardMeters,
-                updated_at = :updatedAt, 
-                version = version + 1
-            WHERE id = :id
-            """;
+        UPDATE bus_routes SET
+            route_name = :routeName,
+            name_tm = :nameTm,
+            name_en = :nameEn,
+            route_color = :routeColor,
+            is_active = :isActive,
+            estimated_duration_minutes = :estimatedDurationMinutes,
+            route_geometry_forward = :routeGeometryForward,
+            route_geometry_backward = :routeGeometryBackward,
+            geometry_forward = CASE 
+                WHEN :routeGeometryForward IS NOT NULL 
+                THEN ST_GeomFromText(:routeGeometryForward, 4326)::geometry
+                ELSE geometry_forward
+            END,
+            geometry_backward = CASE 
+                WHEN :routeGeometryBackward IS NOT NULL 
+                THEN ST_GeomFromText(:routeGeometryBackward, 4326)::geometry
+                ELSE geometry_backward
+            END,
+            total_distance_forward_meters = :totalDistanceForwardMeters,
+            total_distance_backward_meters = :totalDistanceBackwardMeters,
+            updated_at = :updatedAt
+        WHERE id = :id
+        """;
 
         return databaseClient.sql(sql)
                 .bind("id", busRoute.getId().getValue())
-                .bind("routeNumber", busRoute.getRouteNumber())
                 .bind("routeName", busRoute.getRouteName())
                 .bind("nameTm", busRoute.getNameTm())
                 .bind("nameEn", busRoute.getNameEn())
                 .bind("routeColor", busRoute.getRouteColor())
-                .bind("cityId", busRoute.getCityId())
                 .bind("isActive", busRoute.getIsActive())
                 .bind("estimatedDurationMinutes", busRoute.getEstimatedDurationMinutes())
                 .bind("routeGeometryForward", busRoute.getRouteGeometryForward())
@@ -137,7 +134,9 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .bind("totalDistanceBackwardMeters", busRoute.getTotalDistanceBackwardMeters())
                 .bind("updatedAt", Instant.now())
                 .then()
-                .thenReturn(busRoute);
+                .thenReturn(busRoute)
+                .doOnSuccess(route -> log.info("Route {} updated successfully with geometry", route.getRouteNumber()))
+                .doOnError(error -> log.error("Failed to update route {}: {}", busRoute.getRouteNumber(), error.getMessage()));
     }
 
     @Override

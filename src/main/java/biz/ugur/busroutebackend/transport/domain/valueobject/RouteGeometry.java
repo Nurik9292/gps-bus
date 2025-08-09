@@ -1,190 +1,183 @@
 package biz.ugur.busroutebackend.transport.domain.valueobject;
 
 import biz.ugur.busroutebackend.shared.domain.ValueObject;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Getter
 @EqualsAndHashCode(callSuper = false)
 public class RouteGeometry extends ValueObject {
 
-    private final List<RoutePoint> coordinates;
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private final List<RoutePoint> points;
 
-    public RouteGeometry(List<RoutePoint> coordinates) {
-        if (coordinates == null || coordinates.size() < 2) {
-            throw new IllegalArgumentException("Route must have at least 2 coordinate points");
+    public RouteGeometry(List<RoutePoint> points) {
+        if (points == null || points.isEmpty()) {
+            throw new IllegalArgumentException("Route geometry must contain at least one point");
         }
-        this.coordinates = new ArrayList<>(coordinates);
+
+        if (points.size() < 2) {
+            throw new IllegalArgumentException("Route geometry must contain at least 2 points for a valid LineString");
+        }
+
+        this.points = List.copyOf(points);
     }
 
-    public static RouteGeometry fromGeoJson(String geoJsonString) {
-        try {
-            JsonNode root = objectMapper.readTree(geoJsonString);
-
-            if (!"LineString".equals(root.get("type").asText())) {
-                throw new IllegalArgumentException("GeoJSON must be of type LineString");
-            }
-
-            JsonNode coordinatesNode = root.get("coordinates");
-            List<RoutePoint> points = new ArrayList<>();
-
-            for (JsonNode coordArray : coordinatesNode) {
-                double longitude = coordArray.get(0).asDouble();
-                double latitude = coordArray.get(1).asDouble();
-                points.add(new RoutePoint(latitude, longitude));
-            }
-
-            return new RouteGeometry(points);
-
-        } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("Invalid GeoJSON format", e);
+    public static RouteGeometry fromCoordinates(List<List<Double>> coordinates) {
+        if (coordinates == null || coordinates.isEmpty()) {
+            throw new IllegalArgumentException("Coordinates cannot be empty");
         }
-    }
 
-    public static RouteGeometry fromCoordinates(List<Double[]> coordinates) {
         List<RoutePoint> points = coordinates.stream()
-                .map(coord -> new RoutePoint(coord[0], coord[1]))
+                .map(coord -> {
+                    if (coord.size() != 2) {
+                        throw new IllegalArgumentException("Each coordinate must have exactly 2 values [longitude, latitude]");
+                    }
+                    return new RoutePoint(coord.get(0), coord.get(1));
+                })
                 .toList();
+
         return new RouteGeometry(points);
     }
 
-    public String toGeoJson() {
-        try {
-            StringBuilder sb = new StringBuilder();
-            sb.append("{\"type\":\"LineString\",\"coordinates\":[");
-
-            for (int i = 0; i < coordinates.size(); i++) {
-                RoutePoint point = coordinates.get(i);
-                sb.append(String.format("[%.6f,%.6f]", point.getLongitude(), point.getLatitude()));
-                if (i < coordinates.size() - 1) {
-                    sb.append(",");
-                }
-            }
-
-            sb.append("]}");
-            return sb.toString();
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to convert to GeoJSON", e);
+    public static RouteGeometry fromCoordinateArrays(List<Double[]> coordinates) {
+        if (coordinates == null || coordinates.isEmpty()) {
+            throw new IllegalArgumentException("Coordinates cannot be empty");
         }
+
+        List<RoutePoint> points = coordinates.stream()
+                .map(coord -> {
+                    if (coord.length != 2) {
+                        throw new IllegalArgumentException("Each coordinate must have exactly 2 values [longitude, latitude]");
+                    }
+                    return new RoutePoint(coord[0], coord[1]);
+                })
+                .toList();
+
+        return new RouteGeometry(points);
     }
 
-    public void validate() {
-        if (coordinates.isEmpty()) {
-            throw new IllegalArgumentException("Route geometry cannot be empty");
-        }
 
-        if (coordinates.size() < 2) {
-            throw new IllegalArgumentException("Route must have at least 2 points");
-        }
+    public String toWKT() {
+        String pointsWKT = points.stream()
+                .map(point -> String.format("%.6f %.6f", point.getLongitude(), point.getLatitude()))
+                .collect(Collectors.joining(", "));
 
-        for (RoutePoint point : coordinates) {
-            point.validate();
-        }
-
-        for (int i = 1; i < coordinates.size(); i++) {
-            RoutePoint prev = coordinates.get(i - 1);
-            RoutePoint curr = coordinates.get(i);
-
-            if (prev.distanceTo(curr) < 5.0) { // Минимум 5 метров между точками
-                throw new IllegalArgumentException("Route points are too close together at index " + i);
-            }
-        }
+        return String.format("LINESTRING(%s)", pointsWKT);
     }
 
-    public Integer calculateTotalDistance() {
+    public static RouteGeometry fromWKT(String wkt) {
+        if (wkt == null || wkt.trim().isEmpty()) {
+            throw new IllegalArgumentException("WKT string cannot be empty");
+        }
+
+        if (!wkt.startsWith("LINESTRING(") || !wkt.endsWith(")")) {
+            throw new IllegalArgumentException("Invalid WKT format. Expected LINESTRING(...)");
+        }
+
+
+        String coordinatesStr = wkt.substring(11, wkt.length() - 1);
+
+        if (coordinatesStr.trim().isEmpty()) {
+            throw new IllegalArgumentException("WKT contains no coordinates");
+        }
+
+        String[] pointStrings = coordinatesStr.split(",");
+        List<RoutePoint> points = Arrays.stream(pointStrings)
+                .map(String::trim)
+                .map(pointStr -> {
+                    String[] coords = pointStr.split("\\s+");
+                    if (coords.length != 2) {
+                        throw new IllegalArgumentException("Invalid point format in WKT: " + pointStr);
+                    }
+
+                    try {
+                        double longitude = Double.parseDouble(coords[0]);
+                        double latitude = Double.parseDouble(coords[1]);
+                        return new RoutePoint(longitude, latitude);
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException("Invalid coordinate values in WKT: " + pointStr, e);
+                    }
+                })
+                .toList();
+
+        return new RouteGeometry(points);
+    }
+
+    public List<List<Double>> toCoordinates() {
+        return points.stream()
+                .map(point -> List.of(point.getLongitude(), point.getLatitude()))
+                .toList();
+    }
+
+    public List<Double[]> toCoordinateArrays() {
+        return points.stream()
+                .map(point -> new Double[]{point.getLongitude(), point.getLatitude()})
+                .toList();
+    }
+
+    public double calculateDistanceMeters() {
+        if (points.size() < 2) {
+            return 0.0;
+        }
+
         double totalDistance = 0.0;
 
-        for (int i = 1; i < coordinates.size(); i++) {
-            RoutePoint prev = coordinates.get(i - 1);
-            RoutePoint curr = coordinates.get(i);
-            totalDistance += prev.distanceTo(curr);
+        for (int i = 1; i < points.size(); i++) {
+            RoutePoint prev = points.get(i - 1);
+            RoutePoint curr = points.get(i);
+            totalDistance += haversineDistance(prev, curr);
         }
 
-        return (int) Math.round(totalDistance);
+        return totalDistance;
     }
 
-    public RoutePoint getPointAtDistance(double distanceMeters) {
-        if (distanceMeters <= 0) {
-            return coordinates.getFirst();
+    private double haversineDistance(RoutePoint point1, RoutePoint point2) {
+        final double R = 6371000;
+
+        double lat1Rad = Math.toRadians(point1.getLatitude());
+        double lat2Rad = Math.toRadians(point2.getLatitude());
+        double deltaLatRad = Math.toRadians(point2.getLatitude() - point1.getLatitude());
+        double deltaLonRad = Math.toRadians(point2.getLongitude() - point1.getLongitude());
+
+        double a = Math.sin(deltaLatRad / 2) * Math.sin(deltaLatRad / 2) +
+                Math.cos(lat1Rad) * Math.cos(lat2Rad) *
+                        Math.sin(deltaLonRad / 2) * Math.sin(deltaLonRad / 2);
+
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c;
+    }
+
+    public int getPointCount() {
+        return points.size();
+    }
+
+    public boolean isValid() {
+        if (points.size() < 2) {
+            return false;
         }
 
-        double accumulatedDistance = 0.0;
 
-        for (int i = 1; i < coordinates.size(); i++) {
-            RoutePoint prev = coordinates.get(i - 1);
-            RoutePoint curr = coordinates.get(i);
-            double segmentDistance = prev.distanceTo(curr);
-
-            if (accumulatedDistance + segmentDistance >= distanceMeters) {
-                double ratio = (distanceMeters - accumulatedDistance) / segmentDistance;
-                return interpolatePoint(prev, curr, ratio);
-            }
-
-            accumulatedDistance += segmentDistance;
-        }
-
-        return coordinates.getLast();
+        return points.stream().allMatch(RoutePoint::isValid);
     }
 
-    public RoutePoint getNearestPointOnRoute(double latitude, double longitude) {
-        RoutePoint targetPoint = new RoutePoint(latitude, longitude);
-        RoutePoint nearestPoint = coordinates.getFirst();
-        double minDistance = nearestPoint.distanceTo(targetPoint);
-
-        for (int i = 1; i < coordinates.size(); i++) {
-            RoutePoint prev = coordinates.get(i - 1);
-            RoutePoint curr = coordinates.get(i);
-
-            RoutePoint nearestOnSegment = getNearestPointOnSegment(prev, curr, targetPoint);
-            double distance = nearestOnSegment.distanceTo(targetPoint);
-
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearestPoint = nearestOnSegment;
-            }
-        }
-
-        return nearestPoint;
+    public RouteGeometry reverse() {
+        List<RoutePoint> reversedPoints = points.reversed();
+        return new RouteGeometry(reversedPoints);
     }
 
-    public int getCoordinatesCount() {
-        return coordinates.size();
-    }
-
-
-    private RoutePoint interpolatePoint(RoutePoint p1, RoutePoint p2, double ratio) {
-        double lat = p1.getLatitude() + (p2.getLatitude() - p1.getLatitude()) * ratio;
-        double lon = p1.getLongitude() + (p2.getLongitude() - p1.getLongitude()) * ratio;
-        return new RoutePoint(lat, lon);
-    }
-
-    private RoutePoint getNearestPointOnSegment(RoutePoint p1, RoutePoint p2, RoutePoint target) {
-        double dx = p2.getLongitude() - p1.getLongitude();
-        double dy = p2.getLatitude() - p1.getLatitude();
-
-        if (dx == 0 && dy == 0) {
-            return p1;
-        }
-
-        double t = ((target.getLongitude() - p1.getLongitude()) * dx +
-                (target.getLatitude() - p1.getLatitude()) * dy) / (dx * dx + dy * dy);
-
-        t = Math.max(0, Math.min(1, t));
-
-        return interpolatePoint(p1, p2, t);
+    public boolean containsPoint(RoutePoint point, double toleranceMeters) {
+        return points.stream()
+                .anyMatch(p -> haversineDistance(p, point) <= toleranceMeters);
     }
 
     @Override
     public String toString() {
-        return String.format("RouteGeometry[%d points, %.1f km]",
-                coordinates.size(), calculateTotalDistance() / 1000.0);
+        return String.format("RouteGeometry{points=%d, distance=%.1fm}",
+                points.size(), calculateDistanceMeters());
     }
 }

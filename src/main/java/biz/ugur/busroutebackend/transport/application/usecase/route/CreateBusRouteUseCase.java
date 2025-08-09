@@ -8,7 +8,6 @@ import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
-import biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -33,20 +32,16 @@ public class CreateBusRouteUseCase implements UseCase<Mono<CreateRoute>, Mono<Ro
 
     @Override
     public Mono<RouteResult> execute(Mono<CreateRoute> command) {
-
-        return correlationService.executeWithCorrelation(command.flatMap(this::executeWithCorrelation), "admin");
-    }
-
-    private RouteGeometry createRouteGeometry(List<List<Double>> coordinates) {
-        List<RoutePoint> points = coordinates.stream()
-                .map(coord -> new biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint(coord.getFirst(), coord.get(1)))
-                .toList();
-        return new RouteGeometry(points);
+        return correlationService.executeWithCorrelation(
+                command.flatMap(this::executeWithCorrelation),
+                "admin"
+        );
     }
 
     private Mono<RouteResult> executeWithCorrelation(CreateRoute command) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-            log.info("Creating bus route: Correlation - {} RouteNumber - {}", correlationId, command.routeNumber());
+            log.info("Creating bus route: Correlation - {} RouteNumber - {}",
+                    correlationId, command.routeNumber());
 
             return createBusRoute(command)
                     .doOnNext(savedRoute -> {
@@ -55,33 +50,42 @@ public class CreateBusRouteUseCase implements UseCase<Mono<CreateRoute>, Mono<Ro
                     })
                     .map(RouteResult::fromDomain)
                     .doOnSuccess(response -> log.info("Bus route created successfully: {}", response.routeNumber()))
-                    .doOnError(error -> log.error("Failed to create bus route: {}",command.routeNumber(), error));
+                    .doOnError(error -> log.error("Failed to create bus route: {}", command.routeNumber(), error));
         });
     }
 
     private Mono<BusRoute> createBusRoute(CreateRoute command) {
-        BusRoute busRoute = new BusRoute(
-                command.routeNumber(),
-                command.routeName(),
-                command.nameTm(),
-                command.nameEn(),
-                command.routeColor(),
-                command.cityId(),
-                command.estimatedDurationMinutes()
-        );
 
-        if (command.forwardGeometry() != null && !command.forwardGeometry().isEmpty()) {
-            RouteGeometry forwardGeometry = createRouteGeometry(command.forwardGeometry());
-            RouteGeometry backwardGeometry = null;
+            BusRoute busRoute = new BusRoute(
+                    command.routeNumber(),
+                    command.routeName(),
+                    command.nameTm(),
+                    command.nameEn(),
+                    command.routeColor(),
+                    command.cityId(),
+                    command.estimatedDurationMinutes()
+            );
 
-            if (command.backwardGeometry() != null && !command.backwardGeometry().isEmpty()) {
-                backwardGeometry = createRouteGeometry(command.backwardGeometry());
+            if (hasValidGeometry(command)) {
+                processRouteGeometry(busRoute, command);
             }
 
-            busRoute.updateRouteGeometry(forwardGeometry, backwardGeometry);
-        }
+            return busRouteRepository.save(busRoute);
+    }
 
-        return busRouteRepository.save(busRoute);
+    private boolean hasValidGeometry(CreateRoute command) {
+        return (command.forwardGeometry() != null && !command.forwardGeometry().isEmpty()) ||
+                (command.backwardGeometry() != null && !command.backwardGeometry().isEmpty());
+    }
+
+    private void processRouteGeometry(BusRoute busRoute, CreateRoute command) {
+        RouteGeometry forwardGeometry = createRouteGeometry(command.forwardGeometry(), "forward");
+        RouteGeometry backwardGeometry = createRouteGeometry(command.backwardGeometry(), "backward");
+        busRoute.updateRouteGeometry(forwardGeometry, backwardGeometry);
+    }
+
+    private RouteGeometry createRouteGeometry(List<List<Double>> coordinates, String direction) {
+        return RouteGeometry.fromCoordinates(coordinates);
     }
 
 }

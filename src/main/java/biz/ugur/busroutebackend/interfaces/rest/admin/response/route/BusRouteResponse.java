@@ -1,11 +1,13 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.response.route;
 
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 @Data
 public class BusRouteResponse {
@@ -52,6 +54,12 @@ public class BusRouteResponse {
     @JsonProperty("active_vehicles_count")
     private Long activeVehiclesCount;
 
+    @JsonProperty("backword_geometry")
+    private List<RoutePoint> backwardGeometry;
+
+    @JsonProperty("forward_geometry")
+    private List<RoutePoint> forwardGeometry;
+
     @JsonProperty("created_at")
     private Instant createdAt;
 
@@ -71,6 +79,8 @@ public class BusRouteResponse {
                             Integer backwardStopsCount,
                             BigDecimal totalDistanceForwardKm,
                             BigDecimal totalDistanceBackwardKm,
+                            List<RoutePoint> backwardGeometry,
+                            List<RoutePoint> forwardGeometry,
                             Long activeVehiclesCount,
                             Instant createdAt,
                             Instant updatedAt) {
@@ -87,6 +97,8 @@ public class BusRouteResponse {
         this.backwardStopsCount = backwardStopsCount;
         this.totalDistanceForwardKm = totalDistanceForwardKm;
         this.totalDistanceBackwardKm = totalDistanceBackwardKm;
+        this.backwardGeometry = backwardGeometry;
+        this.forwardGeometry = forwardGeometry;
         this.activeVehiclesCount = activeVehiclesCount;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -107,6 +119,8 @@ public class BusRouteResponse {
                 result.backwardStopsCount(),
                 result.totalDistanceForwardKm(),
                 result.totalDistanceBackwardKm(),
+                result.backwardGeometry(),
+                result.forwardGeometry(),
                 result.activeVehiclesCount(),
                 result.createdAt(),
                 result.updatedAt()

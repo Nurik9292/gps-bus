@@ -1,10 +1,12 @@
 package biz.ugur.busroutebackend.transport.application.dto.route;
 
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.List;
 
 public record RouteResult(
         String id,
@@ -20,6 +22,8 @@ public record RouteResult(
         Integer backwardStopsCount,
         BigDecimal totalDistanceForwardKm,
         BigDecimal totalDistanceBackwardKm,
+        List<RoutePoint> backwardGeometry,
+        List<RoutePoint> forwardGeometry,
         Long activeVehiclesCount,
         Instant createdAt,
         Instant updatedAt
@@ -45,7 +49,9 @@ public record RouteResult(
                 busRoute.getTotalDistanceBackwardMeters() != null ?
                         new BigDecimal(busRoute.getTotalDistanceBackwardMeters())
                             .divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
-                0L, // active vehicles count - будет вычислено отдельно
+                busRoute.getBackwardGeometry().getPoints(),
+                busRoute.getForwardGeometry().getPoints(),
+                0L,
                 busRoute.getCreatedAt(),
                 busRoute.getUpdatedAt()
 

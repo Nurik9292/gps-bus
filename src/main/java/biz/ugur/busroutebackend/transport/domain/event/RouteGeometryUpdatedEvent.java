@@ -17,9 +17,14 @@ public class RouteGeometryUpdatedEvent implements DomainEvent {
     private final Integer backwardDistanceMeters;
     private final Instant eventOccurredAt;
 
-    public RouteGeometryUpdatedEvent(String routeId, String routeNumber, String routeName,
-                                     Integer forwardPointsCount, Integer forwardDistanceMeters,
-                                     Integer backwardPointsCount, Integer backwardDistanceMeters) {
+    public RouteGeometryUpdatedEvent(
+            String routeId,
+            String routeNumber,
+            String routeName,
+            Integer forwardPointsCount,
+            Integer forwardDistanceMeters,
+            Integer backwardPointsCount,
+            Integer backwardDistanceMeters) {
         this.routeId = routeId;
         this.routeNumber = routeNumber;
         this.routeName = routeName;
