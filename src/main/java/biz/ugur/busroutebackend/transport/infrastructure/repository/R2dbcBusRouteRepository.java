@@ -94,6 +94,8 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
     }
 
     private Mono<BusRoute> update(BusRoute busRoute) {
+        log.debug("Updating route rdb {}", busRoute);
+        log.debug("Updating route rdb2 created {}", busRoute.getCreatedAt());
         String sql = """
         UPDATE bus_routes SET
             route_name = :routeName,
@@ -101,6 +103,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
             name_en = :nameEn,
             route_color = :routeColor,
             is_active = :isActive,
+            city_id = :cityId,
             estimated_duration_minutes = :estimatedDurationMinutes,
             route_geometry_forward = :routeGeometryForward,
             route_geometry_backward = :routeGeometryBackward,
@@ -116,6 +119,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
             END,
             total_distance_forward_meters = :totalDistanceForwardMeters,
             total_distance_backward_meters = :totalDistanceBackwardMeters,
+            created_at = :createdAt,
             updated_at = :updatedAt
         WHERE id = :id
         """;
@@ -127,11 +131,13 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .bind("nameEn", busRoute.getNameEn())
                 .bind("routeColor", busRoute.getRouteColor())
                 .bind("isActive", busRoute.getIsActive())
+                .bind("cityId", busRoute.getCityId())
                 .bind("estimatedDurationMinutes", busRoute.getEstimatedDurationMinutes())
                 .bind("routeGeometryForward", busRoute.getRouteGeometryForward())
                 .bind("routeGeometryBackward", busRoute.getRouteGeometryBackward())
                 .bind("totalDistanceForwardMeters", busRoute.getTotalDistanceForwardMeters())
                 .bind("totalDistanceBackwardMeters", busRoute.getTotalDistanceBackwardMeters())
+                .bind("createdAt", busRoute.getCreatedAt())
                 .bind("updatedAt", Instant.now())
                 .then()
                 .thenReturn(busRoute)
@@ -434,7 +440,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
 
 
     private BusRoute mapRowToBusRoute(Row row, RowMetadata metadata) {
-        return new BusRoute(
+        BusRoute busRoute = new BusRoute(
                 BusRouteId.of(row.get("id", String.class)),
                 row.get("route_number", String.class),
                 row.get("route_name", String.class),
@@ -449,6 +455,11 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 row.get("total_distance_forward_meters", Integer.class),
                 row.get("total_distance_backward_meters", Integer.class)
         );
+
+        busRoute.setCreatedAt(row.get("created_at", Instant.class));
+        busRoute.setUpdatedAt(row.get("updated_at", Instant.class));
+
+        return  busRoute;
     }
 
     private RouteStopDTO mapToRouteStopDTO(Row row, RowMetadata metadata) {

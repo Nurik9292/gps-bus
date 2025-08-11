@@ -10,6 +10,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 @Getter
 @Table("bus_stops")
@@ -157,8 +158,14 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
         };
     }
 
-    public void updateInfo(String stopName, String nameEn, String nameTm,
-                           BigDecimal latitude, BigDecimal longitude, Boolean isActive, Boolean isMajorStop) {
+    public void updateInfo(String stopName,
+                           String nameEn,
+                           String nameTm,
+                           BigDecimal latitude,
+                           BigDecimal longitude,
+                           Boolean isActive,
+                           Boolean isMajorStop,
+                           String cityId) {
         boolean hasLocationChanged = !this.latitude.equals(latitude) || !this.longitude.equals(longitude);
         boolean hasNameChanged = !this.stopName.equals(stopName);
 
@@ -169,6 +176,7 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
         this.longitude = longitude;
         this.isActive = isActive != null ? isActive : true;
         this.isMajorStop = isMajorStop != null ? isMajorStop : false;
+        this.cityId = cityId;
 
         if (hasLocationChanged) {
             registerEvent(new BusStopLocationChangedEvent(this.id, latitude, longitude));
@@ -179,6 +187,17 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
         }
 
         registerEvent(new BusStopUpdatedEvent(this.id, stopName));
+    }
+
+
+    @Override
+    public Instant getCreatedAt() {
+        return super.getCreatedAt();
+    }
+
+    @Override
+    public Instant getUpdatedAt() {
+        return super.getUpdatedAt();
     }
 
 

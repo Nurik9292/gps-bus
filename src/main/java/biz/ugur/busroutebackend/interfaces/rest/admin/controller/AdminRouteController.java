@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
 import biz.ugur.busroutebackend.interfaces.rest.admin.request.route.BusRouteCreateRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.request.route.BusRouteUpdateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.CheckRouteNumberResponse;
@@ -9,7 +10,6 @@ import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.application.usecase.route.*;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -76,14 +76,14 @@ public class AdminRouteController {
 
     @PutMapping("/{routeId}")
     public Mono<ResponseEntity<BusRouteResponse>> updateRoute(@PathVariable String routeId,
-            @Valid @RequestBody BusRouteCreateRequest request) {
+            @Valid @RequestBody BusRouteUpdateRequest request) {
 
         log.info("Updating bus route: {}", routeId);
+        log.info("Updating bus route2: {}", request);
 
-        return updateBusRouteUseCase.execute(new UpdateBusRouteUseCase.Request(routeId, request))
-                .map(ResponseEntity::ok)
-                .onErrorReturn(IllegalArgumentException.class,
-                        ResponseEntity.notFound().build())
+        return Mono.just(request.toCommand(routeId))
+                .as(updateBusRouteUseCase::execute)
+                .map(this::toRouteResponseEntity)
                 .doOnSuccess(response -> {
                     if (response.getStatusCode().is2xxSuccessful()) {
                         log.info("Bus route updated successfully: {}", routeId);

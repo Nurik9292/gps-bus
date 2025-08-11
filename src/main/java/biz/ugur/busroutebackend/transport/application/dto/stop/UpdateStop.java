@@ -12,7 +12,8 @@ public record UpdateStop(
         BigDecimal latitude,
         BigDecimal longitude,
         Boolean isActive,
-        Boolean isMajorStop
+        Boolean isMajorStop,
+        String cityId
 ) {
     public static UpdateStop fromDomain(BusStop busStop) {
         return new  UpdateStop(
@@ -23,7 +24,8 @@ public record UpdateStop(
                 busStop.getLatitude(),
                 busStop.getLongitude(),
                 busStop.getIsActive(),
-                busStop.getIsMajorStop()
+                busStop.getIsMajorStop(),
+                busStop.getCityId()
         );
     }
 }

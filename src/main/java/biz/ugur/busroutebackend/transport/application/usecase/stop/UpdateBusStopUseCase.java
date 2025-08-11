@@ -60,7 +60,6 @@ public class UpdateBusStopUseCase implements UseCase<Mono<UpdateStop>, Mono<Stop
             if (coordinatesChanged(existingStop, command)) {
                 validateCoordinates(command.latitude(), command.longitude());
             }
-            System.out.println("Updating bus stop: " + command);
             existingStop.updateInfo(
                     command.stopName(),
                     command.nameEn(),
@@ -68,7 +67,8 @@ public class UpdateBusStopUseCase implements UseCase<Mono<UpdateStop>, Mono<Stop
                     command.latitude(),
                     command.longitude(),
                     command.isActive(),
-                    command.isMajorStop()
+                    command.isMajorStop(),
+                    "2"
             );
 
             return busStopRepository.save(existingStop)

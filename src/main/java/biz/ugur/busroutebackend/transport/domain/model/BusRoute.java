@@ -192,13 +192,20 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         }
     }
 
-    public void updateBasicInfo(String routeName, String nameTm, String nameEn,
-                                String routeColor, Integer estimatedDurationMinutes) {
+    public void updateBasicInfo(
+            String routeNumber,
+            String routeName,
+            String nameTm,
+            String nameEn,
+            String routeColor,
+            Integer estimatedDurationMinutes,
+            String cityId) {
         this.routeName = routeName;
         this.nameTm = nameTm;
         this.nameEn = nameEn;
         this.routeColor = routeColor;
         this.estimatedDurationMinutes = estimatedDurationMinutes;
+        this.cityId = cityId;
         this.updatedAt = Instant.now();
 
     }
@@ -252,22 +259,6 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         };
     }
 
-    public void updateRouteInfo(String routeName, String nameTm, String nameEn, Integer estimatedDuration) {
-        if (routeName != null && !routeName.trim().isEmpty()) {
-            this.routeName = routeName.trim();
-        }
-        if (nameTm != null && !nameTm.trim().isEmpty()) {
-            this.nameTm = nameTm.trim();
-        }
-
-        if (nameEn != null && !nameEn.trim().isEmpty()) {
-            this.nameEn = nameEn.trim();
-        }
-
-        if (estimatedDuration != null && estimatedDuration > 0) {
-            this.estimatedDurationMinutes = estimatedDuration;
-        }
-    }
 
     public int getTotalGeometryPoints() {
         int points = 0;
@@ -446,6 +437,17 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
                 totalDistanceBackwardMeters);
     }
 
+
+    @Override
+    public Instant getCreatedAt() {
+        return super.getCreatedAt();
+    }
+
+    @Override
+    public Instant getUpdatedAt() {
+        return super.getUpdatedAt();
+    }
+
     @Override
     public String toString() {
         return "BusRoute{" +
@@ -463,6 +465,8 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
                 ", totalDistanceForwardMeters=" + totalDistanceForwardMeters +
                 ", totalDistanceBackwardMeters=" + totalDistanceBackwardMeters +
                 ", busStops=" + busStops +
+                ", createdAt=" + createdAt +
+                ", updatedAt=" + updatedAt +
                 '}';
     }
 }
