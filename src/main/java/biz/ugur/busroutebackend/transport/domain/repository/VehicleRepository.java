@@ -37,4 +37,6 @@ public interface VehicleRepository {
     Mono<Void> deleteById(VehicleId vehicleId);
 
     Mono<Long> countActiveVehicles();
+;
+    Mono<Long> countActiveVehiclesRouteNumber(String routeNumber);
 }

@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.application.dto.route.UpdateRoute;
+import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
@@ -23,13 +24,16 @@ public class UpdateBusRouteUseCase implements UseCase<Mono<UpdateRoute>, Mono<Ro
     private final BusRouteRepository busRouteRepository;
     private final EventBus eventBus;
     private final CorrelationContextService correlationService;
+    private final RouteStopsService routeStopsService;
 
     public UpdateBusRouteUseCase(BusRouteRepository busRouteRepository,
                                  EventBus eventBus,
-                                 CorrelationContextService correlationService) {
+                                 CorrelationContextService correlationService,
+                                 RouteStopsService routeStopsService) {
         this.busRouteRepository = busRouteRepository;
         this.eventBus = eventBus;
         this.correlationService = correlationService;
+        this.routeStopsService = routeStopsService;
     }
 
     @Override
@@ -45,6 +49,14 @@ public class UpdateBusRouteUseCase implements UseCase<Mono<UpdateRoute>, Mono<Ro
             return busRouteRepository.findById(BusRouteId.of(command.routeId()))
                     .switchIfEmpty(Mono.error(new IllegalArgumentException("Bus route not found: " + command.routeId())))
                     .flatMap(exsistBusRoute -> updateBusRoute(exsistBusRoute, command))
+                    .flatMap(updatedRoute -> {
+                        log.info("Updating route stops for route: {}", updatedRoute.getId().getValue());
+                        return routeStopsService.updateRouteStops(
+                                updatedRoute.getId().getValue(),
+                                command.forwardStopIds(),
+                                command.backwardStopIds()
+                        ).thenReturn(updatedRoute);
+                    })
                     .doOnNext(savedRoute -> {
                         savedRoute.getUncommittedEvents().forEach(eventBus::publish);
                         savedRoute.markEventsAsCommitted();

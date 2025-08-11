@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.response.route;
 
+import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -60,6 +61,12 @@ public class BusRouteResponse {
     @JsonProperty("forward_geometry")
     private List<RoutePoint> forwardGeometry;
 
+    @JsonProperty("forward_stops_ids")
+    private List<String> forwardStopsIds;
+
+    @JsonProperty("backword_stops_ids")
+    private List<String> backwardStopsIds;
+
     @JsonProperty("created_at")
     private Instant createdAt;
 
@@ -81,6 +88,8 @@ public class BusRouteResponse {
                             BigDecimal totalDistanceBackwardKm,
                             List<RoutePoint> backwardGeometry,
                             List<RoutePoint> forwardGeometry,
+                            List<String> forwardStopsIds,
+                            List<String> backwardStopsIds,
                             Long activeVehiclesCount,
                             Instant createdAt,
                             Instant updatedAt) {
@@ -102,6 +111,8 @@ public class BusRouteResponse {
         this.activeVehiclesCount = activeVehiclesCount;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.forwardStopsIds = forwardStopsIds;
+        this.backwardStopsIds = backwardStopsIds;
     }
 
     public static BusRouteResponse fromResult(RouteResult result) {
@@ -121,6 +132,8 @@ public class BusRouteResponse {
                 result.totalDistanceBackwardKm(),
                 result.backwardGeometry(),
                 result.forwardGeometry(),
+                result.forwardStops().stream().map(RouteStopDTO::getStopId).toList(),
+                result.backwardStops().stream().map(RouteStopDTO::getStopId).toList(),
                 result.activeVehiclesCount(),
                 result.createdAt(),
                 result.updatedAt()

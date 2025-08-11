@@ -117,14 +117,12 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 .bind("isInMotion", vehicle.getIsInMotion())
                 .bind("lastPositionUpdate", vehicle.getLastPositionUpdate());
 
-        // FIX 3: Правильный binding для assignedRouteId в update
         if (vehicle.getAssignedRouteId() != null) {
             spec = spec.bind("assignedRouteId", vehicle.getAssignedRouteId().getValue());
         } else {
             spec = spec.bindNull("assignedRouteId", String.class);
         }
 
-        // FIX 4: Правильный binding для routeNumber в update
         if (vehicle.getRouteNumber() != null) {
             spec = spec.bind("routeNumber", vehicle.getRouteNumber());
         } else {
@@ -304,6 +302,17 @@ public class R2dbcVehicleRepository implements VehicleRepository {
         String sql = "SELECT COUNT(*) FROM vehicles WHERE is_active = true";
 
         return databaseClient.sql(sql)
+                .map(row -> row.get(0, Long.class))
+                .one()
+                .doOnNext(count -> log.debug("Active vehicles count: {}", count));
+    }
+
+    @Override
+    public Mono<Long> countActiveVehiclesRouteNumber(String routeNumber) {
+        String sql = "SELECT COUNT(*) FROM vehicles WHERE is_active = true AND route_number = :routeNumber";
+
+        return databaseClient.sql(sql)
+                .bind("routeNumber", routeNumber)
                 .map(row -> row.get(0, Long.class))
                 .one()
                 .doOnNext(count -> log.debug("Active vehicles count: {}", count));

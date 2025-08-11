@@ -65,8 +65,8 @@ public class BusRouteCreateRequest {
                 estimatedDurationMinutes,
                 isActive,
                 cityId,
-                forwardStopIds,
-                backwardStopIds,
+                forwardStopIds != null ? forwardStopIds : List.of(),
+                backwardStopIds != null ? backwardStopIds : List.of(),
                 forwardGeometry,
                 backwardGeometry
         );

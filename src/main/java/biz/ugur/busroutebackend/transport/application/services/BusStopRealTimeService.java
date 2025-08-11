@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.transport.domain.services;
+package biz.ugur.busroutebackend.transport.application.services;
 
 import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.BusStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.application.dto.NearbyStopArrivalsResponse;

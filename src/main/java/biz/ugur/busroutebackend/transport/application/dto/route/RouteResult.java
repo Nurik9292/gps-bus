@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.application.dto.route;
 
+import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint;
 
@@ -26,7 +27,9 @@ public record RouteResult(
         List<RoutePoint> forwardGeometry,
         Long activeVehiclesCount,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        List<RouteStopDTO> forwardStops,
+        List<RouteStopDTO> backwardStops
 ) {
 
     public static RouteResult fromDomain(BusRoute busRoute) {
@@ -40,21 +43,73 @@ public record RouteResult(
                 busRoute.getCityId(),
                 busRoute.getIsActive(),
                 busRoute.getEstimatedDurationMinutes(),
-                0,  // forward stops count - будет вычислено отдельно
-                0, // backward stops count - будет вычислено отдельно
+                0,
+                0,
                 busRoute.getTotalDistanceForwardMeters() != null ?
                         new BigDecimal(busRoute.getTotalDistanceForwardMeters())
                                 .divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
-
                 busRoute.getTotalDistanceBackwardMeters() != null ?
                         new BigDecimal(busRoute.getTotalDistanceBackwardMeters())
-                            .divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
-                busRoute.getBackwardGeometry().getPoints(),
-                busRoute.getForwardGeometry().getPoints(),
+                                .divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
+                busRoute.getBackwardGeometry() != null ? busRoute.getBackwardGeometry().getPoints() : List.of(),
+                busRoute.getForwardGeometry() != null ? busRoute.getForwardGeometry().getPoints() : List.of(),
                 0L,
                 busRoute.getCreatedAt(),
-                busRoute.getUpdatedAt()
+                busRoute.getUpdatedAt(),
+                List.of(),
+                List.of()
+        );
+    }
 
+    public static RouteResult fromDomainWithStops(
+            BusRoute busRoute,
+            List<RouteStopDTO> forwardStops,
+            List<RouteStopDTO> backwardStops,
+            Long activeVehiclesCount
+    ) {
+        return new RouteResult(
+                busRoute.getId().getValue(),
+                busRoute.getRouteNumber(),
+                busRoute.getRouteName(),
+                busRoute.getNameTm(),
+                busRoute.getNameEn(),
+                busRoute.getRouteColor(),
+                busRoute.getCityId(),
+                busRoute.getIsActive(),
+                busRoute.getEstimatedDurationMinutes(),
+                forwardStops.size(),
+                backwardStops.size(),
+                busRoute.getTotalDistanceForwardMeters() != null ?
+                        new BigDecimal(busRoute.getTotalDistanceForwardMeters())
+                                .divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
+                busRoute.getTotalDistanceBackwardMeters() != null ?
+                        new BigDecimal(busRoute.getTotalDistanceBackwardMeters())
+                                .divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP) : null,
+                busRoute.getBackwardGeometry() != null ? busRoute.getBackwardGeometry().getPoints() : List.of(),
+                busRoute.getForwardGeometry() != null ? busRoute.getForwardGeometry().getPoints() : List.of(),
+                activeVehiclesCount != null ? activeVehiclesCount : 0L,
+                busRoute.getCreatedAt(),
+                busRoute.getUpdatedAt(),
+                forwardStops,
+                backwardStops
+        );
+    }
+
+    public RouteResult withStops(List<RouteStopDTO> forwardStops, List<RouteStopDTO> backwardStops) {
+        return new RouteResult(
+                id, routeNumber, routeName, nameTm, nameEn, routeColor, cityId, isActive,
+                estimatedDurationMinutes, forwardStops.size(), backwardStops.size(),
+                totalDistanceForwardKm, totalDistanceBackwardKm, backwardGeometry, forwardGeometry,
+                activeVehiclesCount, createdAt, updatedAt, forwardStops, backwardStops
+        );
+    }
+
+    public RouteResult withActiveVehiclesCount(Long activeVehiclesCount) {
+        return new RouteResult(
+                id, routeNumber, routeName, nameTm, nameEn, routeColor, cityId, isActive,
+                estimatedDurationMinutes, forwardStopsCount, backwardStopsCount,
+                totalDistanceForwardKm, totalDistanceBackwardKm, backwardGeometry, forwardGeometry,
+                activeVehiclesCount, createdAt, updatedAt, forwardStops, backwardStops
         );
     }
 }

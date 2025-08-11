@@ -212,7 +212,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
     public Flux<RouteStopDTO> findRouteStopsOrdered(String routeNumber, Integer direction) {
         String sql = """
             SELECT bs.id, bs.stop_name, bs.stop_code, bs.latitude, bs.longitude,
-                   rs.stop_sequence, rs.estimated_travel_time_minutes, rs.distance_from_start_meters,
+                   rs.stop_sequence, rs.estimated_travel_time_minutes, rs.distance_from_start_meters, rs.direacton,
                    bs.is_major_stop
             FROM route_stops rs
             JOIN bus_stops bs ON rs.stop_id = bs.id
@@ -250,7 +250,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 ))
                 .one();
     }
-
 
 
     @Override
@@ -310,28 +309,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .map(row -> row.get(0, Long.class))
                 .one();
     }
-
-    private RouteInAreaResult mapToRouteInAreaResult(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
-        // Извлекаем координаты из PostGIS Point геометрии
-        Object intersectionPoint = row.get("intersection_point");
-        Double lat = null, lon = null;
-
-        // Здесь нужно парсить PostGIS Point, но для простоты используем заглушку
-        // В реальной реализации нужно использовать ST_X, ST_Y функции в SQL
-
-        return new RouteInAreaResult(
-                row.get("route_id", String.class),
-                row.get("route_number", String.class),
-                row.get("route_name", String.class),
-                row.get("route_color", String.class),
-                row.get("direction", Integer.class),
-                lat != null ? lat : 0.0, // Временная заглушка
-                lon != null ? lon : 0.0, // Временная заглушка
-                row.get("distance_to_center", Double.class),
-                0L // Пока без подсчета автобусов
-        );
-    }
-
 
 
     @Override
@@ -467,11 +444,12 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 row.get("id", String.class),
                 row.get("stop_name", String.class),
                 row.get("stop_code", String.class),
-                row.get("latitude", Double.class),
-                row.get("longitude", Double.class),
                 row.get("stop_sequence", Integer.class),
+                row.get("direction", Integer.class),
                 row.get("estimated_travel_time_minutes", Integer.class),
                 row.get("distance_from_start_meters", Integer.class),
+                row.get("latitude", BigDecimal.class),
+                row.get("longitude", BigDecimal.class),
                 row.get("is_major_stop", Boolean.class)
         );
     }
@@ -492,7 +470,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
         return dto;
     }
 
-    private RouteWithGeometryDTO mapToRouteWithGeometryDTO(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
+    private RouteWithGeometryDTO mapToRouteWithGeometryDTO(Row row, RowMetadata metadata) {
         RouteWithGeometryDTO dto = new RouteWithGeometryDTO();
         dto.setRouteId(row.get("id", String.class));
         dto.setRouteNumber(row.get("route_number", String.class));
@@ -524,6 +502,27 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
         }
 
         return dto;
+    }
+
+    private RouteInAreaResult mapToRouteInAreaResult(Row row, RowMetadata metadata) {
+        // Извлекаем координаты из PostGIS Point геометрии
+        Object intersectionPoint = row.get("intersection_point");
+        Double lat = null, lon = null;
+
+        // Здесь нужно парсить PostGIS Point, но для простоты используем заглушку
+        // В реальной реализации нужно использовать ST_X, ST_Y функции в SQL
+
+        return new RouteInAreaResult(
+                row.get("route_id", String.class),
+                row.get("route_number", String.class),
+                row.get("route_name", String.class),
+                row.get("route_color", String.class),
+                row.get("direction", Integer.class),
+                lat != null ? lat : 0.0, // Временная заглушка
+                lon != null ? lon : 0.0, // Временная заглушка
+                row.get("distance_to_center", Double.class),
+                0L // Пока без подсчета автобусов
+        );
     }
 
 

@@ -2,12 +2,11 @@ package biz.ugur.busroutebackend.transport.infrastructure.services;
 
 import biz.ugur.busroutebackend.admin.domain.exceptions.BusStopException;
 import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.BusStopArrivalsResponse;
-import biz.ugur.busroutebackend.shared.domain.DomainException;
 import biz.ugur.busroutebackend.transport.application.dto.BusArrivalInfo;
 import biz.ugur.busroutebackend.transport.application.dto.NearbyStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
-import biz.ugur.busroutebackend.transport.domain.services.BusStopRealTimeService;
+import biz.ugur.busroutebackend.transport.application.services.BusStopRealTimeService;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;

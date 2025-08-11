@@ -3,6 +3,8 @@ package biz.ugur.busroutebackend.transport.application.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 @Data
 public class RouteStopDTO {
 
@@ -16,13 +18,16 @@ public class RouteStopDTO {
     private String stopCode;
 
     @JsonProperty("latitude")
-    private Double latitude;
+    private BigDecimal latitude;
 
     @JsonProperty("longitude")
-    private Double longitude;
+    private BigDecimal longitude;
 
     @JsonProperty("stop_sequence")
     private Integer stopSequence;
+
+    @JsonProperty("direction")
+    private Integer direction;
 
     @JsonProperty("estimated_travel_time_minutes")
     private Integer estimatedTravelTimeMinutes;
@@ -33,20 +38,16 @@ public class RouteStopDTO {
     @JsonProperty("is_major_stop")
     private Boolean isMajorStop;
 
-    @JsonProperty("is_accessible")
-    private Boolean isAccessible;
-
-    @JsonProperty("cumulative_travel_time_minutes")
-    private Integer cumulativeTravelTimeMinutes;
 
     public RouteStopDTO(String stopId,
                         String stopName,
                         String stopCode,
-                        Double latitude,
-                        Double longitude,
                         Integer stopSequence,
+                        Integer direction,
                         Integer estimatedTravelTimeMinutes,
                         Integer distanceFromStartMeters,
+                        BigDecimal latitude,
+                        BigDecimal longitude,
                         Boolean isMajorStop) {
         this.stopId = stopId;
         this.stopName = stopName;
@@ -57,7 +58,7 @@ public class RouteStopDTO {
         this.estimatedTravelTimeMinutes = estimatedTravelTimeMinutes;
         this.distanceFromStartMeters = distanceFromStartMeters;
         this.isMajorStop = isMajorStop;
-        this.isAccessible = false;
+        this.direction = direction;
     }
 
     public String getDistanceFromStartText() {
