@@ -79,10 +79,8 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteWi
                 .doOnSuccess(result -> log.info("Route {} geometry updated successfully", routeNumber));
     }
 
-    // Приватные методы
 
     private Mono<RouteWithGeometryDTO> enrichWithStopsAndVehicles(RouteWithGeometryDTO route) {
-        // Получаем остановки в обоих направлениях
         Mono<RouteWithGeometryDTO> withForwardStops = getRouteStops(route.getRouteNumber(), 0)
                 .collectList()
                 .map(stops -> {

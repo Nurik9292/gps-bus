@@ -1,11 +1,9 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerCreateRequest;
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerListResponse;
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerResponse;
-import biz.ugur.busroutebackend.admin.application.usecase.CreateBannerUseCase;
-import biz.ugur.busroutebackend.admin.application.usecase.DeleteBannerUseCase;
-import biz.ugur.busroutebackend.admin.application.usecase.GetAllBannersUseCase;
+import biz.ugur.busroutebackend.admin.application.dto.banner.*;
+import biz.ugur.busroutebackend.admin.application.usecase.banner.*;
+import biz.ugur.busroutebackend.interfaces.rest.admin.response.stop.BusStopResponse;
+import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -21,21 +19,52 @@ public class AdminBannerController {
 
     private final CreateBannerUseCase createBannerUseCase;
     private final GetAllBannersUseCase getAllBannersUseCase;
+    private final GetBannersWithPaginationUseCase getBannersWithPaginationUseCase;
+    private final UpdateBannerUseCase updateBannerUseCase;
     private final DeleteBannerUseCase deleteBannerUseCase;
+    private final ToggleStatusBannerUseCase toggleStatusBannerUseCase;
 
     public AdminBannerController(CreateBannerUseCase createBannerUseCase,
                                  GetAllBannersUseCase getAllBannersUseCase,
-                                 DeleteBannerUseCase deleteBannerUseCase) {
+                                 GetBannersWithPaginationUseCase getBannersWithPaginationUseCase,
+                                 UpdateBannerUseCase updateBannerUseCase,
+                                 DeleteBannerUseCase deleteBannerUseCase,
+                                 ToggleStatusBannerUseCase toggleStatusBannerUseCase) {
         this.createBannerUseCase = createBannerUseCase;
         this.getAllBannersUseCase = getAllBannersUseCase;
+        this.getBannersWithPaginationUseCase = getBannersWithPaginationUseCase;
+        this.updateBannerUseCase = updateBannerUseCase;
         this.deleteBannerUseCase = deleteBannerUseCase;
+        this.toggleStatusBannerUseCase = toggleStatusBannerUseCase;
+    }
+
+    @GetMapping
+    public Mono<ResponseEntity<BannerListResponse>> getAllBanners(
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "display_order") String sort,
+            @RequestParam(defaultValue = "asc") String order) {
+
+        log.debug("Fetching banners (active: {}, page: {}, size: {}, sort: {}, order: {})",
+                active, page, size, sort, order);
+
+        if (page == 1 && size == 25 && "display_order".equals(sort) && "asc".equals(order)) {
+            return getAllBannersUseCase.execute(active)
+                    .map(ResponseEntity::ok);
+        }
+
+        BannerPaginationQuery query = new BannerPaginationQuery(page, size, sort, order, active);
+        return getBannersWithPaginationUseCase.execute(query)
+                .map(ResponseEntity::ok);
     }
 
     @PostMapping
     public Mono<ResponseEntity<BannerResponse>> createBanner(@Valid @RequestBody BannerCreateRequest request) {
         log.info("Creating banner: {}", request.getTitle());
 
-        return createBannerUseCase.execute(request)
+        return Mono.just(request)
+                .as(createBannerUseCase::execute)
                 .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
                 .doOnSuccess(response -> {
                     if (response.getStatusCode().is2xxSuccessful()) {
@@ -43,22 +72,29 @@ public class AdminBannerController {
                     }
                 })
                 .doOnError(error -> log.error("Failed to create banner: {}", request.getTitle(), error));
+
     }
 
-    @GetMapping
-    public Mono<ResponseEntity<BannerListResponse>> getAllBanners(
-            @RequestParam(required = false) Boolean active) {
+    @PutMapping("/{bannerId}")
+    public Mono<ResponseEntity<BannerResponse>> updateBanner(@PathVariable String bannerId,
+            @Valid @RequestBody BannerUpdateRequest request) {
 
-        log.debug("Fetching banners (active: {})", active);
+        log.info("Updating banner: {}", bannerId);
 
-        return getAllBannersUseCase.execute(active)
+        UpdateBannerUseCase.Request updateRequest = new UpdateBannerUseCase.Request(bannerId, request);
+
+        return Mono.just(updateRequest)
+                .as(updateBannerUseCase::execute)
                 .map(ResponseEntity::ok)
                 .doOnSuccess(response -> {
-                    if (response.getBody() != null) {
-                        log.debug("Retrieved {} banners", response.getBody().getTotalCount());
+                    if (response.getStatusCode().is2xxSuccessful()) {
+                        log.info("Banner updated successfully: {}", bannerId);
                     }
-                });
+                })
+                .doOnError(error -> log.error("Failed to update banner: {}", bannerId, error));
+
     }
+
 
     @DeleteMapping("/{bannerId}")
     public Mono<ResponseEntity<Void>> deleteBanner(@PathVariable String bannerId) {
@@ -74,5 +110,16 @@ public class AdminBannerController {
                     }
                 })
                 .doOnError(error -> log.error("Failed to delete banner: {}", bannerId, error));
+    }
+
+    @GetMapping("/toggle-status/{id}")
+    public Mono<ResponseEntity<BannerResponse>> toggleStatus(@PathVariable String id, @RequestParam Boolean active) {
+        return Mono.just(new ToggleStatusBannerUseCase.Request(id, active))
+                .as(toggleStatusBannerUseCase::execute)
+                .map(this::toBannerResponseEntity);
+    }
+
+    private ResponseEntity<BannerResponse> toBannerResponseEntity(BannerResponse result) {
+        return ResponseEntity.ok().body(result);
     }
 }

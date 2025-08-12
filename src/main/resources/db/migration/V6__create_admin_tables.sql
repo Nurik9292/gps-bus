@@ -26,6 +26,7 @@ CREATE TABLE admins (
 CREATE TABLE banners (
                          id VARCHAR(36) PRIMARY KEY,
                          title VARCHAR(200) NOT NULL,
+                         type VARCHAR(100)  DEFAULT 'main' NOT NULL,
                          image_url TEXT NOT NULL,
                          target_url TEXT,
                          is_active BOOLEAN DEFAULT true,
@@ -44,6 +45,8 @@ CREATE INDEX idx_admins_active ON admins(is_active);
 CREATE INDEX idx_banners_active ON banners(is_active);
 CREATE INDEX idx_banners_display_order ON banners(display_order);
 CREATE INDEX CONCURRENTLY idx_admins_has_avatar ON admins (id, username) WHERE avatar IS NOT NULL;
+CREATE INDEX idx_banners_type ON banners(type);
+CREATE INDEX idx_banners_type_active ON banners(type, is_active);
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cities_active_name ON cities (is_active, name);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cities_display_order ON cities (display_order, name);
@@ -52,3 +55,5 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cities_active_display_order_name ON 
 
 
 COMMENT ON COLUMN admins.avatar IS 'Base64 encoded avatar image or file path';
+
+COMMENT ON COLUMN banners.type IS 'Type of banner: main, sidebar, footer, popup, etc.';

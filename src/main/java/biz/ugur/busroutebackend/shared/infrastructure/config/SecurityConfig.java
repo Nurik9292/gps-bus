@@ -70,7 +70,9 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/trip-planning/**").permitAll()
                         .pathMatchers(HttpMethod.POST, "/trip-planning/**").permitAll()
                         .pathMatchers("/avatars/**").permitAll()
+                        .pathMatchers("/banners/**").permitAll()
                         .pathMatchers("/api/v1/avatars/**").permitAll()
+                        .pathMatchers("/api/v1/banners/**").permitAll()
 
                         .pathMatchers("/ws/**").permitAll()
 

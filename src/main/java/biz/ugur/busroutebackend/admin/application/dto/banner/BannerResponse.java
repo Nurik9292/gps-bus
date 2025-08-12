@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.admin.application.dto.banner;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Data
@@ -13,6 +14,9 @@ public class BannerResponse {
 
     @JsonProperty("title")
     private String title;
+
+    @JsonProperty("type")
+    private String type;
 
     @JsonProperty("image_url")
     private String imageUrl;
@@ -27,13 +31,14 @@ public class BannerResponse {
     private Integer displayOrder;
 
     @JsonProperty("start_date")
-    private LocalDateTime startDate;
+    private Instant startDate;
 
     @JsonProperty("end_date")
-    private LocalDateTime endDate;
+    private Instant endDate;
 
      public BannerResponse(String id,
                            String title,
+                           String type,
                            String imageUrl,
                            String targetUrl,
                            Boolean isActive,
@@ -42,11 +47,13 @@ public class BannerResponse {
                            LocalDateTime endDate) {
          this.id = id;
          this.title = title;
+         this.type = type;
          this.imageUrl = imageUrl;
          this.targetUrl = targetUrl;
          this.isActive = isActive;
          this.displayOrder = displayOrder;
-         this.startDate = startDate;
-         this.endDate = endDate;
+         this.startDate = Instant.ofEpochSecond(startDate.getSecond());
+         this.endDate = Instant.ofEpochSecond(endDate.getSecond());
+         ;
      }
 }

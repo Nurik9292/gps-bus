@@ -64,6 +64,24 @@ app:
   scheduling:
     enabled: false
 
+  storage:
+    avatars:
+      base-path: ${AVATAR_STORAGE_PATH:/home/developer/projects/bus/ugur_v4/app/data/avatars}
+      base-url: ${AVATAR_BASE_URL:http://localhost:8080/uploads/avatars}
+      max-size-mb: ${AVATAR_MAX_SIZE_MB:2}
+      create-thumbnails: ${AVATAR_CREATE_THUMBNAILS:false}
+      thumbnail-size: ${AVATAR_THUMBNAIL_SIZE:150}
+      jpeg-quality: ${AVATAR_JPEG_QUALITY:0.85}
+
+    banners:
+      base-path: /home/developer/projects/bus/ugur_v4/app/data/banners
+      base-url: http://localhost:8080/banners
+      max-size-mb: 10
+      create-thumbnails: false
+      thumbnail-width: 400
+      thumbnail-height: 200
+      jpeg-quality: 0.85
+
 business:
   vehicle-tracking:
     position-update-interval: 10
@@ -84,6 +102,8 @@ management:
   endpoint:
     health:
       show-details: always
+
+
 
 server:
   port: 8080

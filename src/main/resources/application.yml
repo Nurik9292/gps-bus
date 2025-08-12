@@ -95,12 +95,18 @@ app:
       base-path: ${AVATAR_STORAGE_PATH:/home/developer/projects/bus/ugur_v4/app/data/avatars}
       base-url: ${AVATAR_BASE_URL:http://localhost:8080/uploads/avatars}
       max-size-mb: ${AVATAR_MAX_SIZE_MB:2}
-      allowed-formats: jpg,jpeg,png,webp,gif
       create-thumbnails: ${AVATAR_CREATE_THUMBNAILS:false}
       thumbnail-size: ${AVATAR_THUMBNAIL_SIZE:150}
       jpeg-quality: ${AVATAR_JPEG_QUALITY:0.85}
-      cleanup-temp-files-days: ${AVATAR_CLEANUP_DAYS:7}
-      enable-metrics: ${AVATAR_ENABLE_METRICS:true}
+
+    banners:
+      base-path: /home/developer/projects/bus/ugur_v4/app/data/banners
+      base-url: http://localhost:8080/banners
+      max-size-mb: 10
+      create-thumbnails: false
+      thumbnail-width: 400
+      thumbnail-height: 200
+      jpeg-quality: 0.85
 
 
 external:

@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.admin.application.usecase;
+package biz.ugur.busroutebackend.admin.application.usecase.banner;
 
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerListResponse;
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerResponse;
@@ -40,6 +40,7 @@ public class GetAllBannersUseCase implements UseCase<Boolean, Mono<BannerListRes
         return new BannerResponse(
                 banner.getId().getValue(),
                 banner.getTitle(),
+                banner.getType(),
                 banner.getImageUrl(),
                 banner.getTargetUrl(),
                 banner.getIsActive(),

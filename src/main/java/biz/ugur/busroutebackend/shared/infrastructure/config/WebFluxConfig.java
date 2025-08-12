@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.shared.infrastructure.config;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.codec.ServerCodecConfigurer;
@@ -14,6 +15,13 @@ import org.springframework.web.reactive.config.WebFluxConfigurer;
 @Configuration
 @EnableWebFlux
 public class WebFluxConfig implements WebFluxConfigurer {
+
+    @Value("${app.storage.avatars.base-path:/app/data/avatars}")
+    private String avatarsBasePath;
+
+    @Value("${app.storage.banners.base-path:/app/data/banners}")
+    private String bannersBasePath;
+
 
     @Override
     public void configureHttpMessageCodecs(ServerCodecConfigurer configurer) {
@@ -32,6 +40,9 @@ public class WebFluxConfig implements WebFluxConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/avatars/**")
-                .addResourceLocations("file:/home/developer/projects/bus/ugur_v4/app/data/avatars/");
+                .addResourceLocations("file:" + avatarsBasePath + "/");
+
+        registry.addResourceHandler("/banners/**")
+                .addResourceLocations("file:" + bannersBasePath + "/");
     }
 }

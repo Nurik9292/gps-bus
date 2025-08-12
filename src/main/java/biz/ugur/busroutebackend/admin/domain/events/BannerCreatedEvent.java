@@ -10,12 +10,14 @@ public class BannerCreatedEvent implements DomainEvent {
 
     private final String bannerId;
     private final String title;
+    private final String type;
     private final String imageUrl;
     private final Instant eventOccurredAt;
 
-    public BannerCreatedEvent(String bannerId, String title, String imageUrl) {
+    public BannerCreatedEvent(String bannerId, String title, String type, String imageUrl) {
         this.bannerId = bannerId;
         this.title = title;
+        this.type = type;
         this.imageUrl = imageUrl;
         this.eventOccurredAt = Instant.now();
     }
@@ -24,6 +26,13 @@ public class BannerCreatedEvent implements DomainEvent {
     public Instant getOccurredAt() {
         return eventOccurredAt;
     }
+
+    @Override
+    public String getEventType() {
+        return "BannerCreated";
+    }
+
+
 
     @Override
     public String toString() {

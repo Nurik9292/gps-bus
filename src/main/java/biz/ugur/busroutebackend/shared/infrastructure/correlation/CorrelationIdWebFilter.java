@@ -30,9 +30,10 @@ public class CorrelationIdWebFilter implements WebFilter {
         String path = exchange.getRequest().getPath().value();
         String clientIp = getClientIp(exchange);
 
-        if (method.equalsIgnoreCase("HEAD") || path.contains("/avatars/")) {
+        if (method.equalsIgnoreCase("HEAD") || path.contains("/avatars/") || path.contains("/banners/")) {
             return chain.filter(exchange);
         }
+
 
         CorrelationId correlationId = correlationIdGenerator.extractOrGenerate(exchange);
         correlationIdGenerator.addToResponse(exchange, correlationId);

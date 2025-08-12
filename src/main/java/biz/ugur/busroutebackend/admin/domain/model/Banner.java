@@ -9,6 +9,9 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+import java.time.LocalDateTime;
+import java.util.Objects;
+
 @Getter
 @Table("banners")
 public class Banner extends AggregateRoot<Banner, BannerId> {
@@ -20,6 +23,10 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
     @Column("title")
     private String title;
 
+    @Column("type")
+    private String type;
+
+    @Setter
     @Column("image_url")
     private String imageUrl;
 
@@ -32,52 +39,71 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
     @Column("display_order")
     private Integer displayOrder;
 
+    @Setter
     @Column("start_date")
-    private java.time.LocalDateTime startDate;
+    private LocalDateTime startDate;
 
     @Setter
     @Column("end_date")
-    private java.time.LocalDateTime endDate;
+    private LocalDateTime endDate;
 
-    public Banner(String title, String imageUrl, String targetUrl, Integer displayOrder) {
+    public Banner() {}
+
+    public Banner(String title, String type, String imageUrl, String targetUrl, Integer displayOrder) {
         this.id = BannerId.generate();
         this.title = validateTitle(title);
+        this.type = type;
         this.imageUrl = validateImageUrl(imageUrl);
         this.targetUrl = targetUrl;
         this.isActive = true;
         this.displayOrder = displayOrder != null ? displayOrder : 0;
-        this.startDate = java.time.LocalDateTime.now();
+        this.startDate = LocalDateTime.now();
+        this.endDate = null;
 
         registerEvent(new BannerCreatedEvent(
                 this.id.getValue(),
                 this.title,
+                this.type,
                 this.imageUrl
         ));
     }
 
-    public Banner(BannerId id, String title, String imageUrl, String targetUrl,
-                  Boolean isActive, Integer displayOrder,
-                  java.time.LocalDateTime startDate, java.time.LocalDateTime endDate) {
-        this.id = id;
-        this.title = title;
-        this.imageUrl = imageUrl;
-        this.targetUrl = targetUrl;
-        this.isActive = isActive;
-        this.displayOrder = displayOrder;
-        this.startDate = startDate;
-        this.endDate = endDate;
+    public static Banner restore(BannerId id, String title, String type, String imageUrl, String targetUrl,
+                                 Boolean isActive, Integer displayOrder, LocalDateTime startDate, LocalDateTime endDate) {
+        Banner banner = new Banner();
+        banner.id = id;
+        banner.title = title;
+        banner.type = type;
+        banner.imageUrl = imageUrl;
+        banner.targetUrl = targetUrl;
+        banner.isActive = isActive;
+        banner.displayOrder = displayOrder;
+        banner.startDate = startDate;
+        banner.endDate = endDate;
+        return banner;
     }
 
-    public void updateBanner(String title, String targetUrl, Integer displayOrder) {
+    public void updateBanner(String title, String type, String imageUrl, String targetUrl, Integer displayOrder) {
         if (title != null && !title.trim().isEmpty()) {
             this.title = title.trim();
         }
+
+        if (type != null && !type.trim().isEmpty()) {
+            this.type = type.trim();
+        }
+
         if (targetUrl != null) {
             this.targetUrl = targetUrl.trim();
         }
+
+        if(imageUrl != null) {
+            this.imageUrl = imageUrl.trim();
+        }
+
         if (displayOrder != null) {
             this.displayOrder = displayOrder;
         }
+
     }
 
     public void deactivate() {
@@ -105,5 +131,42 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
             throw new IllegalArgumentException("Banner image URL cannot be null or empty");
         }
         return imageUrl.trim();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof Banner banner)) return false;
+        if (!super.equals(o)) return false;
+        return Objects.equals(id, banner.id) &&
+                Objects.equals(title, banner.title) &&
+                Objects.equals(type, banner.type) &&
+                Objects.equals(imageUrl, banner.imageUrl) &&
+                Objects.equals(targetUrl, banner.targetUrl) &&
+                Objects.equals(isActive, banner.isActive) &&
+                Objects.equals(displayOrder, banner.displayOrder) &&
+                Objects.equals(startDate, banner.startDate) &&
+                Objects.equals(endDate, banner.endDate);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), id, title, type, imageUrl, targetUrl, isActive, displayOrder, startDate, endDate);
+    }
+
+    @Override
+    public String toString() {
+        return "Banner{" +
+                "id=" + id +
+                ", title='" + title + '\'' +
+                ", type='" + type + '\'' +
+                ", imageUrl='" + imageUrl + '\'' +
+                ", targetUrl='" + targetUrl + '\'' +
+                ", isActive=" + isActive +
+                ", displayOrder=" + displayOrder +
+                ", startDate=" + startDate +
+                ", endDate=" + endDate +
+                ", createdAt=" + createdAt +
+                ", updatedAt=" + updatedAt +
+                '}';
     }
 }

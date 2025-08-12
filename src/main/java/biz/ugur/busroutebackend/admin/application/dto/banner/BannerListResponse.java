@@ -17,9 +17,19 @@ public class BannerListResponse {
     @JsonProperty("active_count")
     private Long activeCount;
 
+    @JsonProperty("has_more")
+    private Boolean hasMore;
+
     public BannerListResponse(List<BannerResponse> banners, Long activeCount) {
         this.banners = banners;
         this.totalCount = banners.size();
         this.activeCount = activeCount;
+    }
+
+    public BannerListResponse(List<BannerResponse> banners, Long activeCount,  Boolean hasMore) {
+        this.banners = banners;
+        this.activeCount = activeCount;
+        this.totalCount = banners.size();
+        this.hasMore = hasMore;
     }
 }
