@@ -11,6 +11,7 @@ import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;
 import biz.ugur.busroutebackend.routing.domain.volumeojects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.volumeojects.TripOption;
 import biz.ugur.busroutebackend.routing.domain.volumeojects.TripSearchCriteria;
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
@@ -33,6 +34,7 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
     private final FindRoutesWithTransfersUseCase findRoutesWithTransfersUseCase;
     private final TripPlanRepository tripPlanRepository;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
+    private final CorrelationContextService  correlationService;
 
     private static final Duration CACHE_TIMEOUT = Duration.ofSeconds(2);
     private static final Duration DIRECT_ROUTES_TIMEOUT = Duration.ofSeconds(8);
@@ -43,79 +45,87 @@ public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripS
     public SearchTripsUseCase(FindDirectRoutesUseCase findDirectRoutesUseCase,
                               FindRoutesWithTransfersUseCase findRoutesWithTransfersUseCase,
                               TripPlanRepository tripPlanRepository,
-                              ReactiveRedisTemplate<String, Object> redisTemplate) {
+                              ReactiveRedisTemplate<String, Object> redisTemplate,
+                              CorrelationContextService correlationService) {
         this.findDirectRoutesUseCase = findDirectRoutesUseCase;
         this.findRoutesWithTransfersUseCase = findRoutesWithTransfersUseCase;
         this.tripPlanRepository = tripPlanRepository;
         this.redisTemplate = redisTemplate;
+        this.correlationService = correlationService;
     }
 
     @Override
     public Mono<TripSearchResponse> execute(TripSearchRequest request) {
-        long startTime = System.currentTimeMillis();
-        String searchId = generateSearchId(request);
+        return correlationService.executeWithCorrelation(Mono.just(request).flatMap(this::executeWithCorrelation), "routing");
+    }
 
-        log.info("[{}] Trip search started: from ({},{}) to ({},{})",
-                searchId, request.getFrom().getLatitude(), request.getFrom().getLongitude(),
-                request.getTo().getLatitude(), request.getTo().getLongitude());
+    private Mono<TripSearchResponse> executeWithCorrelation(TripSearchRequest request)  {
+        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
+            long startTime = System.currentTimeMillis();
+            String searchId = generateSearchId(request);
 
-        if (!isValidRequest(request)) {
-            log.warn("[{}] Invalid search parameters", searchId);
-            return Mono.just(new TripSearchResponse("error", "Invalid search parameters", List.of()));
-        }
+            log.info("[{}] Trip search started: from ({},{}) to ({},{})",
+                    searchId, request.getFrom().getLatitude(), request.getFrom().getLongitude(),
+                    request.getTo().getLatitude(), request.getTo().getLongitude());
 
-        Location fromLocation = createLocationFromDTO(request.getFrom());
-        Location toLocation = createLocationFromDTO(request.getTo());
-        TripSearchCriteria searchCriteria = createSearchCriteria(request.getPreferences());
+            if (!isValidRequest(request)) {
+                log.warn("[{}] Invalid search parameters", searchId);
+                return Mono.just(new TripSearchResponse("error", "Invalid search parameters", List.of()));
+            }
 
-        String cacheKey = createCacheKey(fromLocation, toLocation, searchCriteria);
-        return checkCachedResults(cacheKey, searchId)
-                .timeout(CACHE_TIMEOUT)
-                .doOnError(error -> log.warn("[{}] Cache check failed: {}", searchId, error.getMessage()))
-                .onErrorResume(error -> Mono.empty())
-                .switchIfEmpty(
-                        performTripSearchWithDiagnostics(fromLocation, toLocation, searchCriteria, searchId, startTime)
-                                .flatMap(response -> {
-                                    if ("success".equals(response.getStatus()) &&
-                                            response.getTripOptions() != null &&
-                                            !response.getTripOptions().isEmpty()) {
+            Location fromLocation = createLocationFromDTO(request.getFrom());
+            Location toLocation = createLocationFromDTO(request.getTo());
+            TripSearchCriteria searchCriteria = createSearchCriteria(request.getPreferences());
 
-                                        return cacheSearchResult(cacheKey, response, searchId)
-                                                .timeout(Duration.ofSeconds(1))
-                                                .onErrorResume(error -> {
-                                                    log.warn("[{}] Failed to cache result: {}", searchId, error.getMessage());
-                                                    return Mono.just(false);
-                                                })
-                                                .thenReturn(response);
-                                    }
-                                    return Mono.just(response);
-                                })
-                )
-                .timeout(TOTAL_SEARCH_TIMEOUT)
-                .doOnSuccess(response -> {
-                    long duration = System.currentTimeMillis() - startTime;
-                    logSearchResult(request, response, searchId, duration);
-                })
-                .doOnError(error -> {
-                    long duration = System.currentTimeMillis() - startTime;
-                    log.error("[{}] Trip search failed after {}ms: {}", searchId, duration, error.getMessage(), error);
-                })
-                .onErrorResume(error -> {
-                    if (error instanceof TimeoutException) {
-                        log.error("[{}] Trip search timeout after {}ms", searchId, System.currentTimeMillis() - startTime);
+            String cacheKey = createCacheKey(fromLocation, toLocation, searchCriteria);
+            return checkCachedResults(cacheKey, searchId)
+                    .timeout(CACHE_TIMEOUT)
+                    .doOnError(error -> log.warn("[{}] Cache check failed: {}", searchId, error.getMessage()))
+                    .onErrorResume(error -> Mono.empty())
+                    .switchIfEmpty(
+                            performTripSearchWithDiagnostics(fromLocation, toLocation, searchCriteria, searchId, startTime)
+                                    .flatMap(response -> {
+                                        if ("success".equals(response.getStatus()) &&
+                                                response.getTripOptions() != null &&
+                                                !response.getTripOptions().isEmpty()) {
+
+                                            return cacheSearchResult(cacheKey, response, searchId)
+                                                    .timeout(Duration.ofSeconds(1))
+                                                    .onErrorResume(error -> {
+                                                        log.warn("[{}] Failed to cache result: {}", searchId, error.getMessage());
+                                                        return Mono.just(false);
+                                                    })
+                                                    .thenReturn(response);
+                                        }
+                                        return Mono.just(response);
+                                    })
+                    )
+                    .timeout(TOTAL_SEARCH_TIMEOUT)
+                    .doOnSuccess(response -> {
+                        long duration = System.currentTimeMillis() - startTime;
+                        logSearchResult(request, response, searchId, duration);
+                    })
+                    .doOnError(error -> {
+                        long duration = System.currentTimeMillis() - startTime;
+                        log.error("[{}] Trip search failed after {}ms: {}", searchId, duration, error.getMessage(), error);
+                    })
+                    .onErrorResume(error -> {
+                        if (error instanceof TimeoutException) {
+                            log.error("[{}] Trip search timeout after {}ms", searchId, System.currentTimeMillis() - startTime);
+                            return Mono.just(new TripSearchResponse(
+                                    "timeout",
+                                    "Search took too long, please try again",
+                                    List.of()
+                            ));
+                        }
+                        log.error("[{}] Trip search error: {}", searchId, error.getMessage());
                         return Mono.just(new TripSearchResponse(
-                                "timeout",
-                                "Search took too long, please try again",
+                                "error",
+                                "Search failed: " + error.getMessage(),
                                 List.of()
                         ));
-                    }
-                    log.error("[{}] Trip search error: {}", searchId, error.getMessage());
-                    return Mono.just(new TripSearchResponse(
-                            "error",
-                            "Search failed: " + error.getMessage(),
-                            List.of()
-                    ));
-                });
+                    });
+        });
     }
 
     private Mono<TripSearchResponse> performTripSearchWithDiagnostics(Location fromLocation, Location toLocation,

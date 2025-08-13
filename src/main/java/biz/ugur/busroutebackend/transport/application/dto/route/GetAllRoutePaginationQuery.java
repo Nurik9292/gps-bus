@@ -14,7 +14,7 @@ public record GetAllRoutePaginationQuery(
             String sortOrder,
             Boolean isActivate) {
         return new GetAllRoutePaginationQuery(
-                page != null ? page : 0,
+                page != null ? page : 1,
                 size != null ? size : 20,
                 sortField != null ? sortField : "routeNumber",
                 sortOrder != null ? sortOrder : "asc",
