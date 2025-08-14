@@ -21,21 +21,24 @@ import reactor.core.publisher.Mono;
 public class AdminRouteController {
 
     private final CreateBusRouteUseCase createBusRouteUseCase;
-    private final GetAllBusRoutesUseCase getAllBusRoutesUseCase;
+    private final GetAllBusRoutesWithPaginationUseCase getAllBusRoutesUseCase;
     private final UpdateBusRouteUseCase updateBusRouteUseCase;
     private final DeleteBusRouteUseCase deleteBusRouteUseCase;
     private final CheckRouteNumberUseCase checkRouteNumberUseCase;
+    private final GetAllBusRoutesUseCase getAllRoutesUseCase;
 
     public AdminRouteController(CreateBusRouteUseCase createBusRouteUseCase,
-                                GetAllBusRoutesUseCase getAllBusRoutesUseCase,
+                                GetAllBusRoutesWithPaginationUseCase getAllBusRoutesUseCase,
                                 UpdateBusRouteUseCase updateBusRouteUseCase,
                                 DeleteBusRouteUseCase deleteBusRouteUseCase,
-                                CheckRouteNumberUseCase checkRouteNumberUseCase) {
+                                CheckRouteNumberUseCase checkRouteNumberUseCase,
+                                GetAllBusRoutesUseCase getAllRoutesUseCase) {
         this.createBusRouteUseCase = createBusRouteUseCase;
         this.getAllBusRoutesUseCase = getAllBusRoutesUseCase;
         this.updateBusRouteUseCase = updateBusRouteUseCase;
         this.deleteBusRouteUseCase = deleteBusRouteUseCase;
         this.checkRouteNumberUseCase = checkRouteNumberUseCase;
+        this.getAllRoutesUseCase = getAllRoutesUseCase;
     }
 
 
@@ -53,6 +56,15 @@ public class AdminRouteController {
                 .as(getAllBusRoutesUseCase::execute)
                 .map(BusRouteListResponse::fromResult)
                 .doOnNext(response -> log.debug("Retrieved {} routes", response.getTotalCount()))
+                .map(ResponseEntity::ok);
+    }
+
+    @GetMapping("/all")
+    public Mono<ResponseEntity<BusRouteListResponse>> getAll() {
+        log.debug("Fetching all routes");
+        return getAllRoutesUseCase.execute(Mono.empty())
+                .map(BusRouteListResponse::fromResult)
+                .doOnNext(response -> log.debug("All {} routes", response.getTotalCount()))
                 .map(ResponseEntity::ok);
     }
 

@@ -15,10 +15,11 @@ spring:
     username: bus_route_user
     password: bus_route_pass
     pool:
-      initial-size: 2
-      max-size: 5
+      initial-size: 5
+      max-size: 20
       max-idle-time: 30m
       max-acquire-time: 60s
+      max-life-time: 60m
       max-create-connection-time: 60s
       validation-query: SELECT 1
 
@@ -45,16 +46,16 @@ logging:
 external:
   api:
     gps:
-      base-url: http://localhost:8082/mock/gps
-      token: mock-token
+      base-url: https://gps.tugdk.gov.tm # http://localhost:8082/mock/gps
+      token: RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0  #mock-token
       timeout: 5s
       retry:
         max-attempts: 2
         initial-interval: 1s
     bus-info:
-      base-url: http://localhost:8082/mock/bus-info
-      username: test
-      password: test
+      base-url: https://edu.ayauk.gov.tm #http://localhost:8082/mock/bus-info
+      username: turkmenportal #test
+      password: turkmenportal #test
       timeout: 5s
       retry:
         max-attempts: 2

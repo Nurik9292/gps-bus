@@ -68,7 +68,7 @@ spring:
 
 app:
   scheduling:
-    enabled: false
+    enabled: true
 
   admin:
     default-username: ${ADMIN_DEFAULT_USERNAME:admin}
@@ -112,7 +112,7 @@ app:
 external:
   api:
     gps:
-      base-url:  https://gps.tugdk.gov.tm #http://disabled-api.local
+      base-url: https://gps.tugdk.gov.tm  #http://disabled-api.local
       token: ${GPS_API_TOKEN:RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0}
       timeout: 10s
       retry:

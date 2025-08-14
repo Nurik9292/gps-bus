@@ -7,7 +7,12 @@ services:
       POSTGRES_USER: bus_route_user
       POSTGRES_PASSWORD: bus_route_pass
       PGDATA: /var/lib/postgresql/data/pgdata
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --max-connections=200"
+    command: >
+      postgres 
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
     ports:
       - "5432:5432"
     volumes:
