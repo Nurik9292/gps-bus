@@ -22,10 +22,10 @@ public class RouteSearchResultDTO {
     private Long activeVehiclesCount;
 
     @JsonProperty("match_type")
-    private String matchType; // "number", "name", "both"
+    private String matchType;
 
     @JsonProperty("relevance_score")
-    private Double relevanceScore; // Оценка релевантности поиска
+    private Double relevanceScore;
 
     public RouteSearchResultDTO(String routeId, String routeNumber, String routeName,
                                 String routeColor, Long activeVehiclesCount) {

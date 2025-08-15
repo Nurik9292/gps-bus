@@ -3,8 +3,9 @@ package biz.ugur.busroutebackend.interfaces.rest.transport.controller;
 import biz.ugur.busroutebackend.interfaces.rest.transport.dto.request.RouteGeometryRequest;
 import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.RouteGeometryUpdateResponse;
 import biz.ugur.busroutebackend.transport.application.dto.*;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.application.usecase.FindRoutesInAreaUseCase;
-import biz.ugur.busroutebackend.transport.application.usecase.GetRouteWithGeometryUseCase;
+import biz.ugur.busroutebackend.transport.application.usecase.route.GetRouteWithGeometryUseCase;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -33,7 +34,7 @@ public class RouteController {
 
 
     @GetMapping("/{routeNumber}/geometry")
-    public Mono<ResponseEntity<RouteWithGeometryDTO>> getRouteGeometry(
+    public Mono<ResponseEntity<RouteResult>> getRouteGeometry(
             @PathVariable String routeNumber) {
 
         log.debug("Getting route geometry for route: {}", routeNumber);
@@ -43,10 +44,10 @@ public class RouteController {
                 .defaultIfEmpty(ResponseEntity.notFound().build())
                 .doOnNext(response -> {
                     if (response.getBody() != null) {
-                        RouteWithGeometryDTO route = response.getBody();
+                        RouteResult route = response.getBody();
                         log.info("Route geometry retrieved for route {}: forward={}km, backward={}km, {} stops",
-                                routeNumber, route.getTotalDistanceForwardKm(),
-                                route.getTotalDistanceBackwardKm(),
+                                routeNumber, route.totalDistanceForwardKm(),
+                                route.totalDistanceBackwardKm(),
                                 route.getForwardStopsCount() + route.getBackwardStopsCount());
                     }
                 });
@@ -165,11 +166,11 @@ public class RouteController {
         return getRouteWithGeometryUseCase.getAllActiveRoutes()
                 .map(route -> {
                     RouteSearchResultDTO result = new RouteSearchResultDTO(
-                            route.getRouteId(),
-                            route.getRouteNumber(),
-                            route.getRouteName(),
-                            route.getRouteColor(),
-                            route.getActiveVehiclesCount()
+                            route.id(),
+                            route.routeNumber(),
+                            route.routeName(),
+                            route.routeColor(),
+                            route.activeVehiclesCount()
                     );
                     result.calculateRelevance(query);
                     return result;
@@ -181,40 +182,40 @@ public class RouteController {
     }
 
 
-    private RouteBasicInfoDTO toBasicInfo(RouteWithGeometryDTO route) {
+    private RouteBasicInfoDTO toBasicInfo(RouteResult route) {
         return new RouteBasicInfoDTO(
-                route.getRouteNumber(),
-                route.getRouteName(),
-                route.getRouteColor(),
-                route.getTotalDistanceForwardKm(),
-                route.getActiveVehiclesCount()
+                route.routeNumber(),
+                route.routeName(),
+                route.routeColor(),
+                route.totalDistanceForwardKm(),
+                route.activeVehiclesCount()
         );
     }
 
-    private RouteInfoDTO toRouteInfo(RouteWithGeometryDTO route) {
+    private RouteInfoDTO toRouteInfo(RouteResult route) {
         return new RouteInfoDTO(
-                route.getRouteId(),
-                route.getRouteNumber(),
-                route.getRouteName(),
-                route.getRouteColor(),
-                route.getTotalDistanceForwardKm(),
-                route.getTotalDistanceBackwardKm(),
-                route.getActiveVehiclesCount(),
+                route.id(),
+                route.routeNumber(),
+                route.routeName(),
+                route.routeColor(),
+                route.totalDistanceForwardKm(),
+                route.totalDistanceBackwardKm(),
+                route.activeVehiclesCount(),
                 route.getForwardStopsCount(),
                 route.getBackwardStopsCount()
         );
     }
 
-    private RouteStatisticsDTO toRouteStatistics(RouteWithGeometryDTO route) {
+    private RouteStatisticsDTO toRouteStatistics(RouteResult route) {
         return new RouteStatisticsDTO(
-                route.getRouteId(),
-                route.getRouteNumber(),
-                route.getActiveVehiclesCount(),
-                route.getVehiclesInMotion(),
+                route.id(),
+                route.routeNumber(),
+                route.activeVehiclesCount(),
+                route.activeVehiclesCount(),
                 route.getForwardStopsCount(),
                 route.getBackwardStopsCount(),
-                route.getTotalDistanceForwardKm(),
-                route.getTotalDistanceBackwardKm()
+                route.totalDistanceForwardKm(),
+                route.totalDistanceBackwardKm()
         );
     }
 }

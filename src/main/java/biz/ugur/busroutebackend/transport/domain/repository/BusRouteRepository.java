@@ -1,9 +1,10 @@
 package biz.ugur.busroutebackend.transport.domain.repository;
 
-import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
-import biz.ugur.busroutebackend.transport.application.dto.RouteWithGeometryDTO;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteInAreaInfo;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteVehicleStatistics;
 import org.springframework.data.domain.Pageable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -17,17 +18,9 @@ public interface BusRouteRepository {
 
     Mono<BusRoute> findByRouteNumber(String routeNumber);
 
-    Mono<RouteWithGeometryDTO> findByRouteNumberWithGeometry(String routeNumber);
-
-    Flux<RouteWithGeometryDTO> findAllActiveWithBasicInfo();
-
-    Flux<RouteStopDTO> findRouteStopsOrdered(String routeNumber, Integer direction);
-
-    Flux<RouteInAreaResult> findRoutesIntersectingArea(Double latitude, Double longitude, Integer radiusMeters);
-
-    Mono<RouteVehicleStatistics> getRouteVehicleStatistics(String routeId);
-
     Flux<BusRoute> findActiveRoutes();
+
+    Flux<BusRoute> getRoutesWithPagination(Pageable pageable);
 
     Mono<Boolean> existsByRouteNumber(String routeNumber);
 
@@ -35,16 +28,16 @@ public interface BusRouteRepository {
 
     Mono<Long> countActiveRoutes();
 
-    Flux<BusRoute> getRoutesWithPagination(Pageable pageable);
 
-    Flux<RouteWithGeometryDTO> searchRoutesByNameOrNumber(String query, Integer limit);
 
-    record RouteInAreaResult(String routeId, String routeNumber, String routeName, String routeColor, Integer direction,
-                             Double nearestPointLat, Double nearestPointLon, Double distanceToCenterMeters,
-                             Long activeVehiclesCount) {
-    }
 
-    record RouteVehicleStatistics(Long activeVehiclesCount, Long vehiclesInMotionCount,
-                                  Long vehiclesWithRecentPositionCount) {
-    }
+    Flux<RouteStopInfo> getRouteStopsInfo(BusRouteId routeId);
+
+    Flux<RouteStopInfo> getRouteStopsInfoByNumber(String routeNumber, Integer direction);
+
+    Mono<RouteVehicleStatistics> getRouteVehicleStatistics(BusRouteId routeId);
+
+    Flux<BusRoute> searchRoutesByNameOrNumber(String query, Integer limit);
+
+    Flux<RouteInAreaInfo> findRoutesIntersectingArea(Double latitude, Double longitude, Integer radiusMeters);
 }

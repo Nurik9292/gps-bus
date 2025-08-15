@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.transport.application.dto.RouteInAreaDTO;
 import biz.ugur.busroutebackend.transport.application.dto.RoutePointDTO;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteInAreaInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -29,25 +30,24 @@ public class FindRoutesInAreaUseCase implements UseCase<FindRoutesInAreaUseCase.
                 .doOnComplete(() -> log.debug("Routes in area search completed"));
     }
 
-    private RouteInAreaDTO mapToDTO(BusRouteRepository.RouteInAreaResult result) {
+    private RouteInAreaDTO mapToDTO(RouteInAreaInfo result) {
         RoutePointDTO nearestPoint = new RoutePointDTO(
-                result.nearestPointLat(),
-                result.nearestPointLat()
+                result.getNearestPointLatitude(),
+                result.getNearestPointLongitude()
         );
 
         return new RouteInAreaDTO(
-                result.routeId(),
-                result.routeNumber(),
-                result.routeName(),
-                result.routeColor(),
-                result.direction(),
+                result.getRouteId(),
+                result.getRouteNumber(),
+                result.getRouteName(),
+                result.getRouteColor(),
+                result.getDirection(),
                 nearestPoint,
-                result.distanceToCenterMeters(),
-                result.activeVehiclesCount()
+                result.getDistanceToCenterMeters(),
+               0L
         );
     }
 
-    // Request DTO
     public static class Request {
         public final Double latitude;
         public final Double longitude;

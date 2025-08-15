@@ -112,4 +112,36 @@ public record RouteResult(
                 activeVehiclesCount, createdAt, updatedAt, forwardStops, backwardStops
         );
     }
+
+    public int getForwardStopsCount() {
+        return forwardStopsCount != null ? forwardStopsCount :
+                (forwardStops != null ? forwardStops.size() : 0);
+    }
+
+
+    public int getBackwardStopsCount() {
+        return backwardStopsCount != null ? backwardStopsCount :
+                (backwardStops != null ? backwardStops.size() : 0);
+    }
+
+
+    public boolean hasCompleteGeometry() {
+        return forwardGeometry != null && !forwardGeometry.isEmpty() &&
+                backwardGeometry != null && !backwardGeometry.isEmpty();
+    }
+
+
+
+    public boolean isActiveRoute() {
+        return Boolean.TRUE.equals(isActive);
+    }
+
+
+    private static BigDecimal convertMetersToKm(Integer meters) {
+        if (meters == null) {
+            return null;
+        }
+        return new BigDecimal(meters)
+                .divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP);
+    }
 }

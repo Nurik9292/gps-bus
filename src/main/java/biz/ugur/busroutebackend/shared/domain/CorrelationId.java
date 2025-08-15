@@ -6,7 +6,6 @@ import java.util.regex.Pattern;
 public record CorrelationId(String value) {
 
     private static final Pattern VALID_PATTERN = Pattern.compile("^[A-Z]{2,10}-[0-9a-f]{8}(-[0-9a-f]{4})?$");
-    private static final Pattern LEGACY_PATTERN = Pattern.compile("^[A-Z]{2,10}$");
     private static final String DEFAULT_PREFIX = "REQ";
 
     public CorrelationId {
@@ -42,6 +41,12 @@ public record CorrelationId(String value) {
     public static CorrelationId forRoute() {
         return generate("ROUTE");
     }
+
+    public static CorrelationId forMobile() {
+        return generate("MOBILE");
+    }
+
+
 
     public static CorrelationId fromString(String value) {
         return new CorrelationId(value);

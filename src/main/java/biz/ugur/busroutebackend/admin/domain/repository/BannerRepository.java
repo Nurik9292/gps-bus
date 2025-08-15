@@ -28,4 +28,8 @@ public interface BannerRepository {
     Mono<Long> countActiveBanners();
 
     Mono<Long> countTotalBanners();
+
+    Flux<Banner> findByTypeAndActive(String type);
+
+    Mono<Long> countByType(String type);
 }

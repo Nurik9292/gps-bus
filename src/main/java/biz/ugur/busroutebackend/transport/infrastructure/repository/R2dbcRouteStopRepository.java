@@ -1,8 +1,8 @@
 package biz.ugur.busroutebackend.transport.infrastructure.repository;
 
+import biz.ugur.busroutebackend.transport.domain.repository.RouteStopRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopDetail;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
-import biz.ugur.busroutebackend.transport.domain.repository.RouteStopRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopsData;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopsStatistics;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -65,7 +65,7 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
         String sql = """
             SELECT rs.stop_id, rs.stop_sequence, rs.direction, 
                    rs.estimated_travel_time_minutes, rs.distance_from_start_meters,
-                   bs.stop_name, bs.latitude, bs.longitude
+                   bs.stop_name, bs.latitude, bs.longitude, bs.stop_code, bs.is_major_stop
             FROM route_stops rs
             JOIN bus_stops bs ON rs.stop_id = bs.id
             WHERE rs.route_id = :routeId AND rs.direction = :direction
@@ -78,12 +78,14 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
                 .map(row -> new RouteStopInfo(
                         row.get("stop_id", String.class),
                         row.get("stop_name", String.class),
+                        row.get("stop_code", String.class),
                         row.get("stop_sequence", Integer.class),
                         row.get("direction", Integer.class),
                         row.get("estimated_travel_time_minutes", Integer.class),
                         row.get("distance_from_start_meters", Integer.class),
-                        row.get("latitude", Double.class),
-                        row.get("longitude", Double.class)
+                        row.get("latitude", BigDecimal.class),
+                        row.get("longitude", BigDecimal.class),
+                        row.get("is_major_stop", Boolean.class)
                 ))
                 .all();
     }

@@ -28,6 +28,7 @@ public class CorrelationContextService {
             case "admin" -> CorrelationId.forAdmin();
             case "transport" -> CorrelationId.forTransport();
             case "routing" -> CorrelationId.forRouting();
+            case "mobile" -> CorrelationId.forMobile();
             default -> CorrelationId.generate();
         };
 

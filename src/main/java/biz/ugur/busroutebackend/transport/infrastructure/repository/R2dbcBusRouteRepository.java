@@ -5,6 +5,9 @@ import biz.ugur.busroutebackend.transport.application.dto.RouteWithGeometryDTO;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteInAreaInfo;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteVehicleStatistics;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
@@ -146,39 +149,13 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
     }
 
     @Override
-    public Mono<RouteWithGeometryDTO> findByRouteNumberWithGeometry(String routeNumber) {
-        String sql = """
-            SELECT id, route_number, route_name, route_color, 
-                   route_geometry_forward, route_geometry_backward,
-                   total_distance_forward_meters, total_distance_backward_meters
-            FROM bus_routes 
-            WHERE route_number = :routeNumber AND is_active = true
-            """;
+    public Mono<BusRoute> findById(BusRouteId routeId) {
+        String sql = "SELECT * FROM bus_routes WHERE id = :id";
 
         return databaseClient.sql(sql)
-                .bind("routeNumber", routeNumber)
-                .map(this::mapToRouteWithGeometryDTO)
-                .one()
-                .doOnNext(route -> log.debug("Found route with geometry: {}", routeNumber));
-    }
-
-    @Override
-    public Flux<RouteWithGeometryDTO> findAllActiveWithBasicInfo() {
-        String sql = """
-            SELECT br.id, br.route_number, br.route_name, br.route_color,
-                   br.total_distance_forward_meters, br.total_distance_backward_meters,
-                   COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles_count
-            FROM bus_routes br
-            LEFT JOIN vehicles v ON br.id = v.assigned_route_id
-            WHERE br.is_active = true
-            GROUP BY br.id, br.route_number, br.route_name, br.route_color,
-                     br.total_distance_forward_meters, br.total_distance_backward_meters
-            ORDER BY br.route_number
-            """;
-
-        return databaseClient.sql(sql)
-                .map(this::mapToBasicRouteDTO)
-                .all();
+                .bind("id", routeId.getValue())
+                .map(this::mapRowToBusRoute)
+                .one();
     }
 
     @Override
@@ -209,60 +186,6 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
     }
 
     @Override
-    public Flux<RouteStopDTO> findRouteStopsOrdered(String routeNumber, Integer direction) {
-        String sql = """
-            SELECT bs.id, bs.stop_name, bs.stop_code, bs.latitude, bs.longitude,
-                   rs.stop_sequence, rs.estimated_travel_time_minutes, rs.distance_from_start_meters, rs.direacton,
-                   bs.is_major_stop
-            FROM route_stops rs
-            JOIN bus_stops bs ON rs.stop_id = bs.id
-            JOIN bus_routes br ON rs.route_id = br.id
-            WHERE br.route_number = :routeNumber 
-            AND rs.direction = :direction
-            AND bs.is_active = true AND br.is_active = true
-            ORDER BY rs.stop_sequence
-            """;
-
-        return databaseClient.sql(sql)
-                .bind("routeNumber", routeNumber)
-                .bind("direction", direction)
-                .map(this::mapToRouteStopDTO)
-                .all();
-    }
-
-    @Override
-    public Mono<RouteVehicleStatistics> getRouteVehicleStatistics(String routeId) {
-        String sql = """
-            SELECT 
-                COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles_count,
-                COUNT(v.id) FILTER (WHERE v.is_active = true AND v.is_in_motion = true) as vehicles_in_motion_count,
-                COUNT(v.id) FILTER (WHERE v.is_active = true AND v.last_position_update > (CURRENT_TIMESTAMP - INTERVAL '5 minutes')) as vehicles_with_recent_position_count
-            FROM vehicles v
-            WHERE v.assigned_route_id = :routeId
-            """;
-
-        return databaseClient.sql(sql)
-                .bind("routeId", routeId)
-                .map(row -> new RouteVehicleStatistics(
-                        row.get("active_vehicles_count", Long.class),
-                        row.get("vehicles_in_motion_count", Long.class),
-                        row.get("vehicles_with_recent_position_count", Long.class)
-                ))
-                .one();
-    }
-
-
-    @Override
-    public Mono<BusRoute> findById(BusRouteId routeId) {
-        String sql = "SELECT * FROM bus_routes WHERE id = :id";
-
-        return databaseClient.sql(sql)
-                .bind("id", routeId.getValue())
-                .map(this::mapRowToBusRoute)
-                .one();
-    }
-
-    @Override
     public Mono<BusRoute> findByRouteNumber(String routeNumber) {
         String sql = "SELECT * FROM bus_routes WHERE route_number = :routeNumber AND is_active = true";
 
@@ -282,6 +205,17 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
     }
 
     @Override
+    public Mono<Void> deleteById(BusRouteId routeId) {
+        String sql = "DELETE FROM bus_routes WHERE id = :id";
+
+        return databaseClient.sql(sql)
+                .bind("id", routeId.getValue())
+                .then();
+    }
+
+
+
+    @Override
     public Mono<Boolean> existsByRouteNumber(String routeNumber) {
         String sql = "SELECT COUNT(*) FROM bus_routes WHERE route_number = :routeNumber";
 
@@ -292,14 +226,7 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .map(count -> count > 0);
     }
 
-    @Override
-    public Mono<Void> deleteById(BusRouteId routeId) {
-        String sql = "DELETE FROM bus_routes WHERE id = :id";
 
-        return databaseClient.sql(sql)
-                .bind("id", routeId.getValue())
-                .then();
-    }
 
     @Override
     public Mono<Long> countActiveRoutes() {
@@ -312,19 +239,13 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
 
 
     @Override
-    public Flux<RouteWithGeometryDTO> searchRoutesByNameOrNumber(String query, Integer limit) {
+    public Flux<BusRoute> searchRoutesByNameOrNumber(String query, Integer limit) {
         String sql = """
-            SELECT id, route_number, route_name, route_color, 
-                   total_distance_forward_meters, total_distance_backward_meters,
-                   COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles_count
-            FROM bus_routes br
-            LEFT JOIN vehicles v ON br.id = v.assigned_route_id
+            SELECT * FROM bus_routes br
             WHERE br.is_active = true 
             AND (LOWER(br.route_number) LIKE LOWER(:query) 
                  OR LOWER(br.route_name) LIKE LOWER(:searchPattern)
-                 OR LOWER(br.route_name_tm) LIKE LOWER(:searchPattern))
-            GROUP BY br.id, br.route_number, br.route_name, br.route_color,
-                     br.total_distance_forward_meters, br.total_distance_backward_meters
+                 OR LOWER(br.name_tm) LIKE LOWER(:searchPattern))
             ORDER BY 
                 CASE 
                     WHEN LOWER(br.route_number) = LOWER(:query) THEN 1
@@ -342,13 +263,14 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 .bind("query", query.trim())
                 .bind("searchPattern", searchPattern)
                 .bind("limit", limit)
-                .map(this::mapToBasicRouteDTO)
+                .map(this::mapRowToBusRoute)
                 .all()
                 .doOnComplete(() -> log.debug("Route search completed for query: '{}'", query));
     }
 
+
     @Override
-    public Flux<RouteInAreaResult> findRoutesIntersectingArea(Double latitude, Double longitude, Integer radiusMeters) {
+    public Flux<RouteInAreaInfo> findRoutesIntersectingArea(Double latitude, Double longitude, Integer radiusMeters) {
         String sql = """
             WITH search_area AS (
                 SELECT ST_Buffer(
@@ -393,27 +315,78 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
                 AND br.geometry_backward IS NOT NULL
                 AND ST_Intersects(br.geometry_backward, sa.geom)
             )
-            SELECT 
-                ri.*,
-                COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles_count,
-                COUNT(v.id) FILTER (WHERE v.is_active = true AND v.is_in_motion = true) as vehicles_in_motion_count
-            FROM route_intersections ri
-            LEFT JOIN vehicles v ON ri.route_id = v.assigned_route_id
-            GROUP BY ri.route_id, ri.route_number, ri.route_name, ri.route_color, 
-                     ri.direction, ri.nearest_point_lat, ri.nearest_point_lon, ri.distance_to_center
-            ORDER BY ri.distance_to_center
+            SELECT * FROM route_intersections
+            ORDER BY distance_to_center
             """;
 
         return databaseClient.sql(sql)
                 .bind("centerLat", latitude)
                 .bind("centerLon", longitude)
                 .bind("radiusMeters", radiusMeters)
-                .map(this::mapToRouteInAreaResult)
+                .map(this::mapToRouteInAreaInfo)
                 .all()
                 .doOnComplete(() -> log.debug("Found routes intersecting area at ({}, {}) within {}m",
                         latitude, longitude, radiusMeters));
     }
 
+
+    @Override
+    public Flux<RouteStopInfo> getRouteStopsInfo(BusRouteId routeId) {
+        String sql = """
+            SELECT bs.id, bs.stop_name, bs.stop_code, bs.latitude, bs.longitude,
+                   rs.stop_sequence, rs.estimated_travel_time_minutes, rs.distance_from_start_meters, 
+                   rs.direction, bs.is_major_stop
+            FROM route_stops rs
+            JOIN bus_stops bs ON rs.stop_id = bs.id
+            WHERE rs.route_id = :routeId
+            AND bs.is_active = true
+            ORDER BY rs.direction, rs.stop_sequence
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("routeId", routeId.getValue())
+                .map(this::mapToRouteStopInfo)
+                .all();
+    }
+
+    @Override
+    public Flux<RouteStopInfo> getRouteStopsInfoByNumber(String routeNumber, Integer direction) {
+        String sql = """
+            SELECT bs.id, bs.stop_name, bs.stop_code, bs.latitude, bs.longitude,
+                   rs.stop_sequence, rs.estimated_travel_time_minutes, rs.distance_from_start_meters, 
+                   rs.direction, bs.is_major_stop
+            FROM route_stops rs
+            JOIN bus_stops bs ON rs.stop_id = bs.id
+            JOIN bus_routes br ON rs.route_id = br.id
+            WHERE br.route_number = :routeNumber 
+            AND rs.direction = :direction
+            AND bs.is_active = true AND br.is_active = true
+            ORDER BY rs.stop_sequence
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("routeNumber", routeNumber)
+                .bind("direction", direction)
+                .map(this::mapToRouteStopInfo)
+                .all();
+    }
+
+    @Override
+    public Mono<RouteVehicleStatistics> getRouteVehicleStatistics(BusRouteId routeId) {
+        String sql = """
+            SELECT 
+                COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles_count,
+                COUNT(v.id) FILTER (WHERE v.is_active = true AND v.is_in_motion = true) as vehicles_in_motion_count,
+                COUNT(v.id) FILTER (WHERE v.is_active = true AND v.last_position_update > (CURRENT_TIMESTAMP - INTERVAL '5 minutes')) as vehicles_with_recent_position_count
+            FROM vehicles v
+            WHERE v.assigned_route_id = :routeId
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("routeId", routeId.getValue())
+                .map(this::mapToRouteVehicleStatistics)
+                .one();
+    }
 
 
     private BusRoute mapRowToBusRoute(Row row, RowMetadata metadata) {
@@ -436,11 +409,11 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
         busRoute.setCreatedAt(row.get("created_at", Instant.class));
         busRoute.setUpdatedAt(row.get("updated_at", Instant.class));
 
-        return  busRoute;
+        return busRoute;
     }
 
-    private RouteStopDTO mapToRouteStopDTO(Row row, RowMetadata metadata) {
-        return new RouteStopDTO(
+    private RouteStopInfo mapToRouteStopInfo(Row row, RowMetadata metadata) {
+        return new RouteStopInfo(
                 row.get("id", String.class),
                 row.get("stop_name", String.class),
                 row.get("stop_code", String.class),
@@ -454,82 +427,32 @@ public class R2dbcBusRouteRepository implements BusRouteRepository {
         );
     }
 
-    private RouteWithGeometryDTO mapToBasicRouteDTO(Row row, RowMetadata metadata) {
-        RouteWithGeometryDTO dto = new RouteWithGeometryDTO();
-        dto.setRouteId(row.get("id", String.class));
-        dto.setRouteNumber(row.get("route_number", String.class));
-        dto.setRouteName(row.get("route_name", String.class));
-        dto.setRouteColor(row.get("route_color", String.class));
-        dto.setActiveVehiclesCount(row.get("active_vehicles_count", Long.class));
-
-        Integer forwardMeters = row.get("total_distance_forward_meters", Integer.class);
-        if (forwardMeters != null) {
-            dto.setTotalDistanceForwardKm(new BigDecimal(forwardMeters).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP));
-        }
-
-        return dto;
+    private RouteVehicleStatistics mapToRouteVehicleStatistics(Row row, RowMetadata metadata) {
+        return new RouteVehicleStatistics(
+                row.get("active_vehicles_count", Long.class),
+                row.get("vehicles_in_motion_count", Long.class),
+                row.get("vehicles_with_recent_position_count", Long.class)
+        );
     }
 
-    private RouteWithGeometryDTO mapToRouteWithGeometryDTO(Row row, RowMetadata metadata) {
-        RouteWithGeometryDTO dto = new RouteWithGeometryDTO();
-        dto.setRouteId(row.get("id", String.class));
-        dto.setRouteNumber(row.get("route_number", String.class));
-        dto.setRouteName(row.get("route_name", String.class));
-        dto.setRouteColor(row.get("route_color", String.class));
-
-        String forwardGeometry = row.get("route_geometry_forward", String.class);
-        String backwardGeometry = row.get("route_geometry_backward", String.class);
-
-        try {
-            if (forwardGeometry != null) {
-                dto.setGeometryForward(objectMapper.readValue(forwardGeometry, Object.class));
-            }
-            if (backwardGeometry != null) {
-                dto.setGeometryBackward(objectMapper.readValue(backwardGeometry, Object.class));
-            }
-        } catch (Exception e) {
-            log.warn("Failed to parse route geometry for route {}: {}", dto.getRouteNumber(), e.getMessage());
-        }
-
-        Integer forwardMeters = row.get("total_distance_forward_meters", Integer.class);
-        Integer backwardMeters = row.get("total_distance_backward_meters", Integer.class);
-
-        if (forwardMeters != null) {
-            dto.setTotalDistanceForwardKm(new BigDecimal(forwardMeters).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP));
-        }
-        if (backwardMeters != null) {
-            dto.setTotalDistanceBackwardKm(new BigDecimal(backwardMeters).divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP));
-        }
-
-        return dto;
-    }
-
-    private RouteInAreaResult mapToRouteInAreaResult(Row row, RowMetadata metadata) {
-        // Извлекаем координаты из PostGIS Point геометрии
-        Object intersectionPoint = row.get("intersection_point");
-        Double lat = null, lon = null;
-
-        // Здесь нужно парсить PostGIS Point, но для простоты используем заглушку
-        // В реальной реализации нужно использовать ST_X, ST_Y функции в SQL
-
-        return new RouteInAreaResult(
+    private RouteInAreaInfo mapToRouteInAreaInfo(Row row, RowMetadata metadata) {
+        return new RouteInAreaInfo(
                 row.get("route_id", String.class),
                 row.get("route_number", String.class),
                 row.get("route_name", String.class),
                 row.get("route_color", String.class),
                 row.get("direction", Integer.class),
-                lat != null ? lat : 0.0, // Временная заглушка
-                lon != null ? lon : 0.0, // Временная заглушка
-                row.get("distance_to_center", Double.class),
-                0L // Пока без подсчета автобусов
+                row.get("nearest_point_lat", Double.class),
+                row.get("nearest_point_lon", Double.class),
+                row.get("distance_to_center", Double.class)
         );
     }
+
 
 
     private String mapSortField(String sortField) {
         return switch (sortField != null ? sortField.toLowerCase() : "stop_name") {
             case "routnumber" -> "rout_number";
-            case "routename", "name" -> "route_name";
             case "nametm" -> "name_tm";
             case "nameen" -> "name_en";
             case "latitude" -> "latitude";

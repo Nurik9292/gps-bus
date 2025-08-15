@@ -68,7 +68,6 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/trips/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/vehicles/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/trip-planning/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/trip-planning/**").permitAll()
                         .pathMatchers("/avatars/**").permitAll()
                         .pathMatchers("/banners/**").permitAll()
                         .pathMatchers("/api/v1/avatars/**").permitAll()
@@ -92,7 +91,7 @@ public class SecurityConfig {
 //                        .pathMatchers("/admin/system/**").hasRole("SUPER_ADMIN")
 //                        .pathMatchers(HttpMethod.GET, "/admin/logs/**").hasRole("SUPER_ADMIN")
 
-                        .anyExchange().permitAll()
+                        .anyExchange().authenticated()
                 )
                 .build();
     }

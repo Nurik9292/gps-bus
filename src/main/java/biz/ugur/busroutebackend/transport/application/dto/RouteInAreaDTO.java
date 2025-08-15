@@ -19,13 +19,13 @@ public class RouteInAreaDTO {
     private String routeColor;
 
     @JsonProperty("direction")
-    private Integer direction; // 0 = прямое, 1 = обратное
+    private Integer direction;
 
     @JsonProperty("nearest_point")
-    private RoutePointDTO nearestPoint; // Ближайшая точка маршрута к центру поиска
+    private RoutePointDTO nearestPoint;
 
     @JsonProperty("distance_to_center_meters")
-    private Double distanceToCenterMeters; // Расстояние от центра поиска до ближайшей точки
+    private Double distanceToCenterMeters;
 
     @JsonProperty("active_vehicles_count")
     private Long activeVehiclesCount;
@@ -47,20 +47,19 @@ public class RouteInAreaDTO {
         this.nearestPoint = nearestPoint;
         this.distanceToCenterMeters = distanceToCenterMeters;
         this.activeVehiclesCount = activeVehiclesCount;
-        this.vehiclesInMotionCount = 0L; // Будет заполнено в use case
+        this.vehiclesInMotionCount = 0L;
         this.estimatedFrequencyMinutes = calculateEstimatedFrequency();
     }
 
     private Integer calculateEstimatedFrequency() {
-        // Простая логика: больше автобусов = чаще ходят
         if (activeVehiclesCount == null || activeVehiclesCount == 0) {
-            return 60; // Раз в час если нет автобусов
+            return 60;
         } else if (activeVehiclesCount >= 3) {
-            return 10; // Каждые 10 минут если много автобусов
+            return 10;
         } else if (activeVehiclesCount >= 2) {
-            return 20; // Каждые 20 минут
+            return 20;
         } else {
-            return 30; // Каждые 30 минут
+            return 30;
         }
     }
 

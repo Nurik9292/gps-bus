@@ -203,6 +203,27 @@ public class R2dbcBannerRepository implements BannerRepository {
     }
 
 
+    @Override
+    public Flux<Banner> findByTypeAndActive(String type) {
+        String sql = "SELECT * FROM banners WHERE is_active = true AND type = :type";
+
+        return databaseClient.sql(sql)
+                .bind("type", type)
+                .map(this::mapRowToBanner)
+                .all();
+    }
+
+    @Override
+    public Mono<Long> countByType(String type) {
+        String sql = "SELECT COUNT(*) FROM banners WHERE type = :type and is_active = true";
+
+        return databaseClient.sql(sql)
+                .bind("type", type)
+                .map(row -> row.get(0, Long.class))
+                .one();
+    }
+
+
     private String getSortField(Pageable pageable) {
         if (pageable.getSort().isEmpty()) {
             return "display_order";
