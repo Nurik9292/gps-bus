@@ -12,19 +12,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * TripOption - конкретный вариант поездки
- *
- * Представляет один из способов добраться от точки A до точки B:
- * - Последовательность сегментов (ходьба, автобус, пересадка)
- * - Расчет времени и стоимости
- * - Оценка качества варианта
- *
- * Business Rules:
- * - Начинается и заканчивается пешими сегментами (если нужно)
- * - Автобусные сегменты только между остановками
- * - Пересадки только на остановках где пересекаются маршруты
- */
 @Getter
 @EqualsAndHashCode(callSuper = false)
 public class TripOption extends ValueObject {
@@ -40,14 +27,13 @@ public class TripOption extends ValueObject {
     private final double estimatedCostManat;
     private final LocalDateTime estimatedDeparture;
     private final LocalDateTime estimatedArrival;
-    private final double comfortScore; // 0-100, где 100 = максимальный комфорт
+    private final double comfortScore;
 
     public TripOption(TripType tripType, List<RouteSegment> routeSegments) {
         this.optionId = UUID.randomUUID().toString();
         this.tripType = validateTripType(tripType);
         this.routeSegments = validateAndCopySegments(routeSegments);
 
-        // Рассчитываем метрики
         this.totalWalkingMinutes = calculateTotalWalkingTime();
         this.totalBusRideMinutes = calculateTotalBusRideTime();
         this.totalWaitingMinutes = calculateTotalWaitingTime();
@@ -58,41 +44,25 @@ public class TripOption extends ValueObject {
         this.estimatedArrival = calculateArrival();
         this.comfortScore = calculateComfortScore();
 
-        // Валидация целостности
         validateTripLogic();
     }
 
-    /**
-     * Сравнить с другим вариантом по скорости
-     */
     public boolean isFasterThan(TripOption other) {
         return this.totalTravelMinutes < other.totalTravelMinutes;
     }
 
-    /**
-     * Сравнить с другим вариантом по количеству пересадок
-     */
     public boolean hasFewerTransfersThan(TripOption other) {
         return this.transfersCount < other.transfersCount;
     }
 
-    /**
-     * Сравнить с другим вариантом по стоимости
-     */
     public boolean isCheaperThan(TripOption other) {
         return this.estimatedCostManat < other.estimatedCostManat;
     }
 
-    /**
-     * Сравнить с другим вариантом по комфорту
-     */
     public boolean isMoreComfortableThan(TripOption other) {
         return this.comfortScore > other.comfortScore;
     }
 
-    /**
-     * Получить краткое описание варианта
-     */
     public String getSummary() {
         if (tripType == TripType.DIRECT) {
             String routeNumbers = getUsedRouteNumbers();
@@ -105,9 +75,6 @@ public class TripOption extends ValueObject {
         }
     }
 
-    /**
-     * Получить детальное описание варианта
-     */
     public String getDetailedDescription() {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("Поездка займет %d мин", totalTravelMinutes));
@@ -125,9 +92,6 @@ public class TripOption extends ValueObject {
         return sb.toString();
     }
 
-    /**
-     * Получить список используемых маршрутов
-     */
     public List<String> getUsedRoutes() {
         return routeSegments.stream()
                 .filter(segment -> segment.getType() == SegmentType.BUS_RIDE)
@@ -136,82 +100,67 @@ public class TripOption extends ValueObject {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Получить строку с номерами маршрутов
-     */
     public String getUsedRouteNumbers() {
         List<String> routes = getUsedRoutes();
         if (routes.isEmpty()) return "пешком";
         return String.join(", ", routes);
     }
 
-    /**
-     * Проверить валидность варианта для заданной поездки
-     */
     public boolean isValidForTrip(Location origin, Location destination) {
         if (routeSegments.isEmpty()) return false;
 
         RouteSegment firstSegment = routeSegments.getFirst();
         RouteSegment lastSegment = routeSegments.getLast();
 
-        // Проверяем что первый сегмент начинается рядом с точкой отправления
+
         double startDistance = firstSegment.getFromLocation().distanceTo(origin);
-        if (startDistance > 1000) { // Максимум 1км от точки отправления
+        if (startDistance > 1000) {
             return false;
         }
 
-        // Проверяем что последний сегмент заканчивается рядом с пунктом назначения
+
         double endDistance = lastSegment.getToLocation().distanceTo(destination);
-        if (endDistance > 1000) { // Максимум 1км до пункта назначения
+        if (endDistance > 1000) {
             return false;
         }
 
         return true;
     }
 
-    /**
-     * Получить оценку качества варианта (0-100)
-     */
     public double getQualityScore() {
-        double speedScore = Math.max(0, 100 - totalTravelMinutes); // Меньше времени = лучше
-        double transferScore = Math.max(0, 100 - transfersCount * 25); // Меньше пересадок = лучше
-        double walkingScore = Math.max(0, 100 - totalWalkingMinutes * 3); // Меньше ходьбы = лучше
+        double speedScore = Math.max(0, 100 - totalTravelMinutes);
+        double transferScore = Math.max(0, 100 - transfersCount * 25);
+        double walkingScore = Math.max(0, 100 - totalWalkingMinutes * 3);
 
-        // Взвешенная оценка
+
         return (speedScore * 0.4 + transferScore * 0.3 + walkingScore * 0.2 + comfortScore * 0.1);
     }
 
-    /**
-     * Проверить подходит ли для людей с ограниченными возможностями
-     */
     public boolean isAccessible() {
-        // Проверяем что пешие сегменты не слишком длинные
+
         boolean walkingOk = routeSegments.stream()
                 .filter(s -> s.getType() == SegmentType.WALKING)
-                .allMatch(s -> s.getDurationMinutes() <= 5); // Максимум 5 минут ходьбы
+                .allMatch(s -> s.getDurationMinutes() <= 5);
 
-        // Проверяем что не слишком много пересадок
+
         boolean transfersOk = transfersCount <= 1;
 
         return walkingOk && transfersOk;
     }
 
-    /**
-     * Получить прогноз надежности варианта (вероятность успешной поездки)
-     */
     public double getReliabilityScore() {
-        double baseReliability = 0.95; // Базовая надежность 95%
+        double baseReliability = 0.95;
 
-        // Каждая пересадка снижает надежность на 5%
+
         double transferPenalty = transfersCount * 0.05;
 
-        // Длинные пешие переходы снижают надежность
+
         double walkingPenalty = Math.max(0, (totalWalkingMinutes - 10) * 0.01);
 
         return Math.max(0.5, baseReliability - transferPenalty - walkingPenalty);
     }
 
-    // Приватные методы расчета
+
 
     private TripType validateTripType(TripType tripType) {
         if (tripType == null) {
@@ -225,12 +174,12 @@ public class TripOption extends ValueObject {
             throw new IllegalArgumentException("Route segments cannot be null or empty");
         }
 
-        // Проверяем связность сегментов
+
         for (int i = 1; i < segments.size(); i++) {
             Location prevEnd = segments.get(i - 1).getToLocation();
             Location currentStart = segments.get(i).getFromLocation();
 
-            if (prevEnd.distanceTo(currentStart) > 100) { // Максимум 100м между сегментами
+            if (prevEnd.distanceTo(currentStart) > 100) {
                 throw new IllegalArgumentException("Route segments are not connected");
             }
         }
@@ -239,7 +188,7 @@ public class TripOption extends ValueObject {
     }
 
     private void validateTripLogic() {
-        // Проверяем что поездка начинается с ходьбы или автобуса (не с пересадки)
+
         if (!routeSegments.isEmpty()) {
             SegmentType firstType = routeSegments.getFirst().getType();
             if (firstType == SegmentType.TRANSFER) {
@@ -247,7 +196,7 @@ public class TripOption extends ValueObject {
             }
         }
 
-        // Проверяем что после каждой пересадки идет автобус
+
         for (int i = 0; i < routeSegments.size() - 1; i++) {
             if (routeSegments.get(i).getType() == SegmentType.TRANSFER) {
                 SegmentType nextType = routeSegments.get(i + 1).getType();
@@ -292,11 +241,11 @@ public class TripOption extends ValueObject {
                 .distinct()
                 .count();
 
-        return busRides * 1.0; // 1 манат за каждый уникальный маршрут
+        return busRides * 1.0;
     }
 
     private LocalDateTime calculateDeparture() {
-        return LocalDateTime.now().plusMinutes(5); // Предполагаем 5 минут на подготовку
+        return LocalDateTime.now().plusMinutes(5);
     }
 
     private LocalDateTime calculateArrival() {
@@ -306,10 +255,10 @@ public class TripOption extends ValueObject {
     private double calculateComfortScore() {
         double baseScore = 100.0;
 
-        // Штрафы за дискомфорт
-        baseScore -= transfersCount * 15; // -15 за каждую пересадку
-        baseScore -= Math.max(0, totalWalkingMinutes - 5) * 2; // -2 за каждую минуту ходьбы свыше 5
-        baseScore -= Math.max(0, totalTravelMinutes - 30) * 0.5; // -0.5 за каждую минуту поездки свыше 30
+
+        baseScore -= transfersCount * 15;
+        baseScore -= Math.max(0, totalWalkingMinutes - 5) * 2;
+        baseScore -= Math.max(0, totalTravelMinutes - 30) * 0.5;
 
         return Math.max(0, Math.min(100, baseScore));
     }

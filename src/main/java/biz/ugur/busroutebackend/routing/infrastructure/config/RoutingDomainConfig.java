@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.routing.infrastructure.services.LiveETACalculati
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
@@ -19,12 +20,14 @@ public class RoutingDomainConfig {
     public RouteCalculationService routeCalculationService(BusStopRepository busStopRepository,
                                                            BusRouteRepository busRouteRepository,
                                                            DatabaseClient databaseClient,
-                                                           ReactiveRedisTemplate<String, Object> redisTemplate) {
+                                                           ReactiveRedisTemplate<String, Object> redisTemplate,
+                                                           ObjectMapper objectMapper) {
         return new GraphRouteCalculationService(
                 busStopRepository,
                 busRouteRepository,
                 databaseClient,
-                redisTemplate);
+                redisTemplate,
+                objectMapper);
     }
 
     @Bean

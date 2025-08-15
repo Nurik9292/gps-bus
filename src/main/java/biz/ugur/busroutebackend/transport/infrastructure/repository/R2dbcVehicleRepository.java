@@ -9,6 +9,7 @@ import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -17,6 +18,7 @@ import java.util.Optional;
 
 @Repository
 @Slf4j
+@Transactional(readOnly = true)
 public class R2dbcVehicleRepository implements VehicleRepository {
 
     private final DatabaseClient databaseClient;
@@ -26,6 +28,7 @@ public class R2dbcVehicleRepository implements VehicleRepository {
     }
 
     @Override
+    @Transactional
     public Mono<Vehicle> save(Vehicle vehicle) {
         return existsById(vehicle.getId())
                 .flatMap(exists -> {
@@ -70,14 +73,12 @@ public class R2dbcVehicleRepository implements VehicleRepository {
                 .bind("isInMotion", vehicle.getIsInMotion())
                 .bind("lastPositionUpdate", vehicle.getLastPositionUpdate());
 
-        // FIX 1: Правильный binding для assignedRouteId
         if (vehicle.getAssignedRouteId() != null) {
             spec = spec.bind("assignedRouteId", vehicle.getAssignedRouteId().getValue());
         } else {
             spec = spec.bindNull("assignedRouteId", String.class);
         }
 
-        // FIX 2: Правильный binding для routeNumber (КРИТИЧЕСКИЙ БАГ)
         if (vehicle.getRouteNumber() != null) {
             spec = spec.bind("routeNumber", vehicle.getRouteNumber());
         } else {
@@ -288,6 +289,7 @@ public class R2dbcVehicleRepository implements VehicleRepository {
     }
 
     @Override
+    @Transactional
     public Mono<Void> deleteById(VehicleId vehicleId) {
         String sql = "DELETE FROM vehicles WHERE id = :id";
 

@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.transport.domain.event.RouteGeometryUpdatedEvent
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
 import lombok.Getter;
+import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Column;
@@ -55,9 +56,11 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
     @Column("route_geometry_backward")
     private String routeGeometryBackward;
 
+    @Setter
     @Column("total_distance_forward_meters")
     private Integer totalDistanceForwardMeters;
 
+    @Setter
     @Column("total_distance_backward_meters")
     private Integer totalDistanceBackwardMeters;
 

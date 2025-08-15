@@ -138,7 +138,7 @@ business:
   routing:
     nearby-stops-radius: 800
     max-transfers: 2
-    max-search-results: 5
+    max-search-results: 3
     max-transfer-wait-time: 30
     walking-speed: 5.0
 

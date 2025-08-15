@@ -4,11 +4,7 @@ import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.RouteSegment;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.TripOption;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.TripPlanId;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.TripSearchCriteria;
+import biz.ugur.busroutebackend.routing.domain.volumeojects.*;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
@@ -16,42 +12,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * FindRoutesWithTransfersUseCase - поиск маршрутов с пересадками (1-2 пересадки)
- *
- * Алгоритм:
- * 1. Найти ближайшие остановки к точкам отправления и назначения
- * 2. Поиск маршрутов с одной пересадкой:
- *    - Найти промежуточные остановки-пересадки
- *    - Проверить возможность пересадки (время, расстояние)
- *    - Рассчитать общее время с учетом ожидания
- * 3. Если недостаточно вариантов, искать с двумя пересадками
- * 4. Фильтрация и сортировка по качеству
- *
- * Business Rules:
- * - Максимум 2 пересадки для практичности
- * - Время пересадки: 3-10 минут в зависимости от остановки
- * - Приоритет крупным остановкам для пересадок
- * - Максимальное время ожидания: 20 минут
- */
+
 @Service
 @Slf4j
-public class FindRoutesWithTransfersUseCase implements UseCase<FindRoutesWithTransfersUseCase.Command, Mono<TripPlan>> {
-
-    private final RouteCalculationService routeCalculationService;
-    private final ETACalculationService etaCalculationService;
-    private final EventBus eventBus;
+public class FindRoutesWithTransfersUseCase extends BaseRouteUseCase implements UseCase<FindRoutesWithTransfersUseCase.Command, Mono<TripPlan>> {
 
     public FindRoutesWithTransfersUseCase(RouteCalculationService routeCalculationService,
                                           ETACalculationService etaCalculationService,
                                           EventBus eventBus) {
-        this.routeCalculationService = routeCalculationService;
-        this.etaCalculationService = etaCalculationService;
-        this.eventBus = eventBus;
+        super(routeCalculationService, etaCalculationService, eventBus);
     }
 
     @Override
@@ -59,120 +31,59 @@ public class FindRoutesWithTransfersUseCase implements UseCase<FindRoutesWithTra
         log.info("Finding routes with transfers from {} to {}",
                 command.fromLocation.getDescription(), command.toLocation.getDescription());
 
-        Location fromLocation = command.fromLocation;
-        Location toLocation = command.toLocation;
         TripSearchCriteria criteria = command.searchCriteria != null ?
                 command.searchCriteria : TripSearchCriteria.defaultCriteria();
 
-        // Создаем новый план поездки или используем существующий
         TripPlan tripPlan = command.existingPlan != null ?
                 command.existingPlan :
-                new TripPlan(TripPlanId.generate(), fromLocation, toLocation, criteria);
+                new TripPlan(TripPlanId.generate(), command.fromLocation, command.toLocation, criteria);
 
-        return Mono.just(tripPlan)
-                .flatMap(plan -> {
-                    // Параллельно находим ближайшие остановки
-                    return Mono.zip(
-                            findNearbyStopsWithQuality(fromLocation, 0.8, 6),
-                            findNearbyStopsWithQuality(toLocation, 0.8, 6)
-                    ).flatMap(tuple -> {
-                        List<BusStop> fromStops = tuple.getT1();
-                        List<BusStop> toStops = tuple.getT2();
-
-                        log.debug("Searching transfer routes between {} origin and {} destination stops",
-                                fromStops.size(), toStops.size());
-
-                        if (fromStops.isEmpty() || toStops.isEmpty()) {
-                            log.warn("Insufficient stops for transfer route planning");
-                            return Mono.just(plan);
-                        }
-
-                        // Сначала ищем маршруты с одной пересадкой
-                        return findRoutesWithOneTransfer(plan, fromStops, toStops, fromLocation, toLocation, criteria)
-                                .flatMap(planWithOneTransfer -> {
-                                    // Если недостаточно вариантов и разрешены 2 пересадки, ищем их
-                                    int currentOptionsCount = planWithOneTransfer.getTripOptions().size();
-                                    boolean needMoreOptions = currentOptionsCount < 3;
-                                    boolean allowTwoTransfers = criteria.getMaxTransfers() >= 2;
-
-                                    if (needMoreOptions && allowTwoTransfers) {
-                                        log.debug("Found only {} options with one transfer, searching for two-transfer routes",
-                                                currentOptionsCount);
-                                        return findRoutesWithTwoTransfers(planWithOneTransfer, fromStops, toStops,
-                                                fromLocation, toLocation, criteria);
-                                    }
-                                    return Mono.just(planWithOneTransfer);
-                                });
-                    });
-                })
-                .doOnSuccess(plan -> {
-                    int totalOptions = plan.getTripOptions().size();
-                    long transferOptions = plan.getTransferOptions().size();
-
-                    if (transferOptions > 0) {
-                        TripOption bestTransfer = plan.getOptionWithFewestTransfers();
-                        log.info("Found {} transfer route options (total: {}). Best: {} transfers, {} minutes",
-                                transferOptions, totalOptions,
-                                bestTransfer != null ? bestTransfer.getTransfersCount() : "N/A",
-                                bestTransfer != null ? bestTransfer.getTotalTravelMinutes() : "N/A");
-                    } else {
-                        log.info("No viable transfer routes found");
-                    }
-                })
+        return findTransferRoutes(tripPlan, command.fromLocation, command.toLocation, criteria)
+                .doOnSuccess(this::logTransferSearchResults)
                 .doOnError(error -> log.error("Error finding transfer routes", error));
     }
 
-    /**
-     * Найти остановки с учетом их качества для пересадок
-     */
-    private Mono<List<BusStop>> findNearbyStopsWithQuality(Location location, double radiusKm, int maxStops) {
-        return routeCalculationService.findNearbyStops(location, radiusKm)
-                .filter(stop -> {
-                    double distance = location.distanceTo(
-                            stop.getLatitude().doubleValue(),
-                            stop.getLongitude().doubleValue()
-                    );
-                    return distance <= 1000; // Максимум 1км
-                })
-                .sort((stop1, stop2) -> {
-                    // Сортируем по качеству остановки: сначала крупные, потом по расстоянию
-                    int qualityCompare = Boolean.compare(stop2.getIsMajorStop(), stop1.getIsMajorStop());
-                    if (qualityCompare != 0) return qualityCompare;
+    private Mono<TripPlan> findTransferRoutes(TripPlan tripPlan, Location fromLocation, Location toLocation, TripSearchCriteria criteria) {
+        return Mono.zip(
+                findNearbyStopsWithLimit(fromLocation, RoutingConstants.DEFAULT_NEARBY_RADIUS_KM, 6),
+                findNearbyStopsWithLimit(toLocation, RoutingConstants.DEFAULT_NEARBY_RADIUS_KM, 6)
+        ).flatMap(tuple -> {
+            List<BusStop> fromStops = tuple.getT1();
+            List<BusStop> toStops = tuple.getT2();
 
-                    double dist1 = location.distanceTo(
-                            stop1.getLatitude().doubleValue(), stop1.getLongitude().doubleValue());
-                    double dist2 = location.distanceTo(
-                            stop2.getLatitude().doubleValue(), stop2.getLongitude().doubleValue());
-                    return Double.compare(dist1, dist2);
-                })
-                .take(maxStops)
-                .collectList();
+            if (fromStops.isEmpty() || toStops.isEmpty()) {
+                log.warn("Insufficient stops for transfer route planning");
+                return Mono.just(tripPlan);
+            }
+
+            // Сначала ищем маршруты с одной пересадкой
+            return findOneTransferRoutes(tripPlan, fromStops, toStops, fromLocation, toLocation, criteria)
+                    .flatMap(planWithOneTransfer -> {
+                        // Если нужно, ищем маршруты с двумя пересадками
+                        if (shouldSearchTwoTransfers(planWithOneTransfer, criteria)) {
+                            return findTwoTransferRoutes(planWithOneTransfer, fromStops, toStops, fromLocation, toLocation, criteria);
+                        }
+                        return Mono.just(planWithOneTransfer);
+                    });
+        });
     }
 
-    /**
-     * Поиск маршрутов с одной пересадкой
-     */
-    private Mono<TripPlan> findRoutesWithOneTransfer(TripPlan tripPlan, List<BusStop> fromStops,
-                                                     List<BusStop> toStops, Location fromLocation,
-                                                     Location toLocation, TripSearchCriteria criteria) {
+    private boolean shouldSearchTwoTransfers(TripPlan plan, TripSearchCriteria criteria) {
+        return plan.getTripOptions().size() < 3 && criteria.getMaxTransfers() >= 2;
+    }
 
-        double maxTransferDistance = 0.5; // 500м максимальное расстояние пересадки
-
-        return routeCalculationService.findRoutesWithOneTransfer(fromStops, toStops, maxTransferDistance)
-                .filter(transferRoute -> isTransferRouteViable(transferRoute, criteria))
-                .flatMap(transferRoute -> createOneTransferTripOption(transferRoute, fromLocation, toLocation))
+    private Mono<TripPlan> findOneTransferRoutes(TripPlan tripPlan, List<BusStop> fromStops, List<BusStop> toStops,
+                                                 Location fromLocation, Location toLocation, TripSearchCriteria criteria) {
+        return routeCalculationService.findRoutesWithOneTransfer(fromStops, toStops, 0.5)
+                .filter(this::isTransferRouteViable)
+                .flatMap(route -> createOneTransferTripOption(route, fromLocation, toLocation))
                 .filter(Objects::nonNull)
-                .take(8) // Ограничиваем количество для производительности
+                .take(8)
                 .collectList()
-                .flatMap(tripOptions -> {
+                .map(tripOptions -> {
                     tripOptions.forEach(tripPlan::addTripOption);
-
-                    // Публикуем events
-                    tripPlan.getUncommittedEvents().forEach(eventBus::publish);
-                    tripPlan.markEventsAsCommitted();
-
-                    return Mono.just(tripPlan)
-                            .doOnNext(plan -> log.debug("Added {} one-transfer options", tripOptions.size()));
+                    publishTripPlanEvents(tripPlan);
+                    return tripPlan;
                 })
                 .onErrorResume(e -> {
                     log.error("Error finding one-transfer routes", e);
@@ -180,318 +91,333 @@ public class FindRoutesWithTransfersUseCase implements UseCase<FindRoutesWithTra
                 });
     }
 
-    /**
-     * Поиск маршрутов с двумя пересадками (более сложный алгоритм)
-     */
-    private Mono<TripPlan> findRoutesWithTwoTransfers(TripPlan tripPlan, List<BusStop> fromStops,
-                                                     List<BusStop> toStops, Location fromLocation,
-                                                     Location toLocation, TripSearchCriteria criteria) {
+    private Mono<TripPlan> findTwoTransferRoutes(TripPlan tripPlan, List<BusStop> fromStops, List<BusStop> toStops,
+                                                 Location fromLocation, Location toLocation, TripSearchCriteria criteria) {
+        log.info("🔍 STARTING two-transfer search with {} from stops, {} to stops",
+                fromStops.size(), toStops.size());
 
-        double maxTransferDistance = 0.3; // 300м для двух пересадок - более строгое требование
+        return routeCalculationService.findRoutesWithTwoTransfers(fromStops, toStops, 0.3)
+                .doOnNext(route -> {
+                    int totalTime = route.firstRouteTravelMinutes() + route.firstTransferWaitMinutes() +
+                            route.secondRouteTravelMinutes() + route.secondTransferWaitMinutes() +
+                            route.thirdRouteTravelMinutes();
 
-        return routeCalculationService.findRoutesWithTwoTransfers(fromStops, toStops, maxTransferDistance)
-                .filter(twoTransferRoute -> isTwoTransferRouteViable(twoTransferRoute, criteria))
-                .flatMap(twoTransferRoute -> createTwoTransferTripOption(twoTransferRoute, fromLocation, toLocation))
+                    log.info("🎯 SQL found two-transfer route: {}-{}-{} " +
+                                    "(segments: {}+{}+{} min, waits: {}+{} min, total: {} min)",
+                            route.firstRoute().getRouteNumber(),
+                            route.secondRoute().getRouteNumber(),
+                            route.thirdRoute().getRouteNumber(),
+                            route.firstRouteTravelMinutes(),
+                            route.secondRouteTravelMinutes(),
+                            route.thirdRouteTravelMinutes(),
+                            route.firstTransferWaitMinutes(),
+                            route.secondTransferWaitMinutes(),
+                            totalTime);
+                })
+                .filter(twoTransferRoute -> {
+                    boolean viable = isTwoTransferRouteViable(twoTransferRoute);
+                    if (viable) {
+                        log.info("✅ Two-transfer route ACCEPTED: {}-{}-{}",
+                                twoTransferRoute.firstRoute().getRouteNumber(),
+                                twoTransferRoute.secondRoute().getRouteNumber(),
+                                twoTransferRoute.thirdRoute().getRouteNumber());
+                    } else {
+                        log.warn("❌ Two-transfer route REJECTED: {}-{}-{}",
+                                twoTransferRoute.firstRoute().getRouteNumber(),
+                                twoTransferRoute.secondRoute().getRouteNumber(),
+                                twoTransferRoute.thirdRoute().getRouteNumber());
+                    }
+                    return viable;
+                })
+                .flatMap(twoTransferRoute -> {
+                    log.info("🏗️ Creating TripOption for: {}-{}-{}",
+                            twoTransferRoute.firstRoute().getRouteNumber(),
+                            twoTransferRoute.secondRoute().getRouteNumber(),
+                            twoTransferRoute.thirdRoute().getRouteNumber());
+
+                    return createTwoTransferTripOption(twoTransferRoute, fromLocation, toLocation);
+                })
                 .filter(Objects::nonNull)
-                .take(4) // Меньше вариантов для двух пересадок
+                .take(4)
                 .collectList()
                 .flatMap(tripOptions -> {
-                    tripOptions.forEach(tripPlan::addTripOption);
+                    log.info("📊 FINAL: {} two-transfer options created successfully", tripOptions.size());
+
+                    tripOptions.forEach(option -> {
+                        log.info("➕ Adding option to TripPlan: {} transfers, {} min, routes: {}",
+                                option.getTransfersCount(),
+                                option.getTotalTravelMinutes(),
+                                option.getUsedRouteNumbers());
+                        tripPlan.addTripOption(option);
+                    });
 
                     tripPlan.getUncommittedEvents().forEach(eventBus::publish);
                     tripPlan.markEventsAsCommitted();
 
+                    log.info("✅ TripPlan now has {} total options", tripPlan.getTripOptions().size());
+
                     return Mono.just(tripPlan)
                             .doOnNext(plan -> log.debug("Added {} two-transfer options", tripOptions.size()));
                 })
-                .onErrorResume(e -> {
-                    log.error("Error finding two-transfer routes", e);
-                    return Mono.just(tripPlan); // Возвращаем план даже при ошибке, чтобы не ломать цепочку
+                .onErrorResume(throwable -> {
+                    log.error("❌ Error in two-transfer search: {}", throwable.getMessage(), throwable);
+                    return Mono.just(tripPlan);
                 });
     }
-    /**
-     * Проверить жизнеспособность маршрута с одной пересадкой
-     */
-    private boolean isTransferRouteViable(RouteCalculationService.TransferRouteResult transferRoute,
-                                          TripSearchCriteria criteria) {
-
-        // Общее время поездки не должно превышать 90 минут
+    private boolean isTransferRouteViable(RouteCalculationService.TransferRouteResult transferRoute) {
         int totalTime = transferRoute.firstRouteTravelMinutes() +
                 transferRoute.transferWaitMinutes() +
                 transferRoute.secondRouteTravelMinutes();
 
-        if (totalTime > 90) {
+        // Увеличиваем лимиты для одной пересадки тоже
+        if (totalTime > 100) {        // Увеличено с 90 до 100
+            log.debug("One-transfer route rejected: total time {} minutes > 100", totalTime);
             return false;
         }
 
-        // Время ожидания на пересадке не должно быть слишком долгим
-        if (transferRoute.transferWaitMinutes() > 20) {
+        if (transferRoute.transferWaitMinutes() > 30) {  // Увеличено с 20 до 30
+            log.debug("One-transfer route rejected: wait time {} minutes > 30",
+                    transferRoute.transferWaitMinutes());
             return false;
         }
 
-        // Каждый сегмент поездки должен быть разумным (не менее 2 минут)
-        if (transferRoute.firstRouteTravelMinutes() < 2 || transferRoute.secondRouteTravelMinutes() < 2) {
+        if (transferRoute.firstRouteTravelMinutes() < 1 ||   // Уменьшено с 2 до 1
+                transferRoute.secondRouteTravelMinutes() < 1) {  // Уменьшено с 2 до 1
+            log.debug("One-transfer route rejected: segments too short ({}, {})",
+                    transferRoute.firstRouteTravelMinutes(),
+                    transferRoute.secondRouteTravelMinutes());
             return false;
         }
+
+        log.debug("✅ One-transfer route accepted: {}-{} (total: {} min)",
+                transferRoute.firstRoute().getRouteNumber(),
+                transferRoute.secondRoute().getRouteNumber(),
+                totalTime);
 
         return true;
     }
 
-    /**
-     * Проверить жизнеспособность маршрута с двумя пересадками
-     */
-    private boolean isTwoTransferRouteViable(RouteCalculationService.TwoTransferRouteResult twoTransferRoute,
-                                             TripSearchCriteria criteria) {
+    private boolean isTwoTransferRouteViable(RouteCalculationService.TwoTransferRouteResult twoTransferRoute) {
+        // СТАРАЯ (слишком строгая) логика:
+    /*
+    int totalTime = twoTransferRoute.firstRouteTravelMinutes() +
+                   twoTransferRoute.firstTransferWaitMinutes() +
+                   twoTransferRoute.secondRouteTravelMinutes() +
+                   twoTransferRoute.secondTransferWaitMinutes() +
+                   twoTransferRoute.thirdRouteTravelMinutes();
 
-        // Более строгие требования для двух пересадок
+    // Максимум 120 минут для двух пересадок
+    if (totalTime > 120) {
+        return false;
+    }
+
+    // Каждое ожидание не более 15 минут
+    if (twoTransferRoute.firstTransferWaitMinutes() > 15 ||
+        twoTransferRoute.secondTransferWaitMinutes() > 15) {
+        return false;
+    }
+
+    // Каждый сегмент поездки должен быть значимым (не менее 3 минут)
+    if (twoTransferRoute.firstRouteTravelMinutes() < 3 ||
+        twoTransferRoute.secondRouteTravelMinutes() < 3 ||
+        twoTransferRoute.thirdRouteTravelMinutes() < 3) {
+        return false;
+    }
+    */
+
         int totalTime = twoTransferRoute.firstRouteTravelMinutes() +
                 twoTransferRoute.firstTransferWaitMinutes() +
                 twoTransferRoute.secondRouteTravelMinutes() +
                 twoTransferRoute.secondTransferWaitMinutes() +
                 twoTransferRoute.thirdRouteTravelMinutes();
 
-        // Максимум 120 минут для двух пересадок
-        if (totalTime > 120) {
+        log.debug("🔍 Validating route {}-{}-{}: total={}min, segments=[{}+{}+{}], waits=[{}+{}]",
+                twoTransferRoute.firstRoute().getRouteNumber(),
+                twoTransferRoute.secondRoute().getRouteNumber(),
+                twoTransferRoute.thirdRoute().getRouteNumber(),
+                totalTime,
+                twoTransferRoute.firstRouteTravelMinutes(),
+                twoTransferRoute.secondRouteTravelMinutes(),
+                twoTransferRoute.thirdRouteTravelMinutes(),
+                twoTransferRoute.firstTransferWaitMinutes(),
+                twoTransferRoute.secondTransferWaitMinutes());
+
+        // 1. Общее время поездки
+        if (totalTime > 150) {
+            log.debug("❌ Route rejected: total time {} > 150 minutes", totalTime);
             return false;
         }
 
-        // Каждое ожидание не более 15 минут
-        if (twoTransferRoute.firstTransferWaitMinutes() > 15 ||
-                twoTransferRoute.secondTransferWaitMinutes() > 15) {
+        // 2. Время ожидания на пересадках
+        if (twoTransferRoute.firstTransferWaitMinutes() > 25 ||
+                twoTransferRoute.secondTransferWaitMinutes() > 25) {
+            log.debug("❌ Route rejected: wait times too long ({}, {})",
+                    twoTransferRoute.firstTransferWaitMinutes(),
+                    twoTransferRoute.secondTransferWaitMinutes());
             return false;
         }
 
-        // Каждый сегмент поездки должен быть значимым (не менее 3 минут)
-        if (twoTransferRoute.firstRouteTravelMinutes() < 3 ||
-                twoTransferRoute.secondRouteTravelMinutes() < 3 ||
-                twoTransferRoute.thirdRouteTravelMinutes() < 3) {
+        // 3. Минимальное время сегментов
+        if (twoTransferRoute.firstRouteTravelMinutes() < 1 ||
+                twoTransferRoute.secondRouteTravelMinutes() < 1 ||
+                twoTransferRoute.thirdRouteTravelMinutes() < 1) {
+            log.debug("❌ Route rejected: segments too short ({}, {}, {})",
+                    twoTransferRoute.firstRouteTravelMinutes(),
+                    twoTransferRoute.secondRouteTravelMinutes(),
+                    twoTransferRoute.thirdRouteTravelMinutes());
             return false;
         }
+
+        // 4. Проверка уникальности маршрутов
+        if (twoTransferRoute.firstRoute().getRouteNumber().equals(twoTransferRoute.secondRoute().getRouteNumber()) ||
+                twoTransferRoute.secondRoute().getRouteNumber().equals(twoTransferRoute.thirdRoute().getRouteNumber()) ||
+                twoTransferRoute.firstRoute().getRouteNumber().equals(twoTransferRoute.thirdRoute().getRouteNumber())) {
+            log.debug("❌ Route rejected: duplicate routes {}-{}-{}",
+                    twoTransferRoute.firstRoute().getRouteNumber(),
+                    twoTransferRoute.secondRoute().getRouteNumber(),
+                    twoTransferRoute.thirdRoute().getRouteNumber());
+            return false;
+        }
+
+        log.debug("✅ Route accepted: {}-{}-{} (total: {} min)",
+                twoTransferRoute.firstRoute().getRouteNumber(),
+                twoTransferRoute.secondRoute().getRouteNumber(),
+                twoTransferRoute.thirdRoute().getRouteNumber(),
+                totalTime);
 
         return true;
     }
 
-    /**
-     * Создать TripOption с одной пересадкой
-     */
+
     private Mono<TripOption> createOneTransferTripOption(RouteCalculationService.TransferRouteResult transferRoute,
                                                          Location originalFrom, Location originalTo) {
-
-        return Mono.fromCallable(() -> {
-                    try {
-                        List<RouteSegment> segments = new ArrayList<>();
-
-                        // 1. Пешком до первой остановки
-                        Location firstStopLocation = new Location(
-                                transferRoute.fromStop().getLatitude().doubleValue(),
-                                transferRoute.fromStop().getLongitude().doubleValue(),
-                                transferRoute.fromStop().getStopName()
-                        );
-
-                        int walkingToFirstStop = etaCalculationService.calculateWalkingTimeMinutes(
-                                originalFrom, firstStopLocation);
-
-                        if (walkingToFirstStop > 15) {
-                            log.debug("Walking to first stop too long: {} minutes", walkingToFirstStop);
-                            return null;
-                        }
-
-                        segments.add(RouteSegment.walkingSegment(originalFrom, firstStopLocation, walkingToFirstStop));
-
-                        // 2. Первая поездка на автобусе
-                        Location transferStopLocation = new Location(
-                                transferRoute.transferStop().getLatitude().doubleValue(),
-                                transferRoute.transferStop().getLongitude().doubleValue(),
-                                transferRoute.transferStop().getStopName()
-                        );
-
-                        segments.add(RouteSegment.busRideSegment(
-                                firstStopLocation,
-                                transferStopLocation,
-                                transferRoute.firstRouteTravelMinutes(),
-                                transferRoute.firstRoute().getRouteNumber()
-                        ));
-
-                        // 3. Пересадка (ожидание)
-                        int transferTime = etaCalculationService.calculateTransferTimeMinutes(
-                                transferRoute.transferStop().getStopName(),
-                                transferRoute.transferStop().getIsMajorStop()
-                        );
-
-                        // Используем реальное время ожидания или рассчитанное
-                        int actualTransferTime = Math.max(transferTime, transferRoute.transferWaitMinutes());
-                        segments.add(RouteSegment.transferSegment(transferStopLocation, actualTransferTime));
-
-                        // 4. Вторая поездка на автобусе
-                        Location lastStopLocation = new Location(
-                                transferRoute.toStop().getLatitude().doubleValue(),
-                                transferRoute.toStop().getLongitude().doubleValue(),
-                                transferRoute.toStop().getStopName()
-                        );
-
-                        segments.add(RouteSegment.busRideSegment(
-                                transferStopLocation,
-                                lastStopLocation,
-                                transferRoute.secondRouteTravelMinutes(),
-                                transferRoute.secondRoute().getRouteNumber()
-                        ));
-
-                        // 5. Пешком от последней остановки до пункта назначения
-                        int walkingFromLastStop = etaCalculationService.calculateWalkingTimeMinutes(
-                                lastStopLocation, originalTo);
-
-                        if (walkingFromLastStop > 15) {
-                            log.debug("Walking from last stop too long: {} minutes", walkingFromLastStop);
-                            return null;
-                        }
-
-                        segments.add(RouteSegment.walkingSegment(lastStopLocation, originalTo, walkingFromLastStop));
-
-                        return new TripOption(TripType.ONE_TRANSFER, segments);
-
-                    } catch (Exception e) {
-                        log.warn("Failed to create one-transfer trip option: {}", e.getMessage());
-                        return null;
-                    }
-                })
-                .doOnNext(option -> {
-                    if (option != null) {
-                        log.debug("Created one-transfer trip option: routes {}-{}, {} minutes total, {} transfers",
-                                transferRoute.firstRoute().getRouteNumber(),
-                                transferRoute.secondRoute().getRouteNumber(),
-                                option.getTotalTravelMinutes(),
-                                option.getTransfersCount());
-                    }
-                });
+        return createTransferTripOption(
+                transferRoute.fromStop(), transferRoute.transferStop(), transferRoute.toStop(),
+                transferRoute.firstRoute().getRouteNumber(), transferRoute.secondRoute().getRouteNumber(),
+                transferRoute.firstRouteTravelMinutes(), transferRoute.secondRouteTravelMinutes(),
+                transferRoute.transferWaitMinutes(), originalFrom, originalTo, TripType.ONE_TRANSFER
+        );
     }
 
-    /**
-     * Создать TripOption с двумя пересадками
-     */
     private Mono<TripOption> createTwoTransferTripOption(RouteCalculationService.TwoTransferRouteResult twoTransferRoute,
                                                          Location originalFrom, Location originalTo) {
-
         return Mono.fromCallable(() -> {
-                    try {
-                        List<RouteSegment> segments = new ArrayList<>();
-
-                        // 1. Пешком до первой остановки
-                        Location firstStopLocation = new Location(
-                                twoTransferRoute.fromStop().getLatitude().doubleValue(),
-                                twoTransferRoute.fromStop().getLongitude().doubleValue(),
-                                twoTransferRoute.fromStop().getStopName()
-                        );
-
-                        int walkingToFirstStop = etaCalculationService.calculateWalkingTimeMinutes(
-                                originalFrom, firstStopLocation);
-
-                        if (walkingToFirstStop > 12) { // Более строгие требования для двух пересадок
-                            return null;
-                        }
-
-                        segments.add(RouteSegment.walkingSegment(originalFrom, firstStopLocation, walkingToFirstStop));
-
-                        // 2. Первая поездка
-                        Location firstTransferLocation = new Location(
-                                twoTransferRoute.firstTransferStop().getLatitude().doubleValue(),
-                                twoTransferRoute.firstTransferStop().getLongitude().doubleValue(),
-                                twoTransferRoute.firstTransferStop().getStopName()
-                        );
-
-                        segments.add(RouteSegment.busRideSegment(
-                                firstStopLocation,
-                                firstTransferLocation,
-                                twoTransferRoute.firstRouteTravelMinutes(),
-                                twoTransferRoute.firstRoute().getRouteNumber()
-                        ));
-
-                        // 3. Первая пересадка
-                        int firstTransferTime = etaCalculationService.calculateTransferTimeMinutes(
-                                twoTransferRoute.firstTransferStop().getStopName(),
-                                twoTransferRoute.firstTransferStop().getIsMajorStop()
-                        );
-
-                        int actualFirstTransferTime = Math.max(firstTransferTime, twoTransferRoute.firstTransferWaitMinutes());
-                        segments.add(RouteSegment.transferSegment(firstTransferLocation, actualFirstTransferTime));
-
-                        // 4. Вторая поездка
-                        Location secondTransferLocation = new Location(
-                                twoTransferRoute.secondTransferStop().getLatitude().doubleValue(),
-                                twoTransferRoute.secondTransferStop().getLongitude().doubleValue(),
-                                twoTransferRoute.secondTransferStop().getStopName()
-                        );
-
-                        segments.add(RouteSegment.busRideSegment(
-                                firstTransferLocation,
-                                secondTransferLocation,
-                                twoTransferRoute.secondRouteTravelMinutes(),
-                                twoTransferRoute.secondRoute().getRouteNumber()
-                        ));
-
-                        // 5. Вторая пересадка
-                        int secondTransferTime = etaCalculationService.calculateTransferTimeMinutes(
-                                twoTransferRoute.secondTransferStop().getStopName(),
-                                twoTransferRoute.secondTransferStop().getIsMajorStop()
-                        );
-
-                        int actualSecondTransferTime = Math.max(secondTransferTime, twoTransferRoute.secondTransferWaitMinutes());
-                        segments.add(RouteSegment.transferSegment(secondTransferLocation, actualSecondTransferTime));
-
-                        // 6. Третья поездка
-                        Location finalStopLocation = new Location(
-                                twoTransferRoute.toStop().getLatitude().doubleValue(),
-                                twoTransferRoute.toStop().getLongitude().doubleValue(),
-                                twoTransferRoute.toStop().getStopName()
-                        );
-
-                        segments.add(RouteSegment.busRideSegment(
-                                secondTransferLocation,
-                                finalStopLocation,
-                                twoTransferRoute.thirdRouteTravelMinutes(),
-                                twoTransferRoute.thirdRoute().getRouteNumber()
-                        ));
-
-                        // 7. Пешком до пункта назначения
-                        int walkingToDestination = etaCalculationService.calculateWalkingTimeMinutes(
-                                finalStopLocation, originalTo);
-
-                        if (walkingToDestination > 12) {
-                            return null;
-                        }
-
-                        segments.add(RouteSegment.walkingSegment(finalStopLocation, originalTo, walkingToDestination));
-
-                        return new TripOption(TripType.TWO_TRANSFERS, segments);
-
-                    } catch (Exception e) {
-                        log.warn("Failed to create two-transfer trip option: {}", e.getMessage());
-                        return null;
-                    }
-                })
-                .doOnNext(option -> {
-                    if (option != null) {
-                        log.debug("Created two-transfer trip option: routes {}-{}-{}, {} minutes total, {} transfers",
-                                twoTransferRoute.firstRoute().getRouteNumber(),
-                                twoTransferRoute.secondRoute().getRouteNumber(),
-                                twoTransferRoute.thirdRoute().getRouteNumber(),
-                                option.getTotalTravelMinutes(),
-                                option.getTransfersCount());
-                    }
-                });
+            List<RouteSegment> segments = createTwoTransferSegments(twoTransferRoute, originalFrom, originalTo);
+            return new TripOption(TripType.TWO_TRANSFERS, segments);
+        }).onErrorResume(e -> {
+            log.warn("Failed to create two-transfer trip option: {}", e.getMessage());
+            return Mono.empty();
+        });
     }
+
+    // РЕФАКТОРИНГ: Общий метод для создания transfer trip options
+    private Mono<TripOption> createTransferTripOption(BusStop fromStop, BusStop transferStop, BusStop toStop,
+                                                      String firstRouteNumber, String secondRouteNumber,
+                                                      int firstRouteTime, int secondRouteTime, int transferTime,
+                                                      Location originalFrom, Location originalTo, TripType tripType) {
+        return Mono.fromCallable(() -> {
+            List<RouteSegment> segments = createTransferSegments(
+                    fromStop, transferStop, toStop, firstRouteNumber, secondRouteNumber,
+                    firstRouteTime, secondRouteTime, transferTime, originalFrom, originalTo
+            );
+            return new TripOption(tripType, segments);
+        }).onErrorResume(e -> {
+            log.warn("Failed to create transfer trip option: {}", e.getMessage());
+            return Mono.empty();
+        });
+    }
+
+    private List<RouteSegment> createTransferSegments(BusStop fromStop, BusStop transferStop, BusStop toStop,
+                                                      String firstRouteNumber, String secondRouteNumber,
+                                                      int firstRouteTime, int secondRouteTime, int transferTime,
+                                                      Location originalFrom, Location originalTo) {
+        Location firstStopLocation = createLocationFromStop(fromStop);
+        Location transferStopLocation = createLocationFromStop(transferStop);
+        Location lastStopLocation = createLocationFromStop(toStop);
+
+        int walkingToFirst = etaCalculationService.calculateWalkingTimeMinutes(originalFrom, firstStopLocation);
+        int walkingFromLast = etaCalculationService.calculateWalkingTimeMinutes(lastStopLocation, originalTo);
+
+        if (walkingToFirst > RoutingConstants.MAX_WALKING_TIME_MINUTES ||
+                walkingFromLast > RoutingConstants.MAX_WALKING_TIME_MINUTES) {
+            throw new IllegalArgumentException("Walking time too long");
+        }
+
+        return List.of(
+                RouteSegment.walkingSegment(originalFrom, firstStopLocation, walkingToFirst),
+                RouteSegment.busRideSegment(firstStopLocation, transferStopLocation, firstRouteTime, firstRouteNumber),
+                RouteSegment.transferSegment(transferStopLocation, transferTime),
+                RouteSegment.busRideSegment(transferStopLocation, lastStopLocation, secondRouteTime, secondRouteNumber),
+                RouteSegment.walkingSegment(lastStopLocation, originalTo, walkingFromLast)
+        );
+    }
+
+    private List<RouteSegment> createTwoTransferSegments(RouteCalculationService.TwoTransferRouteResult route,
+                                                         Location originalFrom, Location originalTo) {
+        Location firstStopLocation = createLocationFromStop(route.fromStop());
+        Location firstTransferLocation = createLocationFromStop(route.firstTransferStop());
+        Location secondTransferLocation = createLocationFromStop(route.secondTransferStop());
+        Location finalStopLocation = createLocationFromStop(route.toStop());
+
+        int walkingToFirst = etaCalculationService.calculateWalkingTimeMinutes(originalFrom, firstStopLocation);
+        int walkingFromFinal = etaCalculationService.calculateWalkingTimeMinutes(finalStopLocation, originalTo);
+
+        if (walkingToFirst > 12 || walkingFromFinal > 12) {
+            throw new IllegalArgumentException("Walking time too long for two transfers");
+        }
+
+        return List.of(
+                RouteSegment.walkingSegment(originalFrom, firstStopLocation, walkingToFirst),
+                RouteSegment.busRideSegment(firstStopLocation, firstTransferLocation,
+                        route.firstRouteTravelMinutes(), route.firstRoute().getRouteNumber()),
+                RouteSegment.transferSegment(firstTransferLocation, route.firstTransferWaitMinutes()),
+                RouteSegment.busRideSegment(firstTransferLocation, secondTransferLocation,
+                        route.secondRouteTravelMinutes(), route.secondRoute().getRouteNumber()),
+                RouteSegment.transferSegment(secondTransferLocation, route.secondTransferWaitMinutes()),
+                RouteSegment.busRideSegment(secondTransferLocation, finalStopLocation,
+                        route.thirdRouteTravelMinutes(), route.thirdRoute().getRouteNumber()),
+                RouteSegment.walkingSegment(finalStopLocation, originalTo, walkingFromFinal)
+        );
+    }
+
+    private void logTransferSearchResults(TripPlan plan) {
+        int totalOptions = plan.getTripOptions().size();
+
+        // Правильный подсчет опций по типам
+        long directOptions = plan.getTripOptions().stream()
+                .filter(option -> option.getTripType() == TripType.DIRECT)
+                .count();
+
+        long oneTransferOptions = plan.getTripOptions().stream()
+                .filter(option -> option.getTripType() == TripType.ONE_TRANSFER)
+                .count();
+
+        long twoTransferOptions = plan.getTripOptions().stream()
+                .filter(option -> option.getTripType() == TripType.TWO_TRANSFERS)
+                .count();
+
+        long totalTransferOptions = oneTransferOptions + twoTransferOptions;
+
+        if (totalOptions > 0) {
+            TripOption bestTransfer = plan.getOptionWithFewestTransfers();
+            log.info("Found {} transfer route options (direct: {}, 1-transfer: {}, 2-transfer: {}, total: {}). Best: {} transfers, {} minutes",
+                    totalTransferOptions, directOptions, oneTransferOptions, twoTransferOptions, totalOptions,
+                    bestTransfer != null ? bestTransfer.getTransfersCount() : "N/A",
+                    bestTransfer != null ? bestTransfer.getTotalTravelMinutes() : "N/A");
+        } else {
+            log.info("No viable transfer routes found");
+        }
+    }
+
 
     public record Command(Location fromLocation, Location toLocation,
                           TripSearchCriteria searchCriteria, TripPlan existingPlan) {
-
-        // Convenience constructors
         public Command(Location fromLocation, Location toLocation) {
             this(fromLocation, toLocation, TripSearchCriteria.defaultCriteria(), null);
         }
-
         public Command(Location fromLocation, Location toLocation, TripSearchCriteria searchCriteria) {
             this(fromLocation, toLocation, searchCriteria, null);
         }
-
         public Command(Location fromLocation, Location toLocation, TripPlan existingPlan) {
             this(fromLocation, toLocation, TripSearchCriteria.defaultCriteria(), existingPlan);
         }

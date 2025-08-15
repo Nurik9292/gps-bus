@@ -2,8 +2,6 @@ package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
 import biz.ugur.busroutebackend.admin.application.dto.banner.*;
 import biz.ugur.busroutebackend.admin.application.usecase.banner.*;
-import biz.ugur.busroutebackend.interfaces.rest.admin.response.stop.BusStopResponse;
-import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

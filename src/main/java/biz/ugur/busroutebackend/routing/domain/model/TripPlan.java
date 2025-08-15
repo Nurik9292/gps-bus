@@ -190,24 +190,10 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
 
     public List<TripOption> getTransferOptions() {
         return tripOptions.stream()
-                .filter(option -> option.getTripType() != TripType.DIRECT)
-                .sorted(this::compareOptions)
+                .filter(option -> option.getTransfersCount() > 0)
                 .collect(Collectors.toList());
     }
 
-    public TripPlanStatistics getStatistics() {
-        if (tripOptions.isEmpty()) {
-            return new TripPlanStatistics(0, 0, 0, 0, 0);
-        }
-
-        int directCount = (int) tripOptions.stream().filter(o -> o.getTripType() == TripType.DIRECT).count();
-        int transferCount = tripOptions.size() - directCount;
-        int fastestTime = tripOptions.stream().mapToInt(TripOption::getTotalTravelMinutes).min().orElse(0);
-        int averageTime = (int) tripOptions.stream().mapToInt(TripOption::getTotalTravelMinutes).average().orElse(0);
-        double averageCost = tripOptions.stream().mapToDouble(o -> (o.getTransfersCount() + 1) * 1.0).average().orElse(0);
-
-        return new TripPlanStatistics(directCount, transferCount, fastestTime, averageTime, averageCost);
-    }
 
     public boolean isWalkable() {
         double distanceMeters = originLocation.distanceTo(destinationLocation);
@@ -218,7 +204,6 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         if (!isWalkable()) return -1;
 
         double distanceMeters = originLocation.distanceTo(destinationLocation);
-        // Средняя скорость ходьбы: 5 км/ч = 83.33 м/мин
         return (int) Math.ceil(distanceMeters / 83.33);
     }
 
@@ -231,8 +216,6 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         return new ArrayList<>(tripOptions);
     }
 
-    // Приватные методы
-
     private Location validateLocation(Location location, String type) {
         if (location == null) {
             throw new IllegalArgumentException(type + " location cannot be null");
@@ -242,7 +225,6 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
     }
 
     private boolean isOptionAcceptable(TripOption option) {
-        // Проверяем критерии поиска
         if (option.getTransfersCount() > searchCriteria.getMaxTransfers()) {
             return false;
         }
@@ -251,7 +233,6 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
             return false;
         }
 
-        // Отвергаем слишком долгие поездки (больше 4 часов)
         if (option.getTotalTravelMinutes() > 240) {
             return false;
         }

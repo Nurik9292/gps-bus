@@ -12,12 +12,15 @@ import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 @Slf4j
@@ -33,6 +36,10 @@ public class VehicleDataScheduler {
 
     private final AtomicBoolean gpsUpdateInProgress = new AtomicBoolean(false);
     private final AtomicBoolean busInfoSyncInProgress = new AtomicBoolean(false);
+
+    private final AtomicInteger failureCount = new AtomicInteger(0);
+    private final AtomicBoolean circuitOpen = new AtomicBoolean(false);
+    private volatile Instant lastFailure = Instant.now();
 
     private static final String GPS_UPDATE_STATS_KEY = "gps:update:stats";
     private static final String GPS_HEALTH_KEY = "gps:health";
@@ -51,8 +58,20 @@ public class VehicleDataScheduler {
     }
 
 
-    @Scheduled(cron = "0,30 * * * * *")
+    @Scheduled(cron = "0 * * * * *")
     public void updateVehiclePositions() {
+        // 🚨 Circuit Breaker проверка
+        if (circuitOpen.get()) {
+            if (Duration.between(lastFailure, Instant.now()).toMinutes() < 5) {
+                log.warn("Circuit breaker is OPEN, skipping GPS update");
+                return;
+            } else {
+                log.info("Circuit breaker reset after 5 minutes");
+                circuitOpen.set(false);
+                failureCount.set(0);
+            }
+        }
+
         if (!gpsUpdateInProgress.compareAndSet(false, true)) {
             log.warn("GPS update already in progress, skipping this cycle");
             return;
@@ -63,21 +82,37 @@ public class VehicleDataScheduler {
             Instant startTime = Instant.now();
 
             gpsApiClient.fetchAllVehiclePositions()
+                    .timeout(Duration.ofSeconds(30)) // Таймаут
                     .flatMap(positions -> {
-                        log.info("Fetched {} GPS positions, processing...", positions.size());
-                        return updateVehiclePositionsUseCase.execute(positions);
+                        log.info("Fetched {} GPS positions, limiting to 20...", positions.size());
+
+                        return Flux.fromIterable(positions)
+                                .take(20) // Берем только первые 20
+                                .buffer(5) // Делим на батчи по 5
+                                .concatMap(batch -> // Последовательная обработка
+                                        updateVehiclePositionsUseCase.execute(batch)
+                                                .timeout(Duration.ofSeconds(15))
+                                                .onErrorResume(error -> {
+                                                    log.error("Failed to process GPS batch of {} vehicles: {}",
+                                                            batch.size(), error.getMessage());
+                                                    handleFailure();
+                                                    return Mono.empty(); // Пропускаем ошибочный batch
+                                                })
+                                )
+                                .reduce(new VehiclePositionUpdateResult(0, 0, 0, 0, 0, Instant.now(), List.of()),
+                                        this::combineResults); // Объединяем результаты всех батчей
                     })
                     .publishOn(Schedulers.boundedElastic())
                     .doOnSuccess(result -> {
                         Duration duration = Duration.between(startTime, Instant.now());
                         log.info("GPS update completed in {}ms: {}", duration.toMillis(), result);
-
+                        failureCount.set(0); // Сброс счетчика при успехе
                         saveGpsUpdateStats(result, duration).subscribe();
                     })
                     .doOnError(error -> {
                         Duration duration = Duration.between(startTime, Instant.now());
                         log.error("GPS update failed after {}ms", duration.toMillis(), error);
-
+                        handleFailure();
                         saveGpsUpdateError(error, duration).subscribe();
                     })
                     .doFinally(signal -> gpsUpdateInProgress.set(false))
@@ -85,12 +120,14 @@ public class VehicleDataScheduler {
 
         } catch (Exception e) {
             log.error("Unexpected error in GPS update scheduler", e);
+            handleFailure();
             gpsUpdateInProgress.set(false);
         }
     }
 
 
-    @Scheduled(cron = "0 * * * * *")
+
+    @Scheduled(cron = "0 */5 * * * *")
     public void syncBusRouteAssignments() {
         log.info("🔥🔥🔥 SCHEDULER TRIGGERED! Current time: {}", Instant.now());
         if (!busInfoSyncInProgress.compareAndSet(false, true)) {
@@ -167,7 +204,6 @@ public class VehicleDataScheduler {
                 .doOnSuccess(deleted -> log.info("Cleaned up {} old GPS stats entries", deleted.size()))
                 .subscribe();
 
-        // Можно добавить очистку других кэшированных данных
     }
 
 
@@ -260,6 +296,28 @@ public class VehicleDataScheduler {
             return timestamp < cutoff;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    private VehiclePositionUpdateResult combineResults(VehiclePositionUpdateResult a, VehiclePositionUpdateResult b) {
+        return new VehiclePositionUpdateResult(
+                a.updatedCount() + b.updatedCount(),
+                a.createdCount() + b.createdCount(),
+                a.failedCount() + b.failedCount(),
+                a.invalidCount() + b.invalidCount(),
+                a.conflictCount() + b.conflictCount(),
+                Instant.now(),
+                List.of()
+        );
+    }
+
+    private void handleFailure() {
+        int failures = failureCount.incrementAndGet();
+        lastFailure = Instant.now();
+
+        if (failures >= 3) {
+            log.error("GPS Circuit breaker OPENED after {} failures", failures);
+            circuitOpen.set(true);
         }
     }
 

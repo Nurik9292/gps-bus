@@ -9,18 +9,16 @@ spring:
     password: bus_route_pass
     driver-class-name: org.postgresql.Driver
 
-
   r2dbc:
     url: r2dbc:postgresql://localhost:5432/bus_route_db
     username: bus_route_user
     password: bus_route_pass
     pool:
-      initial-size: 5
-      max-size: 20
-      max-idle-time: 30m
-      max-acquire-time: 60s
-      max-life-time: 60m
-      max-create-connection-time: 60s
+      initial-size: 2
+      max-size: 5
+      max-idle-time: 10m
+      max-acquire-time: 10s
+      max-create-connection-time: 10s
       validation-query: SELECT 1
 
   data:
@@ -34,13 +32,18 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+  task:
+    scheduling:
+      pool:
+        size: 1
+
 logging:
   level:
-    biz.ugur.busroutebackend: DEBUG
-    org.springframework.web.reactive: DEBUG
+    biz.ugur.busroutebackend: INFO
+    org.springframework.web.reactive: INFO
     org.springframework.data: INFO
-    org.springframework.r2dbc: DEBUG
-    io.r2dbc.postgresql: DEBUG
+    org.springframework.r2dbc: INFO
+    io.r2dbc.postgresql: INFO
     org.flywaydb: INFO
 
 external:
@@ -62,6 +65,17 @@ external:
         initial-interval: 1s
 
 app:
+#  migration:
+#    enabled: false
+#    source-db:
+#      url: r2dbc:postgresql://95.85.127.56:5432/postgres
+#      username: postgres
+#      password: postgres
+#    target-db:
+#      url: r2dbc:postgresql://localhost:5432/bus_route_db
+#      username: bus_route_user
+#      password: bus_route_pass
+
   scheduling:
     enabled: false
 

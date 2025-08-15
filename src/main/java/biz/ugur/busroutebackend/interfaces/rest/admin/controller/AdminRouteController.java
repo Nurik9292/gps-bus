@@ -8,11 +8,15 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.CheckRouteN
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.application.usecase.route.*;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/admin/routes")
@@ -26,19 +30,22 @@ public class AdminRouteController {
     private final DeleteBusRouteUseCase deleteBusRouteUseCase;
     private final CheckRouteNumberUseCase checkRouteNumberUseCase;
     private final GetAllBusRoutesUseCase getAllRoutesUseCase;
+    private final FixUseCase findRouteByIdUseCase;
 
     public AdminRouteController(CreateBusRouteUseCase createBusRouteUseCase,
                                 GetAllBusRoutesWithPaginationUseCase getAllBusRoutesUseCase,
                                 UpdateBusRouteUseCase updateBusRouteUseCase,
                                 DeleteBusRouteUseCase deleteBusRouteUseCase,
                                 CheckRouteNumberUseCase checkRouteNumberUseCase,
-                                GetAllBusRoutesUseCase getAllRoutesUseCase) {
+                                GetAllBusRoutesUseCase getAllRoutesUseCase,
+                                FixUseCase findRouteByIdUseCase) {
         this.createBusRouteUseCase = createBusRouteUseCase;
         this.getAllBusRoutesUseCase = getAllBusRoutesUseCase;
         this.updateBusRouteUseCase = updateBusRouteUseCase;
         this.deleteBusRouteUseCase = deleteBusRouteUseCase;
         this.checkRouteNumberUseCase = checkRouteNumberUseCase;
         this.getAllRoutesUseCase = getAllRoutesUseCase;
+        this.findRouteByIdUseCase = findRouteByIdUseCase;
     }
 
 
@@ -104,6 +111,7 @@ public class AdminRouteController {
                 .doOnError(error -> log.error("Failed to update bus route: {}", routeId, error));
     }
 
+
     @DeleteMapping("/{routeId}")
     public Mono<ResponseEntity<Void>> deleteRoute(@PathVariable String routeId) {
         log.info("Deleting bus route: {}", routeId);
@@ -128,6 +136,11 @@ public class AdminRouteController {
                 .map(CheckRouteNumberResponse::of)
                 .map(ResponseEntity::ok);
 
+    }
+
+    @GetMapping("/test-route")
+    public Mono<ResponseEntity<Void>> testRoute() {
+        return findRouteByIdUseCase.execute(null).then(Mono.just(ResponseEntity.noContent().<Void>build()));
     }
 
     private ResponseEntity<BusRouteResponse> toRouteResponseEntity(RouteResult result) {

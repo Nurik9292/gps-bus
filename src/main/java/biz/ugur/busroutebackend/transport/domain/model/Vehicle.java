@@ -8,6 +8,7 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehiclePosition;
 import lombok.Getter;
+import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
@@ -22,6 +23,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     @Column("id")
     private VehicleId id;
 
+    @Setter
     @Column("device_id")
     private String deviceId; // GPS device ID from external API
 
@@ -194,7 +196,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
             throw new IllegalArgumentException("License plate cannot be null or empty");
         }
 
-        // Валидация формата туркменских номеров: "1992 AGH"
         String plate = licensePlate.trim().toUpperCase();
         if (!plate.matches("\\d{4}\\s[A-Z]{3}")) {
             throw new IllegalArgumentException("Invalid Turkmen license plate format. Expected: '1992 AGH'");

@@ -85,40 +85,43 @@ public class UpdateVehiclePositionsUseCase implements UseCase<List<GpsPositionDT
             return Mono.just(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), "Cannot extract license plate"));
         }
 
-        return vehicleRepository.existsByLicensePlate(licensePlate)
-                .flatMap(exists -> {
-                    if (exists) {
-                        log.warn("Vehicle with plate {} already exists but different device ID", licensePlate);
-                        return Mono.just(VehicleUpdateStatus.conflict(gpsPosition.getDeviceId(),
-                                "Vehicle with this license plate already exists"));
-                    }
+        return vehicleRepository.findByLicensePlate(licensePlate)
+                .flatMap(existingVehicle -> {
+                    // ✅ НАШЛИ СУЩЕСТВУЮЩИЙ - ОБНОВЛЯЕМ ЕГО
+                    log.info("Found existing vehicle by license plate: {}, updating device_id", licensePlate);
+                    existingVehicle.setDeviceId(gpsPosition.getDeviceId()); // Простое присвоение
+                    return updateExistingVehicle(existingVehicle, gpsPosition);
+                })
+                .switchIfEmpty(
+                        // 🆕 НЕ НАШЛИ - СОЗДАЕМ НОВЫЙ
+                        Mono.defer(() -> {
+                            try {
+                                Vehicle newVehicle = new Vehicle(gpsPosition.getDeviceId(), licensePlate);
+                                newVehicle.updatePosition(
+                                        gpsPosition.getLatitude(),
+                                        gpsPosition.getLongitude(),
+                                        gpsPosition.getSpeed(),
+                                        gpsPosition.getFixTime()
+                                );
 
-                    try {
-                        Vehicle newVehicle = new Vehicle(gpsPosition.getDeviceId(), licensePlate);
-                        newVehicle.updatePosition(
-                                gpsPosition.getLatitude(),
-                                gpsPosition.getLongitude(),
-                                gpsPosition.getSpeed(),
-                                gpsPosition.getFixTime()
-                        );
+                                return vehicleRepository.save(newVehicle)
+                                        .doOnNext(savedVehicle -> {
+                                            savedVehicle.getUncommittedEvents().forEach(eventBus::publish);
+                                            savedVehicle.markEventsAsCommitted();
+                                        })
+                                        .map(savedVehicle -> VehicleUpdateStatus.created(
+                                                savedVehicle.getId().getValue(),
+                                                savedVehicle.getDeviceId(),
+                                                savedVehicle.getLicensePlate()
+                                        ))
+                                        .doOnSuccess(status -> log.info("Created new vehicle: {}", status));
 
-                        return vehicleRepository.save(newVehicle)
-                                .doOnNext(savedVehicle -> {
-                                    savedVehicle.getUncommittedEvents().forEach(eventBus::publish);
-                                    savedVehicle.markEventsAsCommitted();
-                                })
-                                .map(savedVehicle -> VehicleUpdateStatus.created(
-                                        savedVehicle.getId().getValue(),
-                                        savedVehicle.getDeviceId(),
-                                        savedVehicle.getLicensePlate()
-                                ))
-                                .doOnSuccess(status -> log.info("Created new vehicle: {}", status));
-
-                    } catch (IllegalArgumentException e) {
-                        log.warn("Invalid data for new vehicle {}: {}", licensePlate, e.getMessage());
-                        return Mono.just(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), e.getMessage()));
-                    }
-                });
+                            } catch (IllegalArgumentException e) {
+                                log.warn("Invalid data for new vehicle {}: {}", licensePlate, e.getMessage());
+                                return Mono.just(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), e.getMessage()));
+                            }
+                        })
+                );
     }
 
     private boolean isValidGpsPosition(GpsPositionDTO gpsPosition) {
@@ -126,7 +129,6 @@ public class UpdateVehiclePositionsUseCase implements UseCase<List<GpsPositionDT
         if (gpsPosition.getDeviceId() == null || gpsPosition.getDeviceId().trim().isEmpty()) return false;
         if (gpsPosition.getLatitude() == null || gpsPosition.getLongitude() == null) return false;
 
-        // Валидация координат Туркменистана
         double lat = gpsPosition.getLatitude();
         double lon = gpsPosition.getLongitude();
 

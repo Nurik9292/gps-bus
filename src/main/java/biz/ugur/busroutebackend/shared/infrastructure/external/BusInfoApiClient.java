@@ -16,6 +16,7 @@ import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 
 @Component("busInfoApiClientComponent")
@@ -43,6 +44,12 @@ public class BusInfoApiClient {
                 .exchangeToMono(response -> {
                     HttpStatusCode statusCode = response.statusCode();
                     HttpStatus status = HttpStatus.resolve(statusCode.value());
+                    String contentType = response.headers().contentType().map(MediaType::toString).orElse("unknown");
+
+                    if (contentType.contains("text/html")) {
+                        log.error("Bus Info API returned HTML instead of JSON - auth failed or endpoint changed");
+                        return Mono.just(Collections.emptyList());
+                    }
 
                     if (status == HttpStatus.UNAUTHORIZED) {
                         log.error("Bus Info API authentication failed");
