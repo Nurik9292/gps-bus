@@ -8,7 +8,6 @@ import biz.ugur.busroutebackend.client.application.usecase.VerifyOtpUseCase;
 import biz.ugur.busroutebackend.client.domain.enums.Platform;
 import biz.ugur.busroutebackend.interfaces.rest.client.request.*;
 import biz.ugur.busroutebackend.interfaces.rest.client.response.*;
-import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -85,8 +84,6 @@ public class ClientAuthController {
 
     @PostMapping("/center-auth")
     public Mono<ResponseEntity<LoginResponse>> centerLogin(@Valid @RequestBody CenterRequest request) {
-
-
 
        return centerRegisterClientUseCase.execute(new CenterRegisterClientUseCase.Command(request.phone(), request.platform()))
                .map(result -> ResponseEntity.ok(new LoginResponse(

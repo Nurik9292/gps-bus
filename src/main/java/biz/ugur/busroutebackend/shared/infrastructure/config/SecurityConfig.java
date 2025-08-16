@@ -1,5 +1,8 @@
 package biz.ugur.busroutebackend.shared.infrastructure.config;
 
+import biz.ugur.busroutebackend.client.domain.repository.ClientRepository;
+import biz.ugur.busroutebackend.client.infrastructure.security.ClientAuthenticationFilter;
+import biz.ugur.busroutebackend.client.infrastructure.security.JwtTokenService;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtAuthenticationFilter;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtService;
 import biz.ugur.busroutebackend.shared.infrastructure.security.TokenBlacklistService;
@@ -34,11 +37,18 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtService jwtService;
+    private final JwtTokenService clientJwtTokenService;
     private final TokenBlacklistService tokenBlacklistService;
+    private final ClientRepository clientRepository;
 
-    public SecurityConfig(JwtService jwtService, TokenBlacklistService tokenBlacklistService) {
+    public SecurityConfig(JwtService jwtService,
+                          JwtTokenService clientJwtTokenService,
+                          TokenBlacklistService tokenBlacklistService,
+                          ClientRepository clientRepository) {
         this.jwtService = jwtService;
+        this.clientJwtTokenService = clientJwtTokenService;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.clientRepository = clientRepository;
     }
 
     @Bean
@@ -55,11 +65,13 @@ public class SecurityConfig {
                         .accessDeniedHandler(customAccessDeniedHandler())
                 )
 
+                .addFilterAfter(clientAuthenticationFilter(), SecurityWebFiltersOrder.AUTHENTICATION)
                 .addFilterAfter(jwtAuthenticationFilter(), SecurityWebFiltersOrder.AUTHENTICATION)
 
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.POST, "/admin/auth/login").permitAll()
                         .pathMatchers(HttpMethod.POST, "/admin/auth/refresh").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/client/auth/**").permitAll()
 
                         .pathMatchers(HttpMethod.GET, "/public/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/routes/**").permitAll()
@@ -74,6 +86,7 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/banners/**").permitAll()
 
                         .pathMatchers("/ws/**").permitAll()
+                        .pathMatchers("/mobile/**").permitAll()
 
 
 //                        .pathMatchers(HttpMethod.GET, "/admin/auth/me").hasRole("ADMIN")
@@ -99,6 +112,11 @@ public class SecurityConfig {
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
         return new JwtAuthenticationFilter(jwtService, tokenBlacklistService);
+    }
+
+    @Bean
+    public ClientAuthenticationFilter clientAuthenticationFilter() {
+        return new ClientAuthenticationFilter(clientJwtTokenService, clientRepository);
     }
 
     @Bean

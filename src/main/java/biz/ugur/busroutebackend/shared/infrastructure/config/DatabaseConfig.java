@@ -1,5 +1,7 @@
 package biz.ugur.busroutebackend.shared.infrastructure.config;
 
+import io.r2dbc.pool.ConnectionPool;
+import io.r2dbc.pool.ConnectionPoolConfiguration;
 import io.r2dbc.spi.ConnectionFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -39,20 +41,42 @@ public class DatabaseConfig extends AbstractR2dbcConfiguration {
     @Value("${spring.r2dbc.database:bus_route_db}")
     private String database;
 
+    @Value("${spring.r2dbc.pool.initial-size}")
+    private Integer initialPoolSize;
+
+    @Value("${spring.r2dbc.pool.max-size}")
+    private Integer maxPoolSize;
+
+    @Value("${spring.r2dbc.pool.max-idle-time}")
+    private Integer maxIdleTime;
+
+    @Value("${spring.r2dbc.pool.max-create-connection-time}")
+    private Integer maxCreateConnectionTime;
+
+
     @Bean
     @Primary
     @Override
     public ConnectionFactory connectionFactory() {
-        return new PostgresqlConnectionFactory(
+        PostgresqlConnectionFactory factory = new PostgresqlConnectionFactory(
                 PostgresqlConnectionConfiguration.builder()
                         .host(host)
                         .port(port)
                         .database(database)
                         .username(username)
                         .password(password)
-                        .connectTimeout(Duration.ofSeconds(30))
+                        .connectTimeout(Duration.ofSeconds(maxCreateConnectionTime))
                         .build()
         );
+
+        ConnectionPoolConfiguration config = ConnectionPoolConfiguration.builder(factory)
+                .initialSize(initialPoolSize)
+                .maxSize(maxPoolSize)
+                .maxIdleTime(Duration.ofMinutes(maxIdleTime))
+                .maxCreateConnectionTime(Duration.ofSeconds(10))
+                .build();
+
+        return new ConnectionPool(config);
     }
 
     @Bean

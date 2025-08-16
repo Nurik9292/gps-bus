@@ -25,6 +25,10 @@ public class ClientAuthenticationFilter implements WebFilter {
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().toString();
 
+        if (isPublicEndpoint(path) || !isClientEndpoint(path)) {
+            return chain.filter(exchange);
+        }
+
         if (isPublicEndpoint(path)) {
             return chain.filter(exchange);
         }
@@ -79,8 +83,19 @@ public class ClientAuthenticationFilter implements WebFilter {
     private boolean isPublicEndpoint(String path) {
         return path.startsWith("/api/v1/client/auth/") ||
                 path.startsWith("/api/v1/mobile/") ||
-                path.startsWith("/api/v1/admin/") ||
-                path.startsWith("/api/v1/trip-planning/") ||
-                path.startsWith("/ws/");
+                path.startsWith("/admin/") ||
+                path.startsWith("/public/") ||
+                path.startsWith("/routes/") ||
+                path.startsWith("/stops/") ||
+                path.startsWith("/trips/") ||
+                path.startsWith("/vehicles/") ||
+                path.startsWith("/trip-planning/") ||
+                path.startsWith("/ws/") ||
+                path.startsWith("/actuator/");
+    }
+
+    private boolean isClientEndpoint(String path) {
+        return path.startsWith("/api/v1/client/") &&
+                !path.startsWith("/api/v1/client/auth/");
     }
 }

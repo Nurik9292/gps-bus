@@ -85,7 +85,7 @@ app:
 
   security:
     jwt:
-      secret:  ${JWT_SECRET:at-least-32-characters-long-secret-key-here}
+      secret: ${JWT_SECRET:at-least-32-characters-long-secret-key-here}
       access-token-expiration: "PT1H"    # 1 hour
       refresh-token-expiration: "P7D"    # 7 days
       issuer: "bus-route-system"
@@ -112,7 +112,7 @@ app:
 external:
   api:
     gps:
-      base-url: https://gps.tugdk.gov.tm  #http://disabled-api.local
+      base-url: https://gps.tugdk.gov.tm
       token: ${GPS_API_TOKEN:RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0}
       timeout: 10s
       retry:
@@ -124,7 +124,7 @@ external:
         requests-per-minute: 120
 
     bus-info:
-      base-url: https://edu.ayauk.gov.tm/gps/buses #http://disabled-api.local
+      base-url: https://edu.ayauk.gov.tm/gps/buses
       username: ${BUS_INFO_API_USERNAME:turkmenportal}
       password: ${BUS_INFO_API_PASSWORD:turkmenportal}
       timeout: 10s
