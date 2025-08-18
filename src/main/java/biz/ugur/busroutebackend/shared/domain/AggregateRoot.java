@@ -18,8 +18,6 @@ import java.util.Objects;
 @Getter
 public abstract class AggregateRoot<T extends AggregateRoot<T, ID>, ID> extends AbstractAggregateRoot<T> {
 
-    private final List<DomainEvent> uncommittedEvents = new ArrayList<>();
-
     @CreatedDate
     @Column("created_at")
     protected Instant createdAt;
@@ -27,7 +25,6 @@ public abstract class AggregateRoot<T extends AggregateRoot<T, ID>, ID> extends 
     @LastModifiedDate
     @Column("updated_at")
     protected Instant updatedAt;
-
 
     @Version
     @Column("version")
@@ -50,21 +47,6 @@ public abstract class AggregateRoot<T extends AggregateRoot<T, ID>, ID> extends 
         return Objects.hash(getId());
     }
 
-    protected void registerEvent(DomainEvent event) {
-        if (event != null) {
-            uncommittedEvents.add(event);
-        }
-    }
 
-    public List<DomainEvent> getUncommittedEvents() {
-        return Collections.unmodifiableList(uncommittedEvents);
-    }
 
-    public void markEventsAsCommitted() {
-        uncommittedEvents.clear();
-    }
-
-    public boolean hasUncommittedEvents() {
-        return !uncommittedEvents.isEmpty();
-    }
 }
