@@ -3,10 +3,7 @@ package biz.ugur.busroutebackend.interfaces.rest.mobile.cotroller;
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerListResponse;
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerPaginationQuery;
 import biz.ugur.busroutebackend.admin.application.usecase.banner.GetBannersByTypeUseCase;
-import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteDetail;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteList;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteStops;
+import biz.ugur.busroutebackend.transport.application.dto.route.*;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopDetail;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopList;
 import biz.ugur.busroutebackend.transport.application.usecase.route.*;
@@ -72,7 +69,7 @@ public class MobileApiController {
     }
 
     @GetMapping("/routes/{routeNumber}")
-    public Mono<ResponseEntity<RouteDetail>> getRouteByNumber(@PathVariable String routeNumber) {
+    public Mono<ResponseEntity<RouteResult>> getRouteByNumber(@PathVariable String routeNumber) {
         log.info("Mobile API: Get route by number: {}", routeNumber);
 
         return Mono.just(new GetRouteByNumberUseCase.Query(routeNumber))
@@ -81,7 +78,7 @@ public class MobileApiController {
     }
 
     @GetMapping("/routes/id/{routeId}")
-    public Mono<ResponseEntity<RouteDetail>> getRouteById(@PathVariable String routeId) {
+    public Mono<ResponseEntity<RouteResult>> getRouteById(@PathVariable String routeId) {
         log.info("Mobile API: Get route by id: {}", routeId);
 
         return Mono.just(new GetRouteByIdUseCase.Query(routeId))
