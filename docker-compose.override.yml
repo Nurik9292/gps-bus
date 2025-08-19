@@ -10,7 +10,7 @@ services:
   redis-route:
     command: redis-server --loglevel debug --appendonly yes
 
-  bus-route-app:
+  bus-route-app-dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
