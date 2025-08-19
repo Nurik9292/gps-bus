@@ -6,12 +6,12 @@ import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtService;
 import biz.ugur.busroutebackend.shared.infrastructure.security.TokenBlacklistService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -20,14 +20,25 @@ import java.util.Set;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
-public class RefreshTokenUseCase implements UseCase<Mono<RefreshTokenUseCase.Request>, Mono<RefreshTokenUseCase.Response>> {
+public class RefreshTokenUseCase extends BaseUseCase<Mono<RefreshTokenUseCase.Request>, RefreshTokenUseCase.Response> {
 
     private final AdminRepository adminRepository;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
     private final TokenBlacklistService tokenBlacklistService;
-    private final CorrelationContextService correlationService;
+
+    public RefreshTokenUseCase(AdminRepository adminRepository,
+                               JwtService jwtService,
+                               JwtProperties jwtProperties,
+                               TokenBlacklistService tokenBlacklistService,
+                               CorrelationContextService correlationService,
+                               EventBus eventBus) {
+        super(correlationService, eventBus);
+        this.adminRepository = adminRepository;
+        this.jwtService = jwtService;
+        this.jwtProperties = jwtProperties;
+        this.tokenBlacklistService = tokenBlacklistService;
+    }
 
     public record Request(String refreshToken) {}
 
@@ -40,31 +51,36 @@ public class RefreshTokenUseCase implements UseCase<Mono<RefreshTokenUseCase.Req
             CorrelationId correlationId
     ) {}
 
+
     @Override
-    public Mono<Response> execute(Mono<Request> request) {
-        return correlationService.executeWithCorrelation(
-                request.flatMap(this::executeWithCorrelation), "admin");
+    protected Mono<Response> process(Mono<Request> request) {
+        return request.flatMap(this::processInternal);
     }
 
-    private Mono<Response> executeWithCorrelation(Request request) {
+
+    private Mono<Response> processInternal(Request request) {
         return correlationService.getCurrentCorrelationId()
-                .flatMap(correlationId -> {
-                    log.info("Processing token refresh - CorrelationId: {}", correlationId.value());
-
-                    return validateAndExtractAdmin(request.refreshToken(), correlationId)
-                            .flatMap(admin -> checkTokenBlacklist(request.refreshToken(), correlationId)
-                                    .thenReturn(admin))
-                            .flatMap(admin -> generateNewTokens(admin, correlationId))
-                            .flatMap(result -> blacklistOldToken(request.refreshToken(), correlationId)
-                                    .thenReturn(result))
-                            .doOnSuccess(result ->
-                                    log.info("Token refresh successful - CorrelationId: {} - Admin: {}",
-                                            correlationId.value(), result.admin().getUsername()))
-                            .doOnError(error ->
-                                    log.warn("Token refresh failed - CorrelationId: {} - Error: {}",
-                                            correlationId.value(), error.getMessage()));
-                });
+                .flatMap(correlationId -> validateAndExtractAdmin(request.refreshToken(), correlationId)
+                        .flatMap(admin -> checkTokenBlacklist(request.refreshToken(), correlationId)
+                                .thenReturn(admin))
+                        .flatMap(admin -> generateNewTokens(admin, correlationId))
+                        .flatMap(response -> blacklistOldToken(request.refreshToken(), correlationId)
+                                .thenReturn(response))
+                        .doOnSuccess(result ->
+                                log.info("Token refresh successful - CorrelationId={} - Admin={}",
+                                        correlationId.value(), result.admin().getUsername()))
+                        .doOnError(error ->
+                                log.warn("Token refresh failed - CorrelationId={} - Error={}",
+                                        correlationId.value(), error.getMessage()))
+                );
     }
+
+
+    @Override
+    protected String getBoundContext() {
+        return "admin";
+    }
+
 
     private Mono<Admin> validateAndExtractAdmin(String refreshToken, CorrelationId correlationId) {
         return jwtService.validateAndExtractClaims(refreshToken)
