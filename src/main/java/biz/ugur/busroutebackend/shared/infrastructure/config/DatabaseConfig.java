@@ -47,11 +47,6 @@ public class DatabaseConfig extends AbstractR2dbcConfiguration {
     @Value("${spring.r2dbc.pool.max-size}")
     private Integer maxPoolSize;
 
-    @Value("${spring.r2dbc.pool.max-idle-time}")
-    private Integer maxIdleTime;
-
-    @Value("${spring.r2dbc.pool.max-create-connection-time}")
-    private Integer maxCreateConnectionTime;
 
 
     @Bean
@@ -65,14 +60,14 @@ public class DatabaseConfig extends AbstractR2dbcConfiguration {
                         .database(database)
                         .username(username)
                         .password(password)
-                        .connectTimeout(Duration.ofSeconds(maxCreateConnectionTime))
+                        .connectTimeout(Duration.ofSeconds(60))
                         .build()
         );
 
         ConnectionPoolConfiguration config = ConnectionPoolConfiguration.builder(factory)
                 .initialSize(initialPoolSize)
                 .maxSize(maxPoolSize)
-                .maxIdleTime(Duration.ofMinutes(maxIdleTime))
+                .maxIdleTime(Duration.ofSeconds(30))
                 .maxCreateConnectionTime(Duration.ofSeconds(10))
                 .build();
 

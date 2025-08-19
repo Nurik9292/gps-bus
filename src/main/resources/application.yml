@@ -92,7 +92,7 @@ app:
 
   storage:
     avatars:
-      base-path: ${AVATAR_STORAGE_PATH:/home/developer/projects/bus/ugur_v4/app/data/avatars}
+      base-path: ${AVATAR_STORAGE_PATH:/home/user/bus/bus_route_backend/app/data/avatars}
       base-url: ${AVATAR_BASE_URL:http://localhost:8080/uploads/avatars}
       max-size-mb: ${AVATAR_MAX_SIZE_MB:2}
       create-thumbnails: ${AVATAR_CREATE_THUMBNAILS:false}
@@ -100,19 +100,19 @@ app:
       jpeg-quality: ${AVATAR_JPEG_QUALITY:0.85}
 
     banners:
-      base-path: /home/developer/projects/bus/ugur_v4/app/data/banners
-      base-url: http://localhost:8080/banners
+      base-path: ${BANNER_STORAGE_PATH:/home/user/bus_route_backend/app/data/banners}
+      base-url: ${BANNER_BASE_URL:http://localhost:8080/uploads/banners}
       max-size-mb: 10
-      create-thumbnails: false
-      thumbnail-width: 400
-      thumbnail-height: 200
-      jpeg-quality: 0.85
+      create-thumbnails: ${BANNER_CREATE_THUMBNAILS:false}
+      thumbnail-width: ${BANNER_THUMBNAIL_WIDTH:400}
+      thumbnail-height: ${BANNER_THUMBNAIL_HEIGHT:200}
+      jpeg-quality: ${BANNER_JPEG_QUALITY:0.85}
 
 
 external:
   api:
     gps:
-      base-url: https://gps.tugdk.gov.tm
+      base-url: ${GPS_API_BASE_URL:https://gps.tugdk.gov.tm}
       token: ${GPS_API_TOKEN:RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0}
       timeout: 10s
       retry:
@@ -124,7 +124,7 @@ external:
         requests-per-minute: 120
 
     bus-info:
-      base-url: https://edu.ayauk.gov.tm/gps/buses
+      base-url: ${BUS_INFO_API_BASE_URL:https://edu.ayauk.gov.tm/gps/buses}
       username: ${BUS_INFO_API_USERNAME:turkmenportal}
       password: ${BUS_INFO_API_PASSWORD:turkmenportal}
       timeout: 10s

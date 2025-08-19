@@ -4,15 +4,15 @@ spring:
       on-profile: dev
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/bus_route_db
-    username: bus_route_user
-    password: bus_route_pass
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME:bus_route}
+    username: ${DB_USERNAME:bus_route_user}
+    password: ${DB_PASSWORD:bus_route_pass}
     driver-class-name: org.postgresql.Driver
 
   r2dbc:
-    url: r2dbc:postgresql://localhost:5432/bus_route_db
-    username: bus_route_user
-    password: bus_route_pass
+    url: r2dbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:bus_route_db}
+    username: ${DB_USERNAME:bus_route_user}
+    password: ${DB_PASSWORD:bus_route_pass}
     pool:
       initial-size: 2
       max-size: 5
@@ -23,8 +23,10 @@ spring:
 
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
       timeout: 2000ms
 
   flyway:
@@ -65,17 +67,6 @@ external:
         initial-interval: 1s
 
 app:
-#  migration:
-#    enabled: false
-#    source-db:
-#      url: r2dbc:postgresql://95.85.127.56:5432/postgres
-#      username: postgres
-#      password: postgres
-#    target-db:
-#      url: r2dbc:postgresql://localhost:5432/bus_route_db
-#      username: bus_route_user
-#      password: bus_route_pass
-
   scheduling:
     enabled: false
 
