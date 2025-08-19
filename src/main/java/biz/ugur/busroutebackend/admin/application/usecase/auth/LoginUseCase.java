@@ -4,10 +4,10 @@ import biz.ugur.busroutebackend.admin.domain.exceptions.AdminAuthenticationExcep
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -16,31 +16,29 @@ import java.util.Set;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
-public class LoginUseCase implements UseCase<Mono<LoginUseCase.Request>, Mono<LoginUseCase.Response>> {
+public class LoginUseCase extends BaseUseCase<Mono<LoginUseCase.Request>, LoginUseCase.Response> {
 
     private final AdminRepository adminRepository;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
-    private final CorrelationContextService correlationService;
 
-    public record Request(String username, String password) {}
-
-    public record Response(
-            String accessToken,
-            String refreshToken,
-            String tokenType,
-            long expiresIn,
-            Admin admin
-    ) {}
-
-    @Override
-    public Mono<Response> execute(Mono<LoginUseCase.Request> request) {
-        return correlationService.executeWithCorrelation(
-                request.flatMap(this::executeWithCorrelation), "admin");
+    public LoginUseCase(AdminRepository adminRepository,
+                        JwtService jwtService,
+                        JwtProperties jwtProperties,
+                        CorrelationContextService correlationService,
+                        EventBus eventBus) {
+        super(correlationService, eventBus);
+        this.adminRepository = adminRepository;
+        this.jwtService = jwtService;
+        this.jwtProperties = jwtProperties;
     }
 
-    private Mono<Response> executeWithCorrelation(LoginUseCase.Request req) {
+    @Override
+    protected Mono<Response> process(Mono<Request> request) {
+        return request.flatMap(this::processInternal);
+    }
+
+    private Mono<Response> processInternal(Request req) {
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.info("Authentication admin - CorrelationId: {} - Username: {}",
@@ -65,6 +63,13 @@ public class LoginUseCase implements UseCase<Mono<LoginUseCase.Request>, Mono<Lo
                 });
     }
 
+
+    @Override
+    protected String getBoundContext() {
+        return "admin";
+    }
+
+
     private Mono<Response> generateTokens(Admin admin) {
         Set<String> roles = admin.getIsSuperAdmin() ? Set.of("ADMIN", "SUPER_ADMIN") : Set.of("ADMIN");
 
@@ -79,4 +84,17 @@ public class LoginUseCase implements UseCase<Mono<LoginUseCase.Request>, Mono<Lo
                 admin
         ));
     }
+
+
+
+    public record Request(String username, String password) {}
+
+    public record Response(
+            String accessToken,
+            String refreshToken,
+            String tokenType,
+            long expiresIn,
+            Admin admin
+    ) {}
+
 }

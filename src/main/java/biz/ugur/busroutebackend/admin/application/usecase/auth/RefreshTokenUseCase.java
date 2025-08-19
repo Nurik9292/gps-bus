@@ -40,17 +40,6 @@ public class RefreshTokenUseCase extends BaseUseCase<Mono<RefreshTokenUseCase.Re
         this.tokenBlacklistService = tokenBlacklistService;
     }
 
-    public record Request(String refreshToken) {}
-
-    public record Response(
-            String accessToken,
-            String refreshToken,
-            String tokenType,
-            long expiresIn,
-            Admin admin,
-            CorrelationId correlationId
-    ) {}
-
 
     @Override
     protected Mono<Response> process(Mono<Request> request) {
@@ -146,4 +135,16 @@ public class RefreshTokenUseCase extends BaseUseCase<Mono<RefreshTokenUseCase.Re
                             "Failed to generate new tokens", admin.getUsername(), correlationId);
                 });
     }
+
+
+    public record Request(String refreshToken) {}
+
+    public record Response(
+            String accessToken,
+            String refreshToken,
+            String tokenType,
+            long expiresIn,
+            Admin admin,
+            CorrelationId correlationId
+    ) {}
 }
