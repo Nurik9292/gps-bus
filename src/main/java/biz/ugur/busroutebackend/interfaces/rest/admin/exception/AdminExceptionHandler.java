@@ -5,7 +5,7 @@ import biz.ugur.busroutebackend.admin.application.exceptions.AdminConcurrencyExc
 import biz.ugur.busroutebackend.admin.application.exceptions.AdminOperationException;
 import biz.ugur.busroutebackend.admin.domain.exceptions.*;
 import biz.ugur.busroutebackend.admin.infrastructure.exception.AdminRepositoryException;
-import biz.ugur.busroutebackend.shared.domain.AbstractDomainException;
+import biz.ugur.busroutebackend.shared.domain.exception.AbstractDomainException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

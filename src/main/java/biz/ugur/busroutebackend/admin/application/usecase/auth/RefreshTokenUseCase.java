@@ -7,7 +7,7 @@ import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.UseCase;
-import biz.ugur.busroutebackend.shared.domain.CorrelationId;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtService;
 import biz.ugur.busroutebackend.shared.infrastructure.security.TokenBlacklistService;

@@ -3,7 +3,6 @@ package biz.ugur.busroutebackend.admin.infrastructure.repository;
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
-import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
@@ -13,9 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.lang.reflect.Field;
 import java.time.Instant;
-import java.util.Objects;
 
 
 @Repository

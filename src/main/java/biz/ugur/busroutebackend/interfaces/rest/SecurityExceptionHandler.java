@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest;
 
-import biz.ugur.busroutebackend.shared.domain.AbstractDomainException;
+import biz.ugur.busroutebackend.shared.domain.exception.AbstractDomainException;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtTokenException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

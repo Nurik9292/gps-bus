@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.transport.domain.entity;
 
-import biz.ugur.busroutebackend.shared.domain.Entity;
+import biz.ugur.busroutebackend.shared.domain.entity.Entity;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopId;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;

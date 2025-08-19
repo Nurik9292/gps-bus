@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.admin.domain.exceptions;
 
-import biz.ugur.busroutebackend.shared.domain.AbstractDomainException;
-import biz.ugur.busroutebackend.shared.domain.CorrelationId;
+import biz.ugur.busroutebackend.shared.domain.exception.AbstractDomainException;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 
 public class BusStopException extends AbstractDomainException {
 

@@ -2,7 +2,7 @@ package biz.ugur.busroutebackend.routing.domain.volumeojects;
 
 import biz.ugur.busroutebackend.routing.domain.enums.SegmentType;
 import biz.ugur.busroutebackend.routing.domain.enums.TripType;
-import biz.ugur.busroutebackend.shared.domain.ValueObject;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.ValueObject;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 

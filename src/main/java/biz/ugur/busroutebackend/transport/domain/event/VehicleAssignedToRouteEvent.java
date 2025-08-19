@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.transport.domain.event;
 
 
-import biz.ugur.busroutebackend.shared.domain.DomainEvent;
+import biz.ugur.busroutebackend.shared.domain.event.DomainEvent;
 import lombok.Getter;
 
 import java.time.Instant;

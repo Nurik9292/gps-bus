@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.shared.domain;
+package biz.ugur.busroutebackend.shared.domain.event;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 

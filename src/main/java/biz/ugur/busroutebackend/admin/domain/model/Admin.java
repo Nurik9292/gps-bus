@@ -4,7 +4,7 @@ import biz.ugur.busroutebackend.admin.domain.events.AdminCreatedEvent;
 import biz.ugur.busroutebackend.admin.domain.events.AdminPasswordChangedEvent;
 import biz.ugur.busroutebackend.admin.domain.events.AdminProfileUpdatedEvent;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
-import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
+import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;

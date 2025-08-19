@@ -2,7 +2,7 @@ package biz.ugur.busroutebackend.client.domain.model;
 
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
 import biz.ugur.busroutebackend.client.domain.valueobject.StopFavoriteId;
-import biz.ugur.busroutebackend.shared.domain.Entity;
+import biz.ugur.busroutebackend.shared.domain.entity.Entity;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;

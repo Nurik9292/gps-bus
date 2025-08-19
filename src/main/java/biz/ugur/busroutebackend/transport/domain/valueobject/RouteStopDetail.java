@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.transport.domain.valueobject;
 
-import biz.ugur.busroutebackend.shared.domain.ValueObject;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.ValueObject;
 import lombok.Getter;
 
 import java.math.BigDecimal;

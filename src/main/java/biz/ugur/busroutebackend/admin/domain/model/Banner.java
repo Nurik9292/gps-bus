@@ -2,7 +2,7 @@ package biz.ugur.busroutebackend.admin.domain.model;
 
 import biz.ugur.busroutebackend.admin.domain.events.BannerCreatedEvent;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.BannerId;
-import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
+import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;

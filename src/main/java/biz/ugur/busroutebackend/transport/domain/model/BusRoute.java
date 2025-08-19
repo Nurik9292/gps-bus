@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.transport.domain.model;
 
-import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
+import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import biz.ugur.busroutebackend.transport.domain.enums.RouteDirection;
 import biz.ugur.busroutebackend.transport.domain.event.RouteGeometryUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
@@ -12,7 +12,6 @@ import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;

@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.transport.domain.model;
 
-import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
+import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleAssignedToRouteEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent;

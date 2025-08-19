@@ -7,7 +7,7 @@ import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;
 import biz.ugur.busroutebackend.routing.domain.volumeojects.TripOption;
 import biz.ugur.busroutebackend.routing.domain.volumeojects.TripPlanId;
 import biz.ugur.busroutebackend.routing.domain.volumeojects.TripSearchCriteria;
-import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
+import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;

@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.shared.application;
 
-import biz.ugur.busroutebackend.shared.domain.CorrelationId;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.util.context.Context;

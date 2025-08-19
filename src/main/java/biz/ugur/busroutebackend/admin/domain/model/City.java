@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.admin.domain.model;
 
 import biz.ugur.busroutebackend.admin.domain.valueobjects.CityId;
-import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
+import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;

@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.admin.domain.valueobjects;
 
-import biz.ugur.busroutebackend.shared.domain.ValueObject;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.ValueObject;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 

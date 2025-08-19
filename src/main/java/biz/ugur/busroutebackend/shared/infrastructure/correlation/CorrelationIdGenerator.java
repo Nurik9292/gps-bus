@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.shared.infrastructure.correlation;
 
-import biz.ugur.busroutebackend.shared.domain.CorrelationId;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;

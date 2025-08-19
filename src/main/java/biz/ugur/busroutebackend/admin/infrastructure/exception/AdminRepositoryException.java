@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.admin.infrastructure.exception;
 
 import biz.ugur.busroutebackend.admin.domain.exceptions.AdminDomainException;
-import biz.ugur.busroutebackend.shared.domain.CorrelationId;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 import lombok.Getter;
 
 @Getter

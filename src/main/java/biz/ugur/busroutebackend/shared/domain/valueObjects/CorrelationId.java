@@ -1,9 +1,10 @@
-package biz.ugur.busroutebackend.shared.domain;
+package biz.ugur.busroutebackend.shared.domain.valueObjects;
 
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-public record CorrelationId(String value) {
+
+public record CorrelationId(String value)  {
 
     private static final Pattern VALID_PATTERN = Pattern.compile("^[A-Z]{2,10}-[0-9a-f]{8}(-[0-9a-f]{4})?$");
     private static final String DEFAULT_PREFIX = "REQ";

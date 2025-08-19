@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.shared.domain;
+package biz.ugur.busroutebackend.shared.domain.entity;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -9,9 +9,6 @@ import org.springframework.data.domain.AbstractAggregateRoot;
 import org.springframework.data.relational.core.mapping.Column;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
 
 @Setter

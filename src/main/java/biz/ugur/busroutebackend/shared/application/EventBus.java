@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.shared.application;
 
-import biz.ugur.busroutebackend.shared.domain.DomainEvent;
+import biz.ugur.busroutebackend.shared.domain.event.DomainEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 

@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.shared.domain;
+package biz.ugur.busroutebackend.shared.domain.valueObjects;
 
 import java.io.Serializable;
 

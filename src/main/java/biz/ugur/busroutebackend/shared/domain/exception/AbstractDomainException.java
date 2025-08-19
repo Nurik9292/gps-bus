@@ -1,5 +1,6 @@
-package biz.ugur.busroutebackend.shared.domain;
+package biz.ugur.busroutebackend.shared.domain.exception;
 
+import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 import lombok.Getter;
 
 import java.time.Instant;

@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.shared.infrastructure.security;
 
-import biz.ugur.busroutebackend.shared.domain.AbstractDomainException;
-import biz.ugur.busroutebackend.shared.domain.CorrelationId;
+import biz.ugur.busroutebackend.shared.domain.exception.AbstractDomainException;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.UnsupportedJwtException;

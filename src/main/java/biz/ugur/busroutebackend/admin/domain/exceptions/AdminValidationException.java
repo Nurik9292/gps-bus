@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.admin.domain.exceptions;
 
-import biz.ugur.busroutebackend.shared.domain.CorrelationId;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 import lombok.Getter;
 
 import java.util.List;

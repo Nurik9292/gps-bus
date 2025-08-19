@@ -2,7 +2,7 @@ package biz.ugur.busroutebackend.client.domain.model;
 
 import biz.ugur.busroutebackend.client.domain.enums.ClientStatus;
 import biz.ugur.busroutebackend.client.domain.enums.Platform;
-import biz.ugur.busroutebackend.shared.domain.AggregateRoot;
+import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
 import biz.ugur.busroutebackend.client.domain.valueobject.Phone;
 import biz.ugur.busroutebackend.client.domain.valueobject.Otp;
