@@ -23,8 +23,8 @@ public class JwtTokenService {
     private final long refreshTokenValidityInDays;
 
     public JwtTokenService(@Value("${app.security.jwt.secret}") String secret,
-                           @Value("${app.security.jwt.access-token-validity-hours:24}") long accessTokenValidityInHours,
-                           @Value("${app.security.jwt.refresh-token-validity-days:30}") long refreshTokenValidityInDays) {
+                           @Value("${app.security.jwt.access-token-validity-hours-client:24}") long accessTokenValidityInHours,
+                           @Value("${app.security.jwt.refresh-token-validity-days-client:30}") long refreshTokenValidityInDays) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes());
         this.accessTokenValidityInHours = accessTokenValidityInHours;
         this.refreshTokenValidityInDays = refreshTokenValidityInDays;

@@ -59,7 +59,6 @@ public class MobileApiController {
 
         return getCurrentPrincipal()
                 .flatMap(principal -> {
-                    log.info("Client id: {}", principal.getClientId());
                     return getAllRoutesUseCase.execute(Mono.empty())
                             .flatMap(routeList ->
                                     Flux.fromIterable(routeList.getRoutes())
@@ -86,11 +85,12 @@ public class MobileApiController {
     }
 
     @GetMapping("/routes/paginated")
-    public Mono<ResponseEntity<RouteList>> getRoutesPaginated(
+    public Mono<ResponseEntity<MobileRouteListResponse>> getRoutesPaginated(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "routeNumber") String sortField,
             @RequestParam(defaultValue = "asc") String sortOrder) {
+
         log.info("Mobile API: Get routes paginated - page={}, size={}, sort={}, order={}",
                 page, size, sortField, sortOrder);
 
@@ -102,10 +102,32 @@ public class MobileApiController {
                 true
         );
 
-        return getAllBusRoutesWithPaginationUseCase.execute(Mono.just(paginationQuery))
-                .map(ResponseEntity::ok);
-
+        return getCurrentPrincipal().flatMap(principal ->
+                        getAllBusRoutesWithPaginationUseCase.execute(Mono.just(paginationQuery))
+                                .flatMap(routeList ->
+                                        Flux.fromIterable(routeList.getRoutes())
+                                                .flatMap(routeData ->
+                                                        routeIsFavoriteUseCase
+                                                                .execute(new RouteIsFavoriteUseCase.Request(principal.getClientId(), routeData.id()))
+                                                                .map(isFavorite -> MobileRouteResponse.from(routeData, isFavorite))
+                                                )
+                                                .collectList()
+                                                .map(mobileRoutes ->
+                                                        MobileRouteListResponse.builder()
+                                                                .routes(mobileRoutes)
+                                                                .totalCount(routeList.getTotalCount())
+                                                                .activeCount(routeList.getActiveCount())
+                                                                .build()
+                                                )
+                                )
+                )
+                .map(ResponseEntity::ok)
+                .onErrorResume(throwable -> {
+                    log.error("Ошибка при получении маршрутов с пагинацией: {}", throwable.getMessage());
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+                });
     }
+
 
     @GetMapping("/routes/{routeNumber}")
     public Mono<ResponseEntity<RouteDetail>> getRouteByNumber(@PathVariable String routeNumber) {
@@ -117,13 +139,18 @@ public class MobileApiController {
     }
 
     @GetMapping("/routes/id/{routeId}")
-    public Mono<ResponseEntity<RouteDetail>> getRouteById(@PathVariable String routeId) {
+    public Mono<ResponseEntity<MobileRouteResponse>> getRouteById(@PathVariable String routeId) {
         log.info("Mobile API: Get route by id: {}", routeId);
 
-        return Mono.just(new GetRouteByIdUseCase.Query(routeId))
-                .as(getRouteByIdUseCase::execute)
+        return getCurrentPrincipal().flatMap(principal -> {
+           return   Mono.just(new GetRouteByIdUseCase.Query(routeId))
+                   .as(getRouteByIdUseCase::execute)
+                   .flatMap(routeData    ->
+                           routeIsFavoriteUseCase.execute(new RouteIsFavoriteUseCase.Request(principal.getClientId(), routeId))
+                                   .map(isFavorite -> MobileRouteResponse.from(routeData, isFavorite))
+                   );
+        })
                 .map(ResponseEntity::ok);
-
     }
 
     @GetMapping("/routes/id/{routeId}/geometry")

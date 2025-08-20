@@ -88,6 +88,8 @@ app:
       secret: ${JWT_SECRET:at-least-32-characters-long-secret-key-here}
       access-token-expiration: "PT1H"    # 1 hour
       refresh-token-expiration: "P7D"    # 7 days
+      access-token-expiration-client: 744
+      refresh-token-expiration-client: 912
       issuer: "bus-route-system"
 
   storage:
