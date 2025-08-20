@@ -30,8 +30,6 @@ public class AuthController {
     private final GetCurrentAdminUseCase getCurrentAdminUseCase;
 
 
-
-
     @PostMapping("/login")
     @ResponseStatus(HttpStatus.OK)
     public Mono<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
