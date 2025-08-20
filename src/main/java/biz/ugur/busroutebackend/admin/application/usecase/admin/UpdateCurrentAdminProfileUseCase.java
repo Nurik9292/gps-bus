@@ -6,29 +6,36 @@ import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
-import biz.ugur.busroutebackend.shared.application.UseCase;
-import lombok.RequiredArgsConstructor;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
-public class UpdateCurrentAdminProfileUseCase implements UseCase<Mono<UpdateCurrentAdminProfileUseCase.Request>, Mono<Admin>> {
+public class UpdateCurrentAdminProfileUseCase extends BaseUseCase<Mono<UpdateCurrentAdminProfileUseCase.Request>, Admin> {
 
     private final AdminRepository adminRepository;
-    private final EventBus eventBus;
-    private final CorrelationContextService correlationService;
 
-    public record Request(AdminId adminId, String username, String fullName) {}
-
-    @Override
-    public Mono<Admin> execute(Mono<UpdateCurrentAdminProfileUseCase.Request> request) {
-        return correlationService.executeWithCorrelation(request.flatMap(this::executeWithCorrelation), "admin");
+    public UpdateCurrentAdminProfileUseCase(AdminRepository adminRepository,
+                                            EventBus eventBus,
+                                            CorrelationContextService correlationService) {
+        super(correlationService, eventBus);
+        this.adminRepository = adminRepository;
     }
 
-    private Mono<Admin> executeWithCorrelation(Request request) {
+
+    @Override
+    protected Mono<Admin> process(Mono<Request> request) {
+        return request.flatMap(this::processInternal);
+    }
+
+    @Override
+    protected String getBoundContext() {
+        return "admin";
+    }
+
+    private Mono<Admin> processInternal(Request request) {
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId ->  {
                     String adminId = request.adminId().getValue();
@@ -38,15 +45,14 @@ public class UpdateCurrentAdminProfileUseCase implements UseCase<Mono<UpdateCurr
                             .switchIfEmpty(Mono.error(new AdminNotFoundException(adminId, "id", correlationId)))
                             .flatMap(admin -> {
                                 admin.updateProfile(request.username(), request.fullName());
-                                return adminRepository.save(admin)
-                                        .doOnNext(savedAdmin -> {
-                                            savedAdmin.getUncommittedEvents().forEach(eventBus::publish);
-                                            savedAdmin.markEventsAsCommitted();
-                                        });
+                                return adminRepository.save(admin);
+
                             })
                             .doOnSuccess(admin -> log.info("Profile updated successfully for admin: {}", admin.getUsername()))
                             .doOnError(error -> log.error("Failed to update profile for admin: {}: {}",
                                     adminId, error.getMessage()));
                 });
     }
+
+    public record Request(AdminId adminId, String username, String fullName) {}
 }
