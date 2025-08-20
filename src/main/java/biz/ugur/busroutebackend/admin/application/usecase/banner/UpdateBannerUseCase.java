@@ -1,13 +1,13 @@
 package biz.ugur.busroutebackend.admin.application.usecase.banner;
 
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerUpdateRequest;
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerResponse;
+import biz.ugur.busroutebackend.admin.application.dto.banner.BannerUpdateRequest;
 import biz.ugur.busroutebackend.admin.domain.model.Banner;
 import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.BannerId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.shared.infrastructure.storage.BannerStorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,33 +17,33 @@ import java.util.Optional;
 
 @Service
 @Slf4j
-public class UpdateBannerUseCase implements UseCase<Mono<UpdateBannerUseCase.Request>, Mono<BannerResponse>> {
+public class UpdateBannerUseCase extends BaseUseCase<Mono<UpdateBannerUseCase.Request>, BannerResponse> {
 
     private final BannerRepository bannerRepository;
-    private final EventBus eventBus;
-    private final CorrelationContextService correlationContextService;
     private final BannerStorageService bannerStorageService;
 
     public UpdateBannerUseCase(BannerRepository bannerRepository,
                                EventBus eventBus,
                                CorrelationContextService correlationContextService,
                                BannerStorageService bannerStorageService) {
+        super(correlationContextService, eventBus);
         this.bannerRepository = bannerRepository;
-        this.eventBus = eventBus;
-        this.correlationContextService = correlationContextService;
         this.bannerStorageService = bannerStorageService;
     }
 
+
     @Override
-    public Mono<BannerResponse> execute(Mono<Request> request) {
-        return correlationContextService.executeWithCorrelation(
-                request.flatMap(this::executeWithCorrelation),
-                "admin"
-        );
+    protected Mono<BannerResponse> process(Mono<Request> request) {
+        return request.flatMap(this::processInternal);
     }
 
-    private Mono<BannerResponse> executeWithCorrelation(Request request) {
-        return correlationContextService.getCurrentCorrelationId()
+    @Override
+    protected String getBoundContext() {
+        return "admin";
+    }
+
+    private Mono<BannerResponse> processInternal(Request request) {
+        return correlationService.getCurrentCorrelationId()
                 .doOnNext(correlationId -> log.info(
                         "Updating banner: CorrelationId - {} BannerId - {}",
                         correlationId, request.bannerId
@@ -53,7 +53,6 @@ public class UpdateBannerUseCase implements UseCase<Mono<UpdateBannerUseCase.Req
                 .flatMap(banner -> handleImageUpdate(banner, request.updateData))
                 .flatMap(banner -> updateBannerFields(banner, request.updateData))
                 .flatMap(bannerRepository::save)
-                .doOnNext(this::publishEvents)
                 .map(this::toResponse)
                 .doOnSuccess(response -> log.info("Banner updated successfully: {}", response.getTitle()))
                 .doOnError(error -> log.error("Failed to update banner: {}", request.bannerId, error));
@@ -114,10 +113,6 @@ public class UpdateBannerUseCase implements UseCase<Mono<UpdateBannerUseCase.Req
         return Mono.just(banner);
     }
 
-    private void publishEvents(Banner banner) {
-        banner.getUncommittedEvents().forEach(eventBus::publish);
-        banner.markEventsAsCommitted();
-    }
 
     private BannerResponse toResponse(Banner banner) {
         return new BannerResponse(
