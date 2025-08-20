@@ -48,12 +48,15 @@ public class AdminBannerController {
                 active, page, size, sort, order);
 
         if (page == 1 && size == 25 && "display_order".equals(sort) && "asc".equals(order)) {
-            return getAllBannersUseCase.execute(active)
+            return Mono.just(active)
+                    .as(getAllBannersUseCase::execute)
                     .map(ResponseEntity::ok);
         }
 
         BannerPaginationQuery query = new BannerPaginationQuery(page, size, sort, order, active);
-        return getBannersWithPaginationUseCase.execute(query)
+
+        return Mono.just(query)
+                .as(getBannersWithPaginationUseCase::execute)
                 .map(ResponseEntity::ok);
     }
 
@@ -98,7 +101,8 @@ public class AdminBannerController {
     public Mono<ResponseEntity<Void>> deleteBanner(@PathVariable String bannerId) {
         log.info("Deleting banner: {}", bannerId);
 
-        return deleteBannerUseCase.execute(bannerId)
+        return Mono.just(bannerId)
+                .as(deleteBannerUseCase::execute)
                 .then(Mono.just(ResponseEntity.noContent().<Void>build()))
                 .onErrorReturn(IllegalArgumentException.class,
                         ResponseEntity.notFound().build())
