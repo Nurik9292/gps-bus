@@ -6,32 +6,39 @@ import biz.ugur.busroutebackend.admin.domain.model.City;
 import biz.ugur.busroutebackend.admin.domain.repository.CityRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.CityId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Service
 @Slf4j
-public class UpdateCityUseCase implements UseCase<Mono<CityUpdate>, Mono<CityResult>> {
+public class UpdateCityUseCase extends BaseUseCase<Mono<CityUpdate>, CityResult> {
 
     private final CityRepository cityRepository;
-    private final CorrelationContextService correlationService;
 
-    public UpdateCityUseCase(CityRepository cityRepository, CorrelationContextService correlationService) {
+    public UpdateCityUseCase(CityRepository cityRepository,
+                             CorrelationContextService correlationService,
+                             EventBus eventBus) {
+        super(correlationService, eventBus);
         this.cityRepository = cityRepository;
-        this.correlationService = correlationService;
     }
 
     @Override
-    public Mono<CityResult> execute(Mono<CityUpdate> update) {
-        return correlationService.executeWithCorrelation(update.flatMap(this::executeWithCorrelation), "admin");
+    protected Mono<CityResult> process(Mono<CityUpdate> request) {
+        return request.flatMap(this::processInternal);
+    }
+
+    @Override
+    protected String getBoundContext() {
+        return "admin";
     }
 
 
-    private Mono<CityResult> executeWithCorrelation(CityUpdate update) {
+    private Mono<CityResult> processInternal(CityUpdate update) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-            log.info("Updating city  CorrelationId: {}  CityId: {}", correlationId, update.id());
+            log.info("Updating city  CorrelationId: {} - CityId: {}", correlationId, update.id());
 
             return cityRepository.findById(CityId.of(update.id()))
                     .switchIfEmpty(Mono.error(new IllegalArgumentException("City not found with ID: " + update.id())))
