@@ -6,7 +6,7 @@ import biz.ugur.busroutebackend.admin.domain.model.Banner;
 import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.shared.infrastructure.storage.BannerStorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,11 +16,9 @@ import java.util.Objects;
 
 @Service
 @Slf4j
-public class CreateBannerUseCase implements UseCase<Mono<BannerCreateRequest>, Mono<BannerResponse>> {
+public class CreateBannerUseCase extends BaseUseCase<Mono<BannerCreateRequest>, BannerResponse> {
 
     private final BannerRepository bannerRepository;
-    private final CorrelationContextService correlationService;
-    private final EventBus eventBus;
     private final BannerStorageService bannerStorageService;
 
 
@@ -28,18 +26,23 @@ public class CreateBannerUseCase implements UseCase<Mono<BannerCreateRequest>, M
                                CorrelationContextService correlationService,
                                EventBus eventBus,
                                BannerStorageService bannerStorageService) {
+        super(correlationService, eventBus);
         this.bannerRepository = bannerRepository;
-        this.correlationService = correlationService;
-        this.eventBus = eventBus;
         this.bannerStorageService = bannerStorageService;
     }
 
+
     @Override
-    public Mono<BannerResponse> execute(Mono<BannerCreateRequest> request) {
-        return correlationService.executeWithCorrelation(request.flatMap(this::executeWithCorrelation), "admin");
+    protected Mono<BannerResponse> process(Mono<BannerCreateRequest> request) {
+        return request.flatMap(this::processInternal);
     }
 
-    private Mono<BannerResponse> executeWithCorrelation(BannerCreateRequest request) {
+    @Override
+    protected String getBoundContext() {
+        return "admin";
+    }
+
+    private Mono<BannerResponse> processInternal(BannerCreateRequest request) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Creating new banner: CorrelationId - {} BannerTitle  {}", correlationId, request.getTitle());
 
@@ -62,12 +65,7 @@ public class CreateBannerUseCase implements UseCase<Mono<BannerCreateRequest>, M
                             banner.setEndDate(request.getEndDate());
                         }
 
-                        return bannerRepository.save(banner)
-                                .doOnNext(savedBanner -> {
-                                    savedBanner.getUncommittedEvents().forEach(eventBus::publish);
-                                    savedBanner.markEventsAsCommitted();
-                                })
-                                .map(this::toResponse);
+                        return bannerRepository.save(banner).map(this::toResponse);
                     })
                     .doOnSuccess(response -> log.info("Banner created successfully: {}", response.getTitle()))
                     .doOnError(error -> log.error("Failed to create banner: {}", request.getTitle(), error));
