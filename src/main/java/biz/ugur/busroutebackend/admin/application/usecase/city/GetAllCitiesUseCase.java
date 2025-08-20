@@ -6,7 +6,8 @@ import biz.ugur.busroutebackend.admin.application.dto.city.GetAllCitiesInput;
 import biz.ugur.busroutebackend.admin.domain.model.City;
 import biz.ugur.busroutebackend.admin.domain.repository.CityRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -18,24 +19,31 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class GetAllCitiesUseCase implements UseCase<Mono<GetAllCitiesInput>, Mono<CityList>> {
+public class GetAllCitiesUseCase extends BaseUseCase<Mono<GetAllCitiesInput>, CityList> {
 
     private final CityRepository cityRepository;
-    private final CorrelationContextService correlationService;
 
-    public GetAllCitiesUseCase(CityRepository cityRepository, CorrelationContextService correlationService) {
+    public GetAllCitiesUseCase(CityRepository cityRepository,
+                               CorrelationContextService correlationService,
+                               EventBus eventBus) {
+        super(correlationService, eventBus);
         this.cityRepository = cityRepository;
-        this.correlationService = correlationService;
+    }
+
+
+    @Override
+    protected Mono<CityList> process(Mono<GetAllCitiesInput> request) {
+        return request.flatMap(this::processInternal);
     }
 
     @Override
-    public Mono<CityList> execute(Mono<GetAllCitiesInput> input) {
-        return correlationService.executeWithCorrelation(input.flatMap(this::executeWithCorrelation), "admin");
+    protected String getBoundContext() {
+        return "admin";
     }
 
-    public Mono<CityList> executeWithCorrelation(GetAllCitiesInput input) {
+    public Mono<CityList> processInternal(GetAllCitiesInput input) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-            log.debug("Getting cities with pagination Correlation - {}: page={}, size={}, sort={}, order={}, active={}",
+            log.debug("Getting cities with pagination Correlation - {}: page: {}, size: {}, sort: {}, order: {}, active: {}",
                     correlationId, input.getPage(), input.getSize(), input.getSort(), input.getOrder(), input.getActive());
 
             Pageable pageRequest = createPageable(input);
