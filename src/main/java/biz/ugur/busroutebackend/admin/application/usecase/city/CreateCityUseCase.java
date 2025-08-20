@@ -5,29 +5,38 @@ import biz.ugur.busroutebackend.admin.application.dto.city.CreateCity;
 import biz.ugur.busroutebackend.admin.domain.model.City;
 import biz.ugur.busroutebackend.admin.domain.repository.CityRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Service
 @Slf4j
-public class CreateCityUseCase implements UseCase<Mono<CreateCity>, Mono<CityResult>> {
+public class CreateCityUseCase extends BaseUseCase<Mono<CreateCity>, CityResult> {
 
     private final CityRepository cityRepository;
-    private final CorrelationContextService correlationService;
 
-    public CreateCityUseCase(CityRepository cityRepository, CorrelationContextService correlationService) {
+    public CreateCityUseCase(CityRepository cityRepository,
+                             CorrelationContextService correlationService,
+                             EventBus eventBus) {
+        super(correlationService, eventBus);
         this.cityRepository = cityRepository;
-        this.correlationService = correlationService;
+    }
+
+
+
+    @Override
+    protected Mono<CityResult> process(Mono<CreateCity> request) {
+        return request.flatMap(this::processInternal);
     }
 
     @Override
-    public Mono<CityResult> execute(Mono<CreateCity> create) {
-        return correlationService.executeWithCorrelation(create.flatMap(this::executeWithCorrelation), "admin");
+    protected String getBoundContext() {
+        return "admin";
     }
 
-    private Mono<CityResult> executeWithCorrelation(CreateCity create) {
+    private Mono<CityResult> processInternal(CreateCity create) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Creating new CorrelationId {} city: {}", correlationId, create.name());
             return cityRepository.existsByName(create.name())
