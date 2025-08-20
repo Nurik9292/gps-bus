@@ -5,7 +5,8 @@ import biz.ugur.busroutebackend.admin.domain.model.Banner;
 import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.BannerId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -14,31 +15,35 @@ import java.util.Objects;
 
 @Log4j2
 @Service
-public class ToggleStatusBannerUseCase implements UseCase<Mono<ToggleStatusBannerUseCase.Request>, Mono<BannerResponse>> {
+public class ToggleStatusBannerUseCase extends BaseUseCase<Mono<ToggleStatusBannerUseCase.Request>, BannerResponse> {
 
     private static final String BANNER_NOT_FOUND_MSG = "Banner not found: ";
 
-    private final CorrelationContextService correlationContextService;
     private final BannerRepository bannerRepository;
 
     public ToggleStatusBannerUseCase(CorrelationContextService correlationContextService,
+                                     EventBus eventBus,
                                      BannerRepository bannerRepository) {
-        this.correlationContextService = correlationContextService;
+        super(correlationContextService, eventBus);
         this.bannerRepository = bannerRepository;
     }
 
+
+
     @Override
-    public Mono<BannerResponse> execute(Mono<Request> request) {
-        return correlationContextService.executeWithCorrelation(
-                request.flatMap(this::executeWithCorrelation),
-                "admin"
-        );
+    protected Mono<BannerResponse> process(Mono<Request> request) {
+        return request.flatMap(this::processInternal);
     }
 
-    private Mono<BannerResponse> executeWithCorrelation(Request request) {
-        return correlationContextService.getCurrentCorrelationId()
+    @Override
+    protected String getBoundContext() {
+        return "admin";
+    }
+
+    private Mono<BannerResponse> processInternal(Request request) {
+        return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
-                    log.info("Changing banner status | CorrelationId={} | BannerId={} | NewStatus={}",
+                    log.info("Changing banner status CorrelationId: {} - BannerId: {} - NewStatus: {}",
                             correlationId, request.id, request.active);
 
                     return bannerRepository.findById(BannerId.of(request.id))
