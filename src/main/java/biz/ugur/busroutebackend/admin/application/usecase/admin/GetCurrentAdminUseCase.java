@@ -5,28 +5,41 @@ import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
-import lombok.RequiredArgsConstructor;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
-public class GetCurrentAdminUseCase implements UseCase<Mono<GetCurrentAdminUseCase.Query>, Mono<Admin>> {
+public class GetCurrentAdminUseCase extends BaseUseCase<Mono<GetCurrentAdminUseCase.Query>, Admin> {
 
     private final AdminRepository adminRepository;
     private final CorrelationContextService correlationService;
 
-    public record Query(AdminId adminId) {}
-
-    @Override
-    public Mono<Admin> execute(Mono<Query> query) {
-        return correlationService.executeWithCorrelation(query.flatMap(this::executeWithCorrelation), "admin");
+    public GetCurrentAdminUseCase(AdminRepository adminRepository,
+                                  CorrelationContextService correlationService,
+                                  EventBus eventBus) {
+        super(correlationService, eventBus);
+        this.adminRepository = adminRepository;
+        this.correlationService = correlationService;
     }
 
-    private Mono<Admin> executeWithCorrelation(Query query) {
+    public record Query(AdminId adminId) {}
+
+
+    @Override
+    protected Mono<Admin> process(Mono<Query> request) {
+        return request.flatMap(this::processInternal);
+    }
+
+    @Override
+    protected String getBoundContext() {
+        return "admin";
+    }
+
+    private Mono<Admin> processInternal(Query query) {
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     String adminId = query.adminId.getValue();
