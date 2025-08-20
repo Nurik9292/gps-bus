@@ -2,21 +2,24 @@ package biz.ugur.busroutebackend.interfaces.rest.mobile.cotroller;
 
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerListResponse;
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerPaginationQuery;
-import biz.ugur.busroutebackend.admin.application.usecase.banner.GetAllBannersUseCase;
 import biz.ugur.busroutebackend.admin.application.usecase.banner.GetBannersByTypeUseCase;
-import biz.ugur.busroutebackend.admin.application.usecase.banner.GetBannersWithPaginationUseCase;
 import biz.ugur.busroutebackend.client.application.usecase.RouteIsFavoriteUseCase;
 import biz.ugur.busroutebackend.client.infrastructure.security.ClientPrincipal;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.response.MobileRouteListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.response.MobileRouteResponse;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteDetail;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteList;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteStops;
-import biz.ugur.busroutebackend.transport.application.dto.stop.GetAllStopPaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopDetail;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopList;
 import biz.ugur.busroutebackend.transport.application.usecase.route.*;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.GetAllBusStopsUseCase;
+import biz.ugur.busroutebackend.admin.application.usecase.banner.GetAllBannersUseCase;
+import biz.ugur.busroutebackend.admin.application.usecase.banner.GetBannersWithPaginationUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.GetBusStopByIdUseCase;
+import biz.ugur.busroutebackend.transport.application.usecase.route.GetRouteStopsUseCase;
+import biz.ugur.busroutebackend.transport.application.dto.stop.GetAllStopPaginationQuery;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -26,6 +29,8 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.security.Principal;
 
 @RestController
 @RequestMapping("/mobile")
@@ -158,15 +163,17 @@ public class MobileApiController {
     @GetMapping("/routes/id/{routeId}/geometry")
     public Mono<ResponseEntity<MobileRouteResponse>> getRouteGeometryBothDirectionsById(@PathVariable String routeId) {
         log.info("Mobile API: Get route geometry both directions by id: {}", routeId);
+
         return getCurrentPrincipal().flatMap(principal -> {
-                    return   Mono.just(new GetRouteByIdUseCase.Query(routeId))
-                            .as(getRouteByIdUseCase::execute)
+                    return   getRouteGeometryUseCase.execute(routeId)
                             .flatMap(routeData    ->
                                     routeIsFavoriteUseCase.execute(new RouteIsFavoriteUseCase.Request(principal.getClientId(), routeId))
                                             .map(isFavorite -> MobileRouteResponse.from(routeData, isFavorite))
                             );
                 })
                 .map(ResponseEntity::ok);
+
+
     }
 
 
