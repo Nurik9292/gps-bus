@@ -130,12 +130,19 @@ public class MobileApiController {
 
 
     @GetMapping("/routes/{routeNumber}")
-    public Mono<ResponseEntity<RouteDetail>> getRouteByNumber(@PathVariable String routeNumber) {
+    public Mono<ResponseEntity<MobileRouteResponse>> getRouteByNumber(@PathVariable String routeNumber) {
         log.info("Mobile API: Get route by number: {}", routeNumber);
 
-        return Mono.just(new GetRouteByNumberUseCase.Query(routeNumber))
-                .as(getRouteByNumberUseCase::execute)
-                .map(ResponseEntity::ok);
+        return getCurrentPrincipal().flatMap(principal -> {
+            return Mono.just(new GetRouteByNumberUseCase.Query(routeNumber))
+                    .as(getRouteByNumberUseCase::execute)
+                    .flatMap(routeData ->
+                            routeIsFavoriteUseCase.execute(new RouteIsFavoriteUseCase.Request(principal.getClientId(), routeData.id()))
+                                    .map(isFavorite -> MobileRouteResponse.from(routeData, isFavorite))
+                    );
+        }).map(ResponseEntity::ok);
+
+
     }
 
     @GetMapping("/routes/id/{routeId}")
