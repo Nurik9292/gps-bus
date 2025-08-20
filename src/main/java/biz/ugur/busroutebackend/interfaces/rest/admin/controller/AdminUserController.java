@@ -162,10 +162,13 @@ public class AdminUserController {
                     request.avatar()
             );
 
-            return updateCurrentAdminAvatarUseCase.execute(req)
+            return Mono.just(req)
+                    .as(updateCurrentAdminAvatarUseCase::execute)
                     .map(AdminProfileResponse::fromDomain)
                     .doOnSuccess(response -> log.info("✅ Аватар обновлен для: {}", principal.username()))
                     .doOnError(error -> log.error("❌ Ошибка обновления аватара: {}", error.getMessage()));
+
+
         });
     }
 
