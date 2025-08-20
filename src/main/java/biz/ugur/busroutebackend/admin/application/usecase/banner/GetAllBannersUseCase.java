@@ -4,36 +4,53 @@ import biz.ugur.busroutebackend.admin.application.dto.banner.BannerListResponse;
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerResponse;
 import biz.ugur.busroutebackend.admin.domain.model.Banner;
 import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Service
 @Slf4j
-public class GetAllBannersUseCase implements UseCase<Boolean, Mono<BannerListResponse>> {
+public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerListResponse> {
 
     private final BannerRepository bannerRepository;
 
-    public GetAllBannersUseCase(BannerRepository bannerRepository) {
+    public GetAllBannersUseCase(BannerRepository bannerRepository,
+                                CorrelationContextService correlationContextService,
+                                EventBus eventBus) {
+        super(correlationContextService, eventBus);
         this.bannerRepository = bannerRepository;
     }
 
+
     @Override
-    public Mono<BannerListResponse> execute(Boolean activeOnly) {
-        log.debug("Fetching banners (activeOnly: {})", activeOnly);
+    protected Mono<BannerListResponse> process(Mono<Boolean> request) {
+        return request.flatMap(this::processInternal);
+    }
 
-        var bannerFlux = activeOnly != null && activeOnly ?
-                bannerRepository.findActiveBanners() :
-                bannerRepository.findAllBanners();
+    @Override
+    protected String getBoundContext() {
+        return "admin";
+    }
 
-        return bannerFlux
-                .map(this::toResponse)
-                .collectList()
-                .flatMap(banners -> bannerRepository.countActiveBanners()
-                        .map(activeCount -> new BannerListResponse(banners, activeCount)))
-                .doOnSuccess(response -> log.debug("Retrieved {} banners ({} active)",
-                        response.getBanners().size(), response.getActiveCount()));
+    private Mono<BannerListResponse> processInternal(Boolean activeOnly) {
+        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
+            log.debug("Fetching banners (activeOnly: {}) - CorrelationId: {}", activeOnly, correlationId);
+
+            var bannerFlux = activeOnly != null && activeOnly ?
+                    bannerRepository.findActiveBanners() :
+                    bannerRepository.findAllBanners();
+
+            return bannerFlux
+                    .map(this::toResponse)
+                    .collectList()
+                    .flatMap(banners -> bannerRepository.countActiveBanners()
+                            .map(activeCount -> new BannerListResponse(banners, activeCount)))
+                    .doOnSuccess(response -> log.debug("Retrieved {} banners ({} active)",
+                            response.getBanners().size(), response.getActiveCount()));
+        });
     }
 
     private BannerResponse toResponse(Banner banner) {
