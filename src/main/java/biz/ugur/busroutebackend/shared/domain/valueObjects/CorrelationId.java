@@ -39,8 +39,8 @@ public record CorrelationId(String value)  {
         return generate("ROUTING");
     }
 
-    public static CorrelationId forRoute() {
-        return generate("ROUTE");
+    public static CorrelationId forClient() {
+        return generate("CLIENT");
     }
 
     public static CorrelationId forMobile() {
