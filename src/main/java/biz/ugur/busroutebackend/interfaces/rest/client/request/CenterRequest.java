@@ -8,7 +8,6 @@ public record CenterRequest(
         @Pattern(regexp = "^(\\+993|993)?[1-9]\\d{7}$", message = "Invalid Turkmenistan phone number")
         String phone,
 
-        @NotBlank(message = "Platform is required")
         String platform
 ) {
 }

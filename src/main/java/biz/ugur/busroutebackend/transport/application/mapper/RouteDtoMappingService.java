@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.transport.application.mapper;
 
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteVehicleStatistics;
@@ -16,14 +16,14 @@ import java.util.List;
 public class RouteDtoMappingService {
 
 
-    public RouteResult toRouteDto(BusRoute busRoute) {
+    public RouteData toRouteDto(BusRoute busRoute) {
         log.debug("Mapping BusRoute to DTO: {}", busRoute.getRouteNumber());
 
-        return RouteResult.fromDomain(busRoute);
+        return RouteData.fromDomain(busRoute);
     }
 
 
-    public RouteResult toRouteWithFullDataDto(
+    public RouteData toRouteWithFullDataDto(
             BusRoute busRoute,
             List<RouteStopInfo> forwardStops,
             List<RouteStopInfo> backwardStops,
@@ -39,7 +39,7 @@ public class RouteDtoMappingService {
                 .map(this::toRouteStopDto)
                 .toList();
 
-        return RouteResult.fromDomainWithStops(
+        return RouteData.fromDomainWithStops(
                 busRoute,
                 forwardStopDtos,
                 backwardStopDtos,
@@ -71,7 +71,7 @@ public class RouteDtoMappingService {
     }
 
 
-    public List<RouteResult> toRouteDtos(List<BusRoute> busRoutes) {
+    public List<RouteData> toRouteDtos(List<BusRoute> busRoutes) {
         return busRoutes.stream()
                 .map(this::toRouteDto)
                 .toList();

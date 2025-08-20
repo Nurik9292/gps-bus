@@ -7,12 +7,12 @@ import java.util.List;
 @Data
 public class RouteList {
 
-    private List<RouteResult> routes;
+    private List<RouteData> routes;
     private Integer totalCount;
     private Long activeCount;
 
 
-    public  RouteList(List<RouteResult> routes, Long activeCount) {
+    public  RouteList(List<RouteData> routes, Long activeCount) {
         this.routes = routes;
         this.totalCount = routes.size();
         this.activeCount = activeCount;

@@ -4,7 +4,7 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.interfaces.rest.transport.dto.request.RouteGeometryRequest;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.application.mapper.RouteDtoMappingService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
@@ -22,21 +22,21 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteResult>> {
+public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteData>> {
 
     private final BusRouteRepository busRouteRepository;
     private final RouteDtoMappingService routeDtoMappingService;
     private final CorrelationContextService correlationContextService;
 
     @Override
-    public Mono<RouteResult> execute(String routeNumber) {
+    public Mono<RouteData> execute(String routeNumber) {
         return correlationContextService.executeWithCorrelation(
                 Mono.just(routeNumber).flatMap(this::executeWithCorrelation),
                 "transport"
         );
     }
 
-    private Mono<RouteResult> executeWithCorrelation(String routeNumber) {
+    private Mono<RouteData> executeWithCorrelation(String routeNumber) {
         return correlationContextService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.debug("Getting route with geometry - CorrelationId: {} - RouteNumber: {}",
@@ -53,7 +53,7 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteRe
 
 
 
-    public Flux<RouteResult> getAllActiveRoutes() {
+    public Flux<RouteData> getAllActiveRoutes() {
         return correlationContextService.executeWithCorrelation(
                         this.getAllActiveRoutesWithCorrelation(),
                         "transport"
@@ -61,7 +61,7 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteRe
                 .flatMapMany(Flux::fromIterable);
     }
 
-    private Mono<List<RouteResult>> getAllActiveRoutesWithCorrelation() {
+    private Mono<List<RouteData>> getAllActiveRoutesWithCorrelation() {
         return correlationContextService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.debug("Getting all active routes - CorrelationId: {}", correlationId);
@@ -132,7 +132,7 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteRe
 
 
 
-    private Mono<RouteResult> enrichWithStopsAndVehicles(BusRoute busRoute) {
+    private Mono<RouteData> enrichWithStopsAndVehicles(BusRoute busRoute) {
         String routeNumber = busRoute.getRouteNumber();
 
         Mono<List<RouteStopInfo>> forwardStops = busRouteRepository

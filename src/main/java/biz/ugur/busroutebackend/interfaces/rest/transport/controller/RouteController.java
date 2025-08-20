@@ -3,7 +3,7 @@ package biz.ugur.busroutebackend.interfaces.rest.transport.controller;
 import biz.ugur.busroutebackend.interfaces.rest.transport.dto.request.RouteGeometryRequest;
 import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.RouteGeometryUpdateResponse;
 import biz.ugur.busroutebackend.transport.application.dto.*;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.application.usecase.FindRoutesInAreaUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.route.GetRouteWithGeometryUseCase;
 import jakarta.validation.Valid;
@@ -34,7 +34,7 @@ public class RouteController {
 
 
     @GetMapping("/{routeNumber}/geometry")
-    public Mono<ResponseEntity<RouteResult>> getRouteGeometry(
+    public Mono<ResponseEntity<RouteData>> getRouteGeometry(
             @PathVariable String routeNumber) {
 
         log.debug("Getting route geometry for route: {}", routeNumber);
@@ -44,7 +44,7 @@ public class RouteController {
                 .defaultIfEmpty(ResponseEntity.notFound().build())
                 .doOnNext(response -> {
                     if (response.getBody() != null) {
-                        RouteResult route = response.getBody();
+                        RouteData route = response.getBody();
                         log.info("Route geometry retrieved for route {}: forward={}km, backward={}km, {} stops",
                                 routeNumber, route.totalDistanceForwardKm(),
                                 route.totalDistanceBackwardKm(),
@@ -182,7 +182,7 @@ public class RouteController {
     }
 
 
-    private RouteBasicInfoDTO toBasicInfo(RouteResult route) {
+    private RouteBasicInfoDTO toBasicInfo(RouteData route) {
         return new RouteBasicInfoDTO(
                 route.routeNumber(),
                 route.routeName(),
@@ -192,7 +192,7 @@ public class RouteController {
         );
     }
 
-    private RouteInfoDTO toRouteInfo(RouteResult route) {
+    private RouteInfoDTO toRouteInfo(RouteData route) {
         return new RouteInfoDTO(
                 route.id(),
                 route.routeNumber(),
@@ -206,7 +206,7 @@ public class RouteController {
         );
     }
 
-    private RouteStatisticsDTO toRouteStatistics(RouteResult route) {
+    private RouteStatisticsDTO toRouteStatistics(RouteData route) {
         return new RouteStatisticsDTO(
                 route.id(),
                 route.routeNumber(),

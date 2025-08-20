@@ -4,7 +4,7 @@ package biz.ugur.busroutebackend.transport.application.usecase.route;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.application.dto.route.UpdateRoute;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
@@ -19,7 +19,7 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class UpdateBusRouteUseCase implements UseCase<Mono<UpdateRoute>, Mono<RouteResult>> {
+public class UpdateBusRouteUseCase implements UseCase<Mono<UpdateRoute>, Mono<RouteData>> {
 
     private final BusRouteRepository busRouteRepository;
     private final EventBus eventBus;
@@ -37,12 +37,12 @@ public class UpdateBusRouteUseCase implements UseCase<Mono<UpdateRoute>, Mono<Ro
     }
 
     @Override
-    public Mono<RouteResult> execute(Mono<UpdateRoute> command) {
+    public Mono<RouteData> execute(Mono<UpdateRoute> command) {
       return correlationService.executeWithCorrelation(command.flatMap(this::executeWithCorrelation), "admin");
     }
 
 
-    private Mono<RouteResult> executeWithCorrelation(UpdateRoute command) {
+    private Mono<RouteData> executeWithCorrelation(UpdateRoute command) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Updating bus route: CorrelationId - {} RouteId - {}", correlationId, command.routeId());
 
@@ -61,7 +61,7 @@ public class UpdateBusRouteUseCase implements UseCase<Mono<UpdateRoute>, Mono<Ro
                         savedRoute.getUncommittedEvents().forEach(eventBus::publish);
                         savedRoute.markEventsAsCommitted();
                     })
-                    .map(RouteResult::fromDomain)
+                    .map(RouteData::fromDomain)
                     .doOnSuccess(response -> log.info("Bus route updated successfully: {}", response.routeNumber()))
                     .doOnError(error -> log.error("Failed to update bus route: {}", command.routeNumber(), error));
 

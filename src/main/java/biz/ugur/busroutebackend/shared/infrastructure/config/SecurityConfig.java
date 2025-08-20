@@ -65,7 +65,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(customAccessDeniedHandler())
                 )
 
-                .addFilterAfter(clientAuthenticationFilter(), SecurityWebFiltersOrder.AUTHENTICATION)
+                .addFilterBefore(clientAuthenticationFilter(), SecurityWebFiltersOrder.AUTHENTICATION)
                 .addFilterAfter(jwtAuthenticationFilter(), SecurityWebFiltersOrder.AUTHENTICATION)
 
                 .authorizeExchange(exchanges -> exchanges
@@ -86,7 +86,7 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/banners/**").permitAll()
 
                         .pathMatchers("/ws/**").permitAll()
-                        .pathMatchers("/mobile/**").permitAll()
+//                        .pathMatchers("/mobile/**").permitAll()
 
 
 //                        .pathMatchers(HttpMethod.GET, "/admin/auth/me").hasRole("ADMIN")

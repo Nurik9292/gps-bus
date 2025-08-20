@@ -4,7 +4,7 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.transport.application.dto.route.CreateRoute;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
@@ -18,7 +18,7 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class CreateBusRouteUseCase implements UseCase<Mono<CreateRoute>, Mono<RouteResult>> {
+public class CreateBusRouteUseCase implements UseCase<Mono<CreateRoute>, Mono<RouteData>> {
 
     private final BusRouteRepository busRouteRepository;
     private final RouteStopsService routeStopsService;
@@ -36,14 +36,14 @@ public class CreateBusRouteUseCase implements UseCase<Mono<CreateRoute>, Mono<Ro
     }
 
     @Override
-    public Mono<RouteResult> execute(Mono<CreateRoute> command) {
+    public Mono<RouteData> execute(Mono<CreateRoute> command) {
         return correlationService.executeWithCorrelation(
                 command.flatMap(this::executeWithCorrelation),
                 "admin"
         );
     }
 
-    private Mono<RouteResult> executeWithCorrelation(CreateRoute command) {
+    private Mono<RouteData> executeWithCorrelation(CreateRoute command) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Creating bus route: Correlation - {} RouteNumber - {} with {} forward stops and {} backward stops",
                     correlationId, command.routeNumber(),
@@ -67,7 +67,7 @@ public class CreateBusRouteUseCase implements UseCase<Mono<CreateRoute>, Mono<Ro
                         savedRoute.getUncommittedEvents().forEach(eventBus::publish);
                         savedRoute.markEventsAsCommitted();
                     })
-                    .map(RouteResult::fromDomain)
+                    .map(RouteData::fromDomain)
                     .doOnSuccess(response -> log.info("Bus route created successfully: {} with stops", response.routeNumber()))
                     .doOnError(error -> log.error("Failed to create bus route: {}", command.routeNumber(), error));
         });

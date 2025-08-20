@@ -3,6 +3,10 @@ package biz.ugur.busroutebackend.interfaces.rest.mobile.cotroller;
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerListResponse;
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerPaginationQuery;
 import biz.ugur.busroutebackend.admin.application.usecase.banner.GetBannersByTypeUseCase;
+import biz.ugur.busroutebackend.client.application.usecase.RouteIsFavoriteUseCase;
+import biz.ugur.busroutebackend.client.infrastructure.security.ClientPrincipal;
+import biz.ugur.busroutebackend.interfaces.rest.mobile.response.MobileRouteListResponse;
+import biz.ugur.busroutebackend.interfaces.rest.mobile.response.MobileRouteResponse;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteDetail;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteList;
@@ -18,9 +22,15 @@ import biz.ugur.busroutebackend.transport.application.usecase.route.GetRouteStop
 import biz.ugur.busroutebackend.transport.application.dto.stop.GetAllStopPaginationQuery;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.security.Principal;
 
 @RestController
 @RequestMapping("/mobile")
@@ -39,18 +49,44 @@ public class MobileApiController {
     private final GetBusStopByIdUseCase getBusStopByIdUseCase;
     private final GetRouteStopsUseCase getRouteStopsUseCase;
     private final GetBannersByTypeUseCase getBannersByTypeUseCase;
+    private final RouteIsFavoriteUseCase  routeIsFavoriteUseCase;
 
 
 
     @GetMapping("/routes")
-    public Mono<ResponseEntity<RouteList>> getAllRoutes() {
-        log.info("Mobile API: Get all routes request");
-        return getAllRoutesUseCase.execute(Mono.empty())
-                .map(ResponseEntity::ok);
+    public Mono<ResponseEntity<MobileRouteListResponse>> getAllRoutes() {
+        log.info("Мобильное API: Запрос на получение всех маршрутов");
+
+        return getCurrentPrincipal()
+                .flatMap(principal -> {
+                    log.info("Client id: {}", principal.getClientId());
+                    return getAllRoutesUseCase.execute(Mono.empty())
+                            .flatMap(routeList ->
+                                    Flux.fromIterable(routeList.getRoutes())
+                                            .flatMap(routeData ->
+                                                    routeIsFavoriteUseCase
+                                                            .execute(new RouteIsFavoriteUseCase.Request(principal.getClientId(), routeData.id()))
+                                                            .map(isFavorite -> MobileRouteResponse.from(routeData, isFavorite))
+                                            )
+                                            .collectList()
+                                            .map(mobileRoutes ->
+                                                    MobileRouteListResponse.builder()
+                                                            .routes(mobileRoutes)
+                                                            .totalCount(routeList.getTotalCount())
+                                                            .activeCount(routeList.getActiveCount())
+                                                            .build()
+                                            )
+                            );
+                })
+                .map(ResponseEntity::ok)
+                .onErrorResume(throwable -> {
+                    log.error("Ошибка при получении маршрутов: {}", throwable.getMessage());
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+                });
     }
 
     @GetMapping("/routes/paginated")
-    public Mono<ResponseEntity<?>> getRoutesPaginated(
+    public Mono<ResponseEntity<RouteList>> getRoutesPaginated(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "routeNumber") String sortField,
@@ -94,7 +130,6 @@ public class MobileApiController {
     public Mono<ResponseEntity<?>> getRouteGeometryBothDirectionsById(@PathVariable String routeId) {
         log.info("Mobile API: Get route geometry both directions by id: {}", routeId);
         return getRouteGeometryUseCase.execute(routeId).map(ResponseEntity::ok);
-
     }
 
 
@@ -191,6 +226,10 @@ public class MobileApiController {
 
 
 
-
+    private Mono<ClientPrincipal> getCurrentPrincipal() {
+        return ReactiveSecurityContextHolder.getContext()
+                .map(SecurityContext::getAuthentication)
+                .map(auth -> (ClientPrincipal) auth.getPrincipal());
+    }
 
 }

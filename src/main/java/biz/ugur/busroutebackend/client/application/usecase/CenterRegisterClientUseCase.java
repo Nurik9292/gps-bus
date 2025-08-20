@@ -58,8 +58,7 @@ public class CenterRegisterClientUseCase implements
     }
 
     private Mono<Client> createNewClient(Command command) {
-        Platform platform = Platform.valueOf(command.platform().toUpperCase());
-        Client client = new Client("Center", command.phone, platform);
+        Client client = new Client("Center", command.phone, Platform.MOBILE_WEB);
         client.generateOtpForCenter();
         client.verifyOtpCenter(client.getOtpCode());
         return Mono.just(authenticateExistingClient(client));
@@ -74,7 +73,7 @@ public class CenterRegisterClientUseCase implements
         );
     }
 
-    public record Command(String phone, String platform) {}
+    public record Command(String phone) {}
 
     public record Result(String clientId, String accessToken, String refreshToken, String status) {}
 }
