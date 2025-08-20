@@ -5,7 +5,9 @@ import biz.ugur.busroutebackend.admin.application.dto.banner.BannerPaginationQue
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerResponse;
 import biz.ugur.busroutebackend.admin.domain.model.Banner;
 import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -17,35 +19,50 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class GetBannersWithPaginationUseCase implements UseCase<BannerPaginationQuery, Mono<BannerListResponse>> {
+public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPaginationQuery>, BannerListResponse> {
 
     private final BannerRepository bannerRepository;
 
-    public GetBannersWithPaginationUseCase(BannerRepository bannerRepository) {
+    public GetBannersWithPaginationUseCase(BannerRepository bannerRepository,
+                                           CorrelationContextService correlationContextService,
+                                           EventBus eventBus) {
+        super(correlationContextService, eventBus);
         this.bannerRepository = bannerRepository;
     }
 
+
     @Override
-    public Mono<BannerListResponse> execute(BannerPaginationQuery query) {
-        log.debug("Fetching banners with pagination: page={}, size={}, sort={}, order={}, active={}",
-                query.getPage(), query.getSize(), query.getSortField(), query.getSortOrder(), query.getActiveOnly());
+    protected Mono<BannerListResponse> process(Mono<BannerPaginationQuery> query) {
+        return query.flatMap(this::processInternal);
+    }
 
-        Pageable pageable = createPageable(query);
+    @Override
+    protected String getBoundContext() {
+        return "admin";
+    }
 
-        var bannerFlux = bannerRepository.findAllBannersWithPagination(pageable);
+    private Mono<BannerListResponse> processInternal(BannerPaginationQuery query) {
+        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
+            log.debug("Fetching banners with pagination: page={}, size={}, sort={}, order={}, active={}",
+                    query.getPage(), query.getSize(), query.getSortField(), query.getSortOrder(), query.getActiveOnly());
 
-        return bannerFlux
-                .map(this::toResponse)
-                .collectList()
-                .zipWith(bannerRepository.countActiveBanners())
-                .map(tuple -> {
-                    List<BannerResponse> banners = tuple.getT1();
-                    Long activeCount = tuple.getT2();
+            Pageable pageable = createPageable(query);
 
-                    return new BannerListResponse(banners, activeCount,banners.size() == query.getSize());
-                })
-                .doOnSuccess(response -> log.debug("Retrieved {} banners ({} active, {} total)",
-                        response.getBanners().size(), response.getActiveCount(), response.getTotalCount()));
+            var bannerFlux = bannerRepository.findAllBannersWithPagination(pageable);
+
+            return bannerFlux
+                    .map(this::toResponse)
+                    .collectList()
+                    .zipWith(bannerRepository.countActiveBanners())
+                    .map(tuple -> {
+                        List<BannerResponse> banners = tuple.getT1();
+                        Long activeCount = tuple.getT2();
+
+                        return new BannerListResponse(banners, activeCount,banners.size() == query.getSize());
+                    })
+                    .doOnSuccess(response -> log.debug("Retrieved {} banners ({} active, {} total)",
+                            response.getBanners().size(), response.getActiveCount(), response.getTotalCount()));
+        });
     }
 
     private Pageable createPageable(BannerPaginationQuery query) {
@@ -71,4 +88,5 @@ public class GetBannersWithPaginationUseCase implements UseCase<BannerPagination
                 banner.getEndDate()
         );
     }
+
 }
