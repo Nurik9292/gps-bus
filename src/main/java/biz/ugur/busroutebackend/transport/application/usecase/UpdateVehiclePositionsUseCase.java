@@ -1,7 +1,8 @@
 package biz.ugur.busroutebackend.transport.application.usecase;
 
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
@@ -17,27 +18,40 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class UpdateVehiclePositionsUseCase implements UseCase<List<GpsPositionDTO>, Mono<VehiclePositionUpdateResult>> {
+public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionDTO>, VehiclePositionUpdateResult> {
 
     private final VehicleRepository vehicleRepository;
-    private final EventBus eventBus;
 
-    public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository, EventBus eventBus) {
+
+    public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
+                                         EventBus eventBus,
+                                         CorrelationContextService correlationContextService) {
+        super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
-        this.eventBus = eventBus;
     }
 
     @Override
-    public Mono<VehiclePositionUpdateResult> execute(List<GpsPositionDTO> gpsPositions) {
-        log.info("Processing {} GPS positions from external API", gpsPositions.size());
+    protected Mono<VehiclePositionUpdateResult> process(List<GpsPositionDTO> request) {
+        return processInternal(request);
+    }
 
-        return Flux.fromIterable(gpsPositions)
-                .filter(this::isValidGpsPosition)
-                .flatMap(this::updateVehiclePosition)
-                .collectList()
-                .map(this::createResult)
-                .doOnSuccess(result -> log.info("GPS update completed: {}", result))
-                .doOnError(error -> log.error("GPS update failed", error));
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
+
+    private Mono<VehiclePositionUpdateResult> processInternal(List<GpsPositionDTO> gpsPositions) {
+        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
+            log.info("Processing {} GPS positions from external API - CorrelationId: {}", gpsPositions.size(), correlationId);
+
+            return Flux.fromIterable(gpsPositions)
+                    .filter(this::isValidGpsPosition)
+                    .flatMap(this::updateVehiclePosition)
+                    .collectList()
+                    .map(this::createResult)
+                    .doOnSuccess(result -> log.info("GPS update completed: {}", result))
+                    .doOnError(error -> log.error("GPS update failed", error));
+        });
     }
 
     private Mono<VehicleUpdateStatus> updateVehiclePosition(GpsPositionDTO gpsPosition) {
@@ -60,10 +74,6 @@ public class UpdateVehiclePositionsUseCase implements UseCase<List<GpsPositionDT
             );
 
             return vehicleRepository.save(vehicle)
-                    .doOnNext(savedVehicle -> {
-                        savedVehicle.getUncommittedEvents().forEach(eventBus::publish);
-                        savedVehicle.markEventsAsCommitted();
-                    })
                     .map(savedVehicle -> VehicleUpdateStatus.updated(
                             savedVehicle.getId().getValue(),
                             savedVehicle.getDeviceId(),
@@ -87,13 +97,11 @@ public class UpdateVehiclePositionsUseCase implements UseCase<List<GpsPositionDT
 
         return vehicleRepository.findByLicensePlate(licensePlate)
                 .flatMap(existingVehicle -> {
-                    // ✅ НАШЛИ СУЩЕСТВУЮЩИЙ - ОБНОВЛЯЕМ ЕГО
                     log.info("Found existing vehicle by license plate: {}, updating device_id", licensePlate);
-                    existingVehicle.setDeviceId(gpsPosition.getDeviceId()); // Простое присвоение
+                    existingVehicle.setDeviceId(gpsPosition.getDeviceId());
                     return updateExistingVehicle(existingVehicle, gpsPosition);
                 })
                 .switchIfEmpty(
-                        // 🆕 НЕ НАШЛИ - СОЗДАЕМ НОВЫЙ
                         Mono.defer(() -> {
                             try {
                                 Vehicle newVehicle = new Vehicle(gpsPosition.getDeviceId(), licensePlate);
@@ -105,10 +113,6 @@ public class UpdateVehiclePositionsUseCase implements UseCase<List<GpsPositionDT
                                 );
 
                                 return vehicleRepository.save(newVehicle)
-                                        .doOnNext(savedVehicle -> {
-                                            savedVehicle.getUncommittedEvents().forEach(eventBus::publish);
-                                            savedVehicle.markEventsAsCommitted();
-                                        })
                                         .map(savedVehicle -> VehicleUpdateStatus.created(
                                                 savedVehicle.getId().getValue(),
                                                 savedVehicle.getDeviceId(),

@@ -1,6 +1,8 @@
 package biz.ugur.busroutebackend.transport.application.usecase;
 
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.BusInfoDTO;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
@@ -15,29 +17,44 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class SyncBusRouteAssignmentsUseCase implements UseCase<List<BusInfoDTO>, Mono<SyncBusRouteAssignmentsUseCase.BusRouteAssignmentResult>> {
+public class SyncBusRouteAssignmentsUseCase extends BaseUseCase<List<BusInfoDTO>, SyncBusRouteAssignmentsUseCase.BusRouteAssignmentResult> {
 
     private final VehicleRepository vehicleRepository;
     private final BusRouteRepository busRouteRepository;
 
-    public SyncBusRouteAssignmentsUseCase(VehicleRepository vehicleRepository, BusRouteRepository busRouteRepository) {
+    public SyncBusRouteAssignmentsUseCase(VehicleRepository vehicleRepository,
+                                          BusRouteRepository busRouteRepository,
+                                          CorrelationContextService correlationContextService,
+                                          EventBus eventBus) {
+        super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
         this.busRouteRepository = busRouteRepository;
     }
 
     @Override
-    public Mono<BusRouteAssignmentResult> execute(List<BusInfoDTO> busInfos) {
-        log.info("Syncing route assignments for {} buses", busInfos.size());
+    protected Mono<BusRouteAssignmentResult> process(List<BusInfoDTO> request) {
+        return processInternal(request);
+    }
 
-        busInfos.forEach(busInfo ->
-                log.info("Processing bus assignment: car_number='{}' → route_number='{}'",
-                        busInfo.getCarNumber(), busInfo.getRouteNumber()));
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
 
-        return Flux.fromIterable(busInfos)
-                .flatMap(this::assignBusToRoute)
-                .collectList()
-                .map(this::createResult)
-                .doOnSuccess(result -> log.info("Route assignment sync completed: {}", result));
+    private  Mono<BusRouteAssignmentResult> processInternal(List<BusInfoDTO> busInfos) {
+        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
+            log.info("Syncing route assignments for {} buses - CorrelationId: {}", busInfos.size(), correlationId);
+
+            busInfos.forEach(busInfo ->
+                    log.info("Processing bus assignment: car_number='{}' → route_number='{}'",
+                            busInfo.getCarNumber(), busInfo.getRouteNumber()));
+
+            return Flux.fromIterable(busInfos)
+                    .flatMap(this::assignBusToRoute)
+                    .collectList()
+                    .map(this::createResult)
+                    .doOnSuccess(result -> log.info("Route assignment sync completed: {}", result));
+        });
     }
 
     private Mono<AssignmentStatus> assignBusToRoute(BusInfoDTO busInfo) {
