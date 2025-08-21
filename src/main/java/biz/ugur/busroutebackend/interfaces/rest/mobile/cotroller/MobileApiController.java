@@ -97,7 +97,6 @@ public class MobileApiController {
 
     @GetMapping("/stops")
     public Mono<ResponseEntity<StopList>> getAllStops() {
-        log.info("Mobile API: Get all stops request");
         return getAllStopsUseCase.execute(Mono.just(createDefaultStopPaginationQuery())).map(ResponseEntity::ok);
 
     }
@@ -125,15 +124,12 @@ public class MobileApiController {
 
     @GetMapping("/stops/{stopId}")
     public Mono<ResponseEntity<StopDetail>> getStopById(@PathVariable String stopId) {
-        log.info("Mobile API: Get stop by id: {}", stopId);
-
         return getBusStopByIdUseCase.execute(Mono.just(stopId)).map(ResponseEntity::ok);
 
     }
 
     @GetMapping("/routes/{routeId}/stops")
     public Mono<ResponseEntity<RouteStops>> getStopsByRoute(@PathVariable String routeId) {
-        log.info("Mobile API: Get stops by route: {}", routeId);
         return getRouteStopsUseCase.execute(Mono.just(routeId)).map(ResponseEntity::ok);
     }
 
@@ -141,9 +137,9 @@ public class MobileApiController {
 
     @GetMapping("/banners")
     public Mono<ResponseEntity<BannerListResponse>> getAllBanners() {
-        log.info("Mobile API: Get all banners request");
-
-        return getAllBannersUseCase.execute(true).map(ResponseEntity::ok);
+        return Mono.just(true)
+                .as(getAllBannersUseCase::execute)
+                .map(ResponseEntity::ok);
 
     }
 
@@ -164,7 +160,7 @@ public class MobileApiController {
                 true
         );
 
-        return getBannersWithPaginationUseCase.execute(query).map(ResponseEntity::ok);
+        return Mono.just(query).as(getBannersWithPaginationUseCase::execute).map(ResponseEntity::ok);
 
     }
 
