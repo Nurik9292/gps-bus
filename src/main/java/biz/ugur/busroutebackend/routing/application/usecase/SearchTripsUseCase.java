@@ -4,7 +4,6 @@ import biz.ugur.busroutebackend.interfaces.rest.routing.dto.request.TripSearchRe
 import biz.ugur.busroutebackend.interfaces.rest.routing.dto.response.TripSearchResponse;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.response.ResponseBuilder;
-import biz.ugur.busroutebackend.routing.application.response.TripPlanExtensions;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.repository.TripPlanRepository;
 import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;
@@ -13,9 +12,9 @@ import biz.ugur.busroutebackend.routing.infrastructure.config.RouteSearchConfig;
 import biz.ugur.busroutebackend.routing.infrastructure.config.SearchContextFactory;
 import biz.ugur.busroutebackend.routing.infrastructure.services.ParallelRouteSearchService;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -27,27 +26,44 @@ import java.util.concurrent.TimeoutException;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
-public class SearchTripsUseCase implements UseCase<TripSearchRequest, Mono<TripSearchResponse>> {
+public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, TripSearchResponse> {
 
     private final ParallelRouteSearchService parallelSearchService;
     private final TripPlanRepository tripPlanRepository;
     private final ResponseBuilder responseBuilder;
-    private final CorrelationContextService correlationService;
     private final SearchContextFactory contextFactory;
     private final RouteSearchConfig config;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
 
-
-    @Override
-    public Mono<TripSearchResponse> execute(TripSearchRequest request) {
-        return correlationService.executeWithCorrelation(
-                executeSearchWithValidation(request),
-                "routing"
-        );
+    public SearchTripsUseCase(ParallelRouteSearchService parallelSearchService,
+                              TripPlanRepository tripPlanRepository,
+                              ResponseBuilder responseBuilder,
+                              CorrelationContextService correlationService,
+                              SearchContextFactory contextFactory,
+                              RouteSearchConfig config,
+                              EventBus eventBus,
+                              ReactiveRedisTemplate<String, Object> redisTemplate) {
+        super(correlationService, eventBus);
+        this.parallelSearchService = parallelSearchService;
+        this.tripPlanRepository = tripPlanRepository;
+        this.responseBuilder = responseBuilder;
+        this.contextFactory = contextFactory;
+        this.config = config;
+        this.redisTemplate = redisTemplate;
     }
 
-    private Mono<TripSearchResponse> executeSearchWithValidation(TripSearchRequest request) {
+
+    @Override
+    protected Mono<TripSearchResponse> process(Mono<TripSearchRequest> request) {
+        return request.flatMap(this::processInternal);
+    }
+
+    @Override
+    protected String getBoundContext() {
+        return "routing";
+    }
+
+    private Mono<TripSearchResponse> processInternal(TripSearchRequest request) {
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     SearchContext context = contextFactory.createFromRequest(request, correlationId.toString());
