@@ -7,15 +7,14 @@ import biz.ugur.busroutebackend.admin.application.usecase.banner.GetBannersByTyp
 import biz.ugur.busroutebackend.admin.application.usecase.banner.GetBannersWithPaginationUseCase;
 import biz.ugur.busroutebackend.client.application.usecase.RouteIsFavoriteUseCase;
 import biz.ugur.busroutebackend.client.infrastructure.security.ClientPrincipal;
-import biz.ugur.busroutebackend.interfaces.rest.mobile.response.MobileRouteListResponse;
-import biz.ugur.busroutebackend.interfaces.rest.mobile.response.MobileRouteResponse;
-import biz.ugur.busroutebackend.interfaces.rest.mobile.response.MobileStopListResponse;
-import biz.ugur.busroutebackend.interfaces.rest.mobile.response.MobileStopResponse;
+import biz.ugur.busroutebackend.interfaces.rest.mobile.response.*;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteStops;
 import biz.ugur.busroutebackend.transport.application.dto.stop.GetAllStopPaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopDetail;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopList;
+import biz.ugur.busroutebackend.transport.application.usecase.ActiveCountVehicleUseCase;
+import biz.ugur.busroutebackend.transport.application.usecase.CountVehicleUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.route.*;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.GetAllBusStopsUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.GetBusStopByIdUseCase;
@@ -50,7 +49,21 @@ public class MobileApiController {
     private final GetBannersByTypeUseCase getBannersByTypeUseCase;
     private final RouteIsFavoriteUseCase  routeIsFavoriteUseCase;
     private final GetRoutesByStopIdUseCase  getRoutesByStopIdUseCase;
+    private final CountVehicleUseCase countVehicleUseCase;
+    private final ActiveCountVehicleUseCase activeCountVehicleUseCase;
 
+
+    @GetMapping("/buses/info")
+    public Mono<ResponseEntity<MobileVehicleInfoResponse>> busesInfo() {
+        return Mono.zip(countVehicleUseCase.execute(Mono.empty()), activeCountVehicleUseCase.execute(Mono.empty()))
+                .map(tuple ->
+                        MobileVehicleInfoResponse.builder()
+                                .vehicleCount(tuple.getT1().count())
+                                .activeVehicleCount(tuple.getT2().count())
+                                .build()
+
+                ).map(ResponseEntity::ok);
+    }
 
 
     @GetMapping("/routes")
