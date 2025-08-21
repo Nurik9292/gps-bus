@@ -76,8 +76,6 @@ public class AdminStopController {
             @Valid @RequestBody BusStopUpdateRequest request) {
         log.info("Updating bus stop: {}", stopId);
 
-        System.out.println("test test test updateStop: " + request);
-
         return Mono.just(request.toInput(stopId))
                 .as(updateBusStopUseCase::execute)
                 .map(this::toStopResponseEntity)

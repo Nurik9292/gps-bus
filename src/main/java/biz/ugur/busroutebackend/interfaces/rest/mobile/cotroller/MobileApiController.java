@@ -186,7 +186,6 @@ public class MobileApiController {
                             .flatMap(stopList ->
                                     Flux.fromIterable(stopList.getStops())
                                             .flatMap(stopData -> {
-                                                System.out.println("test test: " + stopData);
                                                 Mono<Boolean> isFavoriteMono = routeIsFavoriteUseCase
                                                         .execute(new RouteIsFavoriteUseCase.Request(principal.getClientId(), stopData.id()));
 
@@ -207,7 +206,6 @@ public class MobileApiController {
                                             })
                                             .collectList()
                                             .map(mobileStops -> {
-                                                System.out.println("test test mob: " + mobileStops);
                                                 return MobileStopListResponse.builder()
                                                         .stops(mobileStops)
                                                         .totalCount(stopList.getTotalCount())

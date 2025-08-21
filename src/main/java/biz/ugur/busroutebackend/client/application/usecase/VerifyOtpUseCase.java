@@ -21,7 +21,6 @@ public class VerifyOtpUseCase implements UseCase<VerifyOtpUseCase.Command, Mono<
                     if (!verified) {
                         return Mono.error(new IllegalArgumentException("Invalid OTP"));
                     }
-                    System.out.println("Test " + client);
                     return clientRepository.save(client)
                             .map(savedClient -> new Result(
                                     savedClient.getId().getValue(),
