@@ -1,10 +1,7 @@
 package biz.ugur.busroutebackend.transport.infrastructure.repository;
 
 import biz.ugur.busroutebackend.transport.domain.repository.RouteStopRepository;
-import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopDetail;
-import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
-import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopsData;
-import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopsStatistics;
+import biz.ugur.busroutebackend.transport.domain.valueobject.*;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
@@ -125,6 +122,36 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
                         row.get("latitude", BigDecimal.class),
                         row.get("longitude", BigDecimal.class),
                         row.get("is_major_stop", Boolean.class)
+                ))
+                .all();
+    }
+
+    @Override
+    public Flux<StopRouteDetail> getStopRoutesDetail(String stopId, int direction) {
+        String sql = """
+        SELECT 
+            rs.route_id, 
+            rs.direction,
+            rs.estimated_travel_time_minutes, 
+            rs.distance_from_start_meters,
+            br.route_name, 
+            br.route_number
+        FROM route_stops rs
+        JOIN bus_routes br ON rs.route_id = br.id
+        WHERE rs.stop_id = :stopId AND rs.direction = :direction
+        ORDER BY rs.stop_sequence
+        """;
+
+        return databaseClient.sql(sql)
+                .bind("stopId", stopId)
+                .bind("direction", direction)
+                .map(row -> new StopRouteDetail(
+                        row.get("route_id", String.class),
+                        row.get("route_name", String.class),
+                        row.get("route_number", String.class),
+                        row.get("direction", Integer.class),
+                        row.get("estimated_travel_time_minutes", Integer.class),
+                        row.get("distance_from_start_meters", Integer.class)
                 ))
                 .all();
     }

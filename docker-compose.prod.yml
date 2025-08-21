@@ -1,0 +1,55 @@
+services:
+  db-route:
+    environment:
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data_bus_route:/var/lib/postgresql/data
+      - ./src/main/resources/db/migration:/docker-entrypoint-initdb.d/migration
+      - ./docker/postgres/dev-data.sql:/docker-entrypoint-initdb.d/99-dev-data.sql
+
+  redis-route:
+    command: redis-server --loglevel debug --appendonly yes
+
+  bus-route-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: bus-route-app-prod
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: db-route
+      DB_PORT: 5432
+      REDIS_HOST: redis-route
+      REDIS_PORT: 6379
+      GPS_API_BASE_URL: https://gps.tugdk.gov.tm
+      GPS_API_TOKEN: RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0
+      BUS_INFO_API_BASE_URL: https://edu.ayauk.gov.tm/gps/buses
+      BUS_INFO_API_USERNAME: turkmenportal
+      BUS_INFO_API_PASSWORD: turkmenportal
+      AVATAR_STORAGE_PATH: /home/user/bus/bus_route_backend/app/data/avatars
+      AVATAR_BASE_URL: http://localhost:8080/uploads/avatars
+      AVATAR_CREATE_THUMBNAILS: false
+      AVATAR_THUMBNAIL_SIZE: 150
+      AVATAR_JPEG_QUALITY: 0.85
+      BANNER_STORAGE_PATH: /home/user/bus/bus_route_backend/app/data/banners
+      BANNER_BASE_URL: http://localhost:8080/uploads/banners
+      BANNER_CREATE_THUMBNAILS: false
+      BANNER_THUMBNAIL_WIDTH: 400
+      BANNER_THUMBNAIL_HEIGHT: 200
+      BANNER_JPEG_QUALITY: 0.85
+      JAVA_OPTS: "-Xms1g -Xmx2g -XX:+UseG1GC -XX:+UseStringDeduplication -XX:MaxGCPauseMillis=200"
+      JVM_OPTS: "-server -Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom"
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/workspace
+      - ~/.m2:/home/appuser/.m2
+      - ./logs:/workspace/logs
+    depends_on:
+      db-route:
+        condition: service_healthy
+      redis-route:
+        condition: service_healthy
+    networks:
+      - bus-route-network
+    restart: unless-stopped

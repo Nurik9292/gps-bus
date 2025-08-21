@@ -9,7 +9,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 
-public record RouteResult(
+public record RouteData(
         String id,
         String routeNumber,
         String routeName,
@@ -32,8 +32,8 @@ public record RouteResult(
         List<RouteStopDTO> backwardStops
 ) {
 
-    public static RouteResult fromDomain(BusRoute busRoute) {
-        return new RouteResult(
+    public static RouteData fromDomain(BusRoute busRoute) {
+        return new RouteData(
                 busRoute.getId().getValue(),
                 busRoute.getRouteNumber(),
                 busRoute.getRouteName(),
@@ -61,13 +61,13 @@ public record RouteResult(
         );
     }
 
-    public static RouteResult fromDomainWithStops(
+    public static RouteData fromDomainWithStops(
             BusRoute busRoute,
             List<RouteStopDTO> forwardStops,
             List<RouteStopDTO> backwardStops,
             Long activeVehiclesCount
     ) {
-        return new RouteResult(
+        return new RouteData(
                 busRoute.getId().getValue(),
                 busRoute.getRouteNumber(),
                 busRoute.getRouteName(),
@@ -95,8 +95,8 @@ public record RouteResult(
         );
     }
 
-    public RouteResult withStops(List<RouteStopDTO> forwardStops, List<RouteStopDTO> backwardStops) {
-        return new RouteResult(
+    public RouteData withStops(List<RouteStopDTO> forwardStops, List<RouteStopDTO> backwardStops) {
+        return new RouteData(
                 id, routeNumber, routeName, nameTm, nameEn, routeColor, cityId, isActive,
                 estimatedDurationMinutes, forwardStops.size(), backwardStops.size(),
                 totalDistanceForwardKm, totalDistanceBackwardKm, backwardGeometry, forwardGeometry,
@@ -104,8 +104,8 @@ public record RouteResult(
         );
     }
 
-    public RouteResult withActiveVehiclesCount(Long activeVehiclesCount) {
-        return new RouteResult(
+    public RouteData withActiveVehiclesCount(Long activeVehiclesCount) {
+        return new RouteData(
                 id, routeNumber, routeName, nameTm, nameEn, routeColor, cityId, isActive,
                 estimatedDurationMinutes, forwardStopsCount, backwardStopsCount,
                 totalDistanceForwardKm, totalDistanceBackwardKm, backwardGeometry, forwardGeometry,

@@ -24,17 +24,27 @@ public class ClientAuthenticationFilter implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().toString();
-
-        if (isPublicEndpoint(path) || !isClientEndpoint(path)) {
-            return chain.filter(exchange);
-        }
+        log.info("path : {}", path);
 
         if (isPublicEndpoint(path)) {
             return chain.filter(exchange);
         }
 
-        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        log.info("path2 : {}", path);
 
+        if (!isClientEndpoint(path) && !isMobileEndpoint(path)) {
+            return chain.filter(exchange);
+        }
+
+        log.info("path3 : {}", path);
+
+        HttpHeaders httpHeaders = exchange.getRequest().getHeaders();
+
+        log.info("httpHeaders : {}", httpHeaders);
+        log.info("httpHeaders2 : {}", exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
+
+        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        log.debug("authHeader: {}", authHeader);
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return chain.filter(exchange);
         }
@@ -82,7 +92,6 @@ public class ClientAuthenticationFilter implements WebFilter {
 
     private boolean isPublicEndpoint(String path) {
         return path.startsWith("/api/v1/client/auth/") ||
-                path.startsWith("/api/v1/mobile/") ||
                 path.startsWith("/admin/") ||
                 path.startsWith("/public/") ||
                 path.startsWith("/routes/") ||
@@ -97,5 +106,9 @@ public class ClientAuthenticationFilter implements WebFilter {
     private boolean isClientEndpoint(String path) {
         return path.startsWith("/api/v1/client/") &&
                 !path.startsWith("/api/v1/client/auth/");
+    }
+
+    private boolean isMobileEndpoint(String path) {
+        return path.startsWith("/api/v1/mobile/");
     }
 }

@@ -42,7 +42,7 @@ public class CenterRegisterClientUseCase extends
     private Mono<Result> processInternal(Command command) {
         return correlationService.getCurrentCorrelationId()
                 .doOnNext(correlationId ->
-                        log.info("Center auth client Correlation Id: {} - Client Phone: {}", correlationId, command.phone))
+                        log.info("Center auth client Correlation Id: {} client phone: {}", correlationId, command.phone))
                 .flatMap(id -> findOrCreateClient(command)
                         .flatMap(clientRepository::save)
                         .map(this::buildResult));
@@ -62,8 +62,7 @@ public class CenterRegisterClientUseCase extends
     }
 
     private Mono<Client> createNewClient(Command command) {
-        Platform platform = Platform.valueOf(command.platform().toUpperCase());
-        Client client = new Client("Center", command.phone, platform);
+        Client client = new Client("Center", command.phone, Platform.MOBILE_WEB);
         client.generateOtpForCenter();
         client.verifyOtpCenter(client.getOtpCode());
         return Mono.just(authenticateExistingClient(client));
@@ -78,9 +77,7 @@ public class CenterRegisterClientUseCase extends
         );
     }
 
-
-
-    public record Command(String phone, String platform) {}
+    public record Command(String phone) {}
 
     public record Result(String clientId, String accessToken, String refreshToken, String status) {}
 }

@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.response.route;
 
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
@@ -115,7 +115,7 @@ public class BusRouteResponse {
         this.backwardStopsIds = backwardStopsIds;
     }
 
-    public static BusRouteResponse fromResult(RouteResult result) {
+    public static BusRouteResponse fromResult(RouteData result) {
         return new  BusRouteResponse(
                 result.id(),
                 result.routeNumber(),

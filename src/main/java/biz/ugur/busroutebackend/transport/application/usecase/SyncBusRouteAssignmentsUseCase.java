@@ -64,13 +64,10 @@ public class SyncBusRouteAssignmentsUseCase extends BaseUseCase<List<BusInfoDTO>
                                 .flatMap(busRoute -> {
                                     try {
                                         BusRouteId routeId = busRoute.getId();
-                                        System.out.println("bus route id " + routeId.toString());
-                                        System.out.println("vehicle route id " +vehicle.getAssignedRouteId().toString());
                                         if (routeId.equals(vehicle.getAssignedRouteId()) &&
                                                 busInfo.getRouteNumber().equals(vehicle.getRouteNumber())) {
                                             return Mono.just(AssignmentStatus.unchanged(vehicle.getLicensePlate(), routeId.getValue()));
                                         }
-                                        System.out.println("bus route id after");
                                         vehicle.assignToRoute(routeId);
                                         vehicle.updateCachedRouteNumber(busInfo.getRouteNumber());
 

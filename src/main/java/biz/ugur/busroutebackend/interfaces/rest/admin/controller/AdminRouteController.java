@@ -6,7 +6,7 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteLis
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.BusRouteResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.route.CheckRouteNumberResponse;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.application.usecase.route.*;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -132,7 +132,7 @@ public class AdminRouteController {
     }
 
 
-    private ResponseEntity<BusRouteResponse> toRouteResponseEntity(RouteResult result) {
+    private ResponseEntity<BusRouteResponse> toRouteResponseEntity(RouteData result) {
         return ResponseEntity.ok().body(BusRouteResponse.fromResult(result));
     }
 

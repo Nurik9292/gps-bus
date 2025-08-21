@@ -11,7 +11,7 @@ import org.springframework.data.r2dbc.config.AbstractR2dbcConfiguration;
 import org.springframework.data.r2dbc.config.EnableR2dbcAuditing;
 import org.springframework.data.r2dbc.repository.config.EnableR2dbcRepositories;
 import org.springframework.r2dbc.connection.R2dbcTransactionManager;
-import org.springframework.r2dbc.core.DatabaseClient;
+
 import org.springframework.transaction.ReactiveTransactionManager;
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration;
 import io.r2dbc.postgresql.PostgresqlConnectionFactory;
@@ -60,15 +60,15 @@ public class DatabaseConfig extends AbstractR2dbcConfiguration {
                         .database(database)
                         .username(username)
                         .password(password)
-                        .connectTimeout(Duration.ofSeconds(30))
+                        .connectTimeout(Duration.ofSeconds(60))
                         .build()
         );
 
         ConnectionPoolConfiguration config = ConnectionPoolConfiguration.builder(factory)
                 .initialSize(initialPoolSize)
                 .maxSize(maxPoolSize)
-                .maxIdleTime(Duration.ofMinutes(10))
-                .maxCreateConnectionTime(Duration.ofSeconds(30))
+                .maxIdleTime(Duration.ofSeconds(30))
+                .maxCreateConnectionTime(Duration.ofSeconds(10))
                 .build();
 
         return new ConnectionPool(config);

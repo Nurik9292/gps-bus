@@ -5,7 +5,7 @@ import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteList;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
@@ -69,14 +69,14 @@ public class GetAllBusRoutesUseCase extends BaseUseCase<Mono<Void>, RouteList> {
                 });
     }
 
-    private Mono<RouteResult> enrichRouteWithStops(BusRoute route) {
+    private Mono<RouteData> enrichRouteWithStops(BusRoute route) {
         String routeId = route.getId().getValue();
         Mono<List<RouteStopDTO>> forwardStops = routeStopsService.getForwardStopsDTO(routeId);
         Mono<List<RouteStopDTO>> backwardStops = routeStopsService.getBackwardStopsDTO(routeId);
         Mono<Long> activeVehiclesCount = getActiveVehiclesCount(route.getRouteNumber());
 
         return Mono.zip(forwardStops, backwardStops, activeVehiclesCount)
-                .map(tuple -> RouteResult.fromDomainWithStops(
+                .map(tuple -> RouteData.fromDomainWithStops(
                         route,
                         tuple.getT1(),
                         tuple.getT2(),

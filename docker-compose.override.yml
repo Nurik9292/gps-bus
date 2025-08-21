@@ -17,9 +17,9 @@ services:
     container_name: bus-route-app-dev
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      DB_HOST: localhost
+      DB_HOST: db-route
       DB_PORT: 5432
-      REDIS_HOST: localhost
+      REDIS_HOST: redis-route
       REDIS_PORT: 6379
       GPS_API_BASE_URL: http://wiremock:8080/mock/gps/api
       BUS_INFO_API_BASE_URL: http://wiremock:8080/mock/bus-info
@@ -41,9 +41,3 @@ services:
     networks:
       - bus-route-network
     restart: unless-stopped
-#    healthcheck:
-#      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-#      interval: 30s
-#      timeout: 10s
-#      retries: 3
-#      start_period: 60s

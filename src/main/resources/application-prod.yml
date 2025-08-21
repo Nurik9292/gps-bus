@@ -34,6 +34,8 @@ logging:
     tm.gov.busroute: INFO
     org.springframework: WARN
     org.hibernate: WARN
+  file:
+    name: logs/bus-route-backend.log
 
 websocket:
   max-connections: 50000

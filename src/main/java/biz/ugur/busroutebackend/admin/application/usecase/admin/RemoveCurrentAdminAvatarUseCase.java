@@ -49,7 +49,6 @@ public class RemoveCurrentAdminAvatarUseCase extends BaseUseCase<Mono<AdminId>, 
                             .switchIfEmpty(Mono.error(new AdminNotFoundException(idValue, "id", correlationId)))
                             .flatMap(admin -> {
                                 String oldAvatar = admin.getAvatar();
-                                System.out.println("Removing avatar for admin  - OldAvatar: " + oldAvatar);
                                 admin.removeAvatar();
                                return avatarStorageService.deleteAvatar(oldAvatar)
                                        .then(updateAvatarInDatabase(admin));
