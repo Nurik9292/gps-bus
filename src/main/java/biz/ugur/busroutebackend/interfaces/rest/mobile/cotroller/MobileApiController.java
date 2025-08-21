@@ -53,7 +53,7 @@ public class MobileApiController {
     private final ActiveCountVehicleUseCase activeCountVehicleUseCase;
 
 
-    @GetMapping("/buses/info")
+    @GetMapping("/vehicle/info")
     public Mono<ResponseEntity<MobileVehicleInfoResponse>> busesInfo() {
         return Mono.zip(countVehicleUseCase.execute(Mono.empty()), activeCountVehicleUseCase.execute(Mono.empty()))
                 .map(tuple ->

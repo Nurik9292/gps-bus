@@ -10,7 +10,7 @@ import java.util.List;
 @Data
 @Builder
 public class MobileStopResponse {
-    private String id;
+    private String stopId;
     private String stopName;
     private String nameEn;
     private String nameTm;
@@ -32,7 +32,7 @@ public class MobileStopResponse {
     public static MobileStopResponse from(StopResult stopResult, Boolean isFavorite,
                                           List<String> forwardRouteIds, List<String> backwardRouteIds) {
         return MobileStopResponse.builder()
-                .id(stopResult.id())
+                .stopId(stopResult.id())
                 .stopName(stopResult.stopName())
                 .stopCode(stopResult.stopCode())
                 .nameTm(stopResult.nameTm())
