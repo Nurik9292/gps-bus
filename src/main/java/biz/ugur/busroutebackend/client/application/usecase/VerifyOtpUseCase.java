@@ -1,19 +1,36 @@
 package biz.ugur.busroutebackend.client.application.usecase;
 
 import biz.ugur.busroutebackend.client.domain.repository.ClientRepository;
-import biz.ugur.busroutebackend.shared.application.UseCase;
-import lombok.RequiredArgsConstructor;
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Service
-@RequiredArgsConstructor
-public class VerifyOtpUseCase implements UseCase<VerifyOtpUseCase.Command, Mono<VerifyOtpUseCase.Result>> {
+public class VerifyOtpUseCase extends BaseUseCase<Mono<VerifyOtpUseCase.Command>, VerifyOtpUseCase.Result> {
 
     private final ClientRepository clientRepository;
 
+    protected VerifyOtpUseCase(CorrelationContextService correlationService,
+                               EventBus eventBus,
+                               ClientRepository clientRepository) {
+        super(correlationService, eventBus);
+        this.clientRepository = clientRepository;
+    }
+
+
     @Override
-    public Mono<Result> execute(Command command) {
+    protected Mono<Result> process(Mono<Command> request) {
+        return request.flatMap(this::processInternal);
+    }
+
+    @Override
+    protected String getBoundContext() {
+        return "client";
+    }
+
+    private Mono<Result> processInternal(Command command) {
         return clientRepository.findByPhone(command.phone())
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Client not found")))
                 .flatMap(client -> {

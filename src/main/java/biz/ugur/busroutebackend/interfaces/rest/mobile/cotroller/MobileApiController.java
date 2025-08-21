@@ -262,7 +262,7 @@ public class MobileApiController {
     public Mono<ResponseEntity<BannerListResponse>> getAllBanners() {
         log.info("Mobile API: Get all banners request");
 
-        return getAllBannersUseCase.execute(true).map(ResponseEntity::ok);
+        return Mono.just(true).as(getAllBannersUseCase::execute).map(ResponseEntity::ok);
 
     }
 
@@ -283,7 +283,7 @@ public class MobileApiController {
                 true
         );
 
-        return getBannersWithPaginationUseCase.execute(query).map(ResponseEntity::ok);
+        return Mono.just(query).as(getBannersWithPaginationUseCase::execute).map(ResponseEntity::ok);
 
     }
 

@@ -36,7 +36,7 @@ public class FindRouteByIdUseCase extends BaseUseCase<String, RouteData> {
     private Mono<RouteData> processInternal(String routeId) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Find route by id Correlation ID: {} RouteId: {}", correlationId, routeId);
-            return busRouteRepository.findById(BusRouteId.of(routeId)).map(RouteResult::fromDomain);
+            return busRouteRepository.findById(BusRouteId.of(routeId)).map(RouteData::fromDomain);
         });
     }
 }

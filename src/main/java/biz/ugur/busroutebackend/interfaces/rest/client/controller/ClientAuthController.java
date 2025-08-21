@@ -88,7 +88,7 @@ public class ClientAuthController {
     @PostMapping("/center-auth")
     public Mono<ResponseEntity<LoginResponse>> centerLogin(@Valid @RequestBody CenterRequest request) {
 
-       return Mono.just(new CenterRegisterClientUseCase.Command(request.phone(), request.platform()))
+       return Mono.just(new CenterRegisterClientUseCase.Command(request.phone()))
                .as(centerRegisterClientUseCase::execute)
                .map(result -> ResponseEntity.ok(new LoginResponse(
                        result.clientId(),

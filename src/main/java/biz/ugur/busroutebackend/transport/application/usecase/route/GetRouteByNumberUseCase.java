@@ -4,7 +4,6 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteDetail;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
