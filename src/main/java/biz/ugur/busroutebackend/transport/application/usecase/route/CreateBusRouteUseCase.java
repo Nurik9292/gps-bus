@@ -2,7 +2,7 @@ package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.route.CreateRoute;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
@@ -18,32 +18,32 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class CreateBusRouteUseCase implements UseCase<Mono<CreateRoute>, Mono<RouteResult>> {
+public class CreateBusRouteUseCase extends BaseUseCase<Mono<CreateRoute>, RouteResult> {
 
     private final BusRouteRepository busRouteRepository;
     private final RouteStopsService routeStopsService;
-    private final EventBus eventBus;
-    private final CorrelationContextService correlationService;
 
     public CreateBusRouteUseCase(BusRouteRepository busRouteRepository,
                                  RouteStopsService routeStopsService,
                                  EventBus eventBus,
                                  CorrelationContextService correlationService) {
+        super(correlationService, eventBus);
         this.busRouteRepository = busRouteRepository;
         this.routeStopsService = routeStopsService;
-        this.eventBus = eventBus;
-        this.correlationService = correlationService;
     }
 
     @Override
-    public Mono<RouteResult> execute(Mono<CreateRoute> command) {
-        return correlationService.executeWithCorrelation(
-                command.flatMap(this::executeWithCorrelation),
-                "admin"
-        );
+    protected Mono<RouteResult> process(Mono<CreateRoute> request) {
+        return request.flatMap(this::processInternal);
     }
 
-    private Mono<RouteResult> executeWithCorrelation(CreateRoute command) {
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
+
+
+    private Mono<RouteResult> processInternal(CreateRoute command) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Creating bus route: Correlation - {} RouteNumber - {} with {} forward stops and {} backward stops",
                     correlationId, command.routeNumber(),
@@ -62,10 +62,6 @@ public class CreateBusRouteUseCase implements UseCase<Mono<CreateRoute>, Mono<Ro
                             log.debug("No stops to save for route: {}", savedRoute.getId().getValue());
                             return Mono.just(savedRoute);
                         }
-                    })
-                    .doOnNext(savedRoute -> {
-                        savedRoute.getUncommittedEvents().forEach(eventBus::publish);
-                        savedRoute.markEventsAsCommitted();
                     })
                     .map(RouteResult::fromDomain)
                     .doOnSuccess(response -> log.info("Bus route created successfully: {} with stops", response.routeNumber()))
@@ -108,4 +104,6 @@ public class CreateBusRouteUseCase implements UseCase<Mono<CreateRoute>, Mono<Ro
         }
         return RouteGeometry.fromCoordinates(coordinates);
     }
+
+
 }
