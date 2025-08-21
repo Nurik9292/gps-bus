@@ -37,7 +37,8 @@ public class ClientAuthController {
             Platform.valueOf(request.platform().toUpperCase())
         );
 
-        return registerClientUseCase.execute(command)
+        return Mono.just(command)
+                .as(registerClientUseCase::execute)
                 .map(result -> ResponseEntity.ok(new RegisterResponse(
                     result.clientId(),
                     result.name(),
@@ -55,8 +56,9 @@ public class ClientAuthController {
             request.otp()
         );
 
-        return verifyOtpUseCase.execute(command)
-            .map(result -> ResponseEntity.ok(new VerifyOtpResponse(
+        return Mono.just(command)
+                .as(verifyOtpUseCase::execute)
+                .map(result -> ResponseEntity.ok(new VerifyOtpResponse(
                 result.clientId(),
                 result.verified(),
                 "OTP verified successfully",
@@ -71,8 +73,9 @@ public class ClientAuthController {
 
         AuthenticateClientUseCase.Command command = new AuthenticateClientUseCase.Command(request.phone(),request.otp());
 
-        return authenticateClientUseCase.execute(command)
-            .map(result -> ResponseEntity.ok(new LoginResponse(
+        return Mono.just(command)
+                .as(authenticateClientUseCase::execute)
+                .map(result -> ResponseEntity.ok(new LoginResponse(
                 result.clientId(),
                 result.accessToken(),
                 result.refreshToken(),
@@ -85,7 +88,8 @@ public class ClientAuthController {
     @PostMapping("/center-auth")
     public Mono<ResponseEntity<LoginResponse>> centerLogin(@Valid @RequestBody CenterRequest request) {
 
-       return centerRegisterClientUseCase.execute(new CenterRegisterClientUseCase.Command(request.phone(), request.platform()))
+       return Mono.just(new CenterRegisterClientUseCase.Command(request.phone(), request.platform()))
+               .as(centerRegisterClientUseCase::execute)
                .map(result -> ResponseEntity.ok(new LoginResponse(
                        result.clientId(),
                        result.accessToken(),
