@@ -4,5 +4,5 @@ import reactor.core.publisher.Mono;
 
 public interface UseCase<REQUEST, RESPONSE> {
 
-    Mono<RESPONSE> execute(REQUEST request);
+    RESPONSE execute(REQUEST request);
 }

@@ -5,7 +5,7 @@ import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import reactor.core.publisher.Mono;
 
-public abstract class BaseUseCase<T, R> implements UseCase<T,R> {
+public abstract class BaseUseCase<T, R> implements UseCase<T, Mono<R>> {
 
     protected final CorrelationContextService correlationService;
     protected final EventBus eventBus;
@@ -18,7 +18,7 @@ public abstract class BaseUseCase<T, R> implements UseCase<T,R> {
 
     @Override
     public Mono<R> execute(T request) {
-        return correlationService.executeWithCorrelation(process(request), getBoundContext());
+        return correlationService.executeWithCorrelation(Mono.defer(() -> process(request)), getBoundContext());
     }
 
     protected abstract Mono<R> process(T request);

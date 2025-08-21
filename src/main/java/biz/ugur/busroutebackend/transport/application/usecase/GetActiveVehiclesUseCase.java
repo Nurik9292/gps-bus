@@ -1,6 +1,8 @@
 package biz.ugur.busroutebackend.transport.application.usecase;
 
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseFluxUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
@@ -18,7 +20,7 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class GetActiveVehiclesUseCase implements UseCase<GetActiveVehiclesUseCase.Query, Flux<VehiclePositionDTO>> {
+public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesUseCase.Query, VehiclePositionDTO> {
 
     private final VehicleRepository vehicleRepository;
     private final BusRouteRepository busRouteRepository;
@@ -26,7 +28,10 @@ public class GetActiveVehiclesUseCase implements UseCase<GetActiveVehiclesUseCas
 
     public GetActiveVehiclesUseCase(VehicleRepository vehicleRepository,
                                     BusRouteRepository busRouteRepository,
-                                    ReactiveRedisTemplate<String, Object> redisTemplate) {
+                                    ReactiveRedisTemplate<String, Object> redisTemplate,
+                                    CorrelationContextService  correlationContextService,
+                                    EventBus eventBus) {
+        super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
         this.busRouteRepository = busRouteRepository;
         this.redisTemplate = redisTemplate;
@@ -48,6 +53,34 @@ public class GetActiveVehiclesUseCase implements UseCase<GetActiveVehiclesUseCas
             case BY_RADIUS -> getVehiclesInRadius(query.getCenterLat(), query.getCenterLon(),
                     query.getRadiusMeters());
         };
+    }
+
+    @Override
+    protected Flux<VehiclePositionDTO> process(Query request) {
+        return processVehicles(request);
+    }
+
+    @Override
+    protected String getBoundedContext() {
+        return "transport";
+    }
+
+
+    private Flux<VehiclePositionDTO> processVehicles(Query query) {
+        return correlationService.getCurrentCorrelationId().flatMapMany(correlationId -> {
+            log.debug("Getting active vehicles with query: {} - CorrelationId: {}", query, correlationId);
+
+            Query effectiveQuery = (query != null) ? query : Query.all();
+
+            return switch (effectiveQuery.getType()) {
+                case ALL -> getAllActiveVehicles();
+                case BY_ROUTE -> getVehiclesByRoute(effectiveQuery.getRouteNumber());
+                case BY_AREA -> getVehiclesInArea(effectiveQuery.getMinLat(), effectiveQuery.getMinLon(),
+                        effectiveQuery.getMaxLat(), effectiveQuery.getMaxLon());
+                case BY_RADIUS -> getVehiclesInRadius(effectiveQuery.getCenterLat(), effectiveQuery.getCenterLon(),
+                        effectiveQuery.getRadiusMeters());
+            };
+        });
     }
 
 
