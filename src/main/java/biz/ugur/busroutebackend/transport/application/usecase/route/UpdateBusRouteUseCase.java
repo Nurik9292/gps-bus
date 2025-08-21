@@ -3,7 +3,7 @@ package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.application.dto.route.UpdateRoute;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
@@ -19,30 +19,31 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class UpdateBusRouteUseCase implements UseCase<Mono<UpdateRoute>, Mono<RouteResult>> {
+public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteResult> {
 
     private final BusRouteRepository busRouteRepository;
-    private final EventBus eventBus;
-    private final CorrelationContextService correlationService;
     private final RouteStopsService routeStopsService;
 
     public UpdateBusRouteUseCase(BusRouteRepository busRouteRepository,
                                  EventBus eventBus,
                                  CorrelationContextService correlationService,
                                  RouteStopsService routeStopsService) {
+        super(correlationService, eventBus);
         this.busRouteRepository = busRouteRepository;
-        this.eventBus = eventBus;
-        this.correlationService = correlationService;
         this.routeStopsService = routeStopsService;
     }
 
     @Override
-    public Mono<RouteResult> execute(Mono<UpdateRoute> command) {
-      return correlationService.executeWithCorrelation(command.flatMap(this::executeWithCorrelation), "admin");
+    protected Mono<RouteResult> process(Mono<UpdateRoute> request) {
+        return request.flatMap(this::processInternal);
     }
 
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
 
-    private Mono<RouteResult> executeWithCorrelation(UpdateRoute command) {
+    private Mono<RouteResult> processInternal(UpdateRoute command) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Updating bus route: CorrelationId - {} RouteId - {}", correlationId, command.routeId());
 
@@ -56,10 +57,6 @@ public class UpdateBusRouteUseCase implements UseCase<Mono<UpdateRoute>, Mono<Ro
                                 command.forwardStopIds(),
                                 command.backwardStopIds()
                         ).thenReturn(updatedRoute);
-                    })
-                    .doOnNext(savedRoute -> {
-                        savedRoute.getUncommittedEvents().forEach(eventBus::publish);
-                        savedRoute.markEventsAsCommitted();
                     })
                     .map(RouteResult::fromDomain)
                     .doOnSuccess(response -> log.info("Bus route updated successfully: {}", response.routeNumber()))
@@ -106,4 +103,6 @@ public class UpdateBusRouteUseCase implements UseCase<Mono<UpdateRoute>, Mono<Ro
     private RouteGeometry createRouteGeometry(List<List<Double>> coordinates, String direction) {
         return RouteGeometry.fromCoordinates(coordinates);
     }
+
+
 }

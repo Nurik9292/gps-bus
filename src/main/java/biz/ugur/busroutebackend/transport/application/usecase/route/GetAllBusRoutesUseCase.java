@@ -1,7 +1,8 @@
 package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteList;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
@@ -18,29 +19,35 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class GetAllBusRoutesUseCase implements UseCase<Mono<Void>, Mono<RouteList>> {
+public class GetAllBusRoutesUseCase extends BaseUseCase<Mono<Void>, RouteList> {
 
     private final BusRouteRepository busRouteRepository;
-    private final CorrelationContextService correlationService;
     private final RouteStopsService routeStopsService;
     private final VehicleRepository vehicleRepository;
 
     public GetAllBusRoutesUseCase(BusRouteRepository busRouteRepository,
                                   CorrelationContextService correlationService,
+                                  EventBus eventBus,
                                   RouteStopsService routeStopsService,
                                   VehicleRepository vehicleRepository) {
+        super(correlationService, eventBus);
         this.busRouteRepository = busRouteRepository;
-        this.correlationService = correlationService;
         this.routeStopsService = routeStopsService;
         this.vehicleRepository = vehicleRepository;
     }
 
+
     @Override
-    public Mono<RouteList> execute(Mono<Void> query) {
-        return correlationService.executeWithCorrelation(query.then(executeWithCorrelation()),"admin");
+    protected Mono<RouteList> process(Mono<Void> request) {
+        return request.then(Mono.defer(this::processInternal));
     }
 
-    private Mono<RouteList> executeWithCorrelation() {
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
+
+    private Mono<RouteList> processInternal() {
 
         return correlationService.getCurrentCorrelationId()
                 .doOnNext(correlationId ->

@@ -1,32 +1,39 @@
 package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteStops;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
-public class GetRouteStopsUseCase implements UseCase<Mono<String>, Mono<RouteStops>> {
+public class GetRouteStopsUseCase extends BaseUseCase<Mono<String>, RouteStops> {
 
     private final BusRouteRepository busRouteRepository;
-    private final CorrelationContextService correlationService;
 
-    @Override
-    public Mono<RouteStops> execute(Mono<String> routeIdMono) {
-        return correlationService.executeWithCorrelation(
-                routeIdMono.flatMap(this::executeWithCorrelation),
-                "mobile"
-        );
+    public GetRouteStopsUseCase(BusRouteRepository busRouteRepository,
+                                CorrelationContextService correlationService,
+                                EventBus eventBus) {
+        super(correlationService, eventBus);
+        this.busRouteRepository = busRouteRepository;
     }
 
-    private Mono<RouteStops> executeWithCorrelation(String routeId) {
+    @Override
+    protected Mono<RouteStops> process(Mono<String> request) {
+        return request.flatMap(this::processInternal);
+    }
+
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
+
+    private Mono<RouteStops> processInternal(String routeId) {
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.debug("Getting route stops - Correlation {}: routeId={}", correlationId, routeId);
@@ -46,4 +53,6 @@ public class GetRouteStopsUseCase implements UseCase<Mono<String>, Mono<RouteSto
                             });
                 });
     }
+
+
 }

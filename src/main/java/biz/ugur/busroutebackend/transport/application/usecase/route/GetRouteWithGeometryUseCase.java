@@ -1,8 +1,9 @@
 package biz.ugur.busroutebackend.transport.application.usecase.route;
 
-import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.interfaces.rest.transport.dto.request.RouteGeometryRequest;
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.application.mapper.RouteDtoMappingService;
@@ -11,7 +12,6 @@ import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteVehicleStatistics;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -20,23 +20,34 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
-public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteResult>> {
+public class GetRouteWithGeometryUseCase extends BaseUseCase<String, RouteResult> {
 
     private final BusRouteRepository busRouteRepository;
     private final RouteDtoMappingService routeDtoMappingService;
     private final CorrelationContextService correlationContextService;
 
-    @Override
-    public Mono<RouteResult> execute(String routeNumber) {
-        return correlationContextService.executeWithCorrelation(
-                Mono.just(routeNumber).flatMap(this::executeWithCorrelation),
-                "transport"
-        );
+    public GetRouteWithGeometryUseCase(BusRouteRepository busRouteRepository,
+                                       RouteDtoMappingService routeDtoMappingService,
+                                       CorrelationContextService correlationContextService,
+                                       EventBus eventBus) {
+        super(correlationContextService, eventBus);
+        this.busRouteRepository = busRouteRepository;
+        this.routeDtoMappingService = routeDtoMappingService;
+        this.correlationContextService = correlationContextService;
     }
 
-    private Mono<RouteResult> executeWithCorrelation(String routeNumber) {
+    @Override
+    protected Mono<RouteResult> process(String request) {
+        return processInternal(request);
+    }
+
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
+
+    private Mono<RouteResult> processInternal(String routeNumber) {
         return correlationContextService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.debug("Getting route with geometry - CorrelationId: {} - RouteNumber: {}",

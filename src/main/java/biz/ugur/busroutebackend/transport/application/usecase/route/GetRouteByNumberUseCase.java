@@ -1,36 +1,46 @@
 package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
-public class GetRouteByNumberUseCase implements UseCase<Mono<GetRouteByNumberUseCase.Query>, Mono<RouteResult>> {
+public class GetRouteByNumberUseCase extends BaseUseCase<Mono<GetRouteByNumberUseCase.Query>, RouteResult> {
 
     private final BusRouteRepository busRouteRepository;
     private final CorrelationContextService correlationService;
 
-
-    @Override
-    public Mono<RouteResult> execute(Mono<Query> query) {
-        return correlationService.executeWithCorrelation(
-                query.flatMap(this::executeWithCorrelation),
-                "mobile"
-        );
+    public GetRouteByNumberUseCase(BusRouteRepository busRouteRepository,
+                                   CorrelationContextService correlationService,
+                                   EventBus eventBus) {
+        super(correlationService, eventBus);
+        this.busRouteRepository = busRouteRepository;
+        this.correlationService = correlationService;
     }
 
-    private Mono<RouteResult> executeWithCorrelation(Query query) {
+
+    @Override
+    protected Mono<RouteResult> process(Mono<Query> query) {
+        return query.flatMap(this::processInternal);
+    }
+
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
+
+
+    private Mono<RouteResult> processInternal(Query query) {
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
-                    log.debug("Getting route by route number - Correlation {}: routeNumber={}", correlationId, query.routeNumber);
+                    log.debug("Getting route by route number - Correlation {}: routeNumber: {}", correlationId, query.routeNumber);
 
                     return busRouteRepository.findByRouteNumber(query.routeNumber)
                             .map(RouteResult::fromDomain)

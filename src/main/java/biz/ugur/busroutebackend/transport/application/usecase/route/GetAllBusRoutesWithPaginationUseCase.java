@@ -1,7 +1,8 @@
 package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteList;
@@ -22,32 +23,35 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class GetAllBusRoutesWithPaginationUseCase implements UseCase<Mono<GetAllRoutePaginationQuery>, Mono<RouteList>> {
+public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAllRoutePaginationQuery>, RouteList> {
 
     private final BusRouteRepository busRouteRepository;
-    private final CorrelationContextService correlationService;
     private final RouteStopsService routeStopsService;
     private final VehicleRepository vehicleRepository;
 
     public GetAllBusRoutesWithPaginationUseCase(BusRouteRepository busRouteRepository,
                                                 CorrelationContextService correlationService,
                                                 RouteStopsService routeStopsService,
+                                                EventBus eventBus,
                                                 VehicleRepository vehicleRepository) {
+        super(correlationService, eventBus);
         this.busRouteRepository = busRouteRepository;
-        this.correlationService = correlationService;
         this.routeStopsService = routeStopsService;
         this.vehicleRepository = vehicleRepository;
     }
 
+
     @Override
-    public Mono<RouteList> execute(Mono<GetAllRoutePaginationQuery> query) {
-        return correlationService.executeWithCorrelation(
-                query.flatMap(this::executeWithCorrelation),
-                "admin"
-        );
+    protected Mono<RouteList> process(Mono<GetAllRoutePaginationQuery> query) {
+        return query.flatMap(this::processInternal);
     }
 
-    private Mono<RouteList> executeWithCorrelation(GetAllRoutePaginationQuery query) {
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
+
+    private Mono<RouteList> processInternal(GetAllRoutePaginationQuery query) {
         Pageable pageable = createPageable(query);
 
         return correlationService.getCurrentCorrelationId()

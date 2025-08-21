@@ -1,32 +1,41 @@
 package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
-public class GetRouteByIdUseCase implements UseCase<Mono<GetRouteByIdUseCase.Query>, Mono<RouteResult>> {
+public class GetRouteByIdUseCase extends BaseUseCase<Mono<GetRouteByIdUseCase.Query>, RouteResult> {
 
     private final BusRouteRepository busRouteRepository;
-    private final CorrelationContextService correlationService;
 
-    @Override
-    public Mono<RouteResult> execute(Mono<Query> routeIdMono) {
-        return correlationService.executeWithCorrelation(
-                routeIdMono.flatMap(this::executeWithCorrelation),
-                "mobile"
-        );
+    public GetRouteByIdUseCase(BusRouteRepository busRouteRepository,
+                               CorrelationContextService correlationContextService,
+                               EventBus eventBus) {
+        super(correlationContextService, eventBus);
+        this.busRouteRepository = busRouteRepository;
     }
 
-    private Mono<RouteResult> executeWithCorrelation(Query query) {
+
+
+    @Override
+    protected Mono<RouteResult> process(Mono<Query> query) {
+        return query.flatMap(this::processInternal);
+    }
+
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
+
+    private Mono<RouteResult> processInternal(Query query) {
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.debug("Getting route by id - Correlation {}: routeId={}", correlationId, query.routeId);

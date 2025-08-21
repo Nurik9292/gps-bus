@@ -1,7 +1,8 @@
 package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteResult;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
@@ -11,24 +12,29 @@ import reactor.core.publisher.Mono;
 
 @Log4j2
 @Service
-public class FindRouteByIdUseCase implements UseCase<String, Mono<RouteResult>> {
+public class FindRouteByIdUseCase extends BaseUseCase<String, RouteResult> {
 
     private final BusRouteRepository busRouteRepository;
-    private final CorrelationContextService  correlationContextService;
 
-    public FindRouteByIdUseCase(BusRouteRepository busRouteRepository, CorrelationContextService correlationContextService) {
+    public FindRouteByIdUseCase(BusRouteRepository busRouteRepository,
+                                CorrelationContextService correlationContextService,
+                                EventBus eventBus) {
+        super(correlationContextService, eventBus);
         this.busRouteRepository = busRouteRepository;
-        this.correlationContextService = correlationContextService;
     }
 
     @Override
-    public Mono<RouteResult> execute(String routeId) {
-        return correlationContextService
-                .executeWithCorrelation(Mono.just(routeId).flatMap(this::executeWithCorrelation), "admin");
+    protected Mono<RouteResult> process(String request) {
+        return processInternal(request);
     }
 
-    private Mono<RouteResult> executeWithCorrelation(String routeId) {
-        return correlationContextService.getCurrentCorrelationId().flatMap(correlationId -> {
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
+
+    private Mono<RouteResult> processInternal(String routeId) {
+        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Find route by id Correlation ID: {} RouteId: {}", correlationId, routeId);
             return busRouteRepository.findById(BusRouteId.of(routeId)).map(RouteResult::fromDomain);
         });
