@@ -2,7 +2,7 @@ package biz.ugur.busroutebackend.transport.application.usecase.stop;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
 import biz.ugur.busroutebackend.transport.application.dto.stop.UpdateStop;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
@@ -16,26 +16,28 @@ import java.math.BigDecimal;
 
 @Service
 @Slf4j
-public class UpdateBusStopUseCase implements UseCase<Mono<UpdateStop>, Mono<StopResult>> {
+public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopResult> {
 
     private final BusStopRepository busStopRepository;
-    private final EventBus eventBus;
-    private final CorrelationContextService correlationService;
 
     public UpdateBusStopUseCase(BusStopRepository busStopRepository,
                                 EventBus eventBus,
                                 CorrelationContextService correlationService) {
+        super(correlationService, eventBus);
         this.busStopRepository = busStopRepository;
-        this.eventBus = eventBus;
-        this.correlationService = correlationService;
     }
 
     @Override
-    public Mono<StopResult> execute(Mono<UpdateStop> command) {
-        return correlationService.executeWithCorrelation(command.flatMap(this::executeWithCorrelation), "admin");
+    protected Mono<StopResult> process(Mono<UpdateStop> request) {
+        return request.flatMap(this::processInternal);
     }
 
-    private Mono<StopResult> executeWithCorrelation(UpdateStop command) {
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
+
+    private Mono<StopResult> processInternal(UpdateStop command) {
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.info("Updating bus stop: {} (EN: {}, TM: {}) Correlation - {}",
@@ -71,11 +73,7 @@ public class UpdateBusStopUseCase implements UseCase<Mono<UpdateStop>, Mono<Stop
                     "2"
             );
 
-            return busStopRepository.save(existingStop)
-                    .doOnNext(savedStop -> {
-                        savedStop.getUncommittedEvents().forEach(eventBus::publish);
-                        savedStop.markEventsAsCommitted();
-                    });
+            return busStopRepository.save(existingStop);
         } catch (Exception e) {
             return Mono.error(e);
         }

@@ -1,7 +1,8 @@
 package biz.ugur.busroutebackend.transport.application.usecase.stop;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.stop.GetAllStopPaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopList;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
@@ -19,22 +20,28 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class GetAllBusStopsUseCase implements UseCase<Mono<GetAllStopPaginationQuery>, Mono<StopList>> {
+public class GetAllBusStopsUseCase extends BaseUseCase<Mono<GetAllStopPaginationQuery>, StopList> {
 
     private final BusStopRepository busStopRepository;
-    private final CorrelationContextService correlationService;
 
-    public GetAllBusStopsUseCase(BusStopRepository busStopRepository, CorrelationContextService correlationService) {
+    public GetAllBusStopsUseCase(BusStopRepository busStopRepository,
+                                 CorrelationContextService correlationService,
+                                 EventBus eventBus) {
+        super(correlationService, eventBus);
         this.busStopRepository = busStopRepository;
-        this.correlationService = correlationService;
     }
 
     @Override
-    public Mono<StopList> execute(Mono<GetAllStopPaginationQuery> query) {
-        return correlationService.executeWithCorrelation(query.flatMap(this::executeWithCorrelation), "admin");
+    protected Mono<StopList> process(Mono<GetAllStopPaginationQuery> request) {
+        return request.flatMap(this::processInternal);
     }
 
-    private Mono<StopList> executeWithCorrelation(GetAllStopPaginationQuery query) {
+    @Override
+    protected String getBoundContext() {
+        return "transport";
+    }
+
+    private Mono<StopList> processInternal(GetAllStopPaginationQuery query) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.debug("Getting stops with pagination Correlation - {}: page={}, size={}, sort={}, order={}, active={}",
                     correlationId, query.page(), query.size(), query.size(), query.sortField(), query.page());
