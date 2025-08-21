@@ -129,18 +129,18 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
     @Override
     public Flux<StopRouteDetail> getStopRoutesDetail(String stopId, int direction) {
         String sql = """
-            SELECT 
-                rs.route_id, 
-                rs.direction,
-                rs.estimated_travel_time_minutes, 
-                rs.distance_from_start_meters,
-                br.route_name, 
-                br.route_number, 
-            FROM route_stops rs
-            JOIN bus_routes br ON rs.stop_id = br.id
-            WHERE rs.stop_id = :stopId AND rs.direction = :direction
-            ORDER BY rs.stop_sequence
-            """;
+        SELECT 
+            rs.route_id, 
+            rs.direction,
+            rs.estimated_travel_time_minutes, 
+            rs.distance_from_start_meters,
+            br.route_name, 
+            br.route_number
+        FROM route_stops rs
+        JOIN bus_routes br ON rs.route_id = br.id
+        WHERE rs.stop_id = :stopId AND rs.direction = :direction
+        ORDER BY rs.stop_sequence
+        """;
 
         return databaseClient.sql(sql)
                 .bind("stopId", stopId)
