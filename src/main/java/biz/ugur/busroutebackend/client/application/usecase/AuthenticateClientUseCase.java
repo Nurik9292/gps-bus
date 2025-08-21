@@ -2,44 +2,70 @@ package biz.ugur.busroutebackend.client.application.usecase;
 
 import biz.ugur.busroutebackend.client.domain.repository.ClientRepository;
 import biz.ugur.busroutebackend.client.infrastructure.security.JwtTokenService;
-import biz.ugur.busroutebackend.shared.application.UseCase;
-import lombok.RequiredArgsConstructor;
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+@Log4j2
 @Service
-@RequiredArgsConstructor
-public class AuthenticateClientUseCase implements UseCase<AuthenticateClientUseCase.Command, Mono<AuthenticateClientUseCase.Result>> {
+public class AuthenticateClientUseCase extends BaseUseCase<Mono<AuthenticateClientUseCase.Command>, AuthenticateClientUseCase.Result> {
 
     private final ClientRepository clientRepository;
     private final JwtTokenService jwtTokenService;
 
+    public AuthenticateClientUseCase(ClientRepository clientRepository,
+                                     JwtTokenService jwtTokenService,
+                                     CorrelationContextService correlationContextService,
+                                     EventBus eventBus) {
+        super(correlationContextService, eventBus);
+        this.clientRepository = clientRepository;
+        this.jwtTokenService = jwtTokenService;
+    }
+
+
+
     @Override
-    public Mono<Result> execute(Command command) {
-        return clientRepository.findByPhone(command.phone())
-                .switchIfEmpty(Mono.error(new IllegalArgumentException("Client not found")))
-                .flatMap(client -> {
-                    if (!client.isOtpVerified()) {
-                        return Mono.error(new IllegalArgumentException("Phone not verified"));
-                    }
+    protected Mono<Result> process(Mono<Command> command) {
+        return command.flatMap(this::processInternal);
+    }
 
-                    if (!client.isActive()) {
-                        return Mono.error(new IllegalArgumentException("Client account not active"));
-                    }
+    @Override
+    protected String getBoundContext() {
+        return "client";
+    }
 
-                    String accessToken = jwtTokenService.generateAccessToken(client.getId().getValue());
-                    String refreshToken = jwtTokenService.generateRefreshToken(client.getId().getValue());
+    private Mono<Result> processInternal(Command command) {
+        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
+            log.info("Authenticate client CorrelationId: {} - phone: {}", correlationId, command.phone());
 
-                    client.authenticate(accessToken, refreshToken);
+            return clientRepository.findByPhone(command.phone())
+                    .switchIfEmpty(Mono.error(new IllegalArgumentException("Client not found")))
+                    .flatMap(client -> {
+                        if (!client.isOtpVerified()) {
+                            return Mono.error(new IllegalArgumentException("Phone not verified"));
+                        }
 
-                    return clientRepository.save(client)
-                            .map(savedClient -> new Result(
-                                    savedClient.getId().getValue(),
-                                    accessToken,
-                                    refreshToken,
-                                    savedClient.getStatus().name()
-                            ));
-                });
+                        if (!client.isActive()) {
+                            return Mono.error(new IllegalArgumentException("Client account not active"));
+                        }
+
+                        String accessToken = jwtTokenService.generateAccessToken(client.getId().getValue());
+                        String refreshToken = jwtTokenService.generateRefreshToken(client.getId().getValue());
+
+                        client.authenticate(accessToken, refreshToken);
+
+                        return clientRepository.save(client)
+                                .map(savedClient -> new Result(
+                                        savedClient.getId().getValue(),
+                                        accessToken,
+                                        refreshToken,
+                                        savedClient.getStatus().name()
+                                ));
+                    });
+        });
     }
 
     public record Command(String phone, String otp) {}
