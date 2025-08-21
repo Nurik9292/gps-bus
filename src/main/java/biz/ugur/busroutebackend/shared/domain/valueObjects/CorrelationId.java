@@ -47,6 +47,10 @@ public record CorrelationId(String value)  {
         return generate("MOBILE");
     }
 
+    public static CorrelationId forRoutes() {
+        return generate("ROUTE");
+    }
+
 
 
     public static CorrelationId fromString(String value) {

@@ -40,7 +40,8 @@ public class TripPlanningController {
                 request.getFrom().getLatitude(), request.getFrom().getLongitude(),
                 request.getTo().getLatitude(), request.getTo().getLongitude());
 
-        return searchTripsUseCase.execute(request)
+        return Mono.just(request)
+                .as(searchTripsUseCase::execute)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.internalServerError()
                         .body(new TripSearchResponse("error", "Internal server error", null)))

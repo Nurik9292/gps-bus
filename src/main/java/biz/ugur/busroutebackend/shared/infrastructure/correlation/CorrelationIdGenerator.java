@@ -45,7 +45,9 @@ public class CorrelationIdGenerator {
         } else if (path.startsWith("/api/v1/trip-planning/")) {
             return CorrelationId.forRouting();
         } else if (path.startsWith("/api/v1/routes/")) {
-            return CorrelationId.forRoute();
+            return CorrelationId.forRoutes();
+        }  else if (path.startsWith("/api/v1/client/")) {
+            return CorrelationId.forClient();
         }
 
         return CorrelationId.generate();
