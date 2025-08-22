@@ -4,7 +4,7 @@ import biz.ugur.busroutebackend.client.domain.model.RouteFavorite;
 import biz.ugur.busroutebackend.client.domain.repository.RouteFavoriteRepository;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
 import biz.ugur.busroutebackend.client.domain.valueobject.RouteFavoriteId;
-import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseEntityR2dbcRepository;
+import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
@@ -21,7 +21,7 @@ import java.util.function.BiFunction;
 
 @Repository
 @Slf4j
-public class R2dbcRouteFavoriteRepository extends BaseEntityR2dbcRepository<RouteFavorite, RouteFavoriteId> implements RouteFavoriteRepository {
+public class R2dbcRouteFavoriteRepository extends BaseR2dbcRepository<RouteFavorite, RouteFavoriteId> implements RouteFavoriteRepository {
 
     public R2dbcRouteFavoriteRepository(DatabaseClient databaseClient) {
         super(databaseClient, "route_favorites", RouteFavorite.class);

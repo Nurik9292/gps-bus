@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.shared.domain.entity;
 
+import biz.ugur.busroutebackend.shared.base.BaseEntity;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
@@ -12,7 +13,7 @@ import java.util.Objects;
 
 @Setter
 @Getter
-public abstract class Entity<ID> {
+public abstract class Entity<ID> implements BaseEntity<ID> {
 
     @CreatedDate
     @Column("created_at")
@@ -31,7 +32,6 @@ public abstract class Entity<ID> {
     public boolean equals(Object obj) {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
-
         Entity<?> that = (Entity<?>) obj;
         return Objects.equals(getId(), that.getId());
     }

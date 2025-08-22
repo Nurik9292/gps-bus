@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.shared.infrastructure.persistence;
 
+import biz.ugur.busroutebackend.shared.base.BaseEntity;
 import biz.ugur.busroutebackend.shared.base.BaseRepository;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import io.r2dbc.spi.Row;
@@ -17,7 +18,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 @Slf4j
-public abstract class BaseR2dbcRepository<T extends AggregateRoot<T, ID>, ID> implements BaseRepository<T, ID> {
+public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implements BaseRepository<T, ID> {
 
     protected final DatabaseClient databaseClient;
     protected final String tableName;
