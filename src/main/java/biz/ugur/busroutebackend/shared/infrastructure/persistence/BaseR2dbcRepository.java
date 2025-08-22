@@ -2,7 +2,6 @@ package biz.ugur.busroutebackend.shared.infrastructure.persistence;
 
 import biz.ugur.busroutebackend.shared.base.BaseEntity;
 import biz.ugur.busroutebackend.shared.base.BaseRepository;
-import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;

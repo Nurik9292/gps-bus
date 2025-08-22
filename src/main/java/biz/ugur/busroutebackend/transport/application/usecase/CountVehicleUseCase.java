@@ -36,7 +36,7 @@ public class CountVehicleUseCase extends BaseUseCase<Mono<Void>, CountVehicleUse
     private Mono<Response> processInternal() {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Count vehicle CorrelationId: {} ", correlationId);
-            return vehicleRepository.countVehicles().map(Response::new);
+            return vehicleRepository.count().map(Response::new);
         });
     }
 
