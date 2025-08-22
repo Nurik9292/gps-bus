@@ -46,7 +46,7 @@ public class RegisterClientUseCase extends BaseUseCase<Mono<RegisterClientUseCas
                             return Mono.error(new IllegalArgumentException("Phone number already registered"));
                         }
 
-                        Client client = new Client(command.name(), command.phone(), command.platform());
+                        Client client = Client.create(command.name(), command.phone(), command.platform());
                         client.generateOtp();
 
                         return clientRepository.save(client)

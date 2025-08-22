@@ -57,7 +57,7 @@ public class Client extends AggregateRoot<Client, ClientId> {
 
     public Client() {}
 
-    public Client(String name, String phoneNumber, Platform platform) {
+    private Client(String name, String phoneNumber, Platform platform) {
         this.id = ClientId.generate();
         this.name = validateName(name);
         this.phoneNumber = validatePhoneNumber(phoneNumber);
@@ -74,6 +74,38 @@ public class Client extends AggregateRoot<Client, ClientId> {
                 this.phoneNumber,
                 platform.name()
         ));
+    }
+
+    public static Client create(String name, String phoneNumber, Platform platform) {
+        return new Client(name, phoneNumber, platform);
+    }
+
+    public static Client fromDatabase(ClientId id,
+                                      String name,
+                                      String phoneNumber,
+                                      String otpCode,
+                                      Boolean otpVerify,
+                                      Platform platform,
+                                      ClientStatus status,
+                                      Instant lastActivity,
+                                      String accessToken,
+                                      String refreshToken,
+                                      Instant createdAt,
+                                      Instant updatedAt) {
+        Client client = new Client();
+        client.id = id;
+        client.name = name;
+        client.phoneNumber = phoneNumber;
+        client.otpCode = otpCode;
+        client.otpVerify = otpVerify;
+        client.platform = platform;
+        client.status = status;
+        client.lastActivity = lastActivity;
+        client.createdAt = createdAt;
+        client.updatedAt = updatedAt;
+        client.accessToken = accessToken;
+        client.refreshToken = refreshToken;
+        return client;
     }
 
     public void generateOtp() {

@@ -62,7 +62,7 @@ public class CenterRegisterClientUseCase extends
     }
 
     private Mono<Client> createNewClient(Command command) {
-        Client client = new Client("Center", command.phone, Platform.MOBILE_WEB);
+        Client client = Client.create("Center", command.phone, Platform.MOBILE_WEB);
         client.generateOtpForCenter();
         client.verifyOtpCenter(client.getOtpCode());
         return Mono.just(authenticateExistingClient(client));
