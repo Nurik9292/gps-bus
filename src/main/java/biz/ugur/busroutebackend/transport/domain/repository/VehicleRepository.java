@@ -1,16 +1,13 @@
 package biz.ugur.busroutebackend.transport.domain.repository;
 
+import biz.ugur.busroutebackend.shared.base.BaseRepository;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-public interface VehicleRepository {
-
-    Mono<Vehicle> save(Vehicle vehicle);
-
-    Mono<Vehicle> findById(VehicleId vehicleId);
+public interface VehicleRepository extends BaseRepository<Vehicle, VehicleId> {
 
     Mono<Vehicle> findByDeviceId(String deviceId);
 
@@ -34,11 +31,7 @@ public interface VehicleRepository {
 
     Mono<Boolean> existsByLicensePlate(String licensePlate);
 
-    Mono<Void> deleteById(VehicleId vehicleId);
-
     Mono<Long> countActiveVehicles();
 
-    Mono<Long> countVehicles();
-;
     Mono<Long> countActiveVehiclesRouteNumber(String routeNumber);
 }

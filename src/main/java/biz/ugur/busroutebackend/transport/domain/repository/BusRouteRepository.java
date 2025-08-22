@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.domain.repository;
 
+import biz.ugur.busroutebackend.shared.base.BaseRepository;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteInAreaInfo;
@@ -10,26 +11,16 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 
-public interface BusRouteRepository {
+public interface BusRouteRepository extends BaseRepository<BusRoute, BusRouteId> {
 
-    Mono<BusRoute> save(BusRoute busRoute);
-
-    Mono<BusRoute> findById(BusRouteId routeId);
 
     Mono<BusRoute> findByRouteNumber(String routeNumber);
 
     Flux<BusRoute> findActiveRoutes();
 
-    Flux<BusRoute> getRoutesWithPagination(Pageable pageable);
-
     Mono<Boolean> existsByRouteNumber(String routeNumber);
 
-    Mono<Void> deleteById(BusRouteId routeId);
-
     Mono<Long> countActiveRoutes();
-
-
-
 
     Flux<RouteStopInfo> getRouteStopsInfo(BusRouteId routeId);
 

@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.repository;
 
+import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
@@ -15,35 +16,59 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.BiFunction;
 
 @Repository
 @Slf4j
-public class R2dbcBusStopRepository implements BusStopRepository {
-
-    protected final DatabaseClient databaseClient;
+public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStopId>
+        implements BusStopRepository {
 
     public R2dbcBusStopRepository(DatabaseClient databaseClient) {
-        this.databaseClient = databaseClient;
+        super(databaseClient, "bus_stops", BusStop.class);
     }
 
     @Override
-    public Mono<BusStop> save(BusStop busStop) {
-        return findById(busStop.getId())
-                .flatMap(existing -> updateExisting(busStop))
-                .switchIfEmpty(insertNew(busStop))
-                .doOnSuccess(saved -> log.debug("Bus stop saved: {}", saved.getStopName()))
-                .doOnError(error -> log.error("Failed to save bus stop: {}", busStop.getStopName(), error));
+    protected String convertIdToDatabase(BusStopId id) {
+        return id.getValue();
     }
 
     @Override
-    public Mono<BusStop> findById(BusStopId stopId) {
-        String sql = "SELECT * FROM bus_stops WHERE id = :id";
+    protected BiFunction<Row, RowMetadata, BusStop> getRowMapper() {
+        return this::mapRowToBusStop;
+    }
+
+    @Override
+    protected Map<String, Object> mapEntityToColumns(BusStop entity) {
+        Map<String, Object> columns = new HashMap<>();
+        columns.put("id", entity.getId().getValue());
+        columns.put("stop_name", entity.getStopName());
+        columns.put("name_en", entity.getNameEn());
+        columns.put("name_tm", entity.getNameTm());
+        columns.put("stop_code", entity.getStopCode().getValue());
+        columns.put("latitude", entity.getLatitude());
+        columns.put("longitude", entity.getLongitude());
+        columns.put("is_active", entity.getIsActive());
+        columns.put("is_major_stop", entity.getIsMajorStop());
+        columns.put("city_id", entity.getCityId());
+        return columns;
+    }
+
+    @Override
+    public Flux<BusStop> findByStopName(String stopName) {
+        String sql = """
+            SELECT * FROM bus_stops 
+            WHERE (stop_name ILIKE :stopName 
+               OR name_en ILIKE :stopName 
+               OR name_tm ILIKE :stopName) 
+            AND is_active = true
+            """;
 
         return databaseClient.sql(sql)
-                .bind("id", stopId.getValue())
-                .map(this::mapRowToBusStop)
-                .one()
-                .doOnNext(stop -> log.debug("Found bus stop by ID: {}", stopId.getValue()));
+                .bind("stopName", "%" + stopName + "%")
+                .map(getRowMapper())
+                .all();
     }
 
     @Override
@@ -66,86 +91,56 @@ public class R2dbcBusStopRepository implements BusStopRepository {
                 .bind("centerLat", centerLat)
                 .bind("centerLon", centerLon)
                 .bind("radiusKm", radiusKm)
-                .map(this::mapRowToBusStop)
+                .map(getRowMapper())
                 .all()
                 .doOnComplete(() -> log.debug("Found stops within {}km of ({}, {})",
                         radiusKm, centerLat, centerLon));
     }
 
-    private Mono<BusStop> insertNew(BusStop busStop) {
-        String sql = """
-            INSERT INTO bus_stops (id, stop_name, name_en, name_tm, stop_code, latitude, longitude, 
-                                  is_active, is_major_stop, created_at, updated_at, version, city_id)
-            VALUES (:id, :stopName, :nameEn, :nameTm, :stopCode, :latitude, :longitude, 
-                   :isActive, :isMajorStop, NOW(), NOW(), 0, :cityId)
-            """;
-
-        return databaseClient.sql(sql)
-                .bind("id", busStop.getId().getValue())
-                .bind("stopName", busStop.getStopName())
-                .bind("nameEn", busStop.getNameEn())
-                .bind("nameTm", busStop.getNameTm())
-                .bind("stopCode", busStop.getStopCode().getValue())
-                .bind("latitude", busStop.getLatitude())
-                .bind("longitude", busStop.getLongitude())
-                .bind("isActive", busStop.getIsActive())
-                .bind("isMajorStop", busStop.getIsMajorStop())
-                .bind("cityId", busStop.getCityId())
-                .then()
-                .thenReturn(busStop);
-    }
-
-    private Mono<BusStop> updateExisting(BusStop busStop) {
-        String sql = """
-            UPDATE bus_stops 
-            SET stop_name = :stopName, name_en = :nameEn, name_tm = :nameTm, stop_code = :stopCode, 
-                latitude = :latitude, longitude = :longitude,
-                is_active = :isActive, is_major_stop = :isMajorStop,
-                updated_at = NOW(), version = version + 1
-            WHERE id = :id
-            """;
-
-        return databaseClient.sql(sql)
-                .bind("stopName", busStop.getStopName())
-                .bind("nameEn", busStop.getNameEn())
-                .bind("nameTm", busStop.getNameTm())
-                .bind("stopCode", busStop.getStopCode().getValue())
-                .bind("latitude", busStop.getLatitude())
-                .bind("longitude", busStop.getLongitude())
-                .bind("isActive", busStop.getIsActive())
-                .bind("isMajorStop", busStop.getIsMajorStop())
-                .bind("id", busStop.getId().getValue())
-                .then()
-                .thenReturn(busStop);
-    }
-
-
     @Override
-    public Flux<BusStop> findByStopName(String stopName) {
+    public Flux<BusStop> findByRouteId(String routeId) {
         String sql = """
-            SELECT * FROM bus_stops 
-            WHERE (stop_name ILIKE :stopName 
-               OR name_en ILIKE :stopName 
-               OR name_tm ILIKE :stopName) 
-            AND is_active = true
+            SELECT bs.* FROM bus_stops bs
+            JOIN route_stops rs ON bs.id = rs.stop_id
+            WHERE rs.route_id = :routeId AND bs.is_active = true
+            ORDER BY rs.stop_sequence
             """;
 
         return databaseClient.sql(sql)
-                .bind("stopName", "%" + stopName + "%")
-                .map(this::mapRowToBusStop)
+                .bind("routeId", routeId)
+                .map(getRowMapper())
                 .all();
     }
 
     @Override
-    public Mono<Boolean> existsByStopName(String stopName) {
-        String sql = "SELECT COUNT(*) FROM bus_stops WHERE LOWER(stop_name) = LOWER(:stopName)";
+    public Flux<BusStop> findActiveStops() {
+        String sql = "SELECT * FROM bus_stops WHERE is_active = true ORDER BY stop_name";
 
         return databaseClient.sql(sql)
-                .bind("stopName", stopName)
+                .map(getRowMapper())
+                .all();
+    }
+
+    @Override
+    public Mono<Boolean> existsByStopCode(String stopCode) {
+        String sql = "SELECT COUNT(*) FROM bus_stops WHERE stop_code = :stopCode";
+
+        return databaseClient.sql(sql)
+                .bind("stopCode", stopCode)
                 .map(row -> row.get(0, Long.class))
                 .one()
                 .map(count -> count > 0);
     }
+
+    @Override
+    public Mono<Long> countActiveStops() {
+        String sql = "SELECT COUNT(*) FROM bus_stops WHERE is_active = true";
+
+        return databaseClient.sql(sql)
+                .map(row -> row.get(0, Long.class))
+                .one();
+    }
+
 
     @Override
     public Flux<BusStop> searchByName(String query, Integer limit) {
@@ -169,88 +164,20 @@ public class R2dbcBusStopRepository implements BusStopRepository {
                 .bind("query", "%" + query + "%")
                 .bind("exactQuery", query + "%")
                 .bind("limit", limit)
-                .map(this::mapRowToBusStop)
+                .map(getRowMapper())
                 .all();
     }
 
     @Override
-    public Flux<BusStop> findByRouteId(String routeId) {
-        String sql = """
-            SELECT bs.* FROM bus_stops bs
-            JOIN route_stops rs ON bs.id = rs.stop_id
-            WHERE rs.route_id = :routeId AND bs.is_active = true
-            ORDER BY rs.stop_sequence
-            """;
+    public Mono<Boolean> existsByStopName(String stopName) {
+        String sql = "SELECT COUNT(*) FROM bus_stops WHERE LOWER(stop_name) = LOWER(:stopName)";
 
         return databaseClient.sql(sql)
-                .bind("routeId", routeId)
-                .map(this::mapRowToBusStop)
-                .all();
-    }
-
-    @Override
-    public Flux<BusStop> findActiveStops() {
-        String sql = "SELECT * FROM bus_stops WHERE is_active = true ORDER BY stop_name";
-
-        return databaseClient.sql(sql)
-                .map(this::mapRowToBusStop)
-                .all();
-    }
-
-    @Override
-    public Mono<Boolean> existsByStopCode(String stopCode) {
-        String sql = "SELECT COUNT(*) FROM bus_stops WHERE stop_code = :stopCode";
-
-        return databaseClient.sql(sql)
-                .bind("stopCode", stopCode)
+                .bind("stopName", stopName)
                 .map(row -> row.get(0, Long.class))
                 .one()
                 .map(count -> count > 0);
     }
-
-    @Override
-    public Mono<Void> deleteById(BusStopId stopId) {
-        String sql = "DELETE FROM bus_stops WHERE id = :id";
-
-        return databaseClient.sql(sql)
-                .bind("id", stopId.getValue())
-                .then();
-    }
-
-    @Override
-    public Mono<Long> countActiveStops() {
-        String sql = "SELECT COUNT(*) FROM bus_stops WHERE is_active = true";
-
-        return databaseClient.sql(sql)
-                .map(row -> row.get(0, Long.class))
-                .one();
-    }
-
-    @Override
-    public Flux<BusStop> findAllWithPagination(Pageable pageable) {
-        StringBuilder sqlBuilder = new StringBuilder("SELECT * FROM bus_stops");
-
-        sqlBuilder.append(" ORDER BY ");
-        if (pageable.getSort().isSorted()) {
-            Sort.Order order = pageable.getSort().iterator().next();
-            String sortField = mapSortField(order.getProperty());
-            String direction = order.getDirection().name();
-            sqlBuilder.append(sortField).append(" ").append(direction);
-        } else {
-            sqlBuilder.append("stop_name ASC");
-        }
-
-        sqlBuilder.append(" LIMIT :limit OFFSET :offset");
-
-        return databaseClient.sql(sqlBuilder.toString())
-                .bind("limit", pageable.getPageSize())
-                .bind("offset", pageable.getOffset())
-                .map(this::mapRowToBusStop)
-                .all()
-                .doOnComplete(() -> log.debug("Found stops with pagination: page={}, size={}",
-                        pageable.getPageNumber(), pageable.getPageSize()));
-    }
-
 
     private BusStop mapRowToBusStop(Row row, RowMetadata metadata) {
         String id = row.get("id", String.class);
@@ -264,7 +191,7 @@ public class R2dbcBusStopRepository implements BusStopRepository {
         Boolean isActive = row.get("is_active", Boolean.class);
         Boolean isMajorStop = safeGet(row, "is_major_stop", Boolean.class, false);
 
-        return new BusStop(
+        BusStop busStop = new BusStop(
                 BusStopId.of(id),
                 stopName,
                 nameEn,
@@ -276,6 +203,12 @@ public class R2dbcBusStopRepository implements BusStopRepository {
                 isMajorStop,
                 cityId
         );
+
+        busStop.setCreatedAt(safeGet(row, "created_at", java.time.Instant.class, null));
+        busStop.setUpdatedAt(safeGet(row, "updated_at", java.time.Instant.class, null));
+        busStop.setVersion(safeGet(row, "version", Long.class, 0L));
+
+        return busStop;
     }
 
     private <T> T safeGet(Row row, String columnName, Class<T> type, T defaultValue) {

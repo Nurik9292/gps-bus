@@ -61,7 +61,7 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
                 ))
                 .then(
                         Mono.zip(
-                                busRouteRepository.getRoutesWithPagination(pageable).collectList(),
+                                busRouteRepository.findAll(pageable).collectList(),
                                 busRouteRepository.countActiveRoutes()
                         )
                 )

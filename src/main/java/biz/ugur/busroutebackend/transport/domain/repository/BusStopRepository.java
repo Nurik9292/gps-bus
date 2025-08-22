@@ -1,16 +1,13 @@
 package biz.ugur.busroutebackend.transport.domain.repository;
 
+import biz.ugur.busroutebackend.shared.base.BaseRepository;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 import org.springframework.data.domain.Pageable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-public interface BusStopRepository {
-
-    Mono<BusStop> save(BusStop busStop);
-
-    Mono<BusStop> findById(BusStopId stopId);
+public interface BusStopRepository extends BaseRepository<BusStop, BusStopId> {
 
     Flux<BusStop> findByStopName(String stopName);
 
@@ -22,11 +19,7 @@ public interface BusStopRepository {
 
     Mono<Boolean> existsByStopCode(String stopCode);
 
-    Mono<Void> deleteById(BusStopId stopId);
-
     Mono<Long> countActiveStops();
-
-    Flux<BusStop> findAllWithPagination(Pageable pageable);
 
     Flux<BusStop> searchByName(String query, Integer limit);
 

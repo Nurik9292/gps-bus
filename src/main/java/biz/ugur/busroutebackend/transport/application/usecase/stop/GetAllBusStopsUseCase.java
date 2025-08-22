@@ -48,7 +48,7 @@ public class GetAllBusStopsUseCase extends BaseUseCase<Mono<GetAllStopPagination
 
             Pageable pageable = createPageable(query);
 
-            return busStopRepository.findAllWithPagination(pageable)
+            return busStopRepository.findAll(pageable)
                     .collectList()
                     .zipWith(busStopRepository.countActiveStops())
                     .map(tuple -> {
