@@ -41,7 +41,7 @@ public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerListR
 
             var bannerFlux = activeOnly != null && activeOnly ?
                     bannerRepository.findActiveBanners() :
-                    bannerRepository.findAllBanners();
+                    bannerRepository.findAll();
 
             return bannerFlux
                     .map(this::toResponse)

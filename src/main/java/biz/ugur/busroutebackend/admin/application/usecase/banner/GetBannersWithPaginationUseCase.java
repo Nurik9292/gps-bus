@@ -48,7 +48,7 @@ public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPagi
 
             Pageable pageable = createPageable(query);
 
-            var bannerFlux = bannerRepository.findAllBannersWithPagination(pageable);
+            var bannerFlux = bannerRepository.findAll(pageable);
 
             return bannerFlux
                     .map(this::toResponse)
