@@ -9,6 +9,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+import java.time.Instant;
+
 @Table("route_favorites")
 @Getter
 public class RouteFavorite extends Entity<RouteFavoriteId> {
@@ -18,17 +20,38 @@ public class RouteFavorite extends Entity<RouteFavoriteId> {
     private RouteFavoriteId id;
 
     @Column("client_id")
-    private String clientId;
+    private ClientId clientId;
 
     @Column("route_id")
-    private String routeId;
+    private BusRouteId routeId;
 
     public RouteFavorite() {}
 
-    public RouteFavorite(ClientId clientId, BusRouteId routeId) {
-        this.id = RouteFavoriteId.generate();
-        this.clientId = clientId.getValue();
-        this.routeId = routeId.getValue();
+    public static RouteFavorite create(ClientId clientId, BusRouteId routeId) {
+        RouteFavorite routeFavorite = new RouteFavorite();
+        routeFavorite.id = RouteFavoriteId.generate();
+        routeFavorite.clientId = clientId;
+        routeFavorite.routeId = routeId;
+
+        return routeFavorite;
+    }
+
+    public static RouteFavorite fromDatabase(
+            RouteFavoriteId id,
+            ClientId clientId,
+            BusRouteId routeId,
+            Instant createdAt,
+            Instant updatedAt,
+            Long version) {
+        RouteFavorite routeFavorite = new RouteFavorite();
+        routeFavorite.id = id;
+        routeFavorite.clientId = clientId;
+        routeFavorite.routeId = routeId;
+        routeFavorite.createdAt = createdAt;
+        routeFavorite.updatedAt = updatedAt;
+        routeFavorite.version = version;
+
+        return routeFavorite;
     }
 
     @Override

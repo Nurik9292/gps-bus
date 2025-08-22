@@ -48,9 +48,8 @@ public class AddRouteToFavoritesUseCase extends BaseUseCase<Mono<AddRouteToFavor
                            return routeFavoriteRepository.deleteByClientIdAndRouteId(clientId, routeId)
                                    .thenReturn(false);
                        } else {
-                           RouteFavorite favorite = new RouteFavorite(clientId, routeId);
-                           return routeFavoriteRepository.save(favorite)
-                                   .thenReturn(true);
+                           RouteFavorite favorite = RouteFavorite.create(clientId, routeId);
+                           return routeFavoriteRepository.save(favorite).thenReturn(true);
                        }
                    });
        });
