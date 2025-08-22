@@ -48,7 +48,7 @@ public class GetAllCitiesUseCase extends BaseUseCase<Mono<GetAllCitiesInput>, Ci
 
             Pageable pageRequest = createPageable(input);
 
-            return cityRepository.findAllPaged(input.getActive(), pageRequest)
+            return cityRepository.findAll(pageRequest)
                     .collectList()
                     .zipWith(cityRepository.countActiveCities())
                     .map(tuple -> {
