@@ -55,7 +55,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
         static final Duration TWO_TRANSFER_CACHE_TTL = Duration.ofMinutes(10);
     }
 
-    // РЕФАКТОРИНГ: Общий базовый SQL фрагмент для валидации маршрутов
     private static final String ROUTE_VALIDATION_CTE = """
         validated_routes AS (
             SELECT cr.*,
@@ -75,7 +74,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
         )
         """;
 
-    // РЕФАКТОРИНГ: Общий CTE для подсчета автобусов
     private static final String ROUTE_VEHICLES_CTE = """
         route_vehicles AS (
             SELECT 
@@ -88,7 +86,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
         )
         """;
 
-    // РЕФАКТОРИНГ: Базовые условия активности
     private static final String BASE_ACTIVE_CONDITIONS = """
         AND br.is_active = true
         AND bs1.is_active = true 

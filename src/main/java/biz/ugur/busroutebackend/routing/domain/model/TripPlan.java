@@ -56,7 +56,10 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
     @Column("max_walking_distance_meters")
     private final Integer maxWalkingDistanceMeters;
 
-    public TripPlan(TripPlanId tripPlanId, Location originLocation, Location destinationLocation,
+
+    public TripPlan(TripPlanId tripPlanId,
+                    Location originLocation,
+                    Location destinationLocation,
                     TripSearchCriteria searchCriteria) {
         this.tripPlanId = tripPlanId != null ? tripPlanId : TripPlanId.generate();
         this.originLocation = validateLocation(originLocation, "Origin");
@@ -88,10 +91,14 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
     }
 
     public TripPlan(TripPlanId tripPlanId,
-                    Double originLatitude, Double originLongitude,
-                    Double destinationLatitude, Double destinationLongitude,
-                    LocalDateTime searchTime, Integer optionsCount,
-                    Integer maxTransfers, Integer maxWalkingDistanceMeters) {
+                    Double originLatitude,
+                    Double originLongitude,
+                    Double destinationLatitude,
+                    Double destinationLongitude,
+                    LocalDateTime searchTime,
+                    Integer optionsCount,
+                    Integer maxTransfers,
+                    Integer maxWalkingDistanceMeters) {
         this.tripPlanId = tripPlanId;
         this.originLatitude = originLatitude;
         this.originLongitude = originLongitude;
@@ -116,7 +123,6 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
     public TripPlan(Location originLocation, Location destinationLocation) {
         this(TripPlanId.generate(), originLocation, destinationLocation, TripSearchCriteria.defaultCriteria());
     }
-
 
     public void addTripOption(TripOption option) {
         if (option == null) {

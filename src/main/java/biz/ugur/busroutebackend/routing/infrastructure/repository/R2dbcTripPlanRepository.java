@@ -3,7 +3,9 @@ package biz.ugur.busroutebackend.routing.infrastructure.repository;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.repository.TripPlanRepository;
 import biz.ugur.busroutebackend.routing.domain.volumeojects.TripPlanId;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
+import io.r2dbc.spi.Row;
+import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
@@ -11,48 +13,35 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.BiFunction;
 
 @Repository
 @Slf4j
-public class R2dbcTripPlanRepository implements TripPlanRepository {
+public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripPlanId>
+        implements TripPlanRepository {
 
-    private final DatabaseClient databaseClient;
-    private final ObjectMapper objectMapper;
-
-    public R2dbcTripPlanRepository(DatabaseClient databaseClient, ObjectMapper objectMapper) {
-        this.databaseClient = databaseClient;
-        this.objectMapper = objectMapper;
+    public R2dbcTripPlanRepository(DatabaseClient databaseClient) {
+        super(databaseClient, "trip_plans", TripPlan.class);
     }
 
     @Override
     public Mono<TripPlan> save(TripPlan tripPlan) {
-
         String sql = """
             INSERT INTO trip_plans (
-                                    id, 
-                                    origin_latitude, 
-                                    origin_longitude, 
-                                    destination_latitude, 
-                                    destination_longitude, 
-                                    search_time, 
-                                    options_count, 
-                                    max_transfers, 
-                                    max_walking_distance_meters,
-                                    created_at)
+                id, origin_latitude, origin_longitude, destination_latitude, destination_longitude, 
+                search_time, options_count, max_transfers, max_walking_distance_meters,
+                created_at, updated_at, version)
             VALUES (
-                    :id, 
-                    :originLat, 
-                    :originLon, 
-                    :destLat, 
-                    :destLon,
-                    :searchTime, 
-                    :optionsCount, 
-                    :maxTransfers, 
-                    :maxWalkingDistance, 
-                    :createdAt)
+                :id, :originLat, :originLon, :destLat, :destLon,
+                :searchTime, :optionsCount, :maxTransfers, :maxWalkingDistance, 
+                :created_at, :updated_at, :version)
             ON CONFLICT (id) DO UPDATE SET
                 options_count = :optionsCount,
-                updated_at = CURRENT_TIMESTAMP
+                updated_at = CURRENT_TIMESTAMP,
+                version = trip_plans.version + 1
+            RETURNING *
             """;
 
         return databaseClient.sql(sql)
@@ -65,62 +54,38 @@ public class R2dbcTripPlanRepository implements TripPlanRepository {
                 .bind("optionsCount", tripPlan.getOptionsCount())
                 .bind("maxTransfers", tripPlan.getMaxTransfers())
                 .bind("maxWalkingDistance", tripPlan.getMaxWalkingDistanceMeters())
-                .bind("createdAt", LocalDateTime.now())
-                .then()
-                .thenReturn(tripPlan)
+                .bind("created_at", tripPlan.getCreatedAt())
+                .bind("updated_at", tripPlan.getUpdatedAt())
+                .bind("version", tripPlan.getVersion())
+                .map(getRowMapper())
+                .one()
                 .doOnSuccess(plan -> log.debug("Saved trip plan: {}", plan.getId().getValue()))
                 .doOnError(error -> log.error("Failed to save trip plan: {}", error.getMessage()));
     }
 
     @Override
-    public Mono<TripPlan> findById(TripPlanId tripPlanId) {
-        String sql = """
-            SELECT id, origin_latitude, origin_longitude, destination_latitude, destination_longitude,
-                   search_time, options_count, max_transfers, max_walking_distance_meters
-            FROM trip_plans 
-            WHERE id = :id
-            """;
+    public Flux<TripPlan> findRecentPlans(int limit) {
+        String sql = String.format(
+                "SELECT * FROM %s ORDER BY created_at DESC LIMIT :limit",
+                tableName);
 
         return databaseClient.sql(sql)
-                .bind("id", tripPlanId.getValue())
-                .map((row, metadata) -> new TripPlan(
-                        TripPlanId.of(row.get("id", String.class)),
-                        row.get("origin_latitude", Double.class),
-                        row.get("origin_longitude", Double.class),
-                        row.get("destination_latitude", Double.class),
-                        row.get("destination_longitude", Double.class),
-                        row.get("search_time", LocalDateTime.class),
-                        row.get("options_count", Integer.class),
-                        row.get("max_transfers", Integer.class),
-                        row.get("max_walking_distance_meters", Integer.class)
-                ))
-                .first();
-    }
-
-    @Override
-    public Flux<TripPlan> findRecentPlans(int limit) {
-        return Flux.empty(); // Simplified implementation
+                .bind("limit", limit)
+                .map(getRowMapper())
+                .all();
     }
 
     @Override
     public Flux<TripPlan> findPlansByTimeRange(LocalDateTime from, LocalDateTime to) {
-        return Flux.empty(); // Simplified implementation
-    }
+        String sql = String.format(
+                "SELECT * FROM %s WHERE created_at BETWEEN :from AND :to ORDER BY created_at DESC",
+                tableName);
 
-    @Override
-    public Mono<Void> deleteById(TripPlanId tripPlanId) {
-        String sql = "DELETE FROM trip_plans WHERE id = :id";
         return databaseClient.sql(sql)
-                .bind("id", tripPlanId.getValue())
-                .then();
-    }
-
-    @Override
-    public Mono<Long> countTotalPlans() {
-        String sql = "SELECT COUNT(*) FROM trip_plans";
-        return databaseClient.sql(sql)
-                .map(row -> row.get(0, Long.class))
-                .one();
+                .bind("from", from)
+                .bind("to", to)
+                .map(getRowMapper())
+                .all();
     }
 
     @Override
@@ -145,9 +110,44 @@ public class R2dbcTripPlanRepository implements TripPlanRepository {
                         row.get("total_searches", Long.class),
                         row.get("successful_searches", Long.class),
                         row.get("avg_options_found", Double.class),
-                        0.0,
-                        "Unknown" //
+                        0.0, // averageTravelTime - нужна дополнительная логика
+                        "Unknown" // mostPopularRoute - нужна дополнительная логика
                 ))
                 .all();
+    }
+
+    @Override
+    protected String convertIdToDatabase(TripPlanId id) {
+        return id.getValue();
+    }
+
+    @Override
+    protected BiFunction<Row, RowMetadata, TripPlan> getRowMapper() {
+        return (row, metadata) -> new TripPlan(
+                TripPlanId.of(row.get("id", String.class)),
+                row.get("origin_latitude", Double.class),
+                row.get("origin_longitude", Double.class),
+                row.get("destination_latitude", Double.class),
+                row.get("destination_longitude", Double.class),
+                row.get("search_time", LocalDateTime.class),
+                row.get("options_count", Integer.class),
+                row.get("max_transfers", Integer.class),
+                row.get("max_walking_distance_meters", Integer.class)
+        );
+    }
+
+    @Override
+    protected Map<String, Object> mapEntityToColumns(TripPlan entity) {
+        Map<String, Object> columns = new HashMap<>();
+        columns.put("id", entity.getId().getValue());
+        columns.put("origin_latitude", entity.getOriginLatitude());
+        columns.put("origin_longitude", entity.getOriginLongitude());
+        columns.put("destination_latitude", entity.getDestinationLatitude());
+        columns.put("destination_longitude", entity.getDestinationLongitude());
+        columns.put("search_time", entity.getSearchTimeDb());
+        columns.put("options_count", entity.getOptionsCount());
+        columns.put("max_transfers", entity.getMaxTransfers());
+        columns.put("max_walking_distance_meters", entity.getMaxWalkingDistanceMeters());
+        return columns;
     }
 }
