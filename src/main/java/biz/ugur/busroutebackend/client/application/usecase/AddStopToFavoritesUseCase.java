@@ -49,7 +49,7 @@ public class AddStopToFavoritesUseCase extends BaseUseCase<Mono<AddStopToFavorit
                             return stopFavoriteRepository.deleteByClientIdAndStopId(clientId, stopId)
                                     .thenReturn(false);
                         } else {
-                            StopFavorite favorite = new StopFavorite(clientId, stopId);
+                            StopFavorite favorite = StopFavorite.create(clientId, stopId);
                             return stopFavoriteRepository.save(favorite)
                                     .thenReturn(true);
                         }

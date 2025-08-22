@@ -4,10 +4,13 @@ import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
 import biz.ugur.busroutebackend.client.domain.valueobject.StopFavoriteId;
 import biz.ugur.busroutebackend.shared.domain.entity.Entity;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
+import io.r2dbc.spi.RowMetadata;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+
+import java.time.Instant;
 
 @Table("stop_favorites")
 @Getter
@@ -18,18 +21,39 @@ public class StopFavorite extends Entity<StopFavoriteId> {
     private StopFavoriteId id;
 
     @Column("client_id")
-    private String clientId;
+    private ClientId clientId;
 
     @Column("stop_id")
-    private String stopId;
+    private BusStopId stopId;
 
     public StopFavorite() {}
 
-    public StopFavorite(ClientId clientId, BusStopId stopId) {
-        this.id = StopFavoriteId.generate();
-        this.clientId = clientId.getValue();
-        this.stopId = stopId.getValue();
+    public static StopFavorite create(ClientId clientId, BusStopId stopId) {
+        StopFavorite stopFavorite = new StopFavorite();
+        stopFavorite.id = StopFavoriteId.generate();
+        stopFavorite.clientId = clientId;
+        stopFavorite.stopId = stopId;
+        return stopFavorite;
     }
+
+
+    public static StopFavorite fromDatabase(StopFavoriteId id,
+                                               ClientId clientId,
+                                               BusStopId stopId,
+                                               Instant createdAt,
+                                               Instant updatedAt,
+                                               Long version) {
+        StopFavorite entity = new StopFavorite();
+        entity.clientId = clientId;
+        entity.stopId = stopId;
+        entity.createdAt = createdAt;
+        entity.updatedAt = updatedAt;
+        entity.version = version;
+        entity.id = id;
+
+        return entity;
+    }
+
 
     @Override
     public StopFavoriteId getId() {
