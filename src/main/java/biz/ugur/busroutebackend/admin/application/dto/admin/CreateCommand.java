@@ -12,12 +12,6 @@ public record CreateCommand(
 ) {
 
     public Admin toDomain() {
-        return  new Admin(
-                username,
-                password,
-                fullName,
-                isSuperAdmin,
-                isActive
-        );
+        return Admin.create(username, fullName, password, isSuperAdmin, isActive);
     }
 }

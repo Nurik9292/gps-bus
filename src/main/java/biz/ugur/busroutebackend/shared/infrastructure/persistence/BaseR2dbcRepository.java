@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.r2dbc.core.DatabaseClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
@@ -34,6 +35,89 @@ public abstract class BaseR2dbcRepository<T extends AggregateRoot<T, ID>, ID> im
                 .flatMap(existing -> update(entity))
                 .switchIfEmpty(insert(entity));
     }
+
+    @Override
+    public Flux<T> findAll() {
+        String sql = String.format("SELECT * FROM %s", tableName);
+
+        return databaseClient.sql(sql)
+                .map(getRowMapper())
+                .all();
+    }
+
+
+    @Override
+    public Flux<T> findAll(Pageable pageable) {
+        String sql = String.format(
+                "SELECT * FROM %s %s LIMIT :limit OFFSET :offset",
+                tableName,
+                getOrderByClause(pageable)
+        );
+
+        return databaseClient.sql(sql)
+                .bind("limit", pageable.getPageSize())
+                .bind("offset", pageable.getOffset())
+                .map(getRowMapper())
+                .all();
+    }
+
+
+    @Override
+    public Mono<T> findById(ID id) {
+        String sql = String.format("SELECT * FROM %s WHERE id = :id", tableName);
+
+        return databaseClient.sql(sql)
+                .bind("id", convertIdToDatabase(id))
+                .map(getRowMapper())
+                .one()
+                .doOnNext(entity ->
+                        log.debug("Found {} with id: {}", entityClass.getSimpleName(), id)
+                );
+    }
+
+
+    @Override
+    public Mono<Long> count() {
+        String sql = String.format("SELECT COUNT(*) FROM %s", tableName);
+
+        return databaseClient.sql(sql)
+                .map(row -> row.get(0, Long.class))
+                .one();
+    }
+
+    @Override
+    public Mono<Boolean> existsById(ID id) {
+        String sql = String.format(
+                "SELECT EXISTS(SELECT 1 FROM %s WHERE id = :id)",
+                tableName
+        );
+
+        return databaseClient.sql(sql)
+                .bind("id", convertIdToDatabase(id))
+                .map(row -> row.get(0, Boolean.class))
+                .one();
+    }
+
+    @Override
+    public Mono<Void> deleteById(ID id) {
+        String sql = String.format("DELETE FROM %s WHERE id = :id", tableName);
+
+        return databaseClient.sql(sql)
+                .bind("id", convertIdToDatabase(id))
+                .fetch()
+                .rowsUpdated()
+                .doOnSuccess(count -> {
+                    if (count > 0) {
+                        log.debug("Deleted {} with id: {}",
+                                entityClass.getSimpleName(), id);
+                    } else {
+                        log.warn("No {} found with id: {} to delete",
+                                entityClass.getSimpleName(), id);
+                    }
+                })
+                .then();
+    }
+
 
     protected Mono<T> insert(T entity) {
         Map<String, Object> values = mapEntityToColumns(entity);
@@ -100,6 +184,7 @@ public abstract class BaseR2dbcRepository<T extends AggregateRoot<T, ID>, ID> im
                 }));
     }
 
+
     protected DatabaseClient.GenericExecuteSpec bindValue(
             DatabaseClient.GenericExecuteSpec spec,
             String name,
@@ -111,14 +196,19 @@ public abstract class BaseR2dbcRepository<T extends AggregateRoot<T, ID>, ID> im
         return spec.bind(name, value);
     }
 
-    protected String buildOrderBy(Pageable pageable) {
+    protected String getOrderByClause(Pageable pageable) {
         if (pageable.getSort().isEmpty()) {
-            return "created_at DESC";
+            return "ORDER BY created_at DESC";
         }
-        return pageable.getSort().stream()
+        return "ORDER BY " + pageable.getSort().stream()
                 .map(order -> order.getProperty() + " " + order.getDirection().name())
                 .collect(Collectors.joining(", "));
     }
+
+
+
+
+    protected abstract String convertIdToDatabase(ID id);
 
     protected abstract BiFunction<Row, RowMetadata, T> getRowMapper();
 

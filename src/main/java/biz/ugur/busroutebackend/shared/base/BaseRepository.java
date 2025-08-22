@@ -1,15 +1,16 @@
 package biz.ugur.busroutebackend.shared.base;
 
 import org.springframework.data.domain.Pageable;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 public interface BaseRepository<T, ID> {
 
     Mono<T> save(T entity);
 
-    Mono<T> findAll();
+    Flux<T> findAll();
 
-    Mono<T> findAll(Pageable pageable);
+    Flux<T> findAll(Pageable pageable);
 
     Mono<T> findById(ID id);
 

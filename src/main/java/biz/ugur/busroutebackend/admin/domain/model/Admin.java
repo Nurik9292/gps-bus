@@ -50,70 +50,62 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
 
     private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public Admin(String username,
-                 String password,
-                 String fullName,
-                 Boolean isSuperAdmin,
-                 Boolean isActive) {
-        this.id = AdminId.generate();
-        this.username = validateUsername(username);
-        this.passwordHash = passwordEncoder.encode(password);
-        this.fullName = fullName;
-        this.isActive = isActive;
-        this.isSuperAdmin = isSuperAdmin != null ? isSuperAdmin : false;
-        this.lastLoginAt = Instant.now();
-        this.avatar = null;
+    private Admin() {}
 
-        this.isNew = true;
+    public static Admin create(String username,
+                               String password,
+                               String fullName,
+                               Boolean isSuperAdmin,
+                               Boolean isActive) {
+        Admin admin = new Admin();
+        admin.id = AdminId.generate();
+        admin.username = admin.validateUsername(username);
+        admin.passwordHash = passwordEncoder.encode(password);
+        admin.fullName = fullName;
+        admin.isActive = isActive;
+        admin.isSuperAdmin = isSuperAdmin != null ? isSuperAdmin : false;
+        admin.lastLoginAt = Instant.now();
+        admin.avatar = null;
 
-        registerEvent(new AdminCreatedEvent(
-                this.id.getValue(),
-                this.username,
-                this.fullName,
-                this.isSuperAdmin
+        admin.registerEvent(new AdminCreatedEvent(
+                admin.id.getValue(),
+                admin.username,
+                admin.fullName,
+                admin.isSuperAdmin
         ));
+
+        return admin;
     }
 
 
-    public Admin(String username, String password, String fullName, Boolean isSuperAdmin) {
-        this.id = AdminId.generate();
-        this.username = validateUsername(username);
-        this.passwordHash = passwordEncoder.encode(password);
-        this.fullName = fullName;
-        this.isActive = true;
-        this.isSuperAdmin = isSuperAdmin != null ? isSuperAdmin : false;
-        this.lastLoginAt = Instant.now();
-        this.avatar = null;
-
-        this.isNew = true;
-
-        registerEvent(new AdminCreatedEvent(
-                this.id.getValue(),
-                this.username,
-                this.fullName,
-                this.isSuperAdmin
-        ));
+    public static Admin fromDatabase(
+            AdminId id,
+            String username,
+            String passwordHash,
+            String fullName,
+            String avatar,
+            Boolean isActive,
+            Boolean isSuperAdmin,
+            Instant lastLoginAt,
+            Instant createdAt,
+            Instant updatedAt,
+            Long version
+    ) {
+        Admin admin = new Admin();
+        admin.id = id;
+        admin.username = username;
+        admin.passwordHash = passwordHash;
+        admin.fullName = fullName;
+        admin.avatar = avatar;
+        admin.isActive = isActive;
+        admin.isSuperAdmin = isSuperAdmin;
+        admin.lastLoginAt = lastLoginAt;
+        admin.setCreatedAt(createdAt);
+        admin.setUpdatedAt(updatedAt);
+        admin.setVersion(version);
+        return admin;
     }
 
-    public Admin(AdminId adminId,
-                 String username,
-                 String passwordHash,
-                 String fullName,
-                 String avatar,
-                 Boolean isActive,
-                 Boolean isSuperAdmin,
-                 Instant lastLoginAt) {
-        this.id = adminId;
-        this.username = username;
-        this.passwordHash = passwordHash;
-        this.fullName = fullName;
-        this.avatar = avatar;
-        this.isActive = isActive != null ? isActive : true;
-        this.isSuperAdmin = isSuperAdmin != null ? isSuperAdmin : false;
-        this.lastLoginAt = lastLoginAt;
-        this.isNew = false;
-
-    }
 
     public void changePassword(String newPassword) {
         this.passwordHash = passwordEncoder.encode(newPassword);
@@ -210,9 +202,6 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         }
     }
 
-    public void markAsExisting() {
-        isNew = false;
-    }
 
     @Override
     public AdminId getId() {

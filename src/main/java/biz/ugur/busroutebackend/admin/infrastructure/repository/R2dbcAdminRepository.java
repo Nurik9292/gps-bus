@@ -3,209 +3,146 @@ package biz.ugur.busroutebackend.admin.infrastructure.repository;
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
+import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.BiFunction;
 
 
 @Repository
 @Slf4j
-@Transactional(readOnly = true)
-public class R2dbcAdminRepository implements AdminRepository {
-
-    private final DatabaseClient databaseClient;
+public class R2dbcAdminRepository extends BaseR2dbcRepository<Admin, AdminId> implements AdminRepository {
 
     public R2dbcAdminRepository(DatabaseClient databaseClient) {
-        this.databaseClient = databaseClient;
+        super(databaseClient, "admins", Admin.class);
     }
 
     @Override
-    @Transactional
-    public Mono<Admin> save(Admin admin) {
-        if (admin.isNew()) {
-            return insert(admin).doOnSuccess(Admin::markAsExisting);
-        } else {
-            return update(admin);
-        }
-    }
-
-    private Mono<Admin> insert(Admin admin) {
-        Instant now = Instant.now();
-        return databaseClient.sql("INSERT INTO admins (id, username, password_hash, full_name, is_active, " +
-                        "is_super_admin, last_login_at, created_at, updated_at, version) " +
-                        "VALUES (:id, :username, :passwordHash, :fullName, :isActive, " +
-                        ":isSuperAdmin, :lastLoginAt, :createdAt, :updatedAt, :version)")
-                .bind("id",  admin.getId().toString())
-                .bind("username", admin.getUsername())
-                .bind("passwordHash", admin.getPasswordHash())
-                .bind("fullName", admin.getFullName())
-                .bind("isActive", admin.getIsActive())
-                .bind("isSuperAdmin", admin.getIsSuperAdmin())
-                .bind("lastLoginAt", admin.getLastLoginAt())
-                .bind("createdAt", now)
-                .bind("updatedAt", now)
-                .bind("version", 1L)
-                .fetch()
-                .rowsUpdated()
-                .flatMap(rows -> rows > 0
-                        ? Mono.just(admin)
-                        : Mono.error(new RuntimeException("Insert failed: no rows updated")))
-                .doOnSuccess(a -> log.debug("Inserted admin: {}", a.getUsername()))
-                .doOnError(e -> log.error("Error inserting admin", e));
-    }
-
-
-    private Mono<Admin> update(Admin admin) {
-        log.info("Updating admin repository : {}", admin);
-        return databaseClient.sql(" UPDATE admins " +
-                        "SET username = :username, password_hash = :passwordHash, full_name = :fullName, " +
-                        "is_active = :isActive, is_super_admin = :isSuperAdmin, last_login_at = :lastLoginAt, " +
-                        "updated_at = :updatedAt, version = version + 1 WHERE id = :id")
-                .bind("username", admin.getUsername())
-                .bind("passwordHash", admin.getPasswordHash())
-                .bind("fullName", admin.getFullName())
-                .bind("isActive", admin.getIsActive())
-                .bind("isSuperAdmin", admin.getIsSuperAdmin())
-                .bind("lastLoginAt", admin.getLastLoginAt())
-                .bind("updatedAt", Instant.now())
-                .bind("id", admin.getId().getValue())
-                .fetch()
-                .rowsUpdated()
-                .thenReturn(admin)
-                .doOnSuccess(a -> log.debug("Updated admin: {}", a.getUsername()));
+    protected String convertIdToDatabase(AdminId id) {
+        return id.getValue();
     }
 
     @Override
-    public Mono<Admin> findById(AdminId adminId) {
-        return databaseClient.sql("SELECT * FROM admins WHERE id = :id")
-                .bind("id", adminId.getValue())
-                .map(this::mapRowToAdmin)
-                .one()
-                .doOnNext(a -> log.debug("Found admin by ID: {}", adminId.getValue()));
+    protected BiFunction<Row, RowMetadata, Admin> getRowMapper() {
+        return (row, metadata) -> Admin.fromDatabase(
+                AdminId.of(row.get("id", String.class)),
+                row.get("username", String.class),
+                row.get("password_hash", String.class),
+                row.get("full_name", String.class),
+                row.get("avatar", String.class),
+                row.get("is_active", Boolean.class),
+                row.get("is_super_admin", Boolean.class),
+                row.get("last_login_at", Instant.class),
+                row.get("created_at", Instant.class),
+                row.get("updated_at", Instant.class),
+                row.get("version", Long.class)
+        );
+    }
+
+    @Override
+    protected Map<String, Object> mapEntityToColumns(Admin admin) {
+        Map<String, Object> values = new HashMap<>();
+        values.put("id", admin.getId().getValue());
+        values.put("username", admin.getUsername());
+        values.put("password_hash", admin.getPasswordHash());
+        values.put("full_name", admin.getFullName());
+        values.put("avatar", admin.getAvatar());
+        values.put("is_active", admin.getIsActive());
+        values.put("is_super_admin", admin.getIsSuperAdmin());
+        values.put("last_login_at", admin.getLastLoginAt());
+        return values;
     }
 
     @Override
     public Mono<Admin> findByUsername(String username) {
-        return databaseClient.sql("SELECT * FROM admins WHERE username = :username")
+        String sql = "SELECT * FROM admins WHERE username = :username";
+
+        return databaseClient.sql(sql)
                 .bind("username", username)
-                .map(this::mapRowToAdmin)
-                .first()
-                .doOnNext(a -> log.debug("Found admin by username: {}", username));
+                .map(getRowMapper())
+                .one()
+                .doOnNext(admin -> log.debug("Found admin by username: {}", username));
     }
 
     @Override
     public Flux<Admin> findActiveAdmins() {
-        return databaseClient.sql("SELECT * FROM admins WHERE is_active = true ORDER BY username")
-                .map(this::mapRowToAdmin)
-                .all()
-                .doOnComplete(() -> log.debug("Found all active admins"));
-    }
+        String sql = """
+            SELECT * FROM admins 
+            WHERE is_active = true 
+            ORDER BY full_name
+            """;
 
-    @Override
-    public Flux<Admin> findAllAdmins() {
-        return databaseClient.sql("SELECT * FROM admins ORDER BY created_at DESC")
-                .map(this::mapRowToAdmin)
-                .all()
-                .doOnComplete(() -> log.debug("Found all admins"));
+        return databaseClient.sql(sql)
+                .map(getRowMapper())
+                .all();
     }
 
     @Override
     public Mono<Boolean> existsByUsername(String username) {
-        log.info("Checking if admin exists: {}", username);
-        return databaseClient.sql("SELECT COUNT(*) FROM admins WHERE username = :username")
-                .bind("username", username)
-                .map(row -> row.get(0, Long.class))
-                .one()
-                .map(count -> count > 0);
-    }
+        String sql = """
+            SELECT EXISTS(
+                SELECT 1 FROM admins 
+                WHERE username = :username
+            ) AS exists_flag
+            """;
 
-    @Override
-    @Transactional
-    public Mono<Void> deleteById(AdminId adminId) {
-        return databaseClient.sql("DELETE FROM admins WHERE id = :id")
-                .bind("id", adminId.getValue())
-                .then()
-                .doOnSuccess(v -> log.debug("Deleted admin: {}", adminId.getValue()));
+        return databaseClient.sql(sql)
+                .bind("username", username)
+                .map(row -> row.get("exists_flag", Boolean.class))
+                .one();
     }
 
     @Override
     public Mono<Long> countActiveAdmins() {
-        return databaseClient.sql("SELECT COUNT(*) FROM admins WHERE is_active = true")
-                .map(row -> row.get(0, Long.class))
-                .one()
-                .doOnNext(count -> log.debug("Active admins count: {}", count));
+        String sql = "SELECT COUNT(*) AS cnt FROM admins WHERE is_active = true";
+
+        return databaseClient.sql(sql)
+                .map(row -> row.get("cnt", Long.class))
+                .one();
     }
 
     @Override
-    @Transactional
     public Mono<Admin> updateAvatar(AdminId adminId, String avatar) {
-        log.info("🖼️ Updating avatar for admin ID: {}", adminId.getValue());
-        log.info("   Avatar data: {}", avatar != null ? "EXISTS (" + avatar.length() + " chars)" : "NULL");
+        String sql = """
+        UPDATE admins 
+        SET avatar = :avatar, 
+            updated_at = :updated_at,
+            version = version + 1
+        WHERE id = :id 
+          AND version = :old_version
+        RETURNING *
+        """;
 
-        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql("""
-                UPDATE admins 
-                SET avatar = :avatar,
-                    updated_at = :updatedAt,
-                    version = version + 1 
-                WHERE id = :id
-            """).bind("updatedAt", Instant.now())
-                .bind("id", adminId.getValue());
+        return findById(adminId)
+                .flatMap(existing -> {
+                    DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
+                            .bind("id", adminId.getValue())
+                            .bind("updated_at", Instant.now())
+                            .bind("old_version", existing.getVersion());
 
-        if (avatar == null) {
-            spec = spec.bindNull("avatar", String.class);
-        } else {
-            spec = spec.bind("avatar", avatar);
-        }
+                    spec = bindValue(spec, "avatar", avatar);
 
-        return spec.fetch()
-                .rowsUpdated()
-                .doOnNext(rowsUpdated -> {
-                    log.info("📊 Avatar update result: {} rows affected", rowsUpdated);
-                })
-                .flatMap(rowsUpdated -> {
-                    if (rowsUpdated == 0) {
-                        return Mono.error(new IllegalArgumentException("Admin not found: " + adminId.getValue()));
-                    }
-                    return findById(adminId);
-                })
-                .doOnSuccess(admin -> {
-                    log.info("✅ Avatar updated successfully for: {}", admin.getUsername());
-                })
-                .doOnError(error -> {
-                    log.error("❌ Avatar update failed for admin ID: {}", adminId.getValue());
-                    log.error("   Error: {}", error.getMessage());
+                    return spec.map(getRowMapper())
+                            .one()
+                            .switchIfEmpty(Mono.defer(() -> {
+                                String msg = "Version conflict when updating avatar for Admin with id: " + adminId;
+                                log.error(msg);
+                                return Mono.error(new OptimisticLockingFailureException(msg));
+                            }))
+                            .doOnSuccess(admin -> log.debug(
+                                    "Updated avatar for admin: {} to: {}",
+                                    adminId, avatar != null ? avatar : "NULL"
+                            ));
                 });
-    }
-
-    private Admin mapRowToAdmin(Row row, RowMetadata metadata) {
-        AdminId adminId = AdminId.of(row.get("id", String.class));
-        String username = row.get("username", String.class);
-        String passwordHash = row.get("password_hash", String.class);
-        String fullName = row.get("full_name", String.class);
-        String avatar = row.get("avatar", String.class);
-        Boolean isActive = row.get("is_active", Boolean.class);
-        Boolean isSuperAdmin = row.get("is_super_admin", Boolean.class);
-        Instant lastLoginAt = row.get("last_login_at", Instant.class);
-
-        Admin admin = new Admin(adminId, username, passwordHash, fullName, avatar,
-                isActive, isSuperAdmin, lastLoginAt);
-
-        admin.setCreatedAt(row.get("created_at", Instant.class));
-        admin.setUpdatedAt(row.get("updated_at", Instant.class));
-        admin.setVersion(row.get("version", Long.class));
-
-        admin.markAsExisting();
-
-        log.debug("✅ Mapped admin from DB: {} (created: {}, updated: {})",
-                admin.getUsername(), admin.getCreatedAt(), admin.getUpdatedAt());
-
-        return admin;
     }
 }

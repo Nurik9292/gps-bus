@@ -37,7 +37,7 @@ public class GetAllAdminsUseCase extends BaseUseCase<Mono<Void>, AdminList> {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.debug("Getting admins from correlationId {}", correlationId);
 
-            return adminRepository.findAllAdmins()
+            return adminRepository.findAll()
                     .map(AdminResult::fromDomain)
                     .collectList()
                     .flatMap(admins -> adminRepository.countActiveAdmins()

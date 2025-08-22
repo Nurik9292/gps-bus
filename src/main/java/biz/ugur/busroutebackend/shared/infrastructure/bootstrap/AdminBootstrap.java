@@ -40,12 +40,13 @@ public class AdminBootstrap {
     private Mono<Admin> createDefaultAdmin() {
         log.info("Creating default admin user: {}", defaultUsername);
 
-        Admin defaultAdmin = new Admin(
+        Admin defaultAdmin = Admin.create(
                 defaultUsername,
                 defaultPassword,
                 "Super Administrator",
-                true
-        );
+                true,
+                true);
+
 
         return adminRepository.save(defaultAdmin)
                 .doOnSuccess(admin -> log.info("Default admin created successfully: {}", admin.getUsername()));

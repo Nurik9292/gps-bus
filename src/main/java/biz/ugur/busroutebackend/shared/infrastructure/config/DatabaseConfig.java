@@ -15,8 +15,11 @@ import org.springframework.r2dbc.connection.R2dbcTransactionManager;
 import org.springframework.transaction.ReactiveTransactionManager;
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration;
 import io.r2dbc.postgresql.PostgresqlConnectionFactory;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import java.time.Duration;
+
+
 @Configuration
 @EnableR2dbcRepositories(basePackages = {
         "biz.ugur.busroutebackend.transport.infrastructure.repository",
@@ -24,6 +27,7 @@ import java.time.Duration;
         "biz.ugur.busroutebackend.admin.infrastructure.repository"
 })
 @EnableR2dbcAuditing
+@EnableTransactionManagement
 public class DatabaseConfig extends AbstractR2dbcConfiguration {
 
     @Value("${spring.r2dbc.username:bus_route_user}")

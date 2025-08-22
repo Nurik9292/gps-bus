@@ -10,17 +10,7 @@ public record UpdateCommand(
         Boolean isActive
 
 ) {
-
-
-
-
     public Admin toDomain() {
-        return  new Admin(
-                username,
-                newPassword,
-                fullName,
-                isSuperAdmin,
-                isActive
-        );
+       return Admin.create(username, fullName, newPassword, isSuperAdmin, isActive);
     }
 }
