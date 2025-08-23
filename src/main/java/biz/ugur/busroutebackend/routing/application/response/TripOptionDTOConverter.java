@@ -3,9 +3,9 @@ package biz.ugur.busroutebackend.routing.application.response;
 import biz.ugur.busroutebackend.routing.application.dto.RouteSegmentDTO;
 import biz.ugur.busroutebackend.routing.application.dto.TripOptionDTO;
 import biz.ugur.busroutebackend.routing.domain.enums.SegmentType;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.RouteSegment;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.TripOption;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

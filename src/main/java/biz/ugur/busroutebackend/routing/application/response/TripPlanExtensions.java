@@ -4,8 +4,8 @@ import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.dto.TripPlanStats;
 import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.TripOption;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.TripPlanId;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TripPlanId;
 
 import java.util.List;
 import java.util.stream.Collectors;

@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.routing.domain.volumeojects;
+package biz.ugur.busroutebackend.routing.domain.valueobjects;
 
 import biz.ugur.busroutebackend.routing.domain.enums.SegmentType;
 import biz.ugur.busroutebackend.routing.domain.enums.TripType;

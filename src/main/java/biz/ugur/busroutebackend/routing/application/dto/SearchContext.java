@@ -1,8 +1,8 @@
 package biz.ugur.busroutebackend.routing.application.dto;
 
 import biz.ugur.busroutebackend.interfaces.rest.routing.dto.request.TripSearchRequest;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.TripSearchCriteria;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TripSearchCriteria;
 
 public record SearchContext(
         String searchId,

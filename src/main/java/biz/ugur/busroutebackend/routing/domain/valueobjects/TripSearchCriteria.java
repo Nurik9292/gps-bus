@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.routing.domain.volumeojects;
+package biz.ugur.busroutebackend.routing.domain.valueobjects;
 
 import biz.ugur.busroutebackend.shared.domain.valueObjects.ValueObject;
 import lombok.EqualsAndHashCode;

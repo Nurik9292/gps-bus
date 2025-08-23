@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.routing.infrastructure.services;
 
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;

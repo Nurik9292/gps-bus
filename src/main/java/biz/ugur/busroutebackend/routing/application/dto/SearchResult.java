@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.routing.application.dto;
 
-import biz.ugur.busroutebackend.routing.domain.volumeojects.TripOption;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import lombok.Getter;
 
 import java.util.List;

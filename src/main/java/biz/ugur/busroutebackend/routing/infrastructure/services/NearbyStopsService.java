@@ -3,7 +3,7 @@ package biz.ugur.busroutebackend.routing.infrastructure.services;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.dto.StopsContext;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,8 +17,9 @@ public class NearbyStopsService {
 
     private final RouteCalculationService routeCalculationService;
 
-    private static final double SEARCH_RADIUS_KM = 0.8;
+    private static final double SEARCH_RADIUS_KM = 1;
     private static final int MAX_STOPS_PER_LOCATION = 8;
+
 
     public NearbyStopsService(RouteCalculationService routeCalculationService) {
         this.routeCalculationService = routeCalculationService;

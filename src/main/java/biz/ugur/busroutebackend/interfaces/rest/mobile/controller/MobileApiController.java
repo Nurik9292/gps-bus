@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.interfaces.rest.mobile.cotroller;
+package biz.ugur.busroutebackend.interfaces.rest.mobile.controller;
 
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerListResponse;
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerPaginationQuery;

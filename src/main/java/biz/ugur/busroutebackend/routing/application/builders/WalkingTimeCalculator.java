@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.routing.application.builders;
 
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import org.springframework.stereotype.Component;
 
 @Component

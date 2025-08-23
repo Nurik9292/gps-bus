@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.routing.domain.repository;
 
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.TripPlanId;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TripPlanId;
 import biz.ugur.busroutebackend.shared.base.BaseRepository;
 import reactor.core.publisher.Flux;
 

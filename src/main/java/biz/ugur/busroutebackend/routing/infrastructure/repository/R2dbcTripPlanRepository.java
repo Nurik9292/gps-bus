@@ -2,7 +2,7 @@ package biz.ugur.busroutebackend.routing.infrastructure.repository;
 
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.repository.TripPlanRepository;
-import biz.ugur.busroutebackend.routing.domain.volumeojects.TripPlanId;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TripPlanId;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;

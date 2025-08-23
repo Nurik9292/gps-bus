@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.routing.application.dto;
 
-import biz.ugur.busroutebackend.routing.domain.volumeojects.RouteSegment;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 

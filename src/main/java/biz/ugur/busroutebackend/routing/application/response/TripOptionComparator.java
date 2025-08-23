@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.routing.application.response;
 
-import biz.ugur.busroutebackend.routing.domain.volumeojects.TripOption;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 
 import java.util.Comparator;
 

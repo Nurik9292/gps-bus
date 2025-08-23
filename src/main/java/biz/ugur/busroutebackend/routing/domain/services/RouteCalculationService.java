@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.routing.domain.services;
 
-import biz.ugur.busroutebackend.routing.domain.volumeojects.Location;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import reactor.core.publisher.Flux;
