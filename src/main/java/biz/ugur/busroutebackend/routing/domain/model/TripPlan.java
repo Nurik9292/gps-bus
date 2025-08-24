@@ -13,6 +13,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -76,6 +77,10 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         this.optionsCount = 0;
         this.maxTransfers = this.searchCriteria.getMaxTransfers();
         this.maxWalkingDistanceMeters = this.searchCriteria.getMaxWalkingDistanceMeters();
+
+        this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
+        this.version = 0L;
 
         if (originLocation.distanceTo(destinationLocation) < 100) {
             throw new IllegalArgumentException("Origin and destination are too close. Minimum distance: 100m");

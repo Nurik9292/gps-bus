@@ -4,6 +4,8 @@ import biz.ugur.busroutebackend.interfaces.rest.routing.dto.request.TripSearchRe
 import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripSearchCriteria;
 
+import java.util.UUID;
+
 public record SearchContext(
         String searchId,
         Location fromLocation,
@@ -11,6 +13,11 @@ public record SearchContext(
         TripSearchCriteria searchCriteria,
         long startTime
 ) {
+
+    public static SearchContext of(Location fromLocation, Location toLocation, TripSearchCriteria searchCriteria) {
+        return new SearchContext(UUID.randomUUID().toString(), fromLocation, toLocation, searchCriteria, System.currentTimeMillis());
+    }
+
     public static SearchContext from(TripSearchRequest request, String correlationId) {
         String searchId = generateSearchId(request);
         Location fromLocation = createLocationFromDTO(request.getFrom());

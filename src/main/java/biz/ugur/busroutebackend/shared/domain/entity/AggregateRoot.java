@@ -27,7 +27,7 @@ public abstract class AggregateRoot<T extends AggregateRoot<T, ID>, ID>
 
     @Version
     @Column("version")
-    private Long version;
+    protected Long version;
 
     public abstract ID getId();
 

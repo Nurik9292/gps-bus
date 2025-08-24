@@ -9,42 +9,99 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.util.function.Tuple3;
 
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 @Component
 @Slf4j
 public class TripPlanCombiner {
 
-    public TripPlan combine(SearchContext context, Tuple3<SearchResult, SearchResult, SearchResult> results) {
+    public TripPlan combine(SearchContext context,
+                            Tuple3<SearchResult, SearchResult, SearchResult> results) {
+
         SearchResult directResult = results.getT1();
         SearchResult oneTransferResult = results.getT2();
         SearchResult twoTransferResult = results.getT3();
 
-        TripPlan combinedPlan = new TripPlan(TripPlanId.generate(),
-                context.fromLocation(),
-                context.toLocation(),
-                context.searchCriteria());
+        List<TripOption> allOptions = collectAllOptions(
+                List.of(directResult, oneTransferResult, twoTransferResult)
+        );
 
-        addOptionsFromResult(combinedPlan, directResult, "direct");
-        addOptionsFromResult(combinedPlan, oneTransferResult, "one-transfer");
-        addOptionsFromResult(combinedPlan, twoTransferResult, "two-transfer");
-
-        log.info("Combined plan created with {} total options", combinedPlan.getTripOptions().size());
-        return combinedPlan;
+        return createTripPlan(context, allOptions);
     }
 
-    private void addOptionsFromResult(TripPlan plan, SearchResult result, String type) {
-        if (result.isSuccessful()) {
-            int addedCount = 0;
-            for (TripOption option : result.getOptions()) {
-                try {
-                    plan.addTripOption(option);
-                    addedCount++;
-                } catch (Exception e) {
-                    log.warn("Failed to add {} option: {}", type, e.getMessage());
-                }
-            }
-            log.debug("Added {}/{} {} options", addedCount, result.getOptions().size(), type);
-        } else {
-            log.warn("Skipping failed {} search: {}", type, result.getErrorMessage());
-        }
+    public TripPlan combineWithDeduplication(SearchContext context,
+                                             List<SearchResult> allResults,
+                                             List<TripOption> uniqueRoutes) {
+
+        TripPlan tripPlan = createTripPlan(context, uniqueRoutes);
+
+        logDeduplicationResults(context, allResults, uniqueRoutes);
+
+        return tripPlan;
+    }
+
+    private List<TripOption> collectAllOptions(List<SearchResult> searchResults) {
+        return searchResults.stream()
+                .filter(SearchResult::isSuccessful)
+                .flatMap(result -> result.getOptions().stream())
+                .collect(Collectors.toList());
+    }
+
+    private TripPlan createTripPlan(SearchContext context, List<TripOption> options) {
+
+        TripPlan tripPlan = new TripPlan(
+                TripPlanId.generate(),
+                context.fromLocation(),
+                context.toLocation(),
+                context.searchCriteria()
+        );
+
+
+        options.forEach(tripPlan::addTripOption);
+
+        return tripPlan;
+    }
+
+    private void logDeduplicationResults(SearchContext context,
+                                         List<SearchResult> allResults,
+                                         List<TripOption> uniqueRoutes) {
+
+        int totalOriginalRoutes = allResults.stream()
+                .filter(SearchResult::isSuccessful)
+                .mapToInt(result -> result.getOptions().size())
+                .sum();
+
+        int duplicatesRemoved = totalOriginalRoutes - uniqueRoutes.size();
+        double deduplicationRate = totalOriginalRoutes > 0 ?
+                (double) duplicatesRemoved / totalOriginalRoutes * 100.0 : 0.0;
+
+
+        Map<String, Integer> resultsByType = allResults.stream()
+                .filter(SearchResult::isSuccessful)
+                .collect(Collectors.toMap(
+                        SearchResult::getSearchType,
+                        result -> result.getOptions().size(),
+                        Integer::sum
+                ));
+
+        log.info("[{}] Trip plan created: {} unique routes from {} total (removed {} duplicates - {:.1f}%)",
+                context.searchId(),
+                uniqueRoutes.size(),
+                totalOriginalRoutes,
+                duplicatesRemoved,
+                deduplicationRate);
+
+        log.debug("[{}] Results breakdown: {}", context.searchId(), resultsByType);
+
+
+        Map<Integer, Long> routesByTransfers = uniqueRoutes.stream()
+                .collect(Collectors.groupingBy(
+                        TripOption::getTransfersCount,
+                        Collectors.counting()
+                ));
+
+        log.debug("[{}] Routes by transfers: {}", context.searchId(), routesByTransfers);
     }
 }

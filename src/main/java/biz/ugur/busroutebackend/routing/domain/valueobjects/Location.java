@@ -21,6 +21,14 @@ public class Location extends ValueObject {
         this.description = description != null ? description : "";
     }
 
+    public static Location of(Double latitude, Double longitude) {
+        return new Location(latitude, longitude, "");
+    }
+
+    public static Location of(Double latitude, Double longitude, String description) {
+        return new Location(latitude, longitude, description);
+    }
+
     public void validateTurkmenistanBounds() {
         if (latitude < 35.0 || latitude > 43.0) {
             throw new IllegalArgumentException("Latitude outside Turkmenistan bounds: " + latitude);

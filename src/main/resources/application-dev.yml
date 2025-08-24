@@ -113,3 +113,8 @@ management:
 
 server:
   port: 8080
+
+
+routing:
+  stop-based-search:
+    enabled: true

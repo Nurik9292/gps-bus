@@ -80,6 +80,7 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/trips/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/vehicles/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/trip-planning/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/trip-planning/**").permitAll()
                         .pathMatchers("/avatars/**").permitAll()
                         .pathMatchers("/banners/**").permitAll()
                         .pathMatchers("/api/v1/avatars/**").permitAll()
