@@ -9,6 +9,7 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehiclePosition;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
@@ -17,6 +18,7 @@ import java.time.Instant;
 
 @Table("vehicles")
 @Getter
+@ToString
 public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
     @Id

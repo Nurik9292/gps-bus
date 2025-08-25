@@ -8,6 +8,7 @@ import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
+import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
@@ -21,6 +22,7 @@ import java.util.function.BiFunction;
 
 @Repository
 @Slf4j
+@ToString
 public class R2dbcClientRepository extends BaseR2dbcRepository<Client, ClientId> implements ClientRepository {
 
     public R2dbcClientRepository(DatabaseClient databaseClient) {

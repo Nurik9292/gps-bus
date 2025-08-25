@@ -41,6 +41,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     protected Map<String, Object> mapEntityToColumns(Vehicle entity) {
+        System.out.println("Vehicle save repo: "    + entity);
         Map<String, Object> columns = new HashMap<>();
         columns.put("id", entity.getId().getValue());
         columns.put("device_id", entity.getDeviceId());
@@ -112,13 +113,13 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 is_active = :is_active,
                 updated_at = :updated_at,
                 version = :version
-            WHERE id = :id AND version = :old_version 
+            WHERE id = :id
             RETURNING *
             """;
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
-                .bind("id", entity.getId().getValue())
-                .bind("old_version", entity.getVersion());
+                .bind("id", entity.getId().getValue());
+//                .bind("old_version", entity.getVersion());
 
         for (Map.Entry<String, Object> entry : values.entrySet()) {
             if (!entry.getKey().equals("id")) {

@@ -12,6 +12,7 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/stops")
 @Slf4j
+@CrossOrigin("*")
 public class BusStopRealTimeController {
 
     private final BusStopRealTimeServiceImpl busStopRealTimeService;

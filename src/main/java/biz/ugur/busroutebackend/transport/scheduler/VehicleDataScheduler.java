@@ -60,7 +60,6 @@ public class VehicleDataScheduler {
 
     @Scheduled(cron = "0 * * * * *")
     public void updateVehiclePositions() {
-        // 🚨 Circuit Breaker проверка
         if (circuitOpen.get()) {
             if (Duration.between(lastFailure, Instant.now()).toMinutes() < 5) {
                 log.warn("Circuit breaker is OPEN, skipping GPS update");
@@ -87,16 +86,16 @@ public class VehicleDataScheduler {
                         log.info("Fetched {} GPS positions, limiting to 20...", positions.size());
 
                         return Flux.fromIterable(positions)
-                                .take(20) // Берем только первые 20
-                                .buffer(5) // Делим на батчи по 5
-                                .concatMap(batch -> // Последовательная обработка
+                                .take(20)
+                                .buffer(5)
+                                .concatMap(batch ->
                                         updateVehiclePositionsUseCase.execute(batch)
                                                 .timeout(Duration.ofSeconds(15))
                                                 .onErrorResume(error -> {
                                                     log.error("Failed to process GPS batch of {} vehicles: {}",
                                                             batch.size(), error.getMessage());
                                                     handleFailure();
-                                                    return Mono.empty(); // Пропускаем ошибочный batch
+                                                    return Mono.empty();
                                                 })
                                 )
                                 .reduce(new VehiclePositionUpdateResult(0, 0, 0, 0, 0, Instant.now(), List.of()),
@@ -127,7 +126,7 @@ public class VehicleDataScheduler {
 
 
 
-    @Scheduled(cron = "0 */5 * * * *")
+    @Scheduled(cron = "0 * * * * *")
     public void syncBusRouteAssignments() {
         log.info("🔥🔥🔥 SCHEDULER TRIGGERED! Current time: {}", Instant.now());
         if (!busInfoSyncInProgress.compareAndSet(false, true)) {

@@ -68,7 +68,7 @@ external:
 
 app:
   scheduling:
-    enabled: false
+    enabled: true
 
   storage:
     avatars:

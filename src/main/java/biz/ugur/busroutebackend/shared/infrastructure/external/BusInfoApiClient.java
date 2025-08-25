@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.shared.infrastructure.external;
 
 import biz.ugur.busroutebackend.transport.application.dto.BusInfoDTO;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +16,7 @@ import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
@@ -25,11 +27,14 @@ public class BusInfoApiClient {
 
     private final WebClient webClient;
     private final String basicAuthHeader;
+    private final ObjectMapper objectMapper;
 
     public BusInfoApiClient(@Qualifier("busInfoApiClient") WebClient webClient,
                             @Value("${external.api.bus-info.username}") String username,
-                            @Value("${external.api.bus-info.password}") String password) {
+                            @Value("${external.api.bus-info.password}") String password,
+                            ObjectMapper objectMapper) {
         this.webClient = webClient;
+        this.objectMapper = objectMapper;
         this.basicAuthHeader = createBasicAuthHeader(username, password);
     }
 
@@ -46,10 +51,16 @@ public class BusInfoApiClient {
                     HttpStatus status = HttpStatus.resolve(statusCode.value());
                     String contentType = response.headers().contentType().map(MediaType::toString).orElse("unknown");
 
-                    if (contentType.contains("text/html")) {
-                        log.error("Bus Info API returned HTML instead of JSON - auth failed or endpoint changed");
-                        return Mono.just(Collections.emptyList());
-                    }
+//                    if (contentType.contains("text/html")) {
+//                        log.error("Bus Info API returned HTML instead of JSON - auth failed or endpoint changed");
+//                        return Mono.just(Collections.emptyList());
+//                        return response.bodyToMono(String.class)
+//                                .defaultIfEmpty("<empty>")
+//                                .map(body -> {
+//                                    log.error("Bus Info API returned HTML (auth failed or endpoint changed). Body:\n{}", body);
+//                                    return Collections.emptyList();
+//                                });
+//                    }
 
                     if (status == HttpStatus.UNAUTHORIZED) {
                         log.error("Bus Info API authentication failed");
@@ -70,8 +81,25 @@ public class BusInfoApiClient {
                         return Mono.error(new BusInfoApiException("Bus Info API server error"));
                     }
 
-                    return response.bodyToFlux(BusInfoDTO.class)
-                            .collectList();
+                    return response.bodyToMono(String.class)
+                            .flatMap(body -> {
+                        try {
+
+                            List<BusInfoDTO> list = Arrays.asList(
+                                    objectMapper.readValue(body, BusInfoDTO[].class)
+                            );
+
+                            return Mono.just(list);
+                        } catch (Exception e) {
+                            return Mono.error(new BusInfoApiException("Failed to parse BusInfoDTO JSON", e));
+                        }
+                    });
+
+//                    return response.bodyToFlux(BusInfoDTO.class)
+//                            .collectList()
+//                            .doOnNext(list -> list.forEach(dto ->
+//                                    log.debug("Parsed BusInfoDTO: {}", dto)
+//                            ));
                 })
                 .timeout(Duration.ofSeconds(30))
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(2))

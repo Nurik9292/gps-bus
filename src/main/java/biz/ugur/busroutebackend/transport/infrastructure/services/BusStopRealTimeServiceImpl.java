@@ -8,6 +8,7 @@ import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.application.services.BusStopRealTimeService;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -25,14 +26,17 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
     private final BusStopRepository busStopRepository;
     private final DatabaseClient databaseClient;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
+    private final ObjectMapper objectMapper;
 
     public BusStopRealTimeServiceImpl(
-                                  BusStopRepository busStopRepository,
-                                  DatabaseClient databaseClient,
-                                  ReactiveRedisTemplate<String, Object> redisTemplate) {
+            BusStopRepository busStopRepository,
+            DatabaseClient databaseClient,
+            ReactiveRedisTemplate<String, Object> redisTemplate,
+            ObjectMapper objectMapper) {
         this.busStopRepository = busStopRepository;
         this.databaseClient = databaseClient;
         this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
     }
 
     public Mono<BusStopArrivalsResponse> getStopArrivals(String stopId) {
@@ -40,7 +44,19 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
 
         return redisTemplate.opsForValue()
                 .get(cacheKey)
-                .cast(BusStopArrivalsResponse.class)
+                .flatMap(value -> {
+                    if (value == null) {
+                        return calculateStopArrivals(stopId)
+                                .flatMap(response ->
+                                        redisTemplate.opsForValue()
+                                                .set(cacheKey, response, Duration.ofSeconds(30))
+                                                .thenReturn(response)
+                                );
+                    }
+                    BusStopArrivalsResponse response = objectMapper.convertValue(value, BusStopArrivalsResponse.class);
+                    return Mono.just(response);
+                })
+//                .cast(BusStopArrivalsResponse.class)
                 .switchIfEmpty(
                         calculateStopArrivals(stopId)
                                 .flatMap(response ->
@@ -58,7 +74,6 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 .switchIfEmpty(Mono.error(new BusStopException("BUS_STOP_EXCEPTION", "Stop not found: " + stopId) {
                 }))
                 .flatMap(busStop -> {
-                    // Находим все автобусы, которые едут к этой остановке
                     return findArrivingVehicles(busStop)
                             .collectList()
                             .map(arrivals -> new BusStopArrivalsResponse(
@@ -75,7 +90,6 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
     private Flux<BusArrivalInfo> findArrivingVehicles(BusStop targetStop) {
         String sql = """
             WITH 
-            -- Маршруты, проходящие через целевую остановку
             target_stop_routes AS (
                 SELECT DISTINCT 
                     rs.route_id,
@@ -128,10 +142,10 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                     -- Ближайшая остановка на маршруте автобуса
                     rs_nearest.stop_sequence as current_sequence,
                     rs_nearest.distance_from_start_meters as current_distance,
-                    bs_nearest.stop_name as current_stop_name,
+                  rs_nearest.stop_name as current_stop_name,
                     ST_Distance(
                         ST_Point(rv.current_longitude, rv.current_latitude)::geography,
-                        ST_Point(bs_nearest.longitude, bs_nearest.latitude)::geography
+                        ST_Point(rs_nearest.longitude, rs_nearest.latitude)::geography
                     ) as distance_to_current_stop
                 FROM route_vehicles rv
                 JOIN LATERAL (
@@ -257,6 +271,19 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
                 * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c * 1000; // Возвращаем в метрах
+        return R * c * 1000;
+    }
+
+
+    public static class BusStopNotFoundException extends RuntimeException {
+        public BusStopNotFoundException(String message) {
+            super(message);
+        }
+    }
+
+    public static class ETACalculationException extends RuntimeException {
+        public ETACalculationException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }
