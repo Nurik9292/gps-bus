@@ -40,7 +40,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
     }
 
     public Mono<BusStopArrivalsResponse> getStopArrivals(String stopId) {
-        String cacheKey = "stop_arrivals:" + stopId;
+        String cacheKey = "key:" + stopId;
 
         return redisTemplate.opsForValue()
                 .get(cacheKey)
@@ -105,7 +105,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 AND br.is_active = true
             ),
             
-            -- Активные автобусы на этих маршрутах с их текущими позициями
+        
             route_vehicles AS (
                 SELECT 
                     v.id as vehicle_id,
@@ -135,7 +135,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 AND v.current_longitude IS NOT NULL
             ),
             
-            -- Определяем ближайшую остановку для каждого автобуса
+           
             vehicle_current_stops AS (
                 SELECT 
                     rv.*,
