@@ -5,7 +5,7 @@ import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.stop.GetAllStopPaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopList;
-import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
+import biz.ugur.busroutebackend.transport.application.dto.stop.StopData;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -54,8 +54,8 @@ public class GetAllBusStopsUseCase extends BaseUseCase<Mono<GetAllStopPagination
                     .map(tuple -> {
                         List<BusStop> busStops = tuple.getT1();
                         Long activeCount = tuple.getT2();
-                        List<StopResult> stopLists = busStops.stream()
-                                .map(StopResult::fromDomain)
+                        List<StopData> stopLists = busStops.stream()
+                                .map(StopData::fromDomain)
                                 .toList();
 
                         return new StopList(stopLists, activeCount);

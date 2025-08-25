@@ -5,7 +5,7 @@ import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-public record StopResult(
+public record StopData(
         String id,
         String stopName,
         String nameEn,
@@ -21,8 +21,8 @@ public record StopResult(
         String cityId
 
 ) {
-    public static StopResult fromDomain(BusStop stop) {
-        return new StopResult(
+    public static StopData fromDomain(BusStop stop) {
+        return new StopData(
                 stop.getId().getValue(),
                 stop.getStopName(),
                 stop.getNameEn(),

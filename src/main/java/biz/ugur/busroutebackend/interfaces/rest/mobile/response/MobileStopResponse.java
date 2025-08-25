@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.mobile.response;
 
-import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
+import biz.ugur.busroutebackend.transport.application.dto.stop.StopData;
 import lombok.Builder;
 import lombok.Data;
 
@@ -25,11 +25,11 @@ public class MobileStopResponse {
     private List<String> forwardRouteIds;
     private List<String> backwardRouteIds;
 
-    public static MobileStopResponse from(StopResult stopResult, Boolean isFavorite) {
+    public static MobileStopResponse from(StopData stopResult, Boolean isFavorite) {
         return from(stopResult, isFavorite, List.of(), List.of());
     }
 
-    public static MobileStopResponse from(StopResult stopResult, Boolean isFavorite,
+    public static MobileStopResponse from(StopData stopResult, Boolean isFavorite,
                                           List<String> forwardRouteIds, List<String> backwardRouteIds) {
         return MobileStopResponse.builder()
                 .stopId(stopResult.id())

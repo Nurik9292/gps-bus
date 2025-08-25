@@ -4,7 +4,7 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.stop.CreateStop;
-import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
+import biz.ugur.busroutebackend.transport.application.dto.stop.StopData;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.StopCode;
@@ -17,7 +17,7 @@ import java.util.Random;
 
 @Service
 @Slf4j
-public class CreateBusStopUseCase extends BaseUseCase<Mono<CreateStop>, StopResult> {
+public class CreateBusStopUseCase extends BaseUseCase<Mono<CreateStop>, StopData> {
 
     private final BusStopRepository busStopRepository;
 
@@ -29,7 +29,7 @@ public class CreateBusStopUseCase extends BaseUseCase<Mono<CreateStop>, StopResu
     }
 
     @Override
-    protected Mono<StopResult> process(Mono<CreateStop> request) {
+    protected Mono<StopData> process(Mono<CreateStop> request) {
         return request.flatMap(this::processInternal);
     }
 
@@ -38,7 +38,7 @@ public class CreateBusStopUseCase extends BaseUseCase<Mono<CreateStop>, StopResu
         return "transport";
     }
 
-    private Mono<StopResult> processInternal(CreateStop command) {
+    private Mono<StopData> processInternal(CreateStop command) {
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.info("Creating bus stop: {} (EN: {}, TM: {}) Correlation - {}",
@@ -46,7 +46,7 @@ public class CreateBusStopUseCase extends BaseUseCase<Mono<CreateStop>, StopResu
 
                     return validateUniqueStopName(command.stopName())
                             .then(createBusStop(command))
-                            .map(StopResult::fromDomain)
+                            .map(StopData::fromDomain)
                             .doOnSuccess(result -> log.info("Bus stop created: {}", result.stopName()))
                             .doOnError(error -> log.error("Failed to create bus stop: {}", command.stopName(), error));
                 });

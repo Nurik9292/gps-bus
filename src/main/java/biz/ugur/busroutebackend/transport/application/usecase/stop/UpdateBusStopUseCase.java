@@ -3,7 +3,7 @@ package biz.ugur.busroutebackend.transport.application.usecase.stop;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
-import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
+import biz.ugur.busroutebackend.transport.application.dto.stop.StopData;
 import biz.ugur.busroutebackend.transport.application.dto.stop.UpdateStop;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 
 @Service
 @Slf4j
-public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopResult> {
+public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopData> {
 
     private final BusStopRepository busStopRepository;
 
@@ -28,7 +28,7 @@ public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopResu
     }
 
     @Override
-    protected Mono<StopResult> process(Mono<UpdateStop> request) {
+    protected Mono<StopData> process(Mono<UpdateStop> request) {
         return request.flatMap(this::processInternal);
     }
 
@@ -37,7 +37,7 @@ public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopResu
         return "transport";
     }
 
-    private Mono<StopResult> processInternal(UpdateStop command) {
+    private Mono<StopData> processInternal(UpdateStop command) {
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.info("Updating bus stop: {} (EN: {}, TM: {}) Correlation - {}",
@@ -46,7 +46,7 @@ public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopResu
                     return busStopRepository.findById(BusStopId.of(command.stopId()))
                             .switchIfEmpty(Mono.error(new IllegalArgumentException("Bus stop not found: " + command.stopId())))
                             .flatMap(existingStop -> validateAndUpdate(existingStop, command))
-                            .map(StopResult::fromDomain)
+                            .map(StopData::fromDomain)
                             .doOnSuccess(result -> log.info("Bus stop updated successfully: {}", result.stopName()))
                             .doOnError(error -> log.error("Failed to update bus stop: {}", command.stopId(), error));
                 });

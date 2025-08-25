@@ -5,7 +5,7 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.request.stop.BusStopUpdate
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.stop.BusStopListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.stop.BusStopResponse;
 import biz.ugur.busroutebackend.transport.application.dto.stop.GetAllStopPaginationQuery;
-import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
+import biz.ugur.busroutebackend.transport.application.dto.stop.StopData;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.CreateBusStopUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.DeleteBusStopUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.GetAllBusStopsUseCase;
@@ -105,7 +105,7 @@ public class AdminStopController {
 
     }
 
-    private ResponseEntity<BusStopResponse> toStopResponseEntity(StopResult result) {
+    private ResponseEntity<BusStopResponse> toStopResponseEntity(StopData result) {
         return ResponseEntity.ok().body(BusStopResponse.fromResult(result));
     }
 

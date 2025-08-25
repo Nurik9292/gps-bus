@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.response.stop;
 
-import biz.ugur.busroutebackend.transport.application.dto.stop.StopResult;
+import biz.ugur.busroutebackend.transport.application.dto.stop.StopData;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -86,7 +86,7 @@ public class BusStopResponse {
         };
     }
 
-    public static BusStopResponse fromResult(StopResult  result) {
+    public static BusStopResponse fromResult(StopData result) {
         return new BusStopResponse(
                 result.id(),
                 result.stopName(),
