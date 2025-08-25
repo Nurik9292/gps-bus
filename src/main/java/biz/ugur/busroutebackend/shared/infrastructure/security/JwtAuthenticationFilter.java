@@ -23,6 +23,8 @@ public class JwtAuthenticationFilter implements WebFilter {
             "/admin/auth/login",
             "/admin/auth/refresh",
             "/public",
+            "/client",
+            "/mobile",
             "/routes",
             "/stops",
             "/trips",
@@ -64,6 +66,8 @@ public class JwtAuthenticationFilter implements WebFilter {
         return PUBLIC_PATHS.stream().anyMatch(path::startsWith) ||
                 path.startsWith("/actuator") ||
                 path.startsWith("/swagger") ||
+                path.startsWith("/api/v1/client") ||
+                path.startsWith("/api/v1/mobile") ||
                 path.startsWith("/api-docs");
     }
 

@@ -299,7 +299,7 @@ public class MobileApiController {
         return new GetAllStopPaginationQuery(
                 1,
                 1500,
-                "stopName",
+                "stop_name",
                 "asc",
                 true
         );

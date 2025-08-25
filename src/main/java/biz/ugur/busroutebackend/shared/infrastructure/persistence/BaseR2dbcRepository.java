@@ -12,6 +12,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -32,7 +34,10 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
     @Override
     public Mono<T> save(T entity) {
         return findById(entity.getId())
-                .flatMap(existing -> update(entity))
+                .flatMap(existing -> {
+                    entity.setVersion(existing.getVersion());
+                    return update(entity);
+                })
                 .switchIfEmpty(insert(entity));
     }
 
@@ -158,16 +163,21 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
                 .filter(o -> !o.equals("id"))
                 .map(o -> o + " = :" + o)
                 .collect(Collectors.joining(", "));
+//
+//        String sql = String.format(
+//                "UPDATE %s SET %s WHERE id = :id AND version = :old_version RETURNING *",
+//                tableName, setClause
+//        );
 
         String sql = String.format(
-                "UPDATE %s SET %s WHERE id = :id AND version = :old_version RETURNING *",
+                "UPDATE %s SET %s WHERE id = :id RETURNING *",
                 tableName, setClause
         );
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
-                .bind("id", entity.getId())
-                .bind("old_version", entity.getVersion());
-
+                .bind("id", convertIdToDatabase(entity.getId()));
+//                .bind("old_version", entity.getVersion());
+//
         for (Map.Entry<String, Object> entry : values.entrySet()) {
             if (!entry.getKey().equals("id")) {
                 spec = bindValue(spec, entry.getKey(), entry.getValue());
@@ -193,8 +203,27 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
         if (value == null) {
             return spec.bindNull(name, Object.class);
         }
-        return spec.bind(name, value);
+
+        if (value instanceof Instant) {
+            return spec.bind(name, OffsetDateTime.ofInstant((Instant) value, ZoneOffset.UTC));
+        }
+
+        if (value instanceof Enum<?>) {
+            return spec.bind(name, ((Enum<?>) value).name());
+        }
+
+        if (value instanceof java.util.UUID) {
+            return spec.bind(name, value);
+        }
+
+        if (value instanceof Number || value instanceof String || value instanceof Boolean) {
+            return spec.bind(name, value);
+        }
+
+        return spec.bind(name, value.toString());
     }
+
+
 
     protected String getOrderByClause(Pageable pageable) {
         if (pageable.getSort().isEmpty()) {

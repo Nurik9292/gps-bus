@@ -33,7 +33,8 @@ public class JwtTokenService {
     public String generateAccessToken(String clientId) {
         Instant now = Instant.now();
         Instant expiration = now.plus(accessTokenValidityInHours, ChronoUnit.HOURS);
-
+        log.debug("Generating access token for client {}", expiration);
+        log.debug("Generating access token for client {}", accessTokenValidityInHours);
         log.debug("Generating access token for clientId: {}", clientId);
 
         return Jwts.builder()

@@ -32,9 +32,9 @@ public class ClientAuthenticationFilter implements WebFilter {
 
         log.info("path2 : {}", path);
 
-        if (!isClientEndpoint(path) && !isMobileEndpoint(path)) {
-            return chain.filter(exchange);
-        }
+//        if (!isClientEndpoint(path) && !isMobileEndpoint(path)) {
+//            return chain.filter(exchange);
+//        }
 
         log.info("path3 : {}", path);
 

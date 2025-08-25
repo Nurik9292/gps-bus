@@ -34,6 +34,7 @@ public class MobileRouteResponse {
                 .routeName(routeData.routeName())
                 .nameTm(routeData.nameTm())
                 .nameEn(routeData.nameEn())
+                .routeNumber(routeData.routeNumber())
                 .routeColor(routeData.routeColor())
                 .cityId(routeData.cityId())
                 .estimatedDurationMinutes(routeData.estimatedDurationMinutes())

@@ -68,6 +68,7 @@ public class Client extends AggregateRoot<Client, ClientId> {
         this.lastActivity = now;
         this.createdAt = now;
         this.updatedAt = now;
+        this.version = 0L;
 
         registerEvent(new ClientRegisteredEvent(
                 this.id.getValue(),

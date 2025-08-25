@@ -24,7 +24,7 @@ public abstract class Entity<ID> implements BaseEntity<ID> {
     protected Instant updatedAt;
 
     @Version
-    protected Long version;
+    protected Long version = 0L;
 
     public abstract ID getId();
 
