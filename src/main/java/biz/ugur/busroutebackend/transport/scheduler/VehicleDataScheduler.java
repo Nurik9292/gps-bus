@@ -81,31 +81,30 @@ public class VehicleDataScheduler {
             Instant startTime = Instant.now();
 
             gpsApiClient.fetchAllVehiclePositions()
-                    .timeout(Duration.ofSeconds(30)) // Таймаут
+                    .timeout(Duration.ofSeconds(60)) // Увеличиваем таймаут
                     .flatMap(positions -> {
-                        log.info("Fetched {} GPS positions, limiting to 20...", positions.size());
+                        log.info("Fetched {} GPS positions, processing ALL (removed limit)...", positions.size());
 
                         return Flux.fromIterable(positions)
-                                .take(20)
-                                .buffer(5)
+                                .buffer(10)
                                 .concatMap(batch ->
                                         updateVehiclePositionsUseCase.execute(batch)
-                                                .timeout(Duration.ofSeconds(15))
+                                                .timeout(Duration.ofSeconds(30))
                                                 .onErrorResume(error -> {
                                                     log.error("Failed to process GPS batch of {} vehicles: {}",
                                                             batch.size(), error.getMessage());
-                                                    handleFailure();
-                                                    return Mono.empty();
+                                                    // Не вызываем handleFailure() для отдельных батчей
+                                                    return Mono.just(new VehiclePositionUpdateResult(0, 0, batch.size(), 0, 0, Instant.now(), List.of()));
                                                 })
                                 )
                                 .reduce(new VehiclePositionUpdateResult(0, 0, 0, 0, 0, Instant.now(), List.of()),
-                                        this::combineResults); // Объединяем результаты всех батчей
+                                        this::combineResults);
                     })
                     .publishOn(Schedulers.boundedElastic())
                     .doOnSuccess(result -> {
                         Duration duration = Duration.between(startTime, Instant.now());
                         log.info("GPS update completed in {}ms: {}", duration.toMillis(), result);
-                        failureCount.set(0); // Сброс счетчика при успехе
+                        failureCount.set(0);
                         saveGpsUpdateStats(result, duration).subscribe();
                     })
                     .doOnError(error -> {
@@ -126,7 +125,7 @@ public class VehicleDataScheduler {
 
 
 
-    @Scheduled(cron = "0 * * * * *")
+    @Scheduled(cron = "0 */2 * * * *")
     public void syncBusRouteAssignments() {
         log.info("🔥🔥🔥 SCHEDULER TRIGGERED! Current time: {}", Instant.now());
         if (!busInfoSyncInProgress.compareAndSet(false, true)) {
