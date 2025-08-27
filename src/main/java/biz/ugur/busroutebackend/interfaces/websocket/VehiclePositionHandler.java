@@ -18,8 +18,7 @@ import reactor.core.publisher.Sinks;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -160,13 +159,12 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
             switch (messageType) {
                 case "ping":
-                    // Ping обрабатывается через heartbeat
                     log.debug("Received ping from session {}", sessionId);
                     break;
 
                 case "subscribe_routes":
                     @SuppressWarnings("unchecked")
-                    java.util.List<String> routes = (java.util.List<String>) clientMessage.get("routes");
+                    java.util.List<String> routes = (List<String>) clientMessage.get("routes");
                     if (routes != null) {
                         config.setRouteFilter(Set.copyOf(routes));
                         config.setSubscriptionType("routes");
@@ -176,7 +174,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
                 case "subscribe_bounds":
                     @SuppressWarnings("unchecked")
-                    java.util.List<Double> bounds = (java.util.List<Double>) clientMessage.get("bounds");
+                    java.util.List<Double> bounds = (List<Double>) clientMessage.get("bounds");
                     if (bounds != null && bounds.size() == 4) {
                         config.setBounds(bounds.get(0), bounds.get(1), bounds.get(2), bounds.get(3));
                         config.setSubscriptionType("bounds");
@@ -193,6 +191,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
     private void subscribeToRedisUpdates() {
+        log.info("Subscribing to Redis channel vehicle-position-updates...");
         redisTemplate.listenToChannel("vehicle-position-updates")
                 .mapNotNull(message -> {
                     try {
@@ -200,15 +199,15 @@ public class VehiclePositionHandler implements WebSocketHandler {
                                 message.getMessage().toString(),
                                 VehiclePositionWebSocketMessage.class
                         );
+
                     } catch (Exception e) {
                         log.warn("Error parsing Redis message: {}", e.getMessage());
                         return null;
                     }
                 })
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .subscribe(
                         positionMessage -> {
-                            // Отправляем в broadcast sink
                             Sinks.EmitResult result = broadcastSink.tryEmitNext(positionMessage);
                             if (result.isFailure()) {
                                 log.warn("Failed to emit position update: {}", result);
@@ -293,7 +292,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
     private Map<String, String> parseQueryString(String query) {
-        Map<String, String> params = new java.util.HashMap<>();
+        Map<String, String> params = new HashMap<>();
         if (query != null && !query.isEmpty()) {
             String[] pairs = query.split("&");
             for (String pair : pairs) {
@@ -307,20 +306,15 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
     private boolean isVehicleInScope(VehiclePositionDTO vehicle, SessionConfig config) {
-        switch (config.getSubscriptionType()) {
-            case "routes":
-                return config.getRouteFilter() != null &&
-                        config.getRouteFilter().contains(vehicle.getRouteNumber());
-
-            case "bounds":
-                return config.isInBounds(
-                        vehicle.getCurrentLatitude(),
-                        vehicle.getCurrentLongitude()
-                );
-
-            default:
-                return true;
-        }
+        return switch (config.getSubscriptionType()) {
+            case "routes" -> config.getRouteFilter() != null &&
+                    config.getRouteFilter().contains(vehicle.getRouteNumber());
+            case "bounds" -> config.isInBounds(
+                    vehicle.getCurrentLatitude(),
+                    vehicle.getCurrentLongitude()
+            );
+            default -> true;
+        };
     }
 
     private boolean isPositionInScope(VehiclePositionWebSocketMessage position, SessionConfig config) {

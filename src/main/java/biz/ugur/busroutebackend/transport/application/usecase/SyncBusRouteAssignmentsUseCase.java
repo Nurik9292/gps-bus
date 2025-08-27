@@ -45,10 +45,6 @@ public class SyncBusRouteAssignmentsUseCase extends BaseUseCase<List<BusInfoDTO>
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Syncing route assignments for {} buses - CorrelationId: {}", busInfos.size(), correlationId);
 
-            busInfos.forEach(busInfo ->
-                    log.info("Processing bus assignment: car_number='{}' → route_number='{}'",
-                            busInfo.getCarNumber(), busInfo.getRouteNumber()));
-
             return Flux.fromIterable(busInfos)
                     .flatMap(this::assignBusToRoute)
                     .collectList()
