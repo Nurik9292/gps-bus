@@ -115,6 +115,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                     v.speed_kmh,
                     v.is_in_motion,
                     v.last_position_update,
+                    v.course,
                     tsr.route_id,
                     tsr.direction,
                     tsr.target_sequence,
@@ -204,6 +205,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 .bind("stopLon", targetStop.getLongitude().doubleValue())
                 .map(row -> {
                     String vehicleId = row.get("vehicle_id", String.class);
+                    String routeId = row.get("route_id", String.class);
                     String licensePlate = row.get("license_plate", String.class);
                     String routeNumber = row.get("route_number", String.class);
                     String routeName = row.get("route_name", String.class);
@@ -215,10 +217,12 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                     Double speedKmh = row.get("speed_kmh", Double.class);
                     Boolean isInMotion = row.get("is_in_motion", Boolean.class);
                     String currentStopName = row.get("current_stop_name", String.class);
+                    Double course = row.get("course", Double.class);
 
                     return new BusArrivalInfo(
                             vehicleId,
                             licensePlate,
+                            routeId,
                             routeNumber,
                             routeName,
                             routeColor,
@@ -229,7 +233,8 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                             speedKmh != null ? speedKmh : 0.0,
                             Boolean.TRUE.equals(isInMotion),
                             currentStopName,
-                            LocalDateTime.now()
+                            LocalDateTime.now(),
+                            course
                     );
                 })
                 .all()

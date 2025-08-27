@@ -27,10 +27,10 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
     @Setter
     @Column("device_id")
-    private String deviceId; // GPS device ID from external API
+    private String deviceId;
 
     @Column("license_plate")
-    private String licensePlate; // "1992 AGH"
+    private String licensePlate;
 
     @Column("current_latitude")
     private Double currentLatitude;
@@ -56,6 +56,9 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     @Column("is_active")
     private Boolean isActive;
 
+    @Column("course ")
+    private Double course;
+
     public Vehicle(String deviceId, String licensePlate) {
         this.id = VehicleId.generate();
         this.deviceId = validateDeviceId(deviceId);
@@ -63,6 +66,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         this.isActive = true;
         this.isInMotion = false;
         this.speedKmh = 0.0;
+        this.course = 0.0;
         this.lastPositionUpdate = Instant.now();
 
         registerEvent(new VehicleRegisteredEvent(
@@ -72,10 +76,15 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         ));
     }
 
-    public Vehicle(VehicleId id, String deviceId, String licensePlate,
-                   Double currentLatitude, Double currentLongitude,
-                   Double speedKmh, Boolean isInMotion,
-                   Instant lastPositionUpdate, BusRouteId assignedRouteId,
+    public Vehicle(VehicleId id,
+                   String deviceId,
+                   String licensePlate,
+                   Double currentLatitude,
+                   Double currentLongitude,
+                   Double speedKmh,
+                   Boolean isInMotion,
+                   Instant lastPositionUpdate,
+                   BusRouteId assignedRouteId,
                    String routeNumber,
                    Boolean isActive) {
         this.id = id;
@@ -91,7 +100,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         this.routeNumber = routeNumber;
     }
 
-    public void updatePosition(Double latitude, Double longitude, Double speed, Instant fixTime) {
+    public void updatePosition(Double latitude, Double longitude, Double speed, Instant fixTime, Double course) {
 
         validateCoordinates(latitude, longitude);
 
@@ -102,6 +111,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         this.speedKmh = speed != null ? speed : 0.0;
         this.isInMotion = this.speedKmh > 1.0;
         this.lastPositionUpdate = fixTime != null ? fixTime : Instant.now();
+        this.course = course != null ? course : 0.0;
 
         if (positionChanged) {
             registerEvent(new VehiclePositionUpdatedEvent(

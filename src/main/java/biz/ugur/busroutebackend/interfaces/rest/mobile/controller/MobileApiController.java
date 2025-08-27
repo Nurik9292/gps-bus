@@ -8,6 +8,7 @@ import biz.ugur.busroutebackend.admin.application.usecase.banner.GetBannersWithP
 import biz.ugur.busroutebackend.client.application.usecase.RouteIsFavoriteUseCase;
 import biz.ugur.busroutebackend.client.infrastructure.security.ClientPrincipal;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.response.*;
+import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.BusStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteStops;
 import biz.ugur.busroutebackend.transport.application.dto.stop.GetAllStopPaginationQuery;
@@ -19,6 +20,7 @@ import biz.ugur.busroutebackend.transport.application.usecase.CountVehicleUseCas
 import biz.ugur.busroutebackend.transport.application.usecase.route.*;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.GetAllBusStopsUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.GetBusStopByIdUseCase;
+import biz.ugur.busroutebackend.transport.infrastructure.services.BusStopRealTimeServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -53,6 +55,7 @@ public class MobileApiController {
     private final GetRoutesByStopIdUseCase  getRoutesByStopIdUseCase;
     private final CountVehicleUseCase countVehicleUseCase;
     private final ActiveCountVehicleUseCase activeCountVehicleUseCase;
+    private final BusStopRealTimeServiceImpl busStopRealTimeService;
 
 
     @GetMapping("/vehicle/info")
@@ -204,7 +207,13 @@ public class MobileApiController {
                                                                 .collect(Collectors.toList()));
 
                                                 return Mono.zip(isFavoriteMono, forwardRoutesMono, backwardRoutesMono)
-                                                        .map(tuple -> MobileStopResponse.from(stopData, tuple.getT1(), tuple.getT2(), tuple.getT3()));
+                                                        .map(tuple ->
+                                                                MobileStopResponse.from(
+                                                                        stopData,
+                                                                        tuple.getT1(),
+                                                                        tuple.getT2(),
+                                                                        tuple.getT3())
+                                                                );
                                             })
                                             .collectList()
                                             .map(mobileStops -> {
@@ -269,12 +278,15 @@ public class MobileApiController {
                                             .collect(Collectors.toList()))
                                     .defaultIfEmpty(List.of());
 
-                            return Mono.zip(isFavoriteMono, forwardRoutesMono, backwardRoutesMono)
+                            Mono<BusStopArrivalsResponse> busStopArrivals = busStopRealTimeService.getStopArrivals(stopId);
+
+                            return Mono.zip(isFavoriteMono, forwardRoutesMono, backwardRoutesMono, busStopArrivals)
                                     .map(tuple -> MobileStopResponse.from(
                                             stopData,
                                             tuple.getT1(),
                                             tuple.getT2(),
-                                            tuple.getT3()
+                                            tuple.getT3(),
+                                            tuple.getT4().getArrivals()
                                     ));
                         })
                         .map(ResponseEntity::ok)

@@ -70,7 +70,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     gpsPosition.getLatitude(),
                     gpsPosition.getLongitude(),
                     gpsPosition.getSpeed(),
-                    gpsPosition.getFixTime()
+                    gpsPosition.getFixTime(),
+                    gpsPosition.getCourse()
             );
 
             return vehicleRepository.save(vehicle)
@@ -109,7 +110,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                         gpsPosition.getLatitude(),
                                         gpsPosition.getLongitude(),
                                         gpsPosition.getSpeed(),
-                                        gpsPosition.getFixTime()
+                                        gpsPosition.getFixTime(),
+                                        gpsPosition.getCourse()
                                 );
 
                                 return vehicleRepository.save(newVehicle)
@@ -150,16 +152,13 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     }
 
     private String extractLicensePlateFromGps(GpsPositionDTO gpsPosition) {
-        // GPS API возвращает номер в поле "name" как "12-53 AGH"
         String name = gpsPosition.getVehicleName();
         if (name == null || name.trim().isEmpty()) {
             return null;
         }
 
-        // Конвертируем формат "12-53 AGH" в "1253 AGH"
         String normalized = name.trim().toUpperCase().replace("-", "");
 
-        // Проверяем формат туркменских номеров
         if (normalized.matches("\\d{4}\\s[A-Z]{3}")) {
             return normalized;
         }

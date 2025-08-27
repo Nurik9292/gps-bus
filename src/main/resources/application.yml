@@ -126,7 +126,7 @@ external:
         requests-per-minute: 120
 
     bus-info:
-      base-url: ${BUS_INFO_API_BASE_URL:https://edu.ayauk.gov.tm/gps/buses}
+      base-url: ${BUS_INFO_API_BASE_URL:https://edu.ayauk.gov.tm}
       username: ${BUS_INFO_API_USERNAME:turkmenportal}
       password: ${BUS_INFO_API_PASSWORD:turkmenportal}
       timeout: 10s

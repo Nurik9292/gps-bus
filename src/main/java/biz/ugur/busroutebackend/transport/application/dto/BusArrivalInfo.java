@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public class BusArrivalInfo {
     private String vehicleId;
     private String licensePlate;           // "1234 AGH"
+    private String routeId;
     private String routeNumber;           // "29"
     private String routeName;             // "Маршрут 29"
     private String routeColor;            // "#1976D2"
@@ -21,14 +22,25 @@ public class BusArrivalInfo {
     private Boolean isInMotion;
     private String currentStopName;       // "Текущая остановка"
     private LocalDateTime lastUpdated;
+    private Double course;
 
-    // Конструкторы, геттеры, сеттеры
     public BusArrivalInfo() {}
 
-    public BusArrivalInfo(String vehicleId, String licensePlate, String routeNumber, String routeName,
-                          String routeColor, Integer estimatedArrivalMinutes, String arrivalStatus,
-                          Double currentLatitude, Double currentLongitude, Double speedKmh,
-                          Boolean isInMotion, String currentStopName, LocalDateTime lastUpdated) {
+    public BusArrivalInfo(String vehicleId,
+                          String licensePlate,
+                          String routeId,
+                          String routeNumber,
+                          String routeName,
+                          String routeColor,
+                          Integer estimatedArrivalMinutes,
+                          String arrivalStatus,
+                          Double currentLatitude,
+                          Double currentLongitude,
+                          Double speedKmh,
+                          Boolean isInMotion,
+                          String currentStopName,
+                          LocalDateTime lastUpdated,
+                          Double course) {
         this.vehicleId = vehicleId;
         this.licensePlate = licensePlate;
         this.routeNumber = routeNumber;
@@ -42,9 +54,10 @@ public class BusArrivalInfo {
         this.isInMotion = isInMotion;
         this.currentStopName = currentStopName;
         this.lastUpdated = lastUpdated;
+        this.routeId = routeId;
+        this.course = course;
     }
 
-    // Вспомогательные методы
     public String getDisplayText() {
         if (estimatedArrivalMinutes <= 1) {
             return "Прибывает";

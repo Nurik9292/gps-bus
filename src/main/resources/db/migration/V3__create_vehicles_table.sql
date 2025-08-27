@@ -12,7 +12,8 @@ CREATE TABLE vehicles (
                           is_active BOOLEAN DEFAULT true,
                           created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                           updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                          version BIGINT DEFAULT 0
+                          version BIGINT DEFAULT 0,
+                          course DOUBLE PRECISION,
 );
 
 CREATE INDEX idx_vehicles_device_id ON vehicles(device_id);

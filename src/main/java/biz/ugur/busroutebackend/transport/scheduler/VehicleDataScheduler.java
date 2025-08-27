@@ -81,10 +81,10 @@ public class VehicleDataScheduler {
             Instant startTime = Instant.now();
 
             gpsApiClient.fetchAllVehiclePositions()
-                    .timeout(Duration.ofSeconds(60)) // Увеличиваем таймаут
+                    .timeout(Duration.ofSeconds(60))
                     .flatMap(positions -> {
                         log.info("Fetched {} GPS positions, processing ALL (removed limit)...", positions.size());
-
+                        log.info("Fetched {} GPS positions", positions.getFirst());
                         return Flux.fromIterable(positions)
                                 .buffer(10)
                                 .concatMap(batch ->
@@ -93,7 +93,6 @@ public class VehicleDataScheduler {
                                                 .onErrorResume(error -> {
                                                     log.error("Failed to process GPS batch of {} vehicles: {}",
                                                             batch.size(), error.getMessage());
-                                                    // Не вызываем handleFailure() для отдельных батчей
                                                     return Mono.just(new VehiclePositionUpdateResult(0, 0, batch.size(), 0, 0, Instant.now(), List.of()));
                                                 })
                                 )

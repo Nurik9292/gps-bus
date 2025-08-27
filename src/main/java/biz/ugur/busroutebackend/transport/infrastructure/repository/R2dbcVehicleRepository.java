@@ -41,7 +41,6 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     protected Map<String, Object> mapEntityToColumns(Vehicle entity) {
-        System.out.println("Vehicle save repo: "    + entity);
         Map<String, Object> columns = new HashMap<>();
         columns.put("id", entity.getId().getValue());
         columns.put("device_id", entity.getDeviceId());
@@ -55,6 +54,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 entity.getAssignedRouteId().getValue() : null);
         columns.put("route_number", entity.getRouteNumber());
         columns.put("is_active", entity.getIsActive());
+        columns.put("course", entity.getCourse());
         return columns;
     }
 
@@ -69,11 +69,11 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             INSERT INTO vehicles (
                 id, device_id, license_plate, current_latitude, current_longitude,
                 speed_kmh, is_in_motion, last_position_update, assigned_route_id,
-                route_number, is_active, created_at, updated_at, version
+                route_number, is_active, created_at, updated_at, course version
             ) VALUES (
                 :id, :device_id, :license_plate, :current_latitude, :current_longitude,
                 :speed_kmh, :is_in_motion, :last_position_update, :assigned_route_id,
-                :route_number, :is_active, :created_at, :updated_at, :version
+                :route_number, :is_active, :created_at, :updated_at, :course, :version
             ) RETURNING *
             """;
 
@@ -112,6 +112,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 route_number = :route_number,
                 is_active = :is_active,
                 updated_at = :updated_at,
+                course = :course,
                 version = :version
             WHERE id = :id
             RETURNING *

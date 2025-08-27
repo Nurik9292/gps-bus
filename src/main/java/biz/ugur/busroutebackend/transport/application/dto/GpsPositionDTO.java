@@ -19,10 +19,13 @@ public class GpsPositionDTO {
     private Double longitude;
 
     @JsonProperty("speed")
-    private Double speed; // km/h
+    private Double speed;
 
     @JsonProperty("fixTime")
     private Instant fixTime;
+
+    @JsonProperty("course")
+    private Double course;
 
     @JsonProperty("attributes")
     private GpsAttributesDTO attributes;
@@ -39,7 +42,7 @@ public class GpsPositionDTO {
     public static class GpsAttributesDTO {
 
         @JsonProperty("name")
-        private String name; // "12-53 AGH"
+        private String name;
 
         @JsonProperty("motion")
         private Boolean motion;
