@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.shared.infrastructure.persistence;
 
 import biz.ugur.busroutebackend.shared.base.BaseEntity;
 import biz.ugur.busroutebackend.shared.base.BaseRepository;
+import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +39,11 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
                     entity.setVersion(existing.getVersion());
                     return update(entity);
                 })
-                .switchIfEmpty(insert(entity));
+                .switchIfEmpty(insert(entity)) .doOnSuccess(savedEntity -> {
+                    if (savedEntity instanceof AggregateRoot<?, ?> aggregate) {
+
+                    }
+                });
     }
 
     @Override

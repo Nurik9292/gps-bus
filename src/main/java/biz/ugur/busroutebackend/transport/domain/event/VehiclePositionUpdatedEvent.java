@@ -2,11 +2,12 @@ package biz.ugur.busroutebackend.transport.domain.event;
 
 import biz.ugur.busroutebackend.shared.domain.event.DomainEvent;
 import lombok.Getter;
+import org.springframework.context.ApplicationEvent;
 
 import java.time.Instant;
 
 @Getter
-public class VehiclePositionUpdatedEvent implements DomainEvent {
+public class VehiclePositionUpdatedEvent implements DomainEvent{
 
     private final String vehicleId;
     private final String deviceId;
