@@ -10,12 +10,15 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.VehiclePosition;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+import java.time.Duration;
 import java.time.Instant;
 
+@Log4j2
 @Table("vehicles")
 @Getter
 @ToString
@@ -101,10 +104,12 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     }
 
     public void updatePosition(Double latitude, Double longitude, Double speed, Instant fixTime, Double course) {
-
         validateCoordinates(latitude, longitude);
 
         boolean positionChanged = hasPositionChangedSignificantly(latitude, longitude);
+        boolean speedChanged = hasSpeedChangedSignificantly(speed);
+        boolean shouldNotify = positionChanged || speedChanged || shouldForceUpdate();
+
 
         this.currentLatitude = latitude;
         this.currentLongitude = longitude;
@@ -113,7 +118,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         this.lastPositionUpdate = fixTime != null ? fixTime : Instant.now();
         this.course = course != null ? course : 0.0;
 
-        if (positionChanged) {
+        if (shouldNotify) {
             registerEvent(new VehiclePositionUpdatedEvent(
                     this.id.getValue(),
                     this.deviceId,
@@ -125,6 +130,9 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                     this.isInMotion,
                     this.lastPositionUpdate
             ));
+
+            log.debug("Position update event registered for vehicle {}: pos=({}, {}), speed={}, motion={}",
+                    this.licensePlate, latitude, longitude, this.speedKmh, this.isInMotion);
         }
     }
 
@@ -236,6 +244,35 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         double deltaLat = Math.abs(newLat - currentLatitude);
         double deltaLon = Math.abs(newLon - currentLongitude);
 
-        return deltaLat > 0.0001 || deltaLon > 0.0001;
+        boolean hasPositionChanged = deltaLat > 0.00005 || deltaLon > 0.00005;
+
+        log.trace("Position change check for {}: deltaLat={}, deltaLon={}, changed={}",
+                this.licensePlate, deltaLat, deltaLon, hasPositionChanged);
+
+        return hasPositionChanged;
+    }
+
+    private boolean hasSpeedChangedSignificantly(Double newSpeed) {
+        if (this.speedKmh == null) {
+            return newSpeed != null && newSpeed > 0;
+        }
+
+        if (newSpeed == null) {
+            return this.speedKmh > 0;
+        }
+
+        double speedDelta = Math.abs(newSpeed - this.speedKmh);
+
+        boolean hasSpeedChanged = speedDelta > 2.0;
+
+        log.trace("Speed change check for {}: oldSpeed={}, newSpeed={}, delta={}, changed={}",
+                this.licensePlate, this.speedKmh, newSpeed, speedDelta, hasSpeedChanged);
+
+        return hasSpeedChanged;
+    }
+
+    private boolean shouldForceUpdate() {
+        return lastPositionUpdate == null ||
+                Duration.between(lastPositionUpdate, Instant.now()).toMinutes() >= 2;
     }
 }

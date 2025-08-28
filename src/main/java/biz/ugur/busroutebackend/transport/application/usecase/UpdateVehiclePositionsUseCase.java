@@ -74,6 +74,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     gpsPosition.getCourse()
             );
 
+            eventBus.publish();
+
             return vehicleRepository.save(vehicle)
                     .map(savedVehicle -> VehicleUpdateStatus.updated(
                             savedVehicle.getId().getValue(),

@@ -227,6 +227,8 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
         return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
     }
 
+
+
     @Getter
     public static class Query {
         private QueryType type;

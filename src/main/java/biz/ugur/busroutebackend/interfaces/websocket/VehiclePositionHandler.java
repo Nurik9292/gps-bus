@@ -47,7 +47,6 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
 
-
     @Override
     public Mono<Void> handle(WebSocketSession session) {
         String sessionId = generateSessionId();
@@ -91,7 +90,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
                                                        SessionConfig config) {
         return getActiveVehiclesUseCase.execute(null)
                 .filter(vehicle -> isVehicleInScope(vehicle, config))
-                .take(100) // Ограничиваем для начальной загрузки
+                .take(100)
                 .map(this::convertToWebSocketMessage)
                 .collectList()
                 .map(positions -> {
@@ -193,6 +192,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
     private void subscribeToRedisUpdates() {
         log.info("Subscribing to Redis channel vehicle-position-updates...");
         redisTemplate.listenToChannel("vehicle-position-updates")
+                .filter(Objects::nonNull)
                 .mapNotNull(message -> {
                     try {
                         return objectMapper.readValue(
@@ -205,7 +205,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
                         return null;
                     }
                 })
-                .filter(Objects::nonNull)
+//                .filter(Objects::nonNull)
                 .subscribe(
                         positionMessage -> {
                             Sinks.EmitResult result = broadcastSink.tryEmitNext(positionMessage);
@@ -244,8 +244,6 @@ public class VehiclePositionHandler implements WebSocketHandler {
         });
     }
 
-    // Утилитные методы
-
     private String generateSessionId() {
         return "ws-" + sessionCounter.incrementAndGet() + "-" + System.currentTimeMillis();
     }
@@ -261,7 +259,6 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
         Map<String, String> params = parseQueryString(query);
 
-        // Подписка на область
         if (params.containsKey("bounds")) {
             String[] bounds = params.get("bounds").split(",");
             if (bounds.length == 4) {
@@ -318,23 +315,25 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
     private boolean isPositionInScope(VehiclePositionWebSocketMessage position, SessionConfig config) {
-        switch (config.getSubscriptionType()) {
-            case "routes":
-                return config.getRouteFilter() != null &&
-                        config.getRouteFilter().contains(position.getRouteNumber());
-
-            case "bounds":
-                return config.isInBounds(
-                        position.getLatitude(),
-                        position.getLongitude()
-                );
-
-            default:
-                return true;
+        if (position == null || config == null) {
+            return false;
         }
+
+        return switch (config.getSubscriptionType()) {
+            case "routes" -> config.getRouteFilter() != null &&
+                    config.getRouteFilter().contains(position.getRouteNumber());
+            case "bounds" -> config.isInBounds(
+                    position.getLatitude(),
+                    position.getLongitude()
+            );
+            default -> true;
+        };
     }
 
     private VehiclePositionWebSocketMessage convertToWebSocketMessage(VehiclePositionDTO vehicle) {
+        if (vehicle == null) {
+            return null;
+        }
         return new VehiclePositionWebSocketMessage(
                 vehicle.getVehicleId(),
                 vehicle.getLicensePlate(),
@@ -343,7 +342,9 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 vehicle.getCurrentLongitude(),
                 vehicle.getSpeedKmh(),
                 vehicle.getIsInMotion(),
-                vehicle.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
+                vehicle.getLastPositionUpdate() != null ?
+                        vehicle.getLastPositionUpdate().toInstant(ZoneOffset.UTC) :
+                        Instant.now()
         );
     }
 }

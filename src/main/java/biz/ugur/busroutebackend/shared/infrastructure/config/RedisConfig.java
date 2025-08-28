@@ -38,4 +38,32 @@ public class RedisConfig {
 
         return new ReactiveRedisTemplate<>(connectionFactory, serializationContext);
     }
+
+
+//    @Bean("vehicleRedisTemplate")
+//    public ReactiveRedisTemplate<String, VehiclePositionDTO> reactiveRedisTemplate(
+//            ReactiveRedisConnectionFactory connectionFactory) {
+//
+//        StringRedisSerializer stringSerializer = new StringRedisSerializer();
+//
+//        ObjectMapper objectMapper = new ObjectMapper()
+//                .registerModule(new JavaTimeModule())
+//                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+//                .disable(SerializationFeature.WRITE_DURATIONS_AS_TIMESTAMPS);
+//
+//        Jackson2JsonRedisSerializer<VehiclePositionDTO> jsonSerializer =
+//                new Jackson2JsonRedisSerializer<>(objectMapper, VehiclePositionDTO.class);
+//
+//        RedisSerializationContext<String, VehiclePositionDTO> serializationContext =
+//                RedisSerializationContext.<String, VehiclePositionDTO>newSerializationContext()
+//                        .key(stringSerializer)
+//                        .value(jsonSerializer)
+//                        .hashKey(stringSerializer)
+//                        .hashValue(jsonSerializer)
+//                        .build();
+//
+//        return new ReactiveRedisTemplate<>(connectionFactory, serializationContext);
+//    }
+
+
 }
