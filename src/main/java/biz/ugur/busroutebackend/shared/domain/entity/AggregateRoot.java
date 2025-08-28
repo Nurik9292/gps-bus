@@ -14,8 +14,7 @@ import java.util.Objects;
 
 @Setter
 @Getter
-public abstract class AggregateRoot<T extends AggregateRoot<T, ID>, ID>
-        extends AbstractAggregateRoot<T> implements BaseEntity<ID> {
+public abstract class AggregateRoot<T extends AggregateRoot<T, ID>, ID> extends AbstractAggregateRoot<T> implements BaseEntity<ID> {
 
     @CreatedDate
     @Column("created_at")

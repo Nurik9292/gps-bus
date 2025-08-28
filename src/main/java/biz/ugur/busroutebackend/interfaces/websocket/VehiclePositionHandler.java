@@ -194,6 +194,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
         redisTemplate.listenToChannel("vehicle-position-updates")
                 .filter(Objects::nonNull)
                 .mapNotNull(message -> {
+                    Object messageObj = message.getMessage();
                     try {
                         return objectMapper.readValue(
                                 message.getMessage().toString(),
@@ -205,7 +206,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
                         return null;
                     }
                 })
-//                .filter(Objects::nonNull)
+                .filter(Objects::nonNull)
                 .subscribe(
                         positionMessage -> {
                             Sinks.EmitResult result = broadcastSink.tryEmitNext(positionMessage);
