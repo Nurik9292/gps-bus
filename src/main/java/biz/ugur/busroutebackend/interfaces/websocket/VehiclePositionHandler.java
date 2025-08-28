@@ -220,6 +220,18 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
     public void broadcastVehiclePosition(VehiclePositionWebSocketMessage message) {
+        if (message == null) {
+            log.warn("❌ Cannot broadcast null WebSocket message");
+            return;
+        }
+
+
+        log.debug("📡 Attempting to broadcast vehicle position: {} ({}) at ({}, {})",
+                message.getVehicleId(),
+                message.getLicensePlate(),
+                message.getLatitude(),
+                message.getLongitude());
+
         Sinks.EmitResult result = broadcastSink.tryEmitNext(message);
         if (result.isFailure()) {
             log.warn("Failed to broadcast vehicle position: {}", result);
@@ -316,20 +328,77 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
     private boolean isPositionInScope(VehiclePositionWebSocketMessage position, SessionConfig config) {
-        if (position == null || config == null) {
+        // ✅ FIX для NPE "Cannot invoke "Object.equals(Object)" because "o" is null"
+        if (position == null) {
+            log.trace("❌ Position message is null, filtering out");
             return false;
         }
 
-        return switch (config.getSubscriptionType()) {
-            case "routes" -> config.getRouteFilter() != null &&
-                    config.getRouteFilter().contains(position.getRouteNumber());
-            case "bounds" -> config.isInBounds(
-                    position.getLatitude(),
-                    position.getLongitude()
-            );
-            default -> true;
-        };
+        if (config == null) {
+            log.trace("⚠️ Session config is null, allowing all positions");
+            return true;
+        }
+
+        try {
+            String subscriptionType = config.getSubscriptionType();
+            if (subscriptionType == null) {
+                log.trace("⚠️ Subscription type is null, allowing all");
+                return true;
+            }
+
+            return switch (subscriptionType) {
+                case "routes" -> {
+                    Set<String> routeFilter = config.getRouteFilter();
+                    if (routeFilter == null || routeFilter.isEmpty()) {
+                        log.trace("📝 No route filter configured, filtering out");
+                        yield false;
+                    }
+
+                    String routeNumber = position.getRouteNumber();
+
+                    if (routeNumber == null || routeNumber.trim().isEmpty()) {
+                        log.trace("🚌 Vehicle {} has no route assignment, filtering out for route subscription",
+                                position.getVehicleId());
+                        yield false;
+                    }
+
+                    boolean inScope = routeFilter.contains(routeNumber.trim());
+                    log.trace("📍 Route filter check for vehicle {}: route={}, inScope={}",
+                            position.getVehicleId(), routeNumber, inScope);
+                    yield inScope;
+                }
+                case "bounds" -> {
+                    Double lat = position.getLatitude();
+                    Double lon = position.getLongitude();
+
+                    if (lat == null || lon == null) {
+                        log.warn("❌ Vehicle {} has null coordinates: lat={}, lon={} - filtering out",
+                                position.getVehicleId(), lat, lon);
+                        yield false;
+                    }
+
+                    boolean inBounds = config.isInBounds(lat, lon);
+                    log.trace("🗺 Bounds check for vehicle {}: ({}, {}), inBounds={}",
+                            position.getVehicleId(),
+                            String.format("%.6f", lat),
+                            String.format("%.6f", lon),
+                            inBounds);
+                    yield inBounds;
+                }
+                default -> {
+                    log.trace("📡 Default subscription type '{}': allowing all", subscriptionType);
+                    yield true;
+                }
+            };
+        } catch (Exception e) {
+            // ✅ КРИТИЧЕСКИЙ FIX: Catch all exceptions to prevent cascade failures
+            log.error("❌ Error in position scope check for vehicle {}: {}",
+                    position != null ? position.getVehicleId() : "null",
+                    e.getMessage(), e);
+            return false; // Safe default
+        }
     }
+
 
     private VehiclePositionWebSocketMessage convertToWebSocketMessage(VehiclePositionDTO vehicle) {
         if (vehicle == null) {

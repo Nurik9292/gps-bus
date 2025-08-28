@@ -32,13 +32,13 @@ public class VehicleEventHandler {
         this.webSocketPublisher = webSocketPublisher;
     }
 
-    @EventListener(VehiclePositionUpdatedEvent.class)
+    @EventListener
     public void handleVehiclePositionUpdated(VehiclePositionUpdatedEvent event) {
         if (event == null) {
             log.warn("Received null VehiclePositionUpdatedEvent");
             return;
         }
-        log.debug("Handling VehiclePositionUpdated: {}", event);
+        log.info("Handling VehiclePositionUpdated: {}", event);
 
         cacheVehiclePosition(event)
                 .then(updateVehicleStatistics(event))
@@ -50,7 +50,7 @@ public class VehicleEventHandler {
                 );
     }
 
-    @EventListener(VehicleAssignedToRouteEvent.class)
+    @EventListener
     public void handleVehicleAssignedToRoute(VehicleAssignedToRouteEvent event) {
         if (event == null) {
             log.warn("Received null VehicleAssignedToRouteEvent");

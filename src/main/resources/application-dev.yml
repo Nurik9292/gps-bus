@@ -47,6 +47,12 @@ logging:
     org.springframework.r2dbc: INFO
     io.r2dbc.postgresql: INFO
     org.flywaydb: INFO
+    biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase: DEBUG
+    biz.ugur.busroutebackend.transport.domain.model.Vehicle: DEBUG
+    biz.ugur.busroutebackend.transport.infrastructure.messaging.VehicleEventHandler: INFO
+    biz.ugur.busroutebackend.interfaces.websocket.VehiclePositionHandler: DEBUG
+    biz.ugur.busroutebackend.transport.scheduler.VehicleDataScheduler: INFO
+    org.springframework.context.event: DEBUG
 
 external:
   api:

@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
+import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import lombok.Getter;
@@ -64,8 +65,39 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 });
     }
 
+//    private Mono<VehicleUpdateStatus> updateExistingVehicle(Vehicle vehicle, GpsPositionDTO gpsPosition) {
+//        try {
+//            vehicle.updatePosition(
+//                    gpsPosition.getLatitude(),
+//                    gpsPosition.getLongitude(),
+//                    gpsPosition.getSpeed(),
+//                    gpsPosition.getFixTime(),
+//                    gpsPosition.getCourse()
+//            );
+//
+//            return vehicleRepository.save(vehicle)
+//                    .as(this::persistAndPublish)
+//                    .map(savedVehicle -> VehicleUpdateStatus.updated(
+//                            savedVehicle.getId().getValue(),
+//                            savedVehicle.getDeviceId(),
+//                            savedVehicle.getLicensePlate()
+//                    ))
+//                    .doOnSuccess(status -> log.debug("Updated vehicle position: {}", status));
+//
+//        } catch (IllegalArgumentException e) {
+//            log.warn("Invalid GPS data for vehicle {}: {}", vehicle.getLicensePlate(), e.getMessage());
+//            return Mono.just(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), e.getMessage()));
+//        }
+//    }
+
     private Mono<VehicleUpdateStatus> updateExistingVehicle(Vehicle vehicle, GpsPositionDTO gpsPosition) {
         try {
+            // 🔍 ВАЖНО: Сохраняем старое состояние для проверки изменений
+            Double oldLatitude = vehicle.getCurrentLatitude();
+            Double oldLongitude = vehicle.getCurrentLongitude();
+            Double oldSpeed = vehicle.getSpeedKmh();
+
+            // 📍 Обновляем позицию автобуса
             vehicle.updatePosition(
                     gpsPosition.getLatitude(),
                     gpsPosition.getLongitude(),
@@ -75,18 +107,82 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             );
 
             return vehicleRepository.save(vehicle)
+                    .doOnSuccess(savedVehicle -> {
+                        // ✅ КРИТИЧЕСКИЙ FIX: Manual Event Publishing
+
+                        boolean shouldPublishEvent = shouldPublishPositionEvent(
+                                oldLatitude, oldLongitude, oldSpeed,
+                                savedVehicle.getCurrentLatitude(),
+                                savedVehicle.getCurrentLongitude(),
+                                savedVehicle.getSpeedKmh()
+                        );
+
+                        if (shouldPublishEvent) {
+                            log.info("🔥 MANUAL EVENT PUBLISHING for vehicle: {} from ({}, {}) to ({}, {})",
+                                    savedVehicle.getLicensePlate(),
+                                    oldLatitude, oldLongitude,
+                                    savedVehicle.getCurrentLatitude(), savedVehicle.getCurrentLongitude());
+
+                            VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
+                                    savedVehicle.getId().getValue(),
+                                    savedVehicle.getDeviceId(),
+                                    savedVehicle.getLicensePlate(),
+                                    savedVehicle.getRouteNumber(),
+                                    savedVehicle.getCurrentLatitude(),
+                                    savedVehicle.getCurrentLongitude(),
+                                    savedVehicle.getSpeedKmh(),
+                                    savedVehicle.getIsInMotion(),
+                                    savedVehicle.getLastPositionUpdate()
+                            );
+
+                            eventBus.publish(event);
+
+                            log.info("📡 MANUALLY PUBLISHED VehiclePositionUpdatedEvent for {} at ({}, {}), speed: {} km/h",
+                                    savedVehicle.getLicensePlate(),
+                                    String.format("%.6f", savedVehicle.getCurrentLatitude()),
+                                    String.format("%.6f", savedVehicle.getCurrentLongitude()),
+                                    savedVehicle.getSpeedKmh());
+                        } else {
+                            log.trace("📍 Position change not significant for vehicle: {}",
+                                    savedVehicle.getLicensePlate());
+                        }
+                    })
                     .map(savedVehicle -> VehicleUpdateStatus.updated(
                             savedVehicle.getId().getValue(),
                             savedVehicle.getDeviceId(),
                             savedVehicle.getLicensePlate()
                     ))
-                    .doOnSuccess(status -> log.debug("Updated vehicle position: {}", status));
+                    .doOnSuccess(status -> log.debug("✅ Vehicle position updated: {}", status));
 
         } catch (IllegalArgumentException e) {
-            log.warn("Invalid GPS data for vehicle {}: {}", vehicle.getLicensePlate(), e.getMessage());
+            log.warn("❌ Invalid GPS data for vehicle {}: {}", vehicle.getLicensePlate(), e.getMessage());
             return Mono.just(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), e.getMessage()));
         }
     }
+
+    private boolean shouldPublishPositionEvent(Double oldLat, Double oldLon, Double oldSpeed,
+                                               Double newLat, Double newLon, Double newSpeed) {
+        if (oldLat == null || oldLon == null) {
+            return true;
+        }
+
+        double deltaLat = Math.abs(newLat - oldLat);
+        double deltaLon = Math.abs(newLon - oldLon);
+        boolean positionChanged = deltaLat > 0.00005 || deltaLon > 0.00005;
+
+        boolean speedChanged = false;
+        if (oldSpeed != null && newSpeed != null) {
+            double speedDelta = Math.abs(newSpeed - oldSpeed);
+            speedChanged = speedDelta > 2.0;
+        }
+
+        log.trace("Position change check for vehicle: posChanged={}, speedChanged={}, deltaLat={}, deltaLon={}",
+                positionChanged, speedChanged, deltaLat, deltaLon);
+
+        return positionChanged || speedChanged;
+    }
+
+
 
     private Mono<VehicleUpdateStatus> createNewVehicle(GpsPositionDTO gpsPosition) {
         String licensePlate = extractLicensePlateFromGps(gpsPosition);
@@ -115,6 +211,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 );
 
                                 return vehicleRepository.save(newVehicle)
+                                        .as(this::persistAndPublish)
                                         .map(savedVehicle -> VehicleUpdateStatus.created(
                                                 savedVehicle.getId().getValue(),
                                                 savedVehicle.getDeviceId(),
