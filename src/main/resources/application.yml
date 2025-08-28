@@ -5,6 +5,7 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
+
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:bus_route_db}
     username: ${DB_USERNAME:bus_route_user}
@@ -69,6 +70,7 @@ spring:
 app:
   scheduling:
     enabled: true
+
 
   admin:
     default-username: ${ADMIN_DEFAULT_USERNAME:admin}
@@ -170,6 +172,11 @@ websocket:
   heartbeat-interval: 30
   message-buffer-size: 1024
   connection-timeout: 60
+#  batch-duration-ms: 500
+#  sink-buffer-size: 2000
+#  overflow-strategy:
+
+
 
 management:
   endpoints:

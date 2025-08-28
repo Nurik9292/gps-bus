@@ -65,39 +65,13 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 });
     }
 
-//    private Mono<VehicleUpdateStatus> updateExistingVehicle(Vehicle vehicle, GpsPositionDTO gpsPosition) {
-//        try {
-//            vehicle.updatePosition(
-//                    gpsPosition.getLatitude(),
-//                    gpsPosition.getLongitude(),
-//                    gpsPosition.getSpeed(),
-//                    gpsPosition.getFixTime(),
-//                    gpsPosition.getCourse()
-//            );
-//
-//            return vehicleRepository.save(vehicle)
-//                    .as(this::persistAndPublish)
-//                    .map(savedVehicle -> VehicleUpdateStatus.updated(
-//                            savedVehicle.getId().getValue(),
-//                            savedVehicle.getDeviceId(),
-//                            savedVehicle.getLicensePlate()
-//                    ))
-//                    .doOnSuccess(status -> log.debug("Updated vehicle position: {}", status));
-//
-//        } catch (IllegalArgumentException e) {
-//            log.warn("Invalid GPS data for vehicle {}: {}", vehicle.getLicensePlate(), e.getMessage());
-//            return Mono.just(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), e.getMessage()));
-//        }
-//    }
 
     private Mono<VehicleUpdateStatus> updateExistingVehicle(Vehicle vehicle, GpsPositionDTO gpsPosition) {
         try {
-            // 🔍 ВАЖНО: Сохраняем старое состояние для проверки изменений
             Double oldLatitude = vehicle.getCurrentLatitude();
             Double oldLongitude = vehicle.getCurrentLongitude();
             Double oldSpeed = vehicle.getSpeedKmh();
 
-            // 📍 Обновляем позицию автобуса
             vehicle.updatePosition(
                     gpsPosition.getLatitude(),
                     gpsPosition.getLongitude(),
@@ -108,7 +82,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
             return vehicleRepository.save(vehicle)
                     .doOnSuccess(savedVehicle -> {
-                        // ✅ КРИТИЧЕСКИЙ FIX: Manual Event Publishing
 
                         boolean shouldPublishEvent = shouldPublishPositionEvent(
                                 oldLatitude, oldLongitude, oldSpeed,
@@ -116,12 +89,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 savedVehicle.getCurrentLongitude(),
                                 savedVehicle.getSpeedKmh()
                         );
-
-                        if (shouldPublishEvent) {
-                            log.info("🔥 MANUAL EVENT PUBLISHING for vehicle: {} from ({}, {}) to ({}, {})",
-                                    savedVehicle.getLicensePlate(),
-                                    oldLatitude, oldLongitude,
-                                    savedVehicle.getCurrentLatitude(), savedVehicle.getCurrentLongitude());
+//
+//                        if (shouldPublishEvent) {
 
                             VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
                                     savedVehicle.getId().getValue(),
@@ -137,15 +106,11 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
                             eventBus.publish(event);
 
-                            log.info("📡 MANUALLY PUBLISHED VehiclePositionUpdatedEvent for {} at ({}, {}), speed: {} km/h",
-                                    savedVehicle.getLicensePlate(),
-                                    String.format("%.6f", savedVehicle.getCurrentLatitude()),
-                                    String.format("%.6f", savedVehicle.getCurrentLongitude()),
-                                    savedVehicle.getSpeedKmh());
-                        } else {
-                            log.trace("📍 Position change not significant for vehicle: {}",
-                                    savedVehicle.getLicensePlate());
-                        }
+
+//                        } else {
+//                            log.trace("📍 Position change not significant for vehicle: {}",
+//                                    savedVehicle.getLicensePlate());
+//                        }
                     })
                     .map(savedVehicle -> VehicleUpdateStatus.updated(
                             savedVehicle.getId().getValue(),

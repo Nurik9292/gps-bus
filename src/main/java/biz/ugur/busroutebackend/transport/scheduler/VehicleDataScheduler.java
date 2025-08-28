@@ -58,7 +58,7 @@ public class VehicleDataScheduler {
     }
 
 
-    @Scheduled(cron = "0 * * * * *")
+    @Scheduled(cron = "0/30 * * * * *")
     public void updateVehiclePositions() {
         if (circuitOpen.get()) {
             if (Duration.between(lastFailure, Instant.now()).toMinutes() < 5) {
@@ -83,10 +83,8 @@ public class VehicleDataScheduler {
             gpsApiClient.fetchAllVehiclePositions()
                     .timeout(Duration.ofSeconds(60))
                     .flatMap(positions -> {
-                        log.info("Fetched {} GPS positions, processing ALL (removed limit)...", positions.size());
-                        log.info("Fetched {} GPS positions", positions.getFirst());
                         return Flux.fromIterable(positions)
-                                .buffer(10)
+                                .buffer(20)
                                 .concatMap(batch ->
                                         updateVehiclePositionsUseCase.execute(batch)
                                                 .timeout(Duration.ofSeconds(30))

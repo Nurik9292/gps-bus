@@ -21,6 +21,8 @@ import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
@@ -34,7 +36,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
     private final AtomicInteger sessionCounter = new AtomicInteger(0);
 
     private final Sinks.Many<VehiclePositionWebSocketMessage> broadcastSink =
-            Sinks.many().multicast().onBackpressureBuffer();
+            Sinks.many().multicast().directBestEffort();
 
     public VehiclePositionHandler(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                            ReactiveRedisTemplate<String, Object> redisTemplate,
@@ -75,13 +77,11 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
     private Flux<WebSocketMessage> createOutboundMessageStream(WebSocketSession session,
                                                                SessionConfig config) {
-        Flux<WebSocketMessage> initialPositions = getInitialPositions(session, config);
 
+        Flux<WebSocketMessage> initialPositions = getInitialPositions(session, config);
         Flux<WebSocketMessage> liveUpdates = getLivePositionUpdates(session, config);
 
-        Flux<WebSocketMessage> heartbeat = getHeartbeatMessages(session);
-
-        return Flux.merge(initialPositions, liveUpdates, heartbeat)
+        return Flux.merge(initialPositions, liveUpdates)
                 .onErrorContinue((error, obj) ->
                         log.warn("Error sending message: {}", error.getMessage()));
     }
@@ -111,20 +111,38 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 .doOnNext(msg -> log.debug("Sent initial positions to session"));
     }
 
+
     private Flux<WebSocketMessage> getLivePositionUpdates(WebSocketSession session,
                                                           SessionConfig config) {
         return broadcastSink.asFlux()
                 .filter(positionMsg -> isPositionInScope(positionMsg, config))
-                .map(positionMsg -> {
+                .buffer(Duration.ofMillis(500))
+                .filter(updates -> !updates.isEmpty())
+                .map(updates -> {
                     try {
+                        Map<String, VehiclePositionWebSocketMessage> latestUpdates = updates.stream()
+                                .collect(Collectors.toMap(
+                                        VehiclePositionWebSocketMessage::getVehicleId,
+                                        Function.identity(),
+                                        (existing, replacement) -> replacement
+                                ));
+
+                        List<VehiclePositionWebSocketMessage> finalUpdates = new ArrayList<>(latestUpdates.values());
+
+                        log.debug("📦 Batched {} updates into {} unique vehicles",
+                                updates.size(), finalUpdates.size());
+
                         Map<String, Object> response = Map.of(
                                 "type", "position_update",
-                                "vehicle", positionMsg,
+                                "count", finalUpdates.size(),
+                                "vehicles", finalUpdates,
                                 "timestamp", Instant.now().toString()
                         );
+
                         return session.textMessage(objectMapper.writeValueAsString(response));
+
                     } catch (JsonProcessingException e) {
-                        log.warn("Error serializing position update: {}", e.getMessage());
+                        log.warn("Error serializing batch position updates: {}", e.getMessage());
                         return session.textMessage("{\"type\":\"error\",\"message\":\"Serialization error\"}");
                     }
                 })
@@ -132,21 +150,6 @@ public class VehiclePositionHandler implements WebSocketHandler {
                         log.warn("Error in live updates: {}", error.getMessage()));
     }
 
-    private Flux<WebSocketMessage> getHeartbeatMessages(WebSocketSession session) {
-        return Flux.interval(Duration.ofSeconds(30))
-                .map(tick -> {
-                    try {
-                        Map<String, Object> heartbeat = Map.of(
-                                "type", "heartbeat",
-                                "timestamp", Instant.now().toString(),
-                                "session_active", true
-                        );
-                        return session.textMessage(objectMapper.writeValueAsString(heartbeat));
-                    } catch (JsonProcessingException e) {
-                        return session.textMessage("{\"type\":\"heartbeat\"}");
-                    }
-                });
-    }
 
     private void handleIncomingMessage(String sessionId, SessionConfig config, WebSocketMessage message) {
         try {
@@ -225,13 +228,6 @@ public class VehiclePositionHandler implements WebSocketHandler {
             return;
         }
 
-
-        log.debug("📡 Attempting to broadcast vehicle position: {} ({}) at ({}, {})",
-                message.getVehicleId(),
-                message.getLicensePlate(),
-                message.getLatitude(),
-                message.getLongitude());
-
         Sinks.EmitResult result = broadcastSink.tryEmitNext(message);
         if (result.isFailure()) {
             log.warn("Failed to broadcast vehicle position: {}", result);
@@ -250,7 +246,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
             return new WebSocketStatsDTO(
                     totalSessions,
-                    totalSessions, // В reactive WebSocket все сессии активны
+                    totalSessions,
                     subscriptionTypes,
                     Instant.now()
             );
@@ -328,7 +324,6 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
     private boolean isPositionInScope(VehiclePositionWebSocketMessage position, SessionConfig config) {
-        // ✅ FIX для NPE "Cannot invoke "Object.equals(Object)" because "o" is null"
         if (position == null) {
             log.trace("❌ Position message is null, filtering out");
             return false;
@@ -391,7 +386,6 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 }
             };
         } catch (Exception e) {
-            // ✅ КРИТИЧЕСКИЙ FIX: Catch all exceptions to prevent cascade failures
             log.error("❌ Error in position scope check for vehicle {}: {}",
                     position != null ? position.getVehicleId() : "null",
                     e.getMessage(), e);
