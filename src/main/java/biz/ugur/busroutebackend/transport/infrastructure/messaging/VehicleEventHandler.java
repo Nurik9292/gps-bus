@@ -121,7 +121,8 @@ public class VehicleEventHandler {
                 event.getLongitude(),
                 event.getSpeedKmh(),
                 event.getIsInMotion(),
-                event.getPositionTimestamp()
+                event.getPositionTimestamp(),
+                event.getCourse()
         );
 
         return webSocketPublisher.broadcastVehiclePosition(msg)

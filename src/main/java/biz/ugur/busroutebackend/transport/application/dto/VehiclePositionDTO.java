@@ -41,18 +41,27 @@ public class VehiclePositionDTO {
     @JsonProperty("last_position_update")
     private LocalDateTime lastPositionUpdate;
 
+    @JsonProperty("course")
+    private Double course;
+
     @JsonProperty("created_at")
     private LocalDateTime createdAt;
 
-    // Конструктор по умолчанию
     public VehiclePositionDTO() {}
 
-    // Полный конструктор
-    public VehiclePositionDTO(String vehicleId, String deviceId, String licensePlate,
-                              String routeNumber, String routeName,
-                              Double currentLatitude, Double currentLongitude,
-                              Double speedKmh, Boolean isInMotion, Boolean isActive,
-                              LocalDateTime lastPositionUpdate, LocalDateTime createdAt) {
+    public VehiclePositionDTO(String vehicleId,
+                              String deviceId,
+                              String licensePlate,
+                              String routeNumber,
+                              String routeName,
+                              Double currentLatitude,
+                              Double currentLongitude,
+                              Double speedKmh,
+                              Boolean isInMotion,
+                              Boolean isActive,
+                              Double course,
+                              LocalDateTime lastPositionUpdate,
+                              LocalDateTime createdAt) {
         this.vehicleId = vehicleId;
         this.deviceId = deviceId;
         this.licensePlate = licensePlate;
@@ -63,6 +72,7 @@ public class VehiclePositionDTO {
         this.speedKmh = speedKmh;
         this.isInMotion = isInMotion;
         this.isActive = isActive;
+        this.course = course;
         this.lastPositionUpdate = lastPositionUpdate;
         this.createdAt = createdAt;
     }
@@ -80,7 +90,6 @@ public class VehiclePositionDTO {
         this.lastPositionUpdate = LocalDateTime.now();
     }
 
-    // Вспомогательные методы
     public boolean hasValidPosition() {
         return currentLatitude != null && currentLongitude != null
                 && isValidCoordinate(currentLatitude, currentLongitude);

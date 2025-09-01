@@ -2,10 +2,12 @@ package biz.ugur.busroutebackend.transport.domain.event;
 
 import biz.ugur.busroutebackend.shared.domain.event.DomainEvent;
 import lombok.Getter;
+import lombok.ToString;
 import org.springframework.context.ApplicationEvent;
 
 import java.time.Instant;
 
+@ToString
 @Getter
 public class VehiclePositionUpdatedEvent implements DomainEvent{
 
@@ -19,11 +21,12 @@ public class VehiclePositionUpdatedEvent implements DomainEvent{
     private final Boolean isInMotion;
     private final Instant positionTimestamp;
     private final Instant eventOccurredAt;
+    private final Double course;
 
     public VehiclePositionUpdatedEvent(String vehicleId, String deviceId, String licensePlate,
                                        String routeNumber,
                                        Double latitude, Double longitude, Double speedKmh,
-                                       Boolean isInMotion, Instant positionTimestamp) {
+                                       Boolean isInMotion, Instant positionTimestamp, Double course) {
         this.vehicleId = vehicleId;
         this.deviceId = deviceId;
         this.licensePlate = licensePlate;
@@ -34,6 +37,7 @@ public class VehiclePositionUpdatedEvent implements DomainEvent{
         this.positionTimestamp = positionTimestamp;
         this.eventOccurredAt = Instant.now();
         this.routeNumber = routeNumber;
+        this.course = course;
     }
 
     @Override
@@ -41,9 +45,5 @@ public class VehiclePositionUpdatedEvent implements DomainEvent{
         return eventOccurredAt;
     }
 
-    @Override
-    public String toString() {
-        return String.format("VehiclePositionUpdated[vehicle=%s, plate=%s, position=(%.6f,%.6f), speed=%.1f, routeNumber=%s]",
-                vehicleId, licensePlate, latitude, longitude, speedKmh, routeNumber);
-    }
+
 }

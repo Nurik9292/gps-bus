@@ -88,7 +88,8 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                    Instant lastPositionUpdate,
                    BusRouteId assignedRouteId,
                    String routeNumber,
-                   Boolean isActive) {
+                   Boolean isActive,
+                   Double course) {
         this.id = id;
         this.deviceId = deviceId;
         this.licensePlate = licensePlate;
@@ -100,6 +101,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         this.assignedRouteId = assignedRouteId;
         this.isActive = isActive;
         this.routeNumber = routeNumber;
+        this.course = course;
     }
 
     public void updatePosition(Double latitude, Double longitude, Double speed, Instant fixTime, Double course) {
@@ -122,7 +124,8 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                     longitude,
                     this.speedKmh,
                     this.isInMotion,
-                    this.lastPositionUpdate));
+                    this.lastPositionUpdate,
+                    this.course));
 
 
     }

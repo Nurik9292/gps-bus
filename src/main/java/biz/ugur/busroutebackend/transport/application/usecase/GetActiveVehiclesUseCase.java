@@ -174,6 +174,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
         dto.setCurrentLatitude(vehicle.getCurrentLatitude());
         dto.setCurrentLongitude(vehicle.getCurrentLongitude());
         dto.setSpeedKmh(vehicle.getSpeedKmh());
+        dto.setCourse(vehicle.getCourse());
         dto.setIsInMotion(vehicle.getIsInMotion());
         dto.setIsActive(vehicle.getIsActive());
 

@@ -82,15 +82,12 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
             return vehicleRepository.save(vehicle)
                     .doOnSuccess(savedVehicle -> {
-
                         boolean shouldPublishEvent = shouldPublishPositionEvent(
                                 oldLatitude, oldLongitude, oldSpeed,
                                 savedVehicle.getCurrentLatitude(),
                                 savedVehicle.getCurrentLongitude(),
                                 savedVehicle.getSpeedKmh()
                         );
-//
-//                        if (shouldPublishEvent) {
 
                             VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
                                     savedVehicle.getId().getValue(),
@@ -101,16 +98,13 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                     savedVehicle.getCurrentLongitude(),
                                     savedVehicle.getSpeedKmh(),
                                     savedVehicle.getIsInMotion(),
-                                    savedVehicle.getLastPositionUpdate()
+                                    savedVehicle.getLastPositionUpdate(),
+                                    savedVehicle.getCourse()
                             );
 
                             eventBus.publish(event);
 
 
-//                        } else {
-//                            log.trace("📍 Position change not significant for vehicle: {}",
-//                                    savedVehicle.getLicensePlate());
-//                        }
                     })
                     .map(savedVehicle -> VehicleUpdateStatus.updated(
                             savedVehicle.getId().getValue(),

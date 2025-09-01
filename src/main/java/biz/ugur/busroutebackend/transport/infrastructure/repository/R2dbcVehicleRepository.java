@@ -309,11 +309,10 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 row.get("speed_kmh", Double.class),
                 row.get("is_in_motion", Boolean.class),
                 row.get("last_position_update", Instant.class),
-                Optional.ofNullable(row.get("assigned_route_id", String.class))
-                        .map(BusRouteId::of)
-                        .orElse(null),
+                Optional.ofNullable(row.get("assigned_route_id", String.class)).map(BusRouteId::of).orElse(null),
                 row.get("route_number", String.class),
-                row.get("is_active", Boolean.class)
+                row.get("is_active", Boolean.class),
+                row.get("course", Double.class)
         );
 
         vehicle.setCreatedAt(safeGet(row, "created_at", Instant.class, null));

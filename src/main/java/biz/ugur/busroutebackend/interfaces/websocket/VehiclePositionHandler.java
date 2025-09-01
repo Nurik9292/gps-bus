@@ -86,8 +86,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
                         log.warn("Error sending message: {}", error.getMessage()));
     }
 
-    private Flux<WebSocketMessage> getInitialPositions(WebSocketSession session,
-                                                       SessionConfig config) {
+    private Flux<WebSocketMessage> getInitialPositions(WebSocketSession session, SessionConfig config) {
         return getActiveVehiclesUseCase.execute(null)
                 .filter(vehicle -> isVehicleInScope(vehicle, config))
                 .take(100)
@@ -193,7 +192,6 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
     private void subscribeToRedisUpdates() {
-        log.info("Subscribing to Redis channel vehicle-position-updates...");
         redisTemplate.listenToChannel("vehicle-position-updates")
                 .filter(Objects::nonNull)
                 .mapNotNull(message -> {
@@ -389,7 +387,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
             log.error("❌ Error in position scope check for vehicle {}: {}",
                     position != null ? position.getVehicleId() : "null",
                     e.getMessage(), e);
-            return false; // Safe default
+            return false;
         }
     }
 
@@ -408,7 +406,8 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 vehicle.getIsInMotion(),
                 vehicle.getLastPositionUpdate() != null ?
                         vehicle.getLastPositionUpdate().toInstant(ZoneOffset.UTC) :
-                        Instant.now()
+                        Instant.now(),
+                vehicle.getCourse()
         );
     }
 }

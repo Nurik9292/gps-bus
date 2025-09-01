@@ -24,7 +24,6 @@ public class VehiclePositionWebSocketPublisher {
     }
     public Mono<Void> broadcastVehiclePosition(VehiclePositionWebSocketMessage message) {
         return Mono.fromRunnable(() -> {
-            // Отправляем через WebSocket handler
             vehiclePositionHandler.broadcastVehiclePosition(message);
 
             // Публикуем в Redis для других инстансов приложения (если кластер)
