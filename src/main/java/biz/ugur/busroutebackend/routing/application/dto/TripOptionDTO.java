@@ -13,7 +13,7 @@ public class TripOptionDTO {
     private String optionId;
 
     @JsonProperty("trip_type")
-    private String tripType; // "direct", "one_transfer", "two_transfers"
+    private String tripType;
 
     @JsonProperty("summary")
     private String summary;

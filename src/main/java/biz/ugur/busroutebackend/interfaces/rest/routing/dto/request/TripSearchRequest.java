@@ -24,7 +24,7 @@ public class TripSearchRequest {
     private TripSearchPreferences preferences;
 
     @Data
-    public static class         LocationDTO {
+    public static class   LocationDTO {
         @NotNull(message = "Latitude is required")
         @DecimalMin(value = "35.0", message = "Latitude must be within Turkmenistan bounds")
         @DecimalMax(value = "43.0", message = "Latitude must be within Turkmenistan bounds")

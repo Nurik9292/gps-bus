@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -94,7 +95,7 @@ public class RouteSegmentDTO {
                 return null;
             }
 
-            List<List<Double>> coordinates = new java.util.ArrayList<>();
+            List<List<Double>> coordinates = new ArrayList<>();
             for (Double[] coord : segment.getGeoJsonCoordinates()) {
                 if (coord.length == 2) {
                     coordinates.add(List.of(coord[0], coord[1]));
