@@ -11,6 +11,7 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.r2dbc.spi.ReadableMetadata;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.Getter;
@@ -24,10 +25,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 
 import java.math.BigDecimal;
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 
@@ -346,12 +344,18 @@ public class GraphRouteCalculationService implements RouteCalculationService {
         )
         SELECT 
             vt.*,
+            br1.id as first_route_id_full,                            -- ✅ Добавить запятую
             br1.route_number as first_route_number,
             br1.route_name as first_route_name,
             br1.route_color as first_route_color,
+            br1.route_geometry_forward as first_route_geometry_forward,  
+            br1.total_distance_forward_meters as first_route_distance_meters,
+            br2.id as second_route_id_full,                          
             br2.route_number as second_route_number,
             br2.route_name as second_route_name,
             br2.route_color as second_route_color,
+            br2.route_geometry_forward as second_route_geometry_forward,  
+            br2.total_distance_forward_meters as second_route_distance_meters,
             bs_from.stop_name as from_stop_name,
             bs_from.latitude as from_lat,
             bs_from.longitude as from_lon,
@@ -763,12 +767,18 @@ public class GraphRouteCalculationService implements RouteCalculationService {
             br1.route_number as first_route_number,
             br1.route_name as first_route_name,
             br1.route_color as first_route_color,
+            br1.route_geometry_forward as first_route_geometry_forward,        
+            br1.total_distance_forward_meters as first_route_distance_meters,
             br2.route_number as second_route_number,
             br2.route_name as second_route_name,
             br2.route_color as second_route_color,
+            br2.route_geometry_forward as second_route_geometry_forward,       
+            br2.total_distance_forward_meters as second_route_distance_meters,
             br3.route_number as third_route_number,
             br3.route_name as third_route_name,
             br3.route_color as third_route_color,
+            br3.route_geometry_forward as third_route_geometry_forward,       
+            br3.total_distance_forward_meters as third_route_distance_meters,
             bs_from.stop_name as from_stop_name,
             bs_from.latitude as from_lat,
             bs_from.longitude as from_lon,
@@ -1065,20 +1075,54 @@ public class GraphRouteCalculationService implements RouteCalculationService {
 
     private TransferRouteResult mapToTransferRouteResult(Row row, RowMetadata rowMetadata) {
         try {
+            log.debug("Available columns: {}",
+                    Arrays.toString(rowMetadata.getColumnMetadatas().stream()
+                            .map(ReadableMetadata::getName).toArray()));
+
+            String firstRouteId = row.get("first_route_id_full", String.class);
+            String firstRouteNumber = row.get("first_route_number", String.class);
+            String firstRouteName = row.get("first_route_name", String.class);
+            String firstRouteColor = row.get("first_route_color", String.class);
+            String firstRouteGeometry = row.get("first_route_geometry_forward", String.class);
+            Integer firstRouteDistance = row.get("first_route_distance_meters", Integer.class);
+
+            String secondRouteId = row.get("second_route_id_full", String.class);
+            String secondRouteNumber = row.get("second_route_number", String.class);
+            String secondRouteName = row.get("second_route_name", String.class);
+            String secondRouteColor = row.get("second_route_color", String.class);
+            String secondRouteGeometry = row.get("second_route_geometry_forward", String.class);
+            Integer secondRouteDistance = row.get("second_route_distance_meters", Integer.class);
+
+            if (firstRouteId == null || firstRouteNumber == null ||
+                    secondRouteId == null || secondRouteNumber == null) {
+                log.warn("Missing required route data in transfer result");
+                return null;
+            }
+
             BusRoute firstRoute = new BusRoute(
-                    row.get("first_route_number", String.class),
-                    row.get("first_route_name", String.class),
+                    BusRouteId.of(firstRouteId),
+                    firstRouteNumber,
+                    firstRouteName,
                     null, null,
-                    row.get("first_route_color", String.class) != null ?
-                            row.get("first_route_color", String.class) : "#1976D2"
+                    firstRouteColor != null ? firstRouteColor : "#1976D2",
+                    null, true, null,
+                    firstRouteGeometry,
+                    null,
+                    firstRouteDistance,
+                    null
             );
 
             BusRoute secondRoute = new BusRoute(
-                    row.get("second_route_number", String.class),
-                    row.get("second_route_name", String.class),
+                    BusRouteId.of(secondRouteId),
+                    secondRouteNumber,
+                    secondRouteName,
                     null, null,
-                    row.get("second_route_color", String.class) != null ?
-                            row.get("second_route_color", String.class) : "#4CAF50"
+                    secondRouteColor != null ? secondRouteColor : "#4CAF50",
+                    null, true, null,
+                    secondRouteGeometry,
+                    null,
+                    secondRouteDistance,
+                    null
             );
 
             BusStop fromStop = new BusStop(
@@ -1141,30 +1185,47 @@ public class GraphRouteCalculationService implements RouteCalculationService {
     private TwoTransferRouteResult mapToTwoTransferRouteResult(Row row, RowMetadata rowMetadata) {
         try {
             BusRoute firstRoute = new BusRoute(
+                    BusRouteId.generate(),
                     row.get("first_route_number", String.class),
                     row.get("first_route_name", String.class),
                     null, null,
                     row.get("first_route_color", String.class) != null ?
-                            row.get("first_route_color", String.class) : "#1976D2"
+                            row.get("first_route_color", String.class) : "#1976D2",
+                    null, true, null,
+                    row.get("first_route_geometry_forward", String.class),
+                    null,
+                    row.get("first_route_distance_meters", Integer.class),
+                    null
             );
 
             BusRoute secondRoute = new BusRoute(
+                    BusRouteId.generate(),
                     row.get("second_route_number", String.class),
                     row.get("second_route_name", String.class),
                     null, null,
                     row.get("second_route_color", String.class) != null ?
-                            row.get("second_route_color", String.class) : "#4CAF50"
+                            row.get("second_route_color", String.class) : "#4CAF50",
+                    null, true, null,
+                    row.get("second_route_geometry_forward", String.class),
+                    null,
+                    row.get("second_route_distance_meters", Integer.class),
+                    null
             );
 
             BusRoute thirdRoute = new BusRoute(
+                    BusRouteId.generate(),
                     row.get("third_route_number", String.class),
                     row.get("third_route_name", String.class),
                     null, null,
                     row.get("third_route_color", String.class) != null ?
-                            row.get("third_route_color", String.class) : "#FF9800"
+                            row.get("third_route_color", String.class) : "#FF9800",
+                    null, true, null,
+                    row.get("third_route_geometry_forward", String.class),
+                    null,
+                    row.get("third_route_distance_meters", Integer.class),
+                    null
             );
 
-            // Создаем остановки
             BusStop fromStop = new BusStop(
                     row.get("from_stop_name", String.class),
                     row.get("from_stop_id", String.class),

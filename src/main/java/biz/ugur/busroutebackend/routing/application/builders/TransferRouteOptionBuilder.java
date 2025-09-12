@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
+import biz.ugur.busroutebackend.routing.infrastructure.services.RouteGeometryTrimmingService;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,10 +21,14 @@ public class TransferRouteOptionBuilder {
 
     private final ETACalculationService etaCalculationService;
     private final WalkingTimeCalculator walkingTimeCalculator;
+    private final RouteGeometryTrimmingService geometryTrimmingService;
 
-    public TransferRouteOptionBuilder(ETACalculationService etaCalculationService, WalkingTimeCalculator walkingTimeCalculator) {
+    public TransferRouteOptionBuilder(ETACalculationService etaCalculationService,
+                                      WalkingTimeCalculator walkingTimeCalculator,
+                                      RouteGeometryTrimmingService geometryTrimmingService) {
         this.etaCalculationService = etaCalculationService;
         this.walkingTimeCalculator = walkingTimeCalculator;
+        this.geometryTrimmingService = geometryTrimmingService;
     }
 
     public Mono<TripOption> createOneTransferOption(RouteCalculationService.TransferRouteResult transferRoute,
@@ -46,6 +51,11 @@ public class TransferRouteOptionBuilder {
 
     private TripOption buildOneTransferOption(RouteCalculationService.TransferRouteResult transferRoute,
                                               SearchContext context) {
+        log.debug("Building one-transfer option:");
+        log.debug("  First route geometry: {}",
+                transferRoute.firstRoute().getRouteGeometryForward() != null ? "PRESENT" : "NULL");
+        log.debug("  Second route geometry: {}",
+                transferRoute.secondRoute().getRouteGeometryForward() != null ? "PRESENT" : "NULL");
         Location firstStopLocation = createLocationFromStop(transferRoute.fromStop());
         Location transferStopLocation = createLocationFromStop(transferRoute.transferStop());
         Location lastStopLocation = createLocationFromStop(transferRoute.toStop());
@@ -59,13 +69,31 @@ public class TransferRouteOptionBuilder {
             throw new IllegalArgumentException("Walking time too long");
         }
 
+        String firstRouteGeometry = trimRouteGeometry(
+                transferRoute.firstRoute().getRouteGeometryForward(),
+                transferRoute.fromStop(),
+                transferRoute.transferStop()
+        );
+
+        String secondRouteGeometry = trimRouteGeometry(
+                transferRoute.secondRoute().getRouteGeometryForward(),
+                transferRoute.transferStop(),
+                transferRoute.toStop()
+        );
+
         List<RouteSegment> segments = List.of(
                 RouteSegment.walkingSegment(context.fromLocation(), firstStopLocation, walkingToFirst),
-                RouteSegment.busRideSegment(firstStopLocation, transferStopLocation,
-                        transferRoute.firstRouteTravelMinutes(), transferRoute.firstRoute().getRouteNumber()),
+                createBusSegmentWithGeometry(firstStopLocation, transferStopLocation,
+                        transferRoute.firstRouteTravelMinutes(),
+                        transferRoute.firstRoute().getRouteNumber(),
+                        firstRouteGeometry,
+                        transferRoute.firstRoute().getTotalDistanceForwardMeters()),
                 RouteSegment.transferSegment(transferStopLocation, transferRoute.transferWaitMinutes()),
-                RouteSegment.busRideSegment(transferStopLocation, lastStopLocation,
-                        transferRoute.secondRouteTravelMinutes(), transferRoute.secondRoute().getRouteNumber()),
+                createBusSegmentWithGeometry(transferStopLocation, lastStopLocation,
+                        transferRoute.secondRouteTravelMinutes(),
+                        transferRoute.secondRoute().getRouteNumber(),
+                        secondRouteGeometry,
+                        transferRoute.secondRoute().getTotalDistanceForwardMeters()),
                 RouteSegment.walkingSegment(lastStopLocation, context.toLocation(), walkingFromLast)
         );
 
@@ -74,6 +102,12 @@ public class TransferRouteOptionBuilder {
 
     private TripOption buildTwoTransferOption(RouteCalculationService.TwoTransferRouteResult twoTransferRoute,
                                               SearchContext context) {
+        log.debug("Building one-transfer option:");
+        log.debug("  First route geometry: {}",
+                twoTransferRoute.firstRoute().getRouteGeometryForward() != null ? "PRESENT" : "NULL");
+        log.debug("  Second route geometry: {}",
+                twoTransferRoute.secondRoute().getRouteGeometryForward() != null ? "PRESENT" : "NULL");
+
         Location firstStopLocation = createLocationFromStop(twoTransferRoute.fromStop());
         Location firstTransferLocation = createLocationFromStop(twoTransferRoute.firstTransferStop());
         Location secondTransferLocation = createLocationFromStop(twoTransferRoute.secondTransferStop());
@@ -88,16 +122,43 @@ public class TransferRouteOptionBuilder {
             throw new IllegalArgumentException("Walking time too long for two transfers");
         }
 
+        String firstRouteGeometry = trimRouteGeometry(
+                twoTransferRoute.firstRoute().getRouteGeometryForward(),
+                twoTransferRoute.fromStop(),
+                twoTransferRoute.firstTransferStop()
+        );
+
+        String secondRouteGeometry = trimRouteGeometry(
+                twoTransferRoute.secondRoute().getRouteGeometryForward(),
+                twoTransferRoute.firstTransferStop(),
+                twoTransferRoute.secondTransferStop()
+        );
+
+        String thirdRouteGeometry = trimRouteGeometry(
+                twoTransferRoute.thirdRoute().getRouteGeometryForward(),
+                twoTransferRoute.secondTransferStop(),
+                twoTransferRoute.toStop()
+        );
+
         List<RouteSegment> segments = List.of(
                 RouteSegment.walkingSegment(context.fromLocation(), firstStopLocation, walkingToFirst),
-                RouteSegment.busRideSegment(firstStopLocation, firstTransferLocation,
-                        twoTransferRoute.firstRouteTravelMinutes(), twoTransferRoute.firstRoute().getRouteNumber()),
+                createBusSegmentWithGeometry(firstStopLocation, firstTransferLocation,
+                        twoTransferRoute.firstRouteTravelMinutes(),
+                        twoTransferRoute.firstRoute().getRouteNumber(),
+                        firstRouteGeometry,
+                        twoTransferRoute.firstRoute().getTotalDistanceForwardMeters()),
                 RouteSegment.transferSegment(firstTransferLocation, twoTransferRoute.firstTransferWaitMinutes()),
-                RouteSegment.busRideSegment(firstTransferLocation, secondTransferLocation,
-                        twoTransferRoute.secondRouteTravelMinutes(), twoTransferRoute.secondRoute().getRouteNumber()),
+                createBusSegmentWithGeometry(firstTransferLocation, secondTransferLocation,
+                        twoTransferRoute.secondRouteTravelMinutes(),
+                        twoTransferRoute.secondRoute().getRouteNumber(),
+                        secondRouteGeometry,
+                        twoTransferRoute.secondRoute().getTotalDistanceForwardMeters()),
                 RouteSegment.transferSegment(secondTransferLocation, twoTransferRoute.secondTransferWaitMinutes()),
-                RouteSegment.busRideSegment(secondTransferLocation, finalStopLocation,
-                        twoTransferRoute.thirdRouteTravelMinutes(), twoTransferRoute.thirdRoute().getRouteNumber()),
+                createBusSegmentWithGeometry(secondTransferLocation, finalStopLocation,
+                        twoTransferRoute.thirdRouteTravelMinutes(),
+                        twoTransferRoute.thirdRoute().getRouteNumber(),
+                        thirdRouteGeometry,
+                        twoTransferRoute.thirdRoute().getTotalDistanceForwardMeters()),
                 RouteSegment.walkingSegment(finalStopLocation, context.toLocation(), walkingFromFinal)
         );
 
@@ -110,5 +171,28 @@ public class TransferRouteOptionBuilder {
                 stop.getLongitude().doubleValue(),
                 stop.getStopName()
         );
+    }
+
+    private String trimRouteGeometry(String originalGeometry, BusStop fromStop, BusStop toStop) {
+        if (originalGeometry == null || !geometryTrimmingService.isValidGeometry(originalGeometry)) {
+            return originalGeometry;
+        }
+
+        try {
+            String trimmed = geometryTrimmingService.trimRouteGeometry(originalGeometry, fromStop, toStop);
+            return trimmed != null ? trimmed : originalGeometry;
+        } catch (Exception e) {
+            log.warn("Failed to trim geometry for transfer route: {}", e.getMessage());
+            return originalGeometry;
+        }
+    }
+
+    private RouteSegment createBusSegmentWithGeometry(Location from, Location to, int durationMinutes,
+                                                      String routeNumber, String geometry, Integer distance) {
+        if (geometry != null) {
+            return RouteSegment.busRideSegmentWithGeometry(from, to, durationMinutes, routeNumber, geometry, distance);
+        } else {
+            return RouteSegment.busRideSegment(from, to, durationMinutes, routeNumber);
+        }
     }
 }

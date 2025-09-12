@@ -21,6 +21,7 @@ public class TwoTransferRouteSearchService {
     private final TransferRouteOptionBuilder optionBuilder;
     private final TransferRouteValidator validator;
 
+
     private static final Duration SEARCH_TIMEOUT = Duration.ofSeconds(15);
     private static final int MAX_RESULTS = 4;
     private static final double MAX_TRANSFER_DISTANCE_KM = 0.3;
