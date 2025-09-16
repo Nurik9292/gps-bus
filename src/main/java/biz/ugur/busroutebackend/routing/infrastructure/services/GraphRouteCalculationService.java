@@ -344,7 +344,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
         )
         SELECT 
             vt.*,
-            br1.id as first_route_id_full,                            -- ✅ Добавить запятую
+            br1.id as first_route_id_full,                           
             br1.route_number as first_route_number,
             br1.route_name as first_route_name,
             br1.route_color as first_route_color,
@@ -732,7 +732,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
             AND br3.is_active = true
         ),
         
-        -- КРИТИЧЕСКИ ВАЖНЫЙ CTE для подсчета автобусов по каждому маршруту
         route_vehicles AS (
             SELECT 
                 br.id as route_id,

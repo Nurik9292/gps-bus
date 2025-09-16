@@ -12,13 +12,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
-/**
- * Улучшенная версия сервиса расчета ETA с использованием:
- * - Real-time позиций автобусов
- * - Машинное обучение для предсказания времени
- * - Статистические данные о пробках и задержках
- * - Кэширование для производительности
- */
+
 @Service
 @Slf4j
 public class LiveETACalculationService implements ETACalculationService {
@@ -27,11 +21,10 @@ public class LiveETACalculationService implements ETACalculationService {
     private final DatabaseClient databaseClient;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
 
-    // Константы для расчетов
-    private static final double AVERAGE_WALKING_SPEED_KMH = 5.0; // 5 км/ч средняя скорость ходьбы
-    private static final double AVERAGE_WALKING_SPEED_M_PER_MIN = AVERAGE_WALKING_SPEED_KMH * 1000 / 60; // 83.33 м/мин
-    private static final int MAX_REASONABLE_WALKING_TIME = 20; // Максимум 20 минут ходьбы
-    private static final int MIN_WALKING_TIME = 1; // Минимум 1 минута
+    private static final double AVERAGE_WALKING_SPEED_KMH = 5.0;
+    private static final double AVERAGE_WALKING_SPEED_M_PER_MIN = AVERAGE_WALKING_SPEED_KMH * 1000 / 60;
+    private static final int MAX_REASONABLE_WALKING_TIME = 20;
+    private static final int MIN_WALKING_TIME = 1;
 
     public LiveETACalculationService(VehicleRepository vehicleRepository,
                                      DatabaseClient databaseClient,
@@ -49,7 +42,6 @@ public class LiveETACalculationService implements ETACalculationService {
 
         return calculateTravelTimeMinutes(routeNumber, fromStopName, toStopName)
                 .map(travelMinutes -> {
-                    // Добавляем базовое время ожидания (5-15 минут в зависимости от времени дня)
                     int waitingTime = calculateBaseWaitingTime(departureTime);
                     return departureTime.plusMinutes(waitingTime + travelMinutes);
                 })
