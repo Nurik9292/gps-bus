@@ -125,42 +125,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
             return Flux.empty();
         }
 
-        String sql = """
-        SELECT DISTINCT 
-            br.id as route_id, br.route_number, br.route_name, br.route_color,
-            br.route_geometry_forward, br.total_distance_forward_meters,
-            rs1.stop_id as from_stop_id, bs1.stop_name as from_stop_name,
-            bs1.latitude as from_lat, bs1.longitude as from_lon,
-            rs2.stop_id as to_stop_id, bs2.stop_name as to_stop_name,
-            bs2.latitude as to_lat, bs2.longitude as to_lon,
-            rs1.stop_sequence as from_sequence, rs2.stop_sequence as to_sequence,
-            rs1.direction,
-            ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as estimated_travel_minutes,
-            ABS(rs2.distance_from_start_meters - rs1.distance_from_start_meters) as distance_meters,
-            COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles_count
-        FROM route_stops rs1
-        JOIN route_stops rs2 ON rs1.route_id = rs2.route_id 
-                            AND rs1.direction = rs2.direction
-                            AND rs1.stop_sequence < rs2.stop_sequence
-        JOIN bus_routes br ON rs1.route_id = br.id
-        JOIN bus_stops bs1 ON rs1.stop_id = bs1.id  
-        JOIN bus_stops bs2 ON rs2.stop_id = bs2.id
-        LEFT JOIN vehicles v ON br.id = v.assigned_route_id
-        WHERE rs1.stop_id = ANY(CAST(:fromStopIds AS TEXT[]))
-        AND rs2.stop_id = ANY(CAST(:toStopIds AS TEXT[]))
-        AND br.is_active = true
-        AND bs1.is_active = true 
-        AND bs2.is_active = true
-        GROUP BY br.id, br.route_number, br.route_name, br.route_color,
-                 br.route_geometry_forward, br.total_distance_forward_meters,
-                 rs1.stop_id, bs1.stop_name, bs1.latitude, bs1.longitude,
-                 rs2.stop_id, bs2.stop_name, bs2.latitude, bs2.longitude,
-                 rs1.stop_sequence, rs2.stop_sequence, rs1.direction,
-                 rs1.distance_from_start_meters, rs2.distance_from_start_meters
-        ORDER BY estimated_travel_minutes, active_vehicles_count DESC
-        LIMIT :limit
-        """;
-
         String[] fromStopIds = fromStops.stream()
                 .map(stop -> stop.getId().getValue())
                 .filter(Objects::nonNull)
@@ -176,7 +140,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
             return Flux.empty();
         }
 
-        return databaseClient.sql(sql)
+        return databaseClient.sql(buildDirectRoutesQuery())
                 .bind("fromStopIds", fromStopIds)
                 .bind("toStopIds", toStopIds)
                 .bind("limit", QueryConstants.DIRECT_ROUTES_LIMIT)
