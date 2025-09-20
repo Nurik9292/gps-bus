@@ -19,8 +19,8 @@ public class NearbyStopsService {
 
     private final RouteCalculationService routeCalculationService;
 
-    private static final double SEARCH_RADIUS_KM = 1.0;
-    private static final int MAX_STOPS_PER_LOCATION = 8;
+    private static final double SEARCH_RADIUS_KM = 1.5;
+    private static final int MAX_STOPS_PER_LOCATION = 50;
 
     private static final double[] LAYERED_SEARCH_RADIUSES = {0.3, 0.6, 1.0};
     private static final int[] MAX_STOPS_PER_LAYER = {4, 6, 8};
@@ -72,24 +72,29 @@ public class NearbyStopsService {
     }
 
     private Mono<List<BusStop>> findNearbyStops(Location location, String locationType) {
+        log.debug("Finding {} stops near ({}, {}) within {}km",
+                locationType, location.getLatitude(), location.getLongitude(), SEARCH_RADIUS_KM);
+
         return routeCalculationService.findNearbyStops(location, SEARCH_RADIUS_KM)
                 .filter(this::isStopAccessible)
                 .sort((stop1, stop2) -> compareStopsByEnhancedPriority(stop1, stop2, location))
                 .take(MAX_STOPS_PER_LOCATION)
                 .collectList()
-                .doOnNext(stops -> log.debug("Found {} {} stops", stops.size(), locationType));
+                .doOnNext(stops -> {
+                    log.info("Found {} {} stops near ({}, {})", stops.size(), locationType,
+                            location.getLatitude(), location.getLongitude());
+                    stops.forEach(stop -> {
+                        double distance = location.distanceTo(stop.getLatitude().doubleValue(), stop.getLongitude().doubleValue());
+                        log.info("STOP DEBUG: {} ({}) at ({}, {}) - distance: {:.0f}m, major: {}, routes: {}",
+                                stop.getId().getValue(), stop.getStopName(),
+                                stop.getLatitude(), stop.getLongitude(),
+                                distance, stop.getIsMajorStop(), stop.getServingRoutesCount());
+                    });
+                });
     }
 
     private int compareStopsByEnhancedPriority(BusStop stop1, BusStop stop2, Location location) {
-        int priorityCompare = Boolean.compare(stop2.getIsMajorStop(), stop1.getIsMajorStop());
-        if (priorityCompare != 0) return priorityCompare;
-
-        int routeCountCompare = Integer.compare(
-                getEstimatedRouteCount(stop2),
-                getEstimatedRouteCount(stop1)
-        );
-        if (routeCountCompare != 0) return routeCountCompare;
-
+        // Главный приоритет - ТОЛЬКО расстояние
         double dist1 = location.distanceTo(
                 stop1.getLatitude().doubleValue(),
                 stop1.getLongitude().doubleValue()
@@ -98,6 +103,8 @@ public class NearbyStopsService {
                 stop2.getLatitude().doubleValue(),
                 stop2.getLongitude().doubleValue()
         );
+
+        // Всегда сортируем ТОЛЬКО по расстоянию
         return Double.compare(dist1, dist2);
     }
 

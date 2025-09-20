@@ -118,8 +118,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
 
     @Override
     public Flux<DirectRouteResult> findDirectRoutes(List<BusStop> fromStops, List<BusStop> toStops) {
-        log.debug("Finding direct routes between {} origin stops and {} destination stops",
-                fromStops.size(), toStops.size());
 
         if (fromStops.isEmpty() || toStops.isEmpty()) {
             return Flux.empty();
@@ -135,6 +133,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                 .filter(Objects::nonNull)
                 .toArray(String[]::new);
 
+
         if (fromStopIds.length == 0 || toStopIds.length == 0) {
             log.warn("❌ Empty stop arrays for direct routes");
             return Flux.empty();
@@ -143,17 +142,19 @@ public class GraphRouteCalculationService implements RouteCalculationService {
         return databaseClient.sql(buildDirectRoutesQuery())
                 .bind("fromStopIds", fromStopIds)
                 .bind("toStopIds", toStopIds)
-                .bind("limit", QueryConstants.DIRECT_ROUTES_LIMIT)
+                .bind("limit", 50)
                 .map(this::mapToDirectRouteResult)
                 .all()
                 .filter(Objects::nonNull)
-                .doOnNext(this::logDirectRouteResult);
+                .doOnNext(route -> log.debug("✅ Found route: {}", route.route().getRouteNumber()))
+                .doOnComplete(() -> log.info("✅ Direct routes search completed"));
     }
 
     @Override
-    public Flux<TransferRouteResult> findRoutesWithOneTransfer(List<BusStop> fromStops, List<BusStop> toStops,
+    public Flux<TransferRouteResult> findRoutesWithOneTransfer(List<BusStop> fromStops,
+                                                               List<BusStop> toStops,
                                                                double maxTransferDistanceKm) {
-        log.debug("Finding routes with one transfer (max transfer distance: {}km)", maxTransferDistanceKm);
+
 
         if (fromStops.isEmpty() || toStops.isEmpty()) {
             return Flux.empty();
@@ -203,171 +204,636 @@ public class GraphRouteCalculationService implements RouteCalculationService {
     private String buildDirectRoutesQuery() {
         return """
         WITH candidate_routes AS (
+            -- ========== FORWARD DIRECTION (direction = 0) ==========
             SELECT DISTINCT 
-                br.id as route_id, br.route_number, br.route_name, br.route_color,
-                br.route_geometry_forward, br.total_distance_forward_meters,
-                rs1.stop_id as from_stop_id, bs1.stop_name as from_stop_name,
-                bs1.latitude as from_lat, bs1.longitude as from_lon,
-                rs2.stop_id as to_stop_id, bs2.stop_name as to_stop_name,
-                bs2.latitude as to_lat, bs2.longitude as to_lon,
-                rs1.stop_sequence as from_sequence, rs2.stop_sequence as to_sequence,
-                rs1.direction,
+                br.id as route_id, 
+                br.route_number, 
+                br.route_name, 
+                br.route_color,
+                br.route_geometry_forward as route_geometry,
+                br.total_distance_forward_meters as total_distance_meters,
+                rs1.stop_id as from_stop_id, 
+                bs1.stop_name as from_stop_name,
+                bs1.latitude as from_lat, 
+                bs1.longitude as from_lon,
+                rs2.stop_id as to_stop_id, 
+                bs2.stop_name as to_stop_name,
+                bs2.latitude as to_lat, 
+                bs2.longitude as to_lon,
+                rs1.stop_sequence as from_sequence, 
+                rs2.stop_sequence as to_sequence,
+                0 as direction,  -- FORWARD
                 ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as estimated_travel_minutes,
                 ABS(rs2.distance_from_start_meters - rs1.distance_from_start_meters) as distance_meters,
                 COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles_count
             FROM route_stops rs1
             JOIN route_stops rs2 ON rs1.route_id = rs2.route_id 
-                                AND rs1.direction = rs2.direction
+                                AND rs1.direction = 0 
+                                AND rs2.direction = 0
                                 AND rs1.stop_sequence < rs2.stop_sequence
             JOIN bus_routes br ON rs1.route_id = br.id
             JOIN bus_stops bs1 ON rs1.stop_id = bs1.id  
             JOIN bus_stops bs2 ON rs2.stop_id = bs2.id
             LEFT JOIN vehicles v ON br.id = v.assigned_route_id
             WHERE rs1.stop_id = ANY(:fromStopIds) 
-            AND rs2.stop_id = ANY(:toStopIds)
-            """ + BASE_ACTIVE_CONDITIONS + """
+              AND rs2.stop_id = ANY(:toStopIds)
+              AND br.is_active = true
+              AND bs1.is_active = true
+              AND bs2.is_active = true
+              AND br.route_geometry_forward IS NOT NULL
             GROUP BY br.id, br.route_number, br.route_name, br.route_color,
                      br.route_geometry_forward, br.total_distance_forward_meters,
                      rs1.stop_id, bs1.stop_name, bs1.latitude, bs1.longitude,
                      rs2.stop_id, bs2.stop_name, bs2.latitude, bs2.longitude,
-                     rs1.stop_sequence, rs2.stop_sequence, rs1.direction,
+                     rs1.stop_sequence, rs2.stop_sequence,
+                     rs1.distance_from_start_meters, rs2.distance_from_start_meters
+
+            UNION ALL
+
+            -- ========== BACKWARD DIRECTION (direction = 1) ==========
+            SELECT DISTINCT 
+                br.id as route_id, 
+                br.route_number, 
+                br.route_name, 
+                br.route_color,
+                br.route_geometry_backward as route_geometry,
+                br.total_distance_backward_meters as total_distance_meters,
+                rs1.stop_id as from_stop_id, 
+                bs1.stop_name as from_stop_name,
+                bs1.latitude as from_lat, 
+                bs1.longitude as from_lon,
+                rs2.stop_id as to_stop_id, 
+                bs2.stop_name as to_stop_name,
+                bs2.latitude as to_lat, 
+                bs2.longitude as to_lon,
+                rs1.stop_sequence as from_sequence, 
+                rs2.stop_sequence as to_sequence,
+                1 as direction,  -- BACKWARD
+                ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as estimated_travel_minutes,
+                ABS(rs2.distance_from_start_meters - rs1.distance_from_start_meters) as distance_meters,
+                COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles_count
+            FROM route_stops rs1
+            JOIN route_stops rs2 ON rs1.route_id = rs2.route_id 
+                                AND rs1.direction = 1
+                                AND rs2.direction = 1
+                                AND rs1.stop_sequence < rs2.stop_sequence
+            JOIN bus_routes br ON rs1.route_id = br.id
+            JOIN bus_stops bs1 ON rs1.stop_id = bs1.id  
+            JOIN bus_stops bs2 ON rs2.stop_id = bs2.id
+            LEFT JOIN vehicles v ON br.id = v.assigned_route_id
+            WHERE rs1.stop_id = ANY(:fromStopIds) 
+              AND rs2.stop_id = ANY(:toStopIds)
+              AND br.is_active = true
+              AND bs1.is_active = true
+              AND bs2.is_active = true
+              AND br.route_geometry_backward IS NOT NULL
+            GROUP BY br.id, br.route_number, br.route_name, br.route_color,
+                     br.route_geometry_backward, br.total_distance_backward_meters,
+                     rs1.stop_id, bs1.stop_name, bs1.latitude, bs1.longitude,
+                     rs2.stop_id, bs2.stop_name, bs2.latitude, bs2.longitude,
+                     rs1.stop_sequence, rs2.stop_sequence,
                      rs1.distance_from_start_meters, rs2.distance_from_start_meters
         ),
-        """ + ROUTE_VALIDATION_CTE + """
+        validated_routes AS (
+            SELECT cr.*
+            FROM candidate_routes cr
+            WHERE cr.estimated_travel_minutes >= 2 
+              AND cr.estimated_travel_minutes <= 120
+              AND cr.distance_meters >= 100
+        )
         SELECT *
         FROM validated_routes 
-        WHERE has_from_stop = true AND has_to_stop = true
-        ORDER BY estimated_travel_minutes, active_vehicles_count DESC
+        WHERE active_vehicles_count > 0 OR active_vehicles_count IS NOT NULL
+        ORDER BY estimated_travel_minutes, distance_meters
         LIMIT :limit
         """;
     }
 
     private String buildOneTransferQuery() {
         return """
-        WITH potential_transfers AS (
-            SELECT DISTINCT
-                rs1.route_id as first_route_id,
-                rs1.stop_id as from_stop_id,
-                rs2.stop_id as transfer_stop_id,
-                rs3.route_id as second_route_id,
-                rs4.stop_id as to_stop_id,
-                bs_transfer.stop_name as transfer_stop_name,
-                bs_transfer.latitude as transfer_lat,
-                bs_transfer.longitude as transfer_lon,
-                bs_transfer.is_major_stop as transfer_is_major,
-                ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as first_route_minutes,
-                ABS(rs4.stop_sequence - rs3.stop_sequence) * 2 as second_route_minutes,
-                rs2.distance_from_start_meters - rs1.distance_from_start_meters as first_route_distance,
-                rs4.distance_from_start_meters - rs3.distance_from_start_meters as second_route_distance
-            FROM route_stops rs1
-            JOIN route_stops rs2 ON rs1.route_id = rs2.route_id 
-                                AND rs1.direction = rs2.direction
-                                AND rs1.stop_sequence < rs2.stop_sequence
-            JOIN route_stops rs3 ON rs2.stop_id = rs3.stop_id 
-                                AND rs3.direction = rs2.direction
-                                AND rs1.route_id != rs3.route_id
-            JOIN route_stops rs4 ON rs3.route_id = rs4.route_id 
-                                AND rs3.direction = rs4.direction
-                                AND rs3.stop_sequence < rs4.stop_sequence
-            JOIN bus_stops bs_transfer ON rs2.stop_id = bs_transfer.id
-            WHERE rs1.stop_id = ANY(:fromStopIds)
-            AND rs4.stop_id = ANY(:toStopIds)
-            AND (rs2.stop_sequence - rs1.stop_sequence) <= 15
-            AND (rs4.stop_sequence - rs3.stop_sequence) <= 15
-        ),
-        validated_transfers AS (
-            SELECT pt.*,
-                EXISTS(
-                    SELECT 1 FROM route_stops rs_v1a, route_stops rs_v1b
-                    WHERE rs_v1a.route_id = pt.first_route_id
-                    AND rs_v1b.route_id = pt.first_route_id  
-                    AND rs_v1a.direction = rs_v1b.direction
-                    AND rs_v1a.stop_sequence < rs_v1b.stop_sequence
-                    AND rs_v1a.stop_id = ANY(:fromStopIds)
-                    AND rs_v1b.stop_id = pt.transfer_stop_id
-                ) as first_route_valid,
-                EXISTS(
-                    SELECT 1 FROM route_stops rs_v2a, route_stops rs_v2b
-                    WHERE rs_v2a.route_id = pt.second_route_id
-                    AND rs_v2b.route_id = pt.second_route_id  
-                    AND rs_v2a.direction = rs_v2b.direction
-                    AND rs_v2a.stop_sequence < rs_v2b.stop_sequence
-                    AND rs_v2a.stop_id = pt.transfer_stop_id
-                    AND rs_v2b.stop_id = ANY(:toStopIds)
-                ) as second_route_valid
-            FROM potential_transfers pt
-        ),
-        route_vehicles AS (
-            SELECT 
-                br.id as route_id,
-                COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles
-            FROM bus_routes br
-            LEFT JOIN vehicles v ON br.id = v.assigned_route_id
-            WHERE br.is_active = true
-            GROUP BY br.id
-        )
-        SELECT 
-            vt.*,
-            br1.id as first_route_id_full,                           
-            br1.route_number as first_route_number,
-            br1.route_name as first_route_name,
-            br1.route_color as first_route_color,
-            br1.route_geometry_forward as first_route_geometry_forward,  
-            br1.total_distance_forward_meters as first_route_distance_meters,
-            br2.id as second_route_id_full,                          
-            br2.route_number as second_route_number,
-            br2.route_name as second_route_name,
-            br2.route_color as second_route_color,
-            br2.route_geometry_forward as second_route_geometry_forward,  
-            br2.total_distance_forward_meters as second_route_distance_meters,
-            bs_from.stop_name as from_stop_name,
-            bs_from.latitude as from_lat,
-            bs_from.longitude as from_lon,
-            bs_to.stop_name as to_stop_name,
-            bs_to.latitude as to_lat,
-            bs_to.longitude as to_lon,
-            COALESCE(rv1.active_vehicles, 0) as first_route_vehicles,
-            COALESCE(rv2.active_vehicles, 0) as second_route_vehicles
-        FROM validated_transfers vt
-        JOIN bus_routes br1 ON vt.first_route_id = br1.id
-        JOIN bus_routes br2 ON vt.second_route_id = br2.id
-        JOIN bus_stops bs_from ON vt.from_stop_id = bs_from.id
-        JOIN bus_stops bs_to ON vt.to_stop_id = bs_to.id
-        LEFT JOIN route_vehicles rv1 ON br1.id = rv1.route_id
-        LEFT JOIN route_vehicles rv2 ON br2.id = rv2.route_id
-        WHERE br1.is_active = true AND br2.is_active = true
-        AND vt.first_route_valid = true AND vt.second_route_valid = true
-        ORDER BY (vt.first_route_minutes + vt.second_route_minutes), 
-                 (COALESCE(rv1.active_vehicles, 0) + COALESCE(rv2.active_vehicles, 0)) DESC
-        LIMIT :limit
-        """;
-    }
-
-    private String buildTransferValidationSubquery(String routeIdField, String fromStopField, String toStopField) {
-        return String.format("""
+    WITH potential_transfers AS (
+        SELECT DISTINCT
+            rs1.route_id as first_route_id,
+            rs1.stop_id as from_stop_id,
+            rs2.stop_id as transfer_stop_id,
+            rs3.route_id as second_route_id,
+            rs4.stop_id as to_stop_id,
+            0 as first_direction,
+            0 as second_direction,
+            bs_transfer.stop_name as transfer_stop_name,
+            bs_transfer.latitude as transfer_lat,
+            bs_transfer.longitude as transfer_lon,
+            bs_transfer.is_major_stop as transfer_is_major,
+            ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as first_route_minutes,
+            ABS(rs4.stop_sequence - rs3.stop_sequence) * 2 as second_route_minutes,
+            rs2.distance_from_start_meters - rs1.distance_from_start_meters as first_route_distance,
+            rs4.distance_from_start_meters - rs3.distance_from_start_meters as second_route_distance
+        FROM route_stops rs1
+        JOIN route_stops rs2 ON rs1.route_id = rs2.route_id 
+                            AND rs1.direction = 0  -- FORWARD
+                            AND rs2.direction = 0  -- FORWARD
+                            AND rs1.stop_sequence < rs2.stop_sequence
+        JOIN route_stops rs3 ON rs2.stop_id = rs3.stop_id 
+                            AND rs3.direction = 0  -- FORWARD
+                            AND rs1.route_id != rs3.route_id
+        JOIN route_stops rs4 ON rs3.route_id = rs4.route_id 
+                            AND rs3.direction = 0  -- FORWARD
+                            AND rs4.direction = 0  -- FORWARD
+                            AND rs3.stop_sequence < rs4.stop_sequence
+        JOIN bus_stops bs_transfer ON rs2.stop_id = bs_transfer.id
+        WHERE rs1.stop_id = ANY(:fromStopIds)
+          AND rs4.stop_id = ANY(:toStopIds)
+          AND (rs2.stop_sequence - rs1.stop_sequence) <= 15
+          AND (rs4.stop_sequence - rs3.stop_sequence) <= 15
+        
+        UNION ALL
+        
+        SELECT DISTINCT
+            rs1.route_id as first_route_id,
+            rs1.stop_id as from_stop_id,
+            rs2.stop_id as transfer_stop_id,
+            rs3.route_id as second_route_id,
+            rs4.stop_id as to_stop_id,
+            0 as first_direction,
+            1 as second_direction,
+            bs_transfer.stop_name as transfer_stop_name,
+            bs_transfer.latitude as transfer_lat,
+            bs_transfer.longitude as transfer_lon,
+            bs_transfer.is_major_stop as transfer_is_major,
+            ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as first_route_minutes,
+            ABS(rs4.stop_sequence - rs3.stop_sequence) * 2 as second_route_minutes,
+            rs2.distance_from_start_meters - rs1.distance_from_start_meters as first_route_distance,
+            rs4.distance_from_start_meters - rs3.distance_from_start_meters as second_route_distance
+        FROM route_stops rs1
+        JOIN route_stops rs2 ON rs1.route_id = rs2.route_id 
+                            AND rs1.direction = 0  -- FORWARD
+                            AND rs2.direction = 0  -- FORWARD
+                            AND rs1.stop_sequence < rs2.stop_sequence
+        JOIN route_stops rs3 ON rs2.stop_id = rs3.stop_id 
+                            AND rs3.direction = 1  -- BACKWARD (смена направления!)
+                            AND rs1.route_id != rs3.route_id
+        JOIN route_stops rs4 ON rs3.route_id = rs4.route_id 
+                            AND rs3.direction = 1  -- BACKWARD
+                            AND rs4.direction = 1  -- BACKWARD
+                            AND rs3.stop_sequence < rs4.stop_sequence
+        JOIN bus_stops bs_transfer ON rs2.stop_id = bs_transfer.id
+        WHERE rs1.stop_id = ANY(:fromStopIds)
+          AND rs4.stop_id = ANY(:toStopIds)
+          AND (rs2.stop_sequence - rs1.stop_sequence) <= 15
+          AND (rs4.stop_sequence - rs3.stop_sequence) <= 15
+        
+        UNION ALL
+        
+        SELECT DISTINCT
+            rs1.route_id as first_route_id,
+            rs1.stop_id as from_stop_id,
+            rs2.stop_id as transfer_stop_id,
+            rs3.route_id as second_route_id,
+            rs4.stop_id as to_stop_id,
+            1 as first_direction,
+            0 as second_direction,
+            bs_transfer.stop_name as transfer_stop_name,
+            bs_transfer.latitude as transfer_lat,
+            bs_transfer.longitude as transfer_lon,
+            bs_transfer.is_major_stop as transfer_is_major,
+            ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as first_route_minutes,
+            ABS(rs4.stop_sequence - rs3.stop_sequence) * 2 as second_route_minutes,
+            rs2.distance_from_start_meters - rs1.distance_from_start_meters as first_route_distance,
+            rs4.distance_from_start_meters - rs3.distance_from_start_meters as second_route_distance
+        FROM route_stops rs1
+        JOIN route_stops rs2 ON rs1.route_id = rs2.route_id 
+                            AND rs1.direction = 1  -- BACKWARD
+                            AND rs2.direction = 1  -- BACKWARD
+                            AND rs1.stop_sequence < rs2.stop_sequence
+        JOIN route_stops rs3 ON rs2.stop_id = rs3.stop_id 
+                            AND rs3.direction = 0  -- FORWARD (смена направления!)
+                            AND rs1.route_id != rs3.route_id
+        JOIN route_stops rs4 ON rs3.route_id = rs4.route_id 
+                            AND rs3.direction = 0  -- FORWARD
+                            AND rs4.direction = 0  -- FORWARD
+                            AND rs3.stop_sequence < rs4.stop_sequence
+        JOIN bus_stops bs_transfer ON rs2.stop_id = bs_transfer.id
+        WHERE rs1.stop_id = ANY(:fromStopIds)
+          AND rs4.stop_id = ANY(:toStopIds)
+          AND (rs2.stop_sequence - rs1.stop_sequence) <= 15
+          AND (rs4.stop_sequence - rs3.stop_sequence) <= 15
+        
+        UNION ALL
+        
+        SELECT DISTINCT
+            rs1.route_id as first_route_id,
+            rs1.stop_id as from_stop_id,
+            rs2.stop_id as transfer_stop_id,
+            rs3.route_id as second_route_id,
+            rs4.stop_id as to_stop_id,
+            1 as first_direction,
+            1 as second_direction,
+            bs_transfer.stop_name as transfer_stop_name,
+            bs_transfer.latitude as transfer_lat,
+            bs_transfer.longitude as transfer_lon,
+            bs_transfer.is_major_stop as transfer_is_major,
+            ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as first_route_minutes,
+            ABS(rs4.stop_sequence - rs3.stop_sequence) * 2 as second_route_minutes,
+            rs2.distance_from_start_meters - rs1.distance_from_start_meters as first_route_distance,
+            rs4.distance_from_start_meters - rs3.distance_from_start_meters as second_route_distance
+        FROM route_stops rs1
+        JOIN route_stops rs2 ON rs1.route_id = rs2.route_id 
+                            AND rs1.direction = 1  -- BACKWARD
+                            AND rs2.direction = 1  -- BACKWARD
+                            AND rs1.stop_sequence < rs2.stop_sequence
+        JOIN route_stops rs3 ON rs2.stop_id = rs3.stop_id 
+                            AND rs3.direction = 1  -- BACKWARD
+                            AND rs1.route_id != rs3.route_id
+        JOIN route_stops rs4 ON rs3.route_id = rs4.route_id 
+                            AND rs3.direction = 1  -- BACKWARD
+                            AND rs4.direction = 1  -- BACKWARD
+                            AND rs3.stop_sequence < rs4.stop_sequence
+        JOIN bus_stops bs_transfer ON rs2.stop_id = bs_transfer.id
+        WHERE rs1.stop_id = ANY(:fromStopIds)
+          AND rs4.stop_id = ANY(:toStopIds)
+          AND (rs2.stop_sequence - rs1.stop_sequence) <= 15
+          AND (rs4.stop_sequence - rs3.stop_sequence) <= 15
+    ),
+    validated_transfers AS (
+        SELECT pt.*,
             EXISTS(
                 SELECT 1 FROM route_stops rs_v1a, route_stops rs_v1b
-                WHERE rs_v1a.route_id = pt.%s
-                AND rs_v1b.route_id = pt.%s  
-                AND rs_v1a.direction = rs_v1b.direction
+                WHERE rs_v1a.route_id = pt.first_route_id
+                AND rs_v1b.route_id = pt.first_route_id  
+                AND rs_v1a.direction = pt.first_direction
+                AND rs_v1b.direction = pt.first_direction
                 AND rs_v1a.stop_sequence < rs_v1b.stop_sequence
-                AND rs_v1a.stop_id = %s
-                AND rs_v1b.stop_id = %s
-            )""",
-                routeIdField,
-                routeIdField,
-                fromStopField.startsWith(":") ? "ANY(" + fromStopField + ")" : "pt." + fromStopField,
-                toStopField.startsWith(":") ? "ANY(" + toStopField + ")" : "pt." + toStopField);
+                AND rs_v1a.stop_id = ANY(:fromStopIds)
+                AND rs_v1b.stop_id = pt.transfer_stop_id
+            ) as first_route_valid,
+            EXISTS(
+                SELECT 1 FROM route_stops rs_v2a, route_stops rs_v2b
+                WHERE rs_v2a.route_id = pt.second_route_id
+                AND rs_v2b.route_id = pt.second_route_id  
+                AND rs_v2a.direction = pt.second_direction
+                AND rs_v2b.direction = pt.second_direction
+                AND rs_v2a.stop_sequence < rs_v2b.stop_sequence
+                AND rs_v2a.stop_id = pt.transfer_stop_id
+                AND rs_v2b.stop_id = ANY(:toStopIds)
+            ) as second_route_valid
+        FROM potential_transfers pt
+    ),
+    route_vehicles AS (
+        SELECT 
+            br.id as route_id,
+            COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles
+        FROM bus_routes br
+        LEFT JOIN vehicles v ON br.id = v.assigned_route_id
+        WHERE br.is_active = true
+        GROUP BY br.id
+    )
+    SELECT 
+        vt.*,
+        br1.id as first_route_id_full,                           
+        br1.route_number as first_route_number,
+        br1.route_name as first_route_name,
+        br1.route_color as first_route_color,
+        CASE 
+            WHEN vt.first_direction = 0 THEN br1.route_geometry_forward
+            ELSE br1.route_geometry_backward
+        END as first_route_geometry,
+        CASE 
+            WHEN vt.first_direction = 0 THEN br1.total_distance_forward_meters
+            ELSE br1.total_distance_backward_meters
+        END as first_route_distance_meters,
+        br2.id as second_route_id_full,                          
+        br2.route_number as second_route_number,
+        br2.route_name as second_route_name,
+        br2.route_color as second_route_color,
+        CASE 
+            WHEN vt.second_direction = 0 THEN br2.route_geometry_forward
+            ELSE br2.route_geometry_backward
+        END as second_route_geometry,
+        CASE 
+            WHEN vt.second_direction = 0 THEN br2.total_distance_forward_meters
+            ELSE br2.total_distance_backward_meters
+        END as second_route_distance_meters,
+        bs_from.stop_name as from_stop_name,
+        bs_from.latitude as from_lat,
+        bs_from.longitude as from_lon,
+        bs_to.stop_name as to_stop_name,
+        bs_to.latitude as to_lat,
+        bs_to.longitude as to_lon,
+        COALESCE(rv1.active_vehicles, 0) as first_route_vehicles,
+        COALESCE(rv2.active_vehicles, 0) as second_route_vehicles
+    FROM validated_transfers vt
+    JOIN bus_routes br1 ON vt.first_route_id = br1.id
+    JOIN bus_routes br2 ON vt.second_route_id = br2.id
+    JOIN bus_stops bs_from ON vt.from_stop_id = bs_from.id
+    JOIN bus_stops bs_to ON vt.to_stop_id = bs_to.id
+    LEFT JOIN route_vehicles rv1 ON br1.id = rv1.route_id
+    LEFT JOIN route_vehicles rv2 ON br2.id = rv2.route_id
+    WHERE vt.first_route_valid = true 
+      AND vt.second_route_valid = true
+      AND br1.is_active = true
+      AND br2.is_active = true
+      AND bs_from.is_active = true
+      AND bs_to.is_active = true
+      -- Убедимся что есть geometry для выбранных направлений
+      AND CASE 
+          WHEN vt.first_direction = 0 THEN br1.route_geometry_forward IS NOT NULL
+          ELSE br1.route_geometry_backward IS NOT NULL
+      END
+      AND CASE 
+          WHEN vt.second_direction = 0 THEN br2.route_geometry_forward IS NOT NULL
+          ELSE br2.route_geometry_backward IS NOT NULL
+      END
+    ORDER BY 
+        (vt.first_route_minutes + vt.second_route_minutes),
+        COALESCE(rv1.active_vehicles, 0) + COALESCE(rv2.active_vehicles, 0) DESC
+    LIMIT :limit
+    """;
     }
 
-//    private <T> Flux<T> executeValidatedQuery(String sql, QueryParams params, RowMapper<T> mapper) {
-//        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
-//        params.applyTo(spec);
-//
-//        return spec.map(mapper::map)
-//                .all()
-//                .filter(Objects::nonNull);
-//    }
+    private String buildTwoTransferQuery() {
+        return  """
+    WITH 
+    -- Генерируем первые сегменты для ОБОИХ направлений
+    first_segments AS (
+        SELECT DISTINCT
+            rs1.route_id as first_route_id,
+            rs1.stop_id as from_stop_id,
+            rs2.stop_id as first_transfer_stop_id,
+            0 as first_direction,
+            bs_t1.stop_name as first_transfer_name,
+            bs_t1.latitude as first_transfer_lat,
+            bs_t1.longitude as first_transfer_lon,
+            bs_t1.is_major_stop as first_transfer_is_major,
+            ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as first_route_minutes,
+            ABS(rs2.distance_from_start_meters - rs1.distance_from_start_meters) as first_route_distance
+        FROM route_stops rs1
+        JOIN route_stops rs2 ON rs1.route_id = rs2.route_id 
+                            AND rs1.direction = 0
+                            AND rs2.direction = 0
+                            AND rs1.stop_sequence < rs2.stop_sequence
+                            AND (rs2.stop_sequence - rs1.stop_sequence) <= :maxStopsPerSegment
+        JOIN bus_stops bs_t1 ON rs2.stop_id = bs_t1.id
+        JOIN bus_routes br1 ON rs1.route_id = br1.id
+        WHERE rs1.stop_id = ANY(CAST(:fromStopIds AS TEXT[]))
+          AND br1.is_active = true
+          AND bs_t1.is_active = true
+        
+        UNION ALL
+        
+        SELECT DISTINCT
+            rs1.route_id as first_route_id,
+            rs1.stop_id as from_stop_id,
+            rs2.stop_id as first_transfer_stop_id,
+            1 as first_direction,
+            bs_t1.stop_name as first_transfer_name,
+            bs_t1.latitude as first_transfer_lat,
+            bs_t1.longitude as first_transfer_lon,
+            bs_t1.is_major_stop as first_transfer_is_major,
+            ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as first_route_minutes,
+            ABS(rs2.distance_from_start_meters - rs1.distance_from_start_meters) as first_route_distance
+        FROM route_stops rs1
+        JOIN route_stops rs2 ON rs1.route_id = rs2.route_id 
+                            AND rs1.direction = 1
+                            AND rs2.direction = 1
+                            AND rs1.stop_sequence < rs2.stop_sequence
+                            AND (rs2.stop_sequence - rs1.stop_sequence) <= :maxStopsPerSegment
+        JOIN bus_stops bs_t1 ON rs2.stop_id = bs_t1.id
+        JOIN bus_routes br1 ON rs1.route_id = br1.id
+        WHERE rs1.stop_id = ANY(CAST(:fromStopIds AS TEXT[]))
+          AND br1.is_active = true
+          AND bs_t1.is_active = true
+    ),
+    
+    second_segments AS (
+        -- FORWARD второй сегмент
+        SELECT DISTINCT
+            fs.*,
+            rs3.route_id as second_route_id,
+            rs4.stop_id as second_transfer_stop_id,
+            0 as second_direction,
+            bs_t2.stop_name as second_transfer_name,
+            bs_t2.latitude as second_transfer_lat,
+            bs_t2.longitude as second_transfer_lon,
+            bs_t2.is_major_stop as second_transfer_is_major,
+            ABS(rs4.stop_sequence - rs3.stop_sequence) * 2 as second_route_minutes,
+            ABS(rs4.distance_from_start_meters - rs3.distance_from_start_meters) as second_route_distance,
+            ST_Distance(
+                ST_Point(CAST(fs.first_transfer_lon AS double precision), CAST(fs.first_transfer_lat AS double precision))::geography,
+                ST_Point(CAST(bs_t2.longitude AS double precision), CAST(bs_t2.latitude AS double precision))::geography
+            ) as transfer_distance_meters
+        FROM first_segments fs
+        JOIN route_stops rs3 ON fs.first_transfer_stop_id = rs3.stop_id
+                            AND rs3.direction = 0
+        JOIN route_stops rs4 ON rs3.route_id = rs4.route_id 
+                            AND rs3.direction = 0
+                            AND rs4.direction = 0
+                            AND rs3.stop_sequence < rs4.stop_sequence
+                            AND (rs4.stop_sequence - rs3.stop_sequence) <= :maxMiddleSegmentStops
+        JOIN bus_stops bs_t2 ON rs4.stop_id = bs_t2.id
+        JOIN bus_routes br2 ON rs3.route_id = br2.id
+        WHERE fs.first_route_id != rs3.route_id
+          AND br2.is_active = true
+          AND bs_t2.is_active = true
+          AND ST_Distance(
+              ST_Point(CAST(fs.first_transfer_lon AS double precision), CAST(fs.first_transfer_lat AS double precision))::geography,
+              ST_Point(CAST(bs_t2.longitude AS double precision), CAST(bs_t2.latitude AS double precision))::geography
+          ) <= CAST(:maxTransferDistanceMeters AS double precision)
+        
+        UNION ALL
+        
+        -- BACKWARD второй сегмент
+        SELECT DISTINCT
+            fs.*,
+            rs3.route_id as second_route_id,
+            rs4.stop_id as second_transfer_stop_id,
+            1 as second_direction,
+            bs_t2.stop_name as second_transfer_name,
+            bs_t2.latitude as second_transfer_lat,
+            bs_t2.longitude as second_transfer_lon,
+            bs_t2.is_major_stop as second_transfer_is_major,
+            ABS(rs4.stop_sequence - rs3.stop_sequence) * 2 as second_route_minutes,
+            ABS(rs4.distance_from_start_meters - rs3.distance_from_start_meters) as second_route_distance,
+            ST_Distance(
+                ST_Point(CAST(fs.first_transfer_lon AS double precision), CAST(fs.first_transfer_lat AS double precision))::geography,
+                ST_Point(CAST(bs_t2.longitude AS double precision), CAST(bs_t2.latitude AS double precision))::geography
+            ) as transfer_distance_meters
+        FROM first_segments fs
+        JOIN route_stops rs3 ON fs.first_transfer_stop_id = rs3.stop_id
+                            AND rs3.direction = 1
+        JOIN route_stops rs4 ON rs3.route_id = rs4.route_id 
+                            AND rs3.direction = 1
+                            AND rs4.direction = 1
+                            AND rs3.stop_sequence < rs4.stop_sequence
+                            AND (rs4.stop_sequence - rs3.stop_sequence) <= :maxMiddleSegmentStops
+        JOIN bus_stops bs_t2 ON rs4.stop_id = bs_t2.id
+        JOIN bus_routes br2 ON rs3.route_id = br2.id
+        WHERE fs.first_route_id != rs3.route_id
+          AND br2.is_active = true
+          AND bs_t2.is_active = true
+          AND ST_Distance(
+              ST_Point(CAST(fs.first_transfer_lon AS double precision), CAST(fs.first_transfer_lat AS double precision))::geography,
+              ST_Point(CAST(bs_t2.longitude AS double precision), CAST(bs_t2.latitude AS double precision))::geography
+          ) <= CAST(:maxTransferDistanceMeters AS double precision)
+    ),
+    
+    -- Генерируем третьи сегменты для ОБОИХ направлений
+    complete_routes AS (
+        -- FORWARD третий сегмент
+        SELECT DISTINCT
+            ss.*,
+            rs5.route_id as third_route_id,
+            rs6.stop_id as to_stop_id,
+            0 as third_direction,
+            ABS(rs6.stop_sequence - rs5.stop_sequence) * 2 as third_route_minutes,
+            ABS(rs6.distance_from_start_meters - rs5.distance_from_start_meters) as third_route_distance
+        FROM second_segments ss
+        JOIN route_stops rs5 ON ss.second_transfer_stop_id = rs5.stop_id
+                            AND rs5.direction = 0
+        JOIN route_stops rs6 ON rs5.route_id = rs6.route_id 
+                            AND rs5.direction = 0
+                            AND rs6.direction = 0
+                            AND rs5.stop_sequence < rs6.stop_sequence
+                            AND (rs6.stop_sequence - rs5.stop_sequence) <= :maxStopsPerSegment
+        JOIN bus_routes br3 ON rs5.route_id = br3.id
+        WHERE ss.second_route_id != rs5.route_id
+          AND rs6.stop_id = ANY(CAST(:toStopIds AS TEXT[]))
+          AND br3.is_active = true
+        
+        UNION ALL
+        
+        -- BACKWARD третий сегмент
+        SELECT DISTINCT
+            ss.*,
+            rs5.route_id as third_route_id,
+            rs6.stop_id as to_stop_id,
+            1 as third_direction,
+            ABS(rs6.stop_sequence - rs5.stop_sequence) * 2 as third_route_minutes,
+            ABS(rs6.distance_from_start_meters - rs5.distance_from_start_meters) as third_route_distance
+        FROM second_segments ss
+        JOIN route_stops rs5 ON ss.second_transfer_stop_id = rs5.stop_id
+                            AND rs5.direction = 1
+        JOIN route_stops rs6 ON rs5.route_id = rs6.route_id 
+                            AND rs5.direction = 1
+                            AND rs6.direction = 1
+                            AND rs5.stop_sequence < rs6.stop_sequence
+                            AND (rs6.stop_sequence - rs5.stop_sequence) <= :maxStopsPerSegment
+        JOIN bus_routes br3 ON rs5.route_id = br3.id
+        WHERE ss.second_route_id != rs5.route_id
+          AND rs6.stop_id = ANY(CAST(:toStopIds AS TEXT[]))
+          AND br3.is_active = true
+    ),
+    
+    route_vehicles AS (
+        SELECT 
+            br.id as route_id,
+            COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles
+        FROM bus_routes br
+        LEFT JOIN vehicles v ON br.id = v.assigned_route_id
+        WHERE br.is_active = true
+        GROUP BY br.id
+    )
+    
+    -- Финальный SELECT с правильным выбором geometry
+    SELECT 
+        cr.first_route_id,
+        cr.from_stop_id,
+        cr.first_transfer_stop_id,
+        cr.second_route_id,
+        cr.second_transfer_stop_id,
+        cr.third_route_id,
+        cr.to_stop_id,
+        cr.first_direction,
+        cr.second_direction,
+        cr.third_direction,
+        cr.first_transfer_name,
+        cr.first_transfer_lat,
+        cr.first_transfer_lon,
+        cr.first_transfer_is_major,
+        cr.second_transfer_name,
+        cr.second_transfer_lat,
+        cr.second_transfer_lon,
+        cr.second_transfer_is_major,
+        cr.first_route_minutes,
+        cr.second_route_minutes,
+        cr.third_route_minutes,
+        cr.transfer_distance_meters,
+        br1.route_number as first_route_number,
+        br1.route_name as first_route_name,
+        br1.route_color as first_route_color,
+        CASE 
+            WHEN cr.first_direction = 0 THEN br1.route_geometry_forward
+            ELSE br1.route_geometry_backward
+        END as first_route_geometry_forward,
+        CASE 
+            WHEN cr.first_direction = 0 THEN br1.total_distance_forward_meters
+            ELSE br1.total_distance_backward_meters
+        END as first_route_distance_meters,
+        br2.route_number as second_route_number,
+        br2.route_name as second_route_name,
+        br2.route_color as second_route_color,
+        CASE 
+            WHEN cr.second_direction = 0 THEN br2.route_geometry_forward
+            ELSE br2.route_geometry_backward
+        END as second_route_geometry_forward,
+        CASE 
+            WHEN cr.second_direction = 0 THEN br2.total_distance_forward_meters
+            ELSE br2.total_distance_backward_meters
+        END as second_route_distance_meters,
+        br3.route_number as third_route_number,
+        br3.route_name as third_route_name,
+        br3.route_color as third_route_color,
+        CASE 
+            WHEN cr.third_direction = 0 THEN br3.route_geometry_forward
+            ELSE br3.route_geometry_backward
+        END as third_route_geometry_forward,
+        CASE 
+            WHEN cr.third_direction = 0 THEN br3.total_distance_forward_meters
+            ELSE br3.total_distance_backward_meters
+        END as third_route_distance_meters,
+        bs_from.stop_name as from_stop_name,
+        bs_from.latitude as from_lat,
+        bs_from.longitude as from_lon,
+        bs_to.stop_name as to_stop_name,
+        bs_to.latitude as to_lat,
+        bs_to.longitude as to_lon,
+        COALESCE(rv1.active_vehicles, 0) as first_route_vehicles,
+        COALESCE(rv2.active_vehicles, 0) as second_route_vehicles,
+        COALESCE(rv3.active_vehicles, 0) as third_route_vehicles,
+        (cr.first_route_minutes + cr.second_route_minutes + cr.third_route_minutes) as total_travel_time
+    FROM complete_routes cr
+    JOIN bus_routes br1 ON cr.first_route_id = br1.id
+    JOIN bus_routes br2 ON cr.second_route_id = br2.id
+    JOIN bus_routes br3 ON cr.third_route_id = br3.id
+    JOIN bus_stops bs_from ON cr.from_stop_id = bs_from.id
+    JOIN bus_stops bs_to ON cr.to_stop_id = bs_to.id
+    LEFT JOIN route_vehicles rv1 ON br1.id = rv1.route_id
+    LEFT JOIN route_vehicles rv2 ON br2.id = rv2.route_id
+    LEFT JOIN route_vehicles rv3 ON br3.id = rv3.route_id
+    WHERE 
+        (cr.first_route_minutes + cr.second_route_minutes + cr.third_route_minutes) <= :maxTotalTravelTime
+        AND cr.first_route_minutes >= :minSegmentTime
+        AND cr.second_route_minutes >= :minSegmentTime
+        AND cr.third_route_minutes >= :minSegmentTime
+        -- Проверяем наличие geometry для выбранных направлений
+        AND CASE 
+            WHEN cr.first_direction = 0 THEN br1.route_geometry_forward IS NOT NULL
+            ELSE br1.route_geometry_backward IS NOT NULL
+        END
+        AND CASE 
+            WHEN cr.second_direction = 0 THEN br2.route_geometry_forward IS NOT NULL
+            ELSE br2.route_geometry_backward IS NOT NULL
+        END
+        AND CASE 
+            WHEN cr.third_direction = 0 THEN br3.route_geometry_forward IS NOT NULL
+            ELSE br3.route_geometry_backward IS NOT NULL
+        END
+    ORDER BY 
+        total_travel_time,
+        (COALESCE(rv1.active_vehicles, 0) + COALESCE(rv2.active_vehicles, 0) + COALESCE(rv3.active_vehicles, 0)) DESC
+    LIMIT :limit
+    """;
+
+    }
 
     private <T> Flux<T> executeValidatedQuery(String sql, QueryParams params, RowMapper<T> mapper) {
         try {
@@ -500,14 +966,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
     }
 
 
-    private void logDirectRouteResult(DirectRouteResult result) {
-        log.debug("✅ VALIDATED direct route: {} from {} to {} ({} minutes)",
-                result.route().getRouteNumber(),
-                result.fromStop().getStopName(),
-                result.toStop().getStopName(),
-                result.estimatedTravelMinutes());
-    }
-
     private void logTransferRouteResult(TransferRouteResult result) {
         log.debug("✅ VALIDATED transfer route: {}-{} via {} ({} + {} minutes)",
                 result.firstRoute().getRouteNumber(),
@@ -517,17 +975,11 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                 result.secondRouteTravelMinutes());
     }
 
-
-
     private int adjustTravelTimeByVehicleCount(Integer baseMinutes, Long vehicleCount) {
-        if (baseMinutes == null) return 20;
-        if (vehicleCount == null || vehicleCount == 0) return baseMinutes + 10;
-
-        if (vehicleCount >= 5) return baseMinutes;
-        if (vehicleCount >= 3) return baseMinutes + 2;
-        if (vehicleCount >= 1) return baseMinutes + 5;
-
-        return baseMinutes + 10;
+        if (baseMinutes == null) return 10;
+        if (vehicleCount == null || vehicleCount == 0) return baseMinutes + 3;
+        if (vehicleCount >= 3) return baseMinutes;
+        return baseMinutes + 2;
     }
 
     private int calculateTransferWaitTime(Boolean isMajorStop, Long fromRouteVehicles, Long toRouteVehicles) {
@@ -555,6 +1007,14 @@ public class GraphRouteCalculationService implements RouteCalculationService {
             return Math.min(maxDistance, 0.5);
         }
         return Math.min(maxDistance, 0.4);
+    }
+
+    public String getCorrectGeometry(BusRoute route, int direction) {
+        if (direction == 0) {
+            return route.getRouteGeometryForward();
+        } else {
+            return route.getRouteGeometryBackward();
+        }
     }
 
     @Override
@@ -607,174 +1067,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
 
     private Flux<TwoTransferRouteResult> performTwoTransferSearch(List<BusStop> fromStops, List<BusStop> toStops,
                                                                   double maxTransferDistanceKm) {
-
-        String sql = """
-        WITH 
-        first_segments AS (
-            SELECT DISTINCT
-                rs1.route_id as first_route_id,
-                rs1.stop_id as from_stop_id,
-                rs2.stop_id as first_transfer_stop_id,
-                rs1.direction as first_direction,
-                bs_t1.stop_name as first_transfer_name,
-                bs_t1.latitude as first_transfer_lat,
-                bs_t1.longitude as first_transfer_lon,
-                bs_t1.is_major_stop as first_transfer_is_major,
-                ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as first_route_minutes,
-                ABS(rs2.distance_from_start_meters - rs1.distance_from_start_meters) as first_route_distance
-            FROM route_stops rs1
-            JOIN route_stops rs2 ON rs1.route_id = rs2.route_id 
-                                AND rs1.direction = rs2.direction
-                                AND rs1.stop_sequence < rs2.stop_sequence
-                                AND (rs2.stop_sequence - rs1.stop_sequence) <= :maxStopsPerSegment
-            JOIN bus_stops bs_t1 ON rs2.stop_id = bs_t1.id
-            JOIN bus_routes br1 ON rs1.route_id = br1.id
-            WHERE rs1.stop_id = ANY(CAST(:fromStopIds AS TEXT[]))
-            AND br1.is_active = true
-            AND bs_t1.is_active = true
-        ),
-        
-        -- Второй уровень: находим вторые сегменты (transfer1 → transfer2)
-        second_segments AS (
-            SELECT DISTINCT
-                fs.first_route_id,
-                fs.from_stop_id,
-                fs.first_transfer_stop_id,
-                fs.first_transfer_name,
-                fs.first_transfer_lat,
-                fs.first_transfer_lon,
-                fs.first_transfer_is_major,
-                fs.first_route_minutes,
-                rs3.route_id as second_route_id,
-                rs4.stop_id as second_transfer_stop_id,
-                rs3.direction as second_direction,
-                bs_t2.stop_name as second_transfer_name,
-                bs_t2.latitude as second_transfer_lat,
-                bs_t2.longitude as second_transfer_lon,
-                bs_t2.is_major_stop as second_transfer_is_major,
-                ABS(rs4.stop_sequence - rs3.stop_sequence) * 2 as second_route_minutes,
-                ABS(rs4.distance_from_start_meters - rs3.distance_from_start_meters) as second_route_distance,
-                ST_Distance(
-                    ST_Point(CAST(fs.first_transfer_lon AS double precision), CAST(fs.first_transfer_lat AS double precision))::geography,
-                    ST_Point(CAST(bs_t2.longitude AS double precision), CAST(bs_t2.latitude AS double precision))::geography
-                ) as transfer_distance_meters
-            FROM first_segments fs
-            JOIN route_stops rs3 ON fs.first_transfer_stop_id = rs3.stop_id
-            JOIN route_stops rs4 ON rs3.route_id = rs4.route_id 
-                                AND rs3.direction = rs4.direction
-                                AND rs3.stop_sequence < rs4.stop_sequence
-                                AND (rs4.stop_sequence - rs3.stop_sequence) <= :maxMiddleSegmentStops
-            JOIN bus_stops bs_t2 ON rs4.stop_id = bs_t2.id
-            JOIN bus_routes br2 ON rs3.route_id = br2.id
-            WHERE fs.first_route_id != rs3.route_id
-            AND br2.is_active = true
-            AND bs_t2.is_active = true
-            AND ST_Distance(
-                ST_Point(CAST(fs.first_transfer_lon AS double precision), CAST(fs.first_transfer_lat AS double precision))::geography,
-                ST_Point(CAST(bs_t2.longitude AS double precision), CAST(bs_t2.latitude AS double precision))::geography
-            ) <= CAST(:maxTransferDistanceMeters AS double precision)
-        ),
-        
-        -- Третий уровень: находим финальные сегменты (transfer2 → B)
-        complete_routes AS (
-            SELECT DISTINCT
-                ss.*,
-                rs5.route_id as third_route_id,
-                rs6.stop_id as to_stop_id,
-                rs5.direction as third_direction,
-                ABS(rs6.stop_sequence - rs5.stop_sequence) * 2 as third_route_minutes,
-                ABS(rs6.distance_from_start_meters - rs5.distance_from_start_meters) as third_route_distance
-            FROM second_segments ss
-            JOIN route_stops rs5 ON ss.second_transfer_stop_id = rs5.stop_id
-            JOIN route_stops rs6 ON rs5.route_id = rs6.route_id 
-                                AND rs5.direction = rs6.direction
-                                AND rs5.stop_sequence < rs6.stop_sequence
-                                AND (rs6.stop_sequence - rs5.stop_sequence) <= :maxStopsPerSegment
-            JOIN bus_routes br3 ON rs5.route_id = br3.id
-            WHERE ss.second_route_id != rs5.route_id
-            AND rs6.stop_id = ANY(CAST(:toStopIds AS TEXT[]))
-            AND br3.is_active = true
-        ),
-        
-        route_vehicles AS (
-            SELECT 
-                br.id as route_id,
-                COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles
-            FROM bus_routes br
-            LEFT JOIN vehicles v ON br.id = v.assigned_route_id
-            WHERE br.is_active = true
-            GROUP BY br.id
-        )
-        
-        -- Финальный SELECT с дополнительной информацией о маршрутах
-        SELECT 
-            cr.first_route_id,
-            cr.from_stop_id,
-            cr.first_transfer_stop_id,
-            cr.second_route_id,
-            cr.second_transfer_stop_id,
-            cr.third_route_id,
-            cr.to_stop_id,
-            cr.first_transfer_name,
-            cr.first_transfer_lat,
-            cr.first_transfer_lon,
-            cr.first_transfer_is_major,
-            cr.second_transfer_name,
-            cr.second_transfer_lat,
-            cr.second_transfer_lon,
-            cr.second_transfer_is_major,
-            cr.first_route_minutes,
-            cr.second_route_minutes,
-            cr.third_route_minutes,
-            cr.transfer_distance_meters,
-            br1.route_number as first_route_number,
-            br1.route_name as first_route_name,
-            br1.route_color as first_route_color,
-            br1.route_geometry_forward as first_route_geometry_forward,        
-            br1.total_distance_forward_meters as first_route_distance_meters,
-            br2.route_number as second_route_number,
-            br2.route_name as second_route_name,
-            br2.route_color as second_route_color,
-            br2.route_geometry_forward as second_route_geometry_forward,       
-            br2.total_distance_forward_meters as second_route_distance_meters,
-            br3.route_number as third_route_number,
-            br3.route_name as third_route_name,
-            br3.route_color as third_route_color,
-            br3.route_geometry_forward as third_route_geometry_forward,       
-            br3.total_distance_forward_meters as third_route_distance_meters,
-            bs_from.stop_name as from_stop_name,
-            bs_from.latitude as from_lat,
-            bs_from.longitude as from_lon,
-            bs_to.stop_name as to_stop_name,
-            bs_to.latitude as to_lat,
-            bs_to.longitude as to_lon,
-            COALESCE(rv1.active_vehicles, 0) as first_route_vehicles,
-            COALESCE(rv2.active_vehicles, 0) as second_route_vehicles,
-            COALESCE(rv3.active_vehicles, 0) as third_route_vehicles,
-            (cr.first_route_minutes + cr.second_route_minutes + cr.third_route_minutes) as total_travel_time
-        FROM complete_routes cr
-        JOIN bus_routes br1 ON cr.first_route_id = br1.id
-        JOIN bus_routes br2 ON cr.second_route_id = br2.id
-        JOIN bus_routes br3 ON cr.third_route_id = br3.id
-        JOIN bus_stops bs_from ON cr.from_stop_id = bs_from.id
-        JOIN bus_stops bs_to ON cr.to_stop_id = bs_to.id
-        LEFT JOIN route_vehicles rv1 ON br1.id = rv1.route_id
-        LEFT JOIN route_vehicles rv2 ON br2.id = rv2.route_id
-        LEFT JOIN route_vehicles rv3 ON br3.id = rv3.route_id
-        WHERE 
-            (cr.first_route_minutes + cr.second_route_minutes + cr.third_route_minutes) <= :maxTotalTravelTime
-            AND cr.first_route_minutes >= :minSegmentTime
-            AND cr.second_route_minutes >= :minSegmentTime
-            AND cr.third_route_minutes >= :minSegmentTime
-        ORDER BY 
-            total_travel_time,
-            (COALESCE(rv1.active_vehicles, 0) + COALESCE(rv2.active_vehicles, 0) + COALESCE(rv3.active_vehicles, 0)) DESC,
-            (CASE WHEN cr.first_transfer_is_major THEN 0 ELSE 1 END + 
-             CASE WHEN cr.second_transfer_is_major THEN 0 ELSE 1 END)
-        LIMIT :limit
-        """;
-
-        // ИСПРАВЛЕННЫЙ BINDING ПАРАМЕТРОВ
         String[] fromStopIds = fromStops.stream()
                 .map(stop -> stop.getId().getValue())
                 .filter(Objects::nonNull)
@@ -785,7 +1077,6 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                 .filter(Objects::nonNull)
                 .toArray(String[]::new);
 
-        // ДОБАВЛЯЕМ ВАЛИДАЦИЮ
         if (fromStopIds.length == 0 || toStopIds.length == 0) {
             log.warn("❌ Empty stop arrays: from={}, to={}", fromStopIds.length, toStopIds.length);
             return Flux.empty();
@@ -794,7 +1085,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
         log.debug("🔍 Two-transfer search: {} from stops, {} to stops, max distance={}m",
                 fromStopIds.length, toStopIds.length, maxTransferDistanceKm * 1000);
 
-        return databaseClient.sql(sql)
+        return databaseClient.sql(buildTwoTransferQuery())
                 .bind("fromStopIds", fromStopIds)
                 .bind("toStopIds", toStopIds)
                 .bind("maxTransferDistanceMeters", maxTransferDistanceKm * 1000.0)
@@ -992,6 +1283,10 @@ public class GraphRouteCalculationService implements RouteCalculationService {
 
     private DirectRouteResult mapToDirectRouteResult(Row row, RowMetadata rowMetadata) {
         try {
+            Integer direction = row.get("direction", Integer.class);
+            String routeGeometry = row.get("route_geometry", String.class);
+            Integer totalDistance = row.get("total_distance_meters", Integer.class);
+
             BusRoute route = new BusRoute(
                     BusRouteId.of(row.get("route_id", String.class)),
                     row.get("route_number", String.class),
@@ -1003,10 +1298,10 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                     null,
                     true,
                     null,
-                    row.get("route_geometry_forward", String.class),
-                    null,
-                    row.get("total_distance_forward_meters", Integer.class),
-                    null
+                    direction == 0 ? routeGeometry : null,
+                    direction == 1 ? routeGeometry : null,
+                    direction == 0 ? totalDistance : null,
+                    direction == 1 ? totalDistance : null
             );
 
             BusStop fromStop = new BusStop(
@@ -1046,15 +1341,17 @@ public class GraphRouteCalculationService implements RouteCalculationService {
             String firstRouteNumber = row.get("first_route_number", String.class);
             String firstRouteName = row.get("first_route_name", String.class);
             String firstRouteColor = row.get("first_route_color", String.class);
-            String firstRouteGeometry = row.get("first_route_geometry_forward", String.class);
+            String firstRouteGeometry = row.get("first_route_geometry", String.class);
             Integer firstRouteDistance = row.get("first_route_distance_meters", Integer.class);
+            Integer firstDirection = row.get("first_direction", Integer.class);
 
             String secondRouteId = row.get("second_route_id_full", String.class);
             String secondRouteNumber = row.get("second_route_number", String.class);
             String secondRouteName = row.get("second_route_name", String.class);
             String secondRouteColor = row.get("second_route_color", String.class);
-            String secondRouteGeometry = row.get("second_route_geometry_forward", String.class);
+            String secondRouteGeometry = row.get("second_route_geometry", String.class);
             Integer secondRouteDistance = row.get("second_route_distance_meters", Integer.class);
+            Integer secondDirection = row.get("second_direction", Integer.class);
 
             if (firstRouteId == null || firstRouteNumber == null ||
                     secondRouteId == null || secondRouteNumber == null) {
@@ -1066,26 +1363,32 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                     BusRouteId.of(firstRouteId),
                     firstRouteNumber,
                     firstRouteName,
-                    null, null,
-                    firstRouteColor != null ? firstRouteColor : "#1976D2",
-                    null, true, null,
-                    firstRouteGeometry,
                     null,
-                    firstRouteDistance,
-                    null
+                    null,
+                    firstRouteColor != null ? firstRouteColor : "#1976D2",
+                    null,
+                    true,
+                    null,
+                    firstDirection == 0 ? firstRouteGeometry : null,
+                    firstDirection == 1 ? firstRouteGeometry : null,
+                    firstDirection == 0 ? firstRouteDistance : null,
+                    firstDirection == 1 ? firstRouteDistance : null
             );
 
             BusRoute secondRoute = new BusRoute(
                     BusRouteId.of(secondRouteId),
                     secondRouteNumber,
                     secondRouteName,
-                    null, null,
-                    secondRouteColor != null ? secondRouteColor : "#4CAF50",
-                    null, true, null,
-                    secondRouteGeometry,
                     null,
-                    secondRouteDistance,
-                    null
+                    null,
+                    secondRouteColor != null ? secondRouteColor : "#4CAF50",
+                    null,
+                    true,
+                    null,
+                    secondDirection == 0 ? secondRouteGeometry : null,
+                    secondDirection == 1 ? secondRouteGeometry : null,
+                    secondDirection == 0 ? secondRouteDistance : null,
+                    secondDirection == 1 ? secondRouteDistance : null
             );
 
             BusStop fromStop = new BusStop(
@@ -1131,6 +1434,14 @@ public class GraphRouteCalculationService implements RouteCalculationService {
             int transferWaitTime = calculateTransferWaitTime(transferStop.getIsMajorStop(),
                     firstRouteVehicles, secondRouteVehicles);
 
+            log.debug("✅ Transfer route found: {} ({}) → [{}] → {} ({}) - Total: {} min",
+                    row.get("first_route_number", String.class),
+                    firstDirection == 0 ? "FORWARD" : "BACKWARD",
+                    transferStop.getStopName(),
+                    row.get("second_route_number", String.class),
+                    secondDirection == 0 ? "FORWARD" : "BACKWARD",
+                    adjustedFirstMinutes + transferWaitTime + adjustedSecondMinutes);
+
             return new TransferRouteResult(
                     firstRoute, fromStop, transferStop,
                     secondRoute, toStop,
@@ -1147,32 +1458,43 @@ public class GraphRouteCalculationService implements RouteCalculationService {
 
     private TwoTransferRouteResult mapToTwoTransferRouteResult(Row row, RowMetadata rowMetadata) {
         try {
+            Integer firstDirection = row.get("first_direction", Integer.class);
+            Integer secondDirection = row.get("second_direction", Integer.class);
+            Integer thirdDirection = row.get("third_direction", Integer.class);
+
+            String firstRouteGeometry = row.get("first_route_geometry_forward", String.class);
+            String secondRouteGeometry = row.get("second_route_geometry_forward", String.class);
+            String thirdRouteGeometry = row.get("third_route_geometry_forward", String.class);
+
             BusRoute firstRoute = new BusRoute(
                     BusRouteId.generate(),
                     row.get("first_route_number", String.class),
                     row.get("first_route_name", String.class),
                     null, null,
-                    row.get("first_route_color", String.class) != null ?
-                            row.get("first_route_color", String.class) : "#1976D2",
-                    null, true, null,
-                    row.get("first_route_geometry_forward", String.class),
+                    row.get("first_route_color", String.class) != null ? row.get("first_route_color", String.class) : "#1976D2",
                     null,
-                    row.get("first_route_distance_meters", Integer.class),
-                    null
+                    true,
+                    null,
+                    firstDirection == 0 ? firstRouteGeometry : null,
+                    firstDirection == 1 ? firstRouteGeometry : null,
+                    firstDirection == 0 ? row.get("first_route_distance_meters", Integer.class) : null,
+                    firstDirection == 1 ? row.get("first_route_distance_meters", Integer.class) : null
             );
 
             BusRoute secondRoute = new BusRoute(
                     BusRouteId.generate(),
                     row.get("second_route_number", String.class),
                     row.get("second_route_name", String.class),
-                    null, null,
-                    row.get("second_route_color", String.class) != null ?
-                            row.get("second_route_color", String.class) : "#4CAF50",
-                    null, true, null,
-                    row.get("second_route_geometry_forward", String.class),
                     null,
-                    row.get("second_route_distance_meters", Integer.class),
-                    null
+                    null,
+                    row.get("second_route_color", String.class) != null ? row.get("second_route_color", String.class) : "#4CAF50",
+                    null,
+                    true,
+                    null,
+                    secondDirection == 0 ? secondRouteGeometry : null,
+                    secondDirection == 1 ? secondRouteGeometry : null,
+                    secondDirection == 0 ? row.get("second_route_distance_meters", Integer.class) : null,
+                    secondDirection == 1 ? row.get("second_route_distance_meters", Integer.class) : null
             );
 
             BusRoute thirdRoute = new BusRoute(
@@ -1180,13 +1502,14 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                     row.get("third_route_number", String.class),
                     row.get("third_route_name", String.class),
                     null, null,
-                    row.get("third_route_color", String.class) != null ?
-                            row.get("third_route_color", String.class) : "#FF9800",
-                    null, true, null,
-                    row.get("third_route_geometry_forward", String.class),
+                    row.get("third_route_color", String.class) != null ? row.get("third_route_color", String.class) : "#FF9800",
                     null,
-                    row.get("third_route_distance_meters", Integer.class),
-                    null
+                    true,
+                    null,
+                    thirdDirection == 0 ? thirdRouteGeometry : null,
+                    thirdDirection == 1 ? thirdRouteGeometry : null,
+                    thirdDirection == 0 ? row.get("third_route_distance_meters", Integer.class) : null,
+                    thirdDirection == 1 ? row.get("third_route_distance_meters", Integer.class) : null
             );
 
             BusStop fromStop = new BusStop(

@@ -44,7 +44,7 @@ public class TripSearchRequest {
     @Data
     public static class TripSearchPreferences {
         @JsonProperty("max_walking_distance_meters")
-        private Integer maxWalkingDistanceMeters = 800;
+        private Integer maxWalkingDistanceMeters = 1200;
 
         @JsonProperty("max_transfers")
         private Integer maxTransfers = 2;

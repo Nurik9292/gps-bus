@@ -12,7 +12,10 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -28,40 +31,110 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
 
     @Override
     public Mono<TripPlan> save(TripPlan tripPlan) {
+        // ✅ РЕШЕНИЕ: Сначала проверяем существует ли запись
+        return findById(tripPlan.getId())
+                .flatMap(existing -> {
+                    // Запись уже существует - обновляем её
+                    log.info("🔄 TripPlan {} already exists, updating...", tripPlan.getId().getValue());
+                    return updateExisting(tripPlan);
+                })
+                .switchIfEmpty(
+                        // Записи не существует - создаем новую
+                        insertNew(tripPlan)
+                )
+                .doOnSuccess(plan -> log.info("✅ Successfully saved trip plan: {}", plan.getId().getValue()))
+                .doOnError(error -> log.error("❌ Failed to save trip plan {}: {}",
+                        tripPlan.getId().getValue(), error.getMessage()));
+    }
+
+
+    private Mono<TripPlan> insertNew(TripPlan tripPlan) {
         String sql = """
-            INSERT INTO trip_plans (
-                id, origin_latitude, origin_longitude, destination_latitude, destination_longitude, 
-                search_time, options_count, max_transfers, max_walking_distance_meters,
-                created_at, updated_at, version)
-            VALUES (
-                :id, :originLat, :originLon, :destLat, :destLon,
-                :searchTime, :optionsCount, :maxTransfers, :maxWalkingDistance, 
-                :created_at, :updated_at, :version)
-            ON CONFLICT (id) DO UPDATE SET
-                options_count = :optionsCount,
-                updated_at = CURRENT_TIMESTAMP,
-                version = trip_plans.version + 1
-            RETURNING *
-            """;
+        INSERT INTO trip_plans (
+            id,
+            origin_latitude,
+            origin_longitude,
+            destination_latitude,
+            destination_longitude,
+            search_time,
+            options_count,
+            max_transfers,
+            max_walking_distance_meters,
+            created_at,
+            updated_at,
+            version
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING *
+        """;
+
+        log.info("➕ Inserting new TripPlan: {}", tripPlan.getId().getValue());
 
         return databaseClient.sql(sql)
-                .bind("id", tripPlan.getId().getValue())
-                .bind("originLat", tripPlan.getOriginLatitude())
-                .bind("originLon", tripPlan.getOriginLongitude())
-                .bind("destLat", tripPlan.getDestinationLatitude())
-                .bind("destLon", tripPlan.getDestinationLongitude())
-                .bind("searchTime", tripPlan.getSearchTimeDb())
-                .bind("optionsCount", tripPlan.getOptionsCount())
-                .bind("maxTransfers", tripPlan.getMaxTransfers())
-                .bind("maxWalkingDistance", tripPlan.getMaxWalkingDistanceMeters())
-                .bind("created_at", tripPlan.getCreatedAt())
-                .bind("updated_at", tripPlan.getUpdatedAt())
-                .bind("version", tripPlan.getVersion())
+                .bind(0, tripPlan.getId().getValue())
+                .bind(1, tripPlan.getOriginLatitude() != null ? tripPlan.getOriginLatitude() : 0.0)
+                .bind(2, tripPlan.getOriginLongitude() != null ? tripPlan.getOriginLongitude() : 0.0)
+                .bind(3, tripPlan.getDestinationLatitude() != null ? tripPlan.getDestinationLatitude() : 0.0)
+                .bind(4, tripPlan.getDestinationLongitude() != null ? tripPlan.getDestinationLongitude() : 0.0)
+                .bind(5, tripPlan.getSearchTimeDb() != null ? tripPlan.getSearchTimeDb() : LocalDateTime.now())
+                .bind(6, tripPlan.getOptionsCount() != null ? tripPlan.getOptionsCount() : 0)
+                .bind(7, tripPlan.getMaxTransfers() != null ? tripPlan.getMaxTransfers() : 2)
+                .bind(8, tripPlan.getMaxWalkingDistanceMeters() != null ? tripPlan.getMaxWalkingDistanceMeters() : 800)
+                .bind(9, convertToOffsetDateTime(tripPlan.getCreatedAt()))
+                .bind(10, OffsetDateTime.now())
+                .bind(11, 0L)
                 .map(getRowMapper())
                 .one()
-                .doOnSuccess(plan -> log.debug("Saved trip plan: {}", plan.getId().getValue()))
-                .doOnError(error -> log.error("Failed to save trip plan: {}", error.getMessage()));
+                .onErrorResume(error -> {
+                    if (error.getMessage() != null && error.getMessage().contains("duplicate key")) {
+                        log.warn("⚠️ Duplicate key during insert, trying to find existing record: {}",
+                                tripPlan.getId().getValue());
+                        return findById(tripPlan.getId())
+                                .switchIfEmpty(Mono.error(new RuntimeException("Record disappeared after duplicate key error")));
+                    }
+                    return Mono.error(error);
+                });
     }
+
+
+    private Mono<TripPlan> updateExisting(TripPlan tripPlan) {
+        String sql = """
+        UPDATE trip_plans SET
+            options_count = ?,
+            updated_at = ?,
+            version = version + 1
+        WHERE id = ?
+        RETURNING *
+        """;
+
+        log.info("🔄 Updating existing TripPlan: {}", tripPlan.getId().getValue());
+
+        return databaseClient.sql(sql)
+                .bind(0, tripPlan.getOptionsCount() != null ? tripPlan.getOptionsCount() : 0)
+                .bind(1, OffsetDateTime.now())
+                .bind(2, tripPlan.getId().getValue())
+                .map(getRowMapper())
+                .one()
+                .switchIfEmpty(Mono.error(new RuntimeException("Failed to update TripPlan: " + tripPlan.getId().getValue())));
+    }
+
+
+    @Override
+    public Mono<TripPlan> findById(TripPlanId id) {
+        String sql = "SELECT * FROM trip_plans WHERE id = ?";
+
+        return databaseClient.sql(sql)
+                .bind(0, id.getValue())
+                .map(getRowMapper())
+                .all()
+                .take(1)
+                .singleOrEmpty()
+                .doOnNext(plan -> log.debug("🔍 Found existing TripPlan: {}", id.getValue()));
+    }
+
+
+
+
 
     @Override
     public Flux<TripPlan> findRecentPlans(int limit) {
@@ -123,17 +196,24 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
 
     @Override
     protected BiFunction<Row, RowMetadata, TripPlan> getRowMapper() {
-        return (row, metadata) -> new TripPlan(
-                TripPlanId.of(row.get("id", String.class)),
-                row.get("origin_latitude", Double.class),
-                row.get("origin_longitude", Double.class),
-                row.get("destination_latitude", Double.class),
-                row.get("destination_longitude", Double.class),
-                row.get("search_time", LocalDateTime.class),
-                row.get("options_count", Integer.class),
-                row.get("max_transfers", Integer.class),
-                row.get("max_walking_distance_meters", Integer.class)
-        );
+        return (row, metadata) -> {
+            TripPlan tripPlan = new TripPlan(
+                    TripPlanId.of(row.get("id", String.class)),
+                    row.get("origin_latitude", Double.class),
+                    row.get("origin_longitude", Double.class),
+                    row.get("destination_latitude", Double.class),
+                    row.get("destination_longitude", Double.class),
+                    row.get("search_time", LocalDateTime.class),
+                    row.get("options_count", Integer.class),
+                    row.get("max_transfers", Integer.class),
+                    row.get("max_walking_distance_meters", Integer.class));
+
+            tripPlan.setCreatedAt(row.get("created_at", Instant.class));
+            tripPlan.setUpdatedAt(row.get("updated_at", Instant.class));
+            tripPlan.setVersion(row.get("version", Long.class));
+
+            return tripPlan;
+        };
     }
 
     @Override
@@ -148,6 +228,16 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
         columns.put("options_count", entity.getOptionsCount());
         columns.put("max_transfers", entity.getMaxTransfers());
         columns.put("max_walking_distance_meters", entity.getMaxWalkingDistanceMeters());
+        columns.put("created_at", entity.getCreatedAt());
+        columns.put("updated_at", entity.getUpdatedAt());
+        columns.put("version", entity.getVersion());
         return columns;
+    }
+
+    private OffsetDateTime convertToOffsetDateTime(Instant instant) {
+        if (instant == null) {
+            return OffsetDateTime.now();
+        }
+        return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 }

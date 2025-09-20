@@ -62,32 +62,72 @@ public class DirectRouteOptionBuilder {
                 directRoute.toStop().getStopName()
         ).map(busRideTime -> {
 
+            String routeGeometry = getCorrectRouteGeometry(directRoute);
+            Integer routeDistance = getCorrectRouteDistance(directRoute);
+
+
             String trimmedGeometry = trimRouteGeometry(
-                    directRoute.route().getRouteGeometryForward(),
+                    routeGeometry,
                     directRoute.fromStop(),
                     directRoute.toStop()
             );
 
             List<RouteSegment> segments = List.of(
                     RouteSegment.walkingSegment(context.fromLocation(), fromStopLocation, walkingToStop),
-                    createBusSegmentWithGeometry(fromStopLocation, toStopLocation, busRideTime,
-                            directRoute.route().getRouteNumber(), trimmedGeometry,
-                            directRoute.route().getTotalDistanceForwardMeters()),
+                    createBusSegmentWithGeometry(
+                            fromStopLocation,
+                            toStopLocation,
+                            busRideTime,
+                            directRoute.route().getRouteNumber(),
+                            trimmedGeometry,
+                            routeDistance),
                     RouteSegment.walkingSegment(toStopLocation, context.toLocation(), walkingFromStop)
             );
 
             return new TripOption(TripType.DIRECT, segments);
 
         });
-
-//        int busRideTime = etaCalculationService.calculateTravelTimeMinutes(
-//                directRoute.route().getRouteNumber(),
-//                directRoute.fromStop().getStopName(),
-//                directRoute.toStop().getStopName()
-//        );
-
-
     }
+
+    private String getCorrectRouteGeometry(RouteCalculationService.DirectRouteResult directRoute) {
+        if (directRoute.route().hasForwardGeometry() &&
+                directRoute.route().getRouteGeometryForward() != null) {
+            String forwardGeom = directRoute.route().getRouteGeometryForward();
+            if (!forwardGeom.isEmpty()) {
+                return forwardGeom;
+            }
+        }
+
+        if (directRoute.route().hasBackwardGeometry() &&
+                directRoute.route().getRouteGeometryBackward() != null) {
+            String backwardGeom = directRoute.route().getRouteGeometryBackward();
+            if (!backwardGeom.isEmpty()) {
+                log.debug("✅ Using BACKWARD geometry for route {}",
+                        directRoute.route().getRouteNumber());
+                return backwardGeom;
+            }
+        }
+
+        log.warn("⚠️ No geometry found for route {}", directRoute.route().getRouteNumber());
+        return null;
+    }
+
+    private Integer getCorrectRouteDistance(RouteCalculationService.DirectRouteResult directRoute) {
+        if (directRoute.route().getTotalDistanceForwardMeters() != null &&
+                directRoute.route().getTotalDistanceForwardMeters() > 0) {
+            return directRoute.route().getTotalDistanceForwardMeters();
+        }
+
+        if (directRoute.route().getTotalDistanceBackwardMeters() != null &&
+                directRoute.route().getTotalDistanceBackwardMeters() > 0) {
+            log.debug("✅ Using BACKWARD distance for route {}",
+                    directRoute.route().getRouteNumber());
+            return directRoute.route().getTotalDistanceBackwardMeters();
+        }
+
+        return null;
+    }
+
 
     private String trimRouteGeometry(String originalGeometry, BusStop fromStop, BusStop toStop) {
         if (originalGeometry == null || !geometryTrimmingService.isValidGeometry(originalGeometry)) {

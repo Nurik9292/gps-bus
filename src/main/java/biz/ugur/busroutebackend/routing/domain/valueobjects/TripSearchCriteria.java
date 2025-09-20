@@ -13,8 +13,10 @@ public class TripSearchCriteria extends ValueObject {
     private final boolean prioritizeSpeed;
     private final boolean prioritizeFewerTransfers;
 
-    public TripSearchCriteria(int maxWalkingDistanceMeters, int maxTransfers,
-                              boolean prioritizeSpeed, boolean prioritizeFewerTransfers) {
+    public TripSearchCriteria(int maxWalkingDistanceMeters,
+                              int maxTransfers,
+                              boolean prioritizeSpeed,
+                              boolean prioritizeFewerTransfers) {
         this.maxWalkingDistanceMeters = maxWalkingDistanceMeters;
         this.maxTransfers = maxTransfers;
         this.prioritizeSpeed = prioritizeSpeed;
@@ -22,7 +24,7 @@ public class TripSearchCriteria extends ValueObject {
     }
 
     public static TripSearchCriteria defaultCriteria() {
-        return new TripSearchCriteria(800, 2, true, true);
+        return new TripSearchCriteria(1200, 2, true, true);
     }
 
     public static TripSearchCriteria fastestRoute() {

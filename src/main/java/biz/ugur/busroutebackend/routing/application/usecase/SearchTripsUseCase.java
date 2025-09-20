@@ -67,12 +67,6 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     SearchContext context = contextFactory.createFromRequest(request, correlationId.toString());
-
-                    log.info("[{}] Trip search started: from ({},{}) to ({},{})",
-                            context.searchId(),
-                            request.getFrom().getLatitude(), request.getFrom().getLongitude(),
-                            request.getTo().getLatitude(), request.getTo().getLongitude());
-
                     return validateAndSearch(request, context);
                 });
     }
@@ -98,11 +92,9 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
                 .cast(TripSearchResponse.class)
                 .timeout(config.getCacheTimeout())
                 .doOnNext(cachedResponse -> {
-                    log.info("[{}] Found cached trip search result", context.searchId());
                     cachedResponse.setSearchTime(LocalDateTime.now());
                 })
                 .onErrorResume(error -> {
-                    log.debug("[{}] Cache miss: {}", context.searchId(), error.getMessage());
                     return Mono.empty();
                 });
     }
@@ -175,7 +167,7 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
     }
 
     private double calculateDistance(TripSearchRequest.LocationDTO from, TripSearchRequest.LocationDTO to) {
-        final int R = 6371000; // Earth radius in meters
+        final int R = 6371000;
 
         double lat1Rad = Math.toRadians(from.getLatitude());
         double lat2Rad = Math.toRadians(to.getLatitude());

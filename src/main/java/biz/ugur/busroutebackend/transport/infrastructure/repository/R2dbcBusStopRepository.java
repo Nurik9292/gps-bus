@@ -71,27 +71,33 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
 
     @Override
     public Flux<BusStop> findStopsWithinRadius(Double centerLat, Double centerLon, Double radiusKm) {
+        log.debug("Searching for stops within {}km of ({}, {})", radiusKm, centerLat, centerLon);
+
         String sql = """
             SELECT *,
-                   (6371 * acos(cos(radians(:centerLat)) * cos(radians(latitude)) 
-                   * cos(radians(longitude) - radians(:centerLon)) 
-                   + sin(radians(:centerLat)) * sin(radians(latitude)))) as distance
-            FROM bus_stops 
-            WHERE is_active = true 
-            AND (6371 * acos(cos(radians(:centerLat)) * cos(radians(latitude)) 
-                * cos(radians(longitude) - radians(:centerLon)) 
-                + sin(radians(:centerLat)) * sin(radians(latitude)))) <= :radiusKm
-            ORDER BY distance
-            LIMIT 10
+                   ST_Distance(
+                       ST_SetSRID(ST_Point(longitude, latitude), 4326)::geography,
+                       ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326)::geography
+                   ) / 1000.0 as distance_km
+            FROM bus_stops
+            WHERE is_active = true
+            AND ST_Distance(
+                ST_SetSRID(ST_Point(longitude, latitude), 4326)::geography,
+                ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326)::geography
+            ) <= :radiusMeters
+            ORDER BY distance_km
+            LIMIT 15
             """;
 
         return databaseClient.sql(sql)
                 .bind("centerLat", centerLat)
                 .bind("centerLon", centerLon)
-                .bind("radiusKm", radiusKm)
+                .bind("radiusMeters", radiusKm * 1000.0)
                 .map(getRowMapper())
                 .all()
-                .doOnComplete(() -> log.debug("Found stops within {}km of ({}, {})",
+                .doOnNext(stop -> log.debug("Found stop: {} at coordinates ({}, {})",
+                        stop.getStopName(), stop.getLatitude(), stop.getLongitude()))
+                .doOnComplete(() -> log.info("Completed search for stops within {}km of ({}, {})",
                         radiusKm, centerLat, centerLon));
     }
 

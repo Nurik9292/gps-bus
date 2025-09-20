@@ -36,23 +36,12 @@ public class TripPlanningController {
 
     @PostMapping("/search")
     public Mono<ResponseEntity<TripSearchResponse>> searchTrips(@Valid @RequestBody TripSearchRequest request) {
-        log.info("Trip search request: from ({},{}) to ({},{})",
-                request.getFrom().getLatitude(), request.getFrom().getLongitude(),
-                request.getTo().getLatitude(), request.getTo().getLongitude());
 
         return Mono.just(request)
                 .as(searchTripsUseCase::execute)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.internalServerError()
                         .body(new TripSearchResponse("error", "Internal server error", null)))
-                .doOnNext(response -> {
-                    if (response.getBody() != null) {
-                        TripSearchResponse body = response.getBody();
-                        log.info("Trip search completed: {} - {} options found",
-                                body.getStatus(),
-                                body.getTripOptions() != null ? body.getTripOptions().size() : 0);
-                    }
-                })
                 .doOnError(error -> log.error("Trip search failed", error))
                 .onErrorResume(error -> Mono.just(ResponseEntity.internalServerError()
                         .body(new TripSearchResponse("error", "Trip search failed: " + error.getMessage(), null))));

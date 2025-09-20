@@ -41,14 +41,17 @@ public class DirectRouteSearchService {
                 .filter(this::isRouteViable)
                 .flatMap(route -> optionBuilder.createOption(route, context))
                 .filter(Objects::nonNull)
-                .take(MAX_RESULTS)
+//.take(MAX_RESULTS)
                 .collectList()
-                .map(options -> SearchResult.successful("direct", options));
+                .map(options -> {
+                    return SearchResult.successful("direct", options);
+                });
     }
 
     private boolean isRouteViable(RouteCalculationService.DirectRouteResult route) {
         return route.estimatedTravelMinutes() >= 2 && route.estimatedTravelMinutes() <= 120;
     }
+
 
     private Mono<SearchResult> handleSearchError(Throwable error, SearchContext context, String type) {
         log.warn("[{}] {} routes failed: {}", context.searchId(), type, error.getMessage());

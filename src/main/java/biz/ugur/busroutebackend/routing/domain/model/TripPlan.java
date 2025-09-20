@@ -118,7 +118,7 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         this.destinationLocation = new Location(destinationLatitude, destinationLongitude, "Destination");
         this.searchTime = searchTime;
         this.searchCriteria = new TripSearchCriteria(
-                maxWalkingDistanceMeters != null ? maxWalkingDistanceMeters : 800,
+                maxWalkingDistanceMeters != null ? maxWalkingDistanceMeters : 1200,
                 maxTransfers != null ? maxTransfers : 2,
                 true, true
         );
@@ -135,10 +135,16 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         }
 
         if (!option.isValidForTrip(originLocation, destinationLocation)) {
-            throw new IllegalArgumentException("Trip option is not valid for this trip plan");
+            System.err.println("Trip option validation failed for option " + option.getOptionId() +
+                    ": Option start/end too far from trip origin/destination");
+            return;
         }
 
         if (!isOptionAcceptable(option)) {
+            System.err.println("Trip option " + option.getOptionId() + " rejected by isOptionAcceptable: " +
+                    "transfers=" + option.getTransfersCount() + " (max " + searchCriteria.getMaxTransfers() + "), " +
+                    "walkingMinutes=" + option.getTotalWalkingMinutes() + " (max " + (searchCriteria.getMaxWalkingDistanceMeters() / 66.67) + "), " +
+                    "totalMinutes=" + option.getTotalTravelMinutes() + " (max 240)");
             return;
         }
 
@@ -150,6 +156,7 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
             }
         } else {
             tripOptions.add(option);
+            System.err.println("Trip option " + option.getOptionId() + " successfully added to TripPlan. Total options: " + tripOptions.size());
         }
 
         registerEvent(new TripOptionsCalculatedEvent(
@@ -240,7 +247,8 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
             return false;
         }
 
-        if (option.getTotalWalkingMinutes() > searchCriteria.getMaxWalkingDistanceMeters() / 83.33) {
+        double maxWalkingMinutes = searchCriteria.getMaxWalkingDistanceMeters() / 66.67;
+        if (option.getTotalWalkingMinutes() > maxWalkingMinutes) {
             return false;
         }
 
@@ -262,6 +270,7 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
     }
 
     private int compareOptions(TripOption a, TripOption b) {
+        boolean test = searchCriteria.isPrioritizeFewerTransfers();
         if (searchCriteria.isPrioritizeFewerTransfers()) {
             int transfersComparison = Integer.compare(a.getTransfersCount(), b.getTransfersCount());
             if (transfersComparison != 0) return transfersComparison;
