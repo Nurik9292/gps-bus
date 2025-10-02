@@ -235,7 +235,7 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
             return "ORDER BY created_at DESC";
         }
         return "ORDER BY " + pageable.getSort().stream()
-                .map(order -> order.getProperty() + " " + order.getDirection().name())
+                .map(order -> order.getProperty().toLowerCase() + " " + order.getDirection().name())
                 .collect(Collectors.joining(", "));
     }
 

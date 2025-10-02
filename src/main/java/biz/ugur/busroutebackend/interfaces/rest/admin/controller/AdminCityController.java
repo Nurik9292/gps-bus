@@ -8,17 +8,17 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.request.city.CityCreateReq
 import biz.ugur.busroutebackend.interfaces.rest.admin.request.city.CityUpdateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.city.CityListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.city.CityResponse;
+import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import jakarta.validation.Valid;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/admin/cities")
-@Slf4j
 @CrossOrigin("*")
-public class AdminCityController {
+public class AdminCityController extends BaseController {
 
     private final CreateCityUseCase createCityUseCase;
     private final GetAllCitiesUseCase getAllCitiesUseCase;
@@ -30,7 +30,9 @@ public class AdminCityController {
                                GetAllCitiesUseCase getAllCitiesUseCase,
                                UpdateCityUseCase updateCityUseCase,
                                DeleteCityUseCase deleteCityUseCase,
-                               GetCityByIdUseCase getCityByIdUseCase) {
+                               GetCityByIdUseCase getCityByIdUseCase,
+                               MessageSource messageSource) {
+        super(messageSource);
         this.createCityUseCase = createCityUseCase;
         this.getAllCitiesUseCase = getAllCitiesUseCase;
         this.updateCityUseCase = updateCityUseCase;
@@ -38,91 +40,68 @@ public class AdminCityController {
         this.getCityByIdUseCase = getCityByIdUseCase;
     }
 
+    @Override
+    protected String getControllerName() {
+        return AdminCityController.class.getSimpleName();
+    }
+
     @GetMapping
-    public Mono<ResponseEntity<CityListResponse>> getAllCities(
+    public Mono<ResponseEntity<ApiResponse<CityListResponse>>> getAllCities(
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) String order,
             @RequestParam(required = false) Boolean active) {
 
-        log.debug("Fetching cities with params: page={}, size={}, sort={}, order={}, active={}",
-                page, size, sort, order, active);
-
-        return Mono.just(GetAllCitiesInput.fromParams(page, size, sort, order, active))
-                .as(getAllCitiesUseCase::execute)
-                .map(CityListResponse::fromResult)
-                .doOnNext(response -> log.debug("Retrieved {} cities", response.getTotalCount()))
-                .map(ResponseEntity::ok);
+      return ok(Mono.just(GetAllCitiesInput.fromParams(page, size, camelToSnake(sort), order, active))
+              .as(getAllCitiesUseCase::execute)
+              .map(CityListResponse::fromResult));
     }
 
 
     @PostMapping
-    public Mono<ResponseEntity<CityResponse>> createCity(@Valid @RequestBody CityCreateRequest request) {
-        log.info("Creating city: {}", request.getName());
+    public Mono<ResponseEntity<ApiResponse<CityResponse>>> createCity(@Valid @RequestBody CityCreateRequest request) {
 
-        return Mono.just(request.toCommand())
+        return created(Mono.just(request.toCommand())
                 .as(createCityUseCase::execute)
-                .map(this::toCityResponseEntity)
-                .onErrorReturn(IllegalArgumentException.class,
-                        ResponseEntity.badRequest().build())
-                .doOnSuccess(response -> {
-                    if (response.getStatusCode().is2xxSuccessful()) {
-                        log.info("City created successfully: {}", request.getName());
-                    }
-                })
-                .doOnError(error -> log.error("Failed to create city: {}", request.getName(), error));
-
+                .map(this::toBasicCity));
     }
 
     @PutMapping("/{id}")
-    public Mono<ResponseEntity<CityResponse>> updateCity(@PathVariable String id,
+    public Mono<ResponseEntity<ApiResponse<CityResponse>>> updateCity(@PathVariable String id,
                                                          @Valid @RequestBody CityUpdateRequest request) {
-        log.info("Updating city with ID: {}", id);
 
-        return Mono.just(request.toCommand(id))
+        return ok(Mono.just(request.toCommand(id))
                 .as(updateCityUseCase::execute)
-                .map(this::toCityResponseEntity)
-                .doOnSuccess(response -> {
-                    if (response.getStatusCode().is2xxSuccessful()) {
-                        log.info("City updated successfully with ID: {}", id);
-                    }
-                })
-                .doOnError(error -> log.error("Failed to update city with ID: {}", id, error));
+                .map(this::toBasicCity));
+
 
     }
 
     @GetMapping("/{id}")
-    public Mono<ResponseEntity<CityResponse>> getCityById(@PathVariable String id) {
-        log.debug("Getting city by ID: {}", id);
+    public Mono<ResponseEntity<ApiResponse<CityResponse>>> getCityById(@PathVariable String id) {
 
-        return Mono.just(id)
+        return ok(Mono.just(id)
                 .as(getCityByIdUseCase::execute)
-                .map(this::toCityResponseEntity)
-                .doOnError(error -> log.error("Failed to get city by ID: {}", id, error));
+                .map(this::toBasicCity));
     }
 
 
     @DeleteMapping("/{id}")
     public Mono<ResponseEntity<Void>> deleteCity(@PathVariable String id) {
-        log.info("Deleting city with ID: {}", id);
 
         return Mono.just(id)
                 .as(deleteCityUseCase::execute)
-                .then(Mono.just(ResponseEntity.noContent().<Void>build()))
-                .doOnSuccess(response -> {
-                    if (response.getStatusCode().is2xxSuccessful()) {
-                        log.info("City deleted successfully with ID: {}", id);
-                    }
-                })
-                .doOnError(error -> log.error("Failed to delete city with ID: {}", id, error));
+                .then(noContent());
 
     }
 
 
-    private ResponseEntity<CityResponse> toCityResponseEntity(CityResult result) {
-        return ResponseEntity.ok().body(CityResponse.fromResult(result));
+    private CityResponse toBasicCity(CityResult result) {
+        return CityResponse.fromResult(result);
     }
+
+
 
 
 }

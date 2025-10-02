@@ -3,13 +3,14 @@ package biz.ugur.busroutebackend.interfaces.rest.routing.controller;
 import biz.ugur.busroutebackend.interfaces.rest.routing.dto.request.TripSearchRequest;
 import biz.ugur.busroutebackend.interfaces.rest.routing.dto.response.TripSearchResponse;
 import biz.ugur.busroutebackend.routing.application.usecase.SearchTripsUseCase;
+import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -17,45 +18,41 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 @RestController
 @RequestMapping("/trip-planning")
-@Slf4j
 @CrossOrigin(origins = "*")
-public class TripPlanningController {
+public class TripPlanningController extends BaseController {
 
     private final SearchTripsUseCase searchTripsUseCase;
     private final BusStopRepository busStopRepository;
 
     public TripPlanningController(SearchTripsUseCase searchTripsUseCase,
-                                  BusStopRepository busStopRepository) {
+                                  BusStopRepository busStopRepository,
+                                  MessageSource messageSource) {
+        super(messageSource);
         this.searchTripsUseCase = searchTripsUseCase;
         this.busStopRepository = busStopRepository;
     }
 
-    @PostMapping("/search")
-    public Mono<ResponseEntity<TripSearchResponse>> searchTrips(@Valid @RequestBody TripSearchRequest request) {
+    @Override
+    protected String getControllerName() {
+        return TripPlanningController.class.getSimpleName();
+    }
 
-        return Mono.just(request)
-                .as(searchTripsUseCase::execute)
-                .map(ResponseEntity::ok)
-                .defaultIfEmpty(ResponseEntity.internalServerError()
-                        .body(new TripSearchResponse("error", "Internal server error", null)))
-                .doOnError(error -> log.error("Trip search failed", error))
-                .onErrorResume(error -> Mono.just(ResponseEntity.internalServerError()
-                        .body(new TripSearchResponse("error", "Trip search failed: " + error.getMessage(), null))));
+    @PostMapping("/search")
+    public Mono<ResponseEntity<ApiResponse<TripSearchResponse>>> searchTrips(@Valid @RequestBody TripSearchRequest request) {
+        return ok(Mono.just(request)
+                .as(searchTripsUseCase::execute));
     }
 
     @GetMapping("/nearby-stops")
-    public Mono<ResponseEntity<Map<String, Object>>> getNearbyStops(
+    public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> getNearbyStops(
             @RequestParam @DecimalMin("35.0") @DecimalMax("43.0") Double lat,
             @RequestParam @DecimalMin("52.0") @DecimalMax("67.0") Double lon,
-            @RequestParam(defaultValue = "0.8") @Min(1) @Max(20) Double radiusKm) {
+            @RequestParam(defaultValue = "1.0") @Min(1) @Max(20) Double radiusKm) {
 
-        log.debug("Finding nearby stops at ({}, {}) within {}km", lat, lon, radiusKm);
-
-        return busStopRepository.findStopsWithinRadius(lat, lon, radiusKm)
+        return ok(busStopRepository.findStopsWithinRadius(lat, lon, radiusKm)
                 .map(stop -> Map.of(
                         "stop_id", stop.getId().getValue(),
                         "stop_name", stop.getStopName(),
@@ -67,25 +64,20 @@ public class TripPlanningController {
                                 stop.getLatitude().doubleValue(), stop.getLongitude().doubleValue()))
                 ))
                 .collectList()
-                .map(stops -> ResponseEntity.ok(Map.of(
+                .map(stops -> Map.of(
                         "status", "success",
                         "message", String.format("Found %d nearby stops", stops.size()),
                         "stops", stops,
                         "search_location", Map.of("latitude", lat, "longitude", lon),
                         "search_radius_km", radiusKm
-                )))
-                .defaultIfEmpty(ResponseEntity.ok(Map.of(
+                ))
+                .defaultIfEmpty(Map.of(
                         "status", "success",
                         "message", "No stops found in the specified radius",
                         "stops", java.util.List.of(),
                         "search_location", Map.of("latitude", lat, "longitude", lon),
                         "search_radius_km", radiusKm
-                )))
-                .doOnNext(response -> {
-                    @SuppressWarnings("unchecked")
-                    java.util.List<Object> stops = (java.util.List<Object>) Objects.requireNonNull(response.getBody()).get("stops");
-                    log.debug("Found {} nearby stops", stops.size());
-                });
+                )));
     }
 
 
@@ -107,8 +99,6 @@ public class TripPlanningController {
 
     @GetMapping("/stats")
     public Mono<ResponseEntity<Map<String, Object>>> getStatistics() {
-        log.debug("Retrieving trip planning statistics");
-
         return Mono.fromCallable(() -> Map.of(
                         "status", "success",
                         "statistics", Map.of(
@@ -120,8 +110,7 @@ public class TripPlanningController {
                         ),
                         "timestamp", LocalDateTime.now().toString()
                 ))
-                .map(ResponseEntity::ok)
-                .doOnNext(response -> log.debug("Statistics retrieved successfully"));
+                .map(ResponseEntity::ok);
     }
 
     @PostMapping("/validate-coordinates")

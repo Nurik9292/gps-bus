@@ -10,9 +10,9 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.response.admin.AdminListRe
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.admin.AdminResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.request.admin.AdminUpdateRequest;
 import biz.ugur.busroutebackend.shared.infrastructure.security.AdminPrincipal;
+import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import jakarta.validation.Valid;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
+import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
@@ -21,8 +21,8 @@ import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/admin/users")
-@Slf4j
-public class AdminUserController {
+@CrossOrigin(origins = "*")
+public class AdminUserController extends BaseController {
 
     private final CreateAdminUseCase createAdminUseCase;
     private final GetAllAdminsUseCase getAllAdminsUseCase;
@@ -41,7 +41,10 @@ public class AdminUserController {
                                UpdateAdminStatusUseCase updateAdminStatusUseCase,
                                UpdateCurrentAdminProfileUseCase updateCurrentAdminProfileUseCase,
                                UpdateCurrentAdminAvatarUseCase updateCurrentAdminAvatarUseCase,
-                               RemoveCurrentAdminAvatarUseCase removeCurrentAdminAvatarUseCase) {
+                               RemoveCurrentAdminAvatarUseCase removeCurrentAdminAvatarUseCase,
+                               MessageSource messageSource) {
+
+        super(messageSource);
         this.createAdminUseCase = createAdminUseCase;
         this.getAllAdminsUseCase = getAllAdminsUseCase;
         this.updateAdminUseCase = updateAdminUseCase;
@@ -52,90 +55,67 @@ public class AdminUserController {
         this.removeCurrentAdminAvatarUseCase = removeCurrentAdminAvatarUseCase;
     }
 
+    @Override
+    protected String getControllerName() {
+        return AdminUserController.class.getSimpleName();
+    }
+
     @GetMapping
-    public Mono<ResponseEntity<AdminListResponse>> getAllAdmins() {
-        return getAllAdminsUseCase.execute(Mono.empty())
-                .map(AdminListResponse::fromResult)
-                .doOnNext(response -> log.debug("Retrieved {} admins", response.getTotalCount()))
-                .map(ResponseEntity::ok);
+    public Mono<ResponseEntity<ApiResponse<AdminListResponse>>> getAllAdmins() {
+
+        return ok(getAllAdminsUseCase.execute(Mono.empty())
+                .map(AdminListResponse::fromResult));
     }
 
     @PostMapping
-    public Mono<ResponseEntity<AdminResponse>> createAdmin(@Valid @RequestBody AdminCreateRequest request) {
-        String username = request.username();
-        log.info("Creating admin: {}", username);
+    public Mono<ResponseEntity<ApiResponse<AdminResponse>>> createAdmin(@Valid @RequestBody AdminCreateRequest request) {
 
-        return Mono.just(request.toCommand())
+        return created(Mono.just(request.toCommand())
                 .as(createAdminUseCase::execute)
-                .map(this::toAdminResponseEntity)
-                .doOnSuccess(response -> {
-                    if (response.getStatusCode().is2xxSuccessful()) {
-                        log.info("Admin created successfully: {}", username);
-                    }
-                })
-                .doOnError(error -> log.error("Failed to create admin: {}", username, error));
+                .map(this::toBasic));
+
     }
 
     @PutMapping("/{adminId}")
-    public Mono<ResponseEntity<AdminResponse>> updateAdmin(@PathVariable String adminId,
+    public Mono<ResponseEntity<ApiResponse<AdminResponse>>> updateAdmin(@PathVariable String adminId,
                                                            @Valid @RequestBody AdminUpdateRequest request) {
-        String username = request.username();
-        log.info("Updating admin - ID: {} - Username: {}", adminId, username);
 
-        return Mono.just(new UpdateAdminUseCase.Request(adminId, request.toCommand()))
+        return ok(Mono.just(new UpdateAdminUseCase.Request(adminId, request.toCommand()))
                 .as(updateAdminUseCase::execute)
-                .map(this::toAdminResponseEntity)
-                .doOnSuccess(resp -> {
-                    if (resp.getStatusCode().is2xxSuccessful()) {
-                        log.info("Admin '{}' (ID: {}) updated successfully", username, adminId);
-                    }
-                })
-                .doOnError(error -> log.error("Failed to update admin '{}' (ID: {}): {}",
-                        username, adminId, error.getMessage(), error));
+                .map(this::toBasic));
+
     }
 
     @DeleteMapping("/{adminId}")
     public Mono<ResponseEntity<Void>> deleteAdmin(@PathVariable String adminId) {
-        log.info("Deleting admin - ID: {}", adminId);
-
-        return deleteAdminUseCase.execute(Mono.just(new DeleteAdminUseCase.Request(adminId)))
-                .then(Mono.just(ResponseEntity.noContent().<Void>build()))
-                .doOnSuccess(resp -> log.info("Admin deleted successfully - ID: {}", adminId))
-                .doOnError(error -> log.error("Failed to delete admin - ID: {}: {}",
-                        adminId, error.getMessage(), error));
+        return Mono.just(new DeleteAdminUseCase.Request(adminId))
+                .as(deleteAdminUseCase::execute)
+                .then(noContent());
     }
 
 
     @PostMapping("/{id}/deactivate")
-    public Mono<ResponseEntity<AdminResponse>> deactivateAdmin(@PathVariable String id) {
-        log.info("Deactivating admin - ID: {}", id);
+    public Mono<ResponseEntity<ApiResponse<AdminResponse>>> deactivateAdmin(@PathVariable String id) {
 
-        return Mono.just(new UpdateAdminStatusUseCase.Request(id, false))
+        return ok(Mono.just(new UpdateAdminStatusUseCase.Request(id, false))
                 .as(updateAdminStatusUseCase::execute)
-                .map(this::toAdminResponseEntity)
-                .doOnSuccess(resp -> log.info("Admin update status - ID: {}", id))
-                .doOnError(error -> log.error("Failed update status admin - ID: {}: {}", id, error.getMessage(), error));
+                .map(this::toBasic));
+
     }
 
     @PostMapping("/{id}/activate")
-    public Mono<ResponseEntity<AdminResponse>> activateAdmin(@PathVariable String id) {
-        log.info("Activate admin - ID: {}", id);
+    public Mono<ResponseEntity<ApiResponse<AdminResponse>>> activateAdmin(@PathVariable String id) {
 
-        return Mono.just(new UpdateAdminStatusUseCase.Request(id, true))
+        return ok(Mono.just(new UpdateAdminStatusUseCase.Request(id, true))
                 .as(updateAdminStatusUseCase::execute)
-                .map(this::toAdminResponseEntity)
-                .doOnSuccess(resp -> log.info("Admin update status - ID: {}", id))
-                .doOnError(error -> log.error("Failed update status admin - ID: {}: {}", id, error.getMessage(), error));
+                .map(this::toBasic));
     }
 
 
 
     @PatchMapping("/profile")
-    @ResponseStatus(HttpStatus.OK)
-    public Mono<AdminProfileResponse> updateProfile(@Valid @RequestBody AdminUpdateProfileRequest request) {
-
-        return getCurrentPrincipal().flatMap(principal -> {
-
+    public Mono<ResponseEntity<ApiResponse<AdminProfileResponse>>> updateProfile(@Valid @RequestBody AdminUpdateProfileRequest request) {
+        return ok(getCurrentPrincipal().flatMap(principal -> {
             UpdateCurrentAdminProfileUseCase.Request req = new UpdateCurrentAdminProfileUseCase.Request(
                     principal.id(),
                     request.getUsername(),
@@ -143,20 +123,14 @@ public class AdminUserController {
             );
 
             return updateCurrentAdminProfileUseCase.execute(Mono.just(req))
-                    .map(AdminProfileResponse::fromDomain)
-                    .doOnSuccess(response -> log.info("✅ Профиль обновлен для: {}", principal.username()))
-                    .doOnError(error -> log.error("❌ Ошибка обновления профиля: {}", error.getMessage()));
-        });
-
+                    .map(AdminProfileResponse::fromDomain);
+        }));
     }
 
 
     @PatchMapping("/profile/avatar")
-    @ResponseStatus(HttpStatus.OK)
-    public Mono<AdminProfileResponse> updateAvatar(@Valid @RequestBody AvatarUpdateRequest request) {
-        return getCurrentPrincipal().flatMap(principal -> {
-            log.debug("Обновление аватара для админа: {}", principal.username());
-
+    public Mono<ResponseEntity<ApiResponse<AdminProfileResponse>>> updateAvatar(@Valid @RequestBody AvatarUpdateRequest request) {
+        return ok(getCurrentPrincipal().flatMap(principal -> {
             UpdateCurrentAdminAvatarUseCase.Request req = new UpdateCurrentAdminAvatarUseCase.Request(
                     principal.id(),
                     request.avatar()
@@ -164,27 +138,18 @@ public class AdminUserController {
 
             return Mono.just(req)
                     .as(updateCurrentAdminAvatarUseCase::execute)
-                    .map(AdminProfileResponse::fromDomain)
-                    .doOnSuccess(response -> log.info("✅ Аватар обновлен для: {}", principal.username()))
-                    .doOnError(error -> log.error("❌ Ошибка обновления аватара: {}", error.getMessage()));
-
-
-        });
+                    .map(AdminProfileResponse::fromDomain);
+        }));
     }
 
 
 
     @DeleteMapping("/profile/avatar")
-    @ResponseStatus(HttpStatus.OK)
-    public Mono<AdminProfileResponse> removeAvatar() {
-        return getCurrentPrincipal().flatMap(principal -> {
+    public Mono<ResponseEntity<ApiResponse<AdminProfileResponse>>> removeAvatar() {
+        return ok(getCurrentPrincipal().flatMap(principal -> {
             return removeCurrentAdminAvatarUseCase.execute(Mono.just(principal.id()))
-                    .map(AdminProfileResponse::fromDomain)
-                    .doOnSuccess(response -> log.info("✅ Аватар удален для: {}", principal.username()))
-                    .doOnError(error -> log.error("❌ Ошибка удаления аватара: {}", error.getMessage()));
-        });
-
-
+                    .map(AdminProfileResponse::fromDomain);
+        }));
     }
 
     private Mono<AdminPrincipal> getCurrentPrincipal() {
@@ -193,7 +158,8 @@ public class AdminUserController {
                 .map(auth -> (AdminPrincipal) auth.getPrincipal());
     }
 
-    private ResponseEntity<AdminResponse> toAdminResponseEntity(AdminResult result) {
-        return ResponseEntity.ok(AdminResponse.fromResult(result));
+    private AdminResponse toBasic(AdminResult result) {
+        return AdminResponse.fromResult(result);
     }
+
 }

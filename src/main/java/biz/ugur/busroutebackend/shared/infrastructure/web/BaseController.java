@@ -1,37 +1,63 @@
 package biz.ugur.busroutebackend.shared.infrastructure.web;
 
 import biz.ugur.busroutebackend.shared.domain.exception.AbstractDomainException;
+import biz.ugur.busroutebackend.shared.infrastructure.web.error.EnrichedApiResponse;
+import biz.ugur.busroutebackend.shared.infrastructure.web.error.ErrorContext;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.support.WebExchangeBindException;
+import org.springframework.web.reactive.function.client.WebClientException;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 
 @Slf4j
 public abstract class BaseController {
 
-    private MessageSource messageSource;
+    private final MessageSource messageSource;
+
+
+    protected BaseController(MessageSource messageSource) {
+        this.messageSource = messageSource;
+    }
 
     protected abstract String getControllerName();
 
+    protected MessageSource getMessageSource() {
+        return messageSource;
+    }
+
+    protected String camelToSnake(String str) {
+        return str.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
+    }
+
     protected <T> Mono<ResponseEntity<ApiResponse<T>>> ok(Mono<T> data) {
-        return data.map(d -> ResponseEntity.ok().body(ApiResponse.success(d)))
+        Objects.requireNonNull(data, "Data mono cannot be null");
+
+        return data.map(d -> ResponseEntity.ok(ApiResponse.success(d)))
                 .defaultIfEmpty(ResponseEntity.ok(ApiResponse.success(null)))
                 .doOnSuccess(response -> logResponse("OK", response))
                 .doOnError(error -> logError("OK", error));
@@ -39,7 +65,9 @@ public abstract class BaseController {
 
 
     protected <T> Mono<ResponseEntity<ApiResponse<T>>> created(Mono<T> data) {
-        return data.map(d -> ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(d)))
+        Objects.requireNonNull(data, "Data mono cannot be null");
+
+        return data.map(d -> new ResponseEntity<>(ApiResponse.success(d), HttpStatus.CREATED))
                 .doOnSuccess(response -> logResponse("CREATED", response))
                 .doOnError(error -> logError("CREATED", error));
     }
@@ -52,7 +80,9 @@ public abstract class BaseController {
 
 
     protected <T> Mono<ResponseEntity<ApiResponse<T>>> accepted(Mono<T> data) {
-        return data.map(d -> ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.success(d)))
+        Objects.requireNonNull(data, "Data mono cannot be null");
+
+        return data.map(d -> new ResponseEntity<>(ApiResponse.success(d), HttpStatus.ACCEPTED))
                 .doOnSuccess(response -> logResponse("ACCEPTED", response))
                 .doOnError(error -> logError("ACCEPTED", error));
     }
@@ -60,8 +90,10 @@ public abstract class BaseController {
 
 
     protected <T> Mono<ResponseEntity<ApiResponse<List<T>>>> okList(Flux<T> data) {
+        Objects.requireNonNull(data, "Data flux cannot be null");
+
         return data.collectList()
-                .map(list -> ResponseEntity.ok().body(ApiResponse.success(list)))
+                .map(list -> ResponseEntity.ok(ApiResponse.success(list)))
                 .defaultIfEmpty(ResponseEntity.ok(ApiResponse.success(List.of())))
                 .doOnSuccess(response -> logResponse("OK_LIST", response))
                 .doOnError(error -> logError("OK_LIST", error));
@@ -70,13 +102,43 @@ public abstract class BaseController {
 
     protected <T> Mono<ResponseEntity<ApiResponse<PagedResponse<T>>>> okPaged(
             Flux<T> data, long total, int page, int size) {
+        Objects.requireNonNull(data, "Data flux cannot be null");
+        if (total < 0) throw new IllegalArgumentException("Total cannot be negative");
+        if (page < 0) throw new IllegalArgumentException("Page cannot be negative");
+        if (size <= 0) throw new IllegalArgumentException("Size must be positive");
+
         return data.collectList()
                 .map(list -> {
                     PagedResponse<T> paged = new PagedResponse<>(list, total, page, size);
-                    return ResponseEntity.ok().body(ApiResponse.success(paged));
+                    return ResponseEntity.ok(ApiResponse.success(paged));
                 })
                 .doOnSuccess(response -> logResponse("OK_PAGED", response))
                 .doOnError(error -> logError("OK_PAGED", error));
+    }
+
+
+    protected <T> Mono<ResponseEntity<ApiResponse<List<T>>>> okListBuffered(Flux<T> data, int bufferSize) {
+        Objects.requireNonNull(data, "Data flux cannot be null");
+        if (bufferSize <= 0) throw new IllegalArgumentException("Buffer size must be positive");
+
+        return data.buffer(bufferSize)
+                .collectList()
+                .map(batches -> {
+                    List<T> allItems = new ArrayList<>();
+                    for (List<T> batch : batches) {
+                        allItems.addAll(batch);
+                    }
+                    return allItems;
+                })
+                .map(list -> ResponseEntity.ok(ApiResponse.success(list)))
+                .defaultIfEmpty(ResponseEntity.ok(ApiResponse.success(List.of())))
+                .doOnSuccess(response -> logResponse("OK_LIST_BUFFERED", response))
+                .doOnError(error -> logError("OK_LIST_BUFFERED", error));
+    }
+
+
+    protected <T> Mono<ResponseEntity<ApiResponse<List<T>>>> okListBuffered(Flux<T> data) {
+        return okListBuffered(data, 200);
     }
 
 
@@ -105,16 +167,21 @@ public abstract class BaseController {
     }
 
 
-    @ExceptionHandler({MethodArgumentNotValidException.class, WebExchangeBindException.class})
-    public Mono<ResponseEntity<ApiResponse<Map<String, String>>>> handleValidationException(Exception ex) {
-        log.error("[{}] Validation exception", getControllerName(), ex);
-        Map<String, String> errors = new HashMap<>();
+    @ExceptionHandler(WebExchangeBindException.class)
+    public Mono<ResponseEntity<ApiResponse<Map<String, String>>>> handleWebFluxValidationException(WebExchangeBindException ex) {
+        log.error("[{}] WebFlux validation exception", getControllerName(), ex);
 
-        if (ex instanceof MethodArgumentNotValidException validationEx) {
-            errors = extractValidationErrors(validationEx.getBindingResult().getFieldErrors());
-        } else if (ex instanceof WebExchangeBindException bindEx) {
-            errors = extractValidationErrors(bindEx.getFieldErrors());
-        }
+        Map<String, String> errors = extractValidationErrors(ex.getFieldErrors());
+
+        return Mono.just(ResponseEntity.badRequest()
+                .body(ApiResponse.validationError(errors)));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public Mono<ResponseEntity<ApiResponse<Map<String, String>>>> handleWebMvcValidationException(MethodArgumentNotValidException ex) {
+        log.error("[{}] WebMVC validation exception", getControllerName(), ex);
+
+        Map<String, String> errors = extractValidationErrors(ex.getBindingResult().getFieldErrors());
 
         return Mono.just(ResponseEntity.badRequest()
                 .body(ApiResponse.validationError(errors)));

@@ -24,24 +24,10 @@ public class ClientAuthenticationFilter implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().toString();
-        log.info("path : {}", path);
 
         if (isPublicEndpoint(path)) {
             return chain.filter(exchange);
         }
-
-        log.info("path2 : {}", path);
-
-//        if (!isClientEndpoint(path) && !isMobileEndpoint(path)) {
-//            return chain.filter(exchange);
-//        }
-
-        log.info("path3 : {}", path);
-
-        HttpHeaders httpHeaders = exchange.getRequest().getHeaders();
-
-        log.info("httpHeaders : {}", httpHeaders);
-        log.info("httpHeaders2 : {}", exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
 
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         log.debug("authHeader: {}", authHeader);
@@ -93,6 +79,7 @@ public class ClientAuthenticationFilter implements WebFilter {
     private boolean isPublicEndpoint(String path) {
         return path.startsWith("/api/v1/client/auth/") ||
                 path.startsWith("/admin/") ||
+                path.startsWith("/api/v1/admin/") ||
                 path.startsWith("/public/") ||
                 path.startsWith("/routes/") ||
                 path.startsWith("/stops/") ||

@@ -1,57 +1,57 @@
 package biz.ugur.busroutebackend.interfaces.rest.transport.controller;
 
 import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.BusStopArrivalsResponse;
+import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import biz.ugur.busroutebackend.transport.application.dto.NearbyStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.infrastructure.services.BusStopRealTimeServiceImpl;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSource;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/stops")
-@Slf4j
-@CrossOrigin("*")
-public class BusStopRealTimeController {
+@CrossOrigin(origins = "*")
+public class BusStopRealTimeController extends BaseController {
 
     private final BusStopRealTimeServiceImpl busStopRealTimeService;
 
-    public BusStopRealTimeController(BusStopRealTimeServiceImpl busStopRealTimeService) {
+    public BusStopRealTimeController(BusStopRealTimeServiceImpl busStopRealTimeService,
+                                    MessageSource messageSource) {
+        super(messageSource);
         this.busStopRealTimeService = busStopRealTimeService;
     }
 
-    @GetMapping("/{stopId}/arrivals")
-    public Mono<BusStopArrivalsResponse> getStopArrivals(@PathVariable String stopId) {
-        log.info("Getting real-time arrivals for stop: {}", stopId);
+    @Override
+    protected String getControllerName() {
+        return BusStopRealTimeController.class.getSimpleName();
+    }
 
-        return busStopRealTimeService.getStopArrivals(stopId)
-                .doOnNext(response -> log.debug("Found {} arriving buses for stop {}",
-                        response.getArrivals().size(), stopId));
+    @GetMapping("/{stopId}/arrivals")
+    public Mono<ResponseEntity<ApiResponse<BusStopArrivalsResponse>>> getStopArrivals(@PathVariable String stopId) {
+        return ok(busStopRealTimeService.getStopArrivals(stopId));
     }
 
     @GetMapping("/nearby/arrivals")
-    public Flux<NearbyStopArrivalsResponse> getNearbyStopArrivals(
+    public Mono<ResponseEntity<ApiResponse<List<NearbyStopArrivalsResponse>>>> getNearbyStopArrivals(
             @RequestParam Double lat,
             @RequestParam Double lon,
             @RequestParam(defaultValue = "500") Integer radiusMeters) {
 
-        log.info("Getting arrivals for nearest stop to ({}, {}) within {}m", lat, lon, radiusMeters);
-
-        return busStopRealTimeService.getNearbyStopArrivals(lat, lon, radiusMeters);
+        return okList(busStopRealTimeService.getNearbyStopArrivals(lat, lon, radiusMeters));
     }
 
     @GetMapping("/{stopId}/arrivals/stream")
     public Flux<ServerSentEvent<BusStopArrivalsResponse>> streamStopArrivals(@PathVariable String stopId) {
-        log.info("Starting real-time stream for stop: {}", stopId);
-
         return busStopRealTimeService.streamStopArrivals(stopId)
                 .map(arrivals -> ServerSentEvent.<BusStopArrivalsResponse>builder()
                         .id(String.valueOf(System.currentTimeMillis()))
                         .event("bus-arrivals")
                         .data(arrivals)
-                        .build())
-                .doOnSubscribe(sub -> log.debug("Client subscribed to stop {} arrivals", stopId))
-                .doOnCancel(() -> log.debug("Client unsubscribed from stop {} arrivals", stopId));
+                        .build());
     }
 }
