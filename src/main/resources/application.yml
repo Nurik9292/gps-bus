@@ -87,12 +87,16 @@ app:
 
   security:
     jwt:
-      secret: ${JWT_SECRET:at-least-32-characters-long-secret-key-here}
-      access-token-expiration: "PT1H"    # 1 hour
-      refresh-token-expiration: "P7D"    # 7 days
-      access-token-validity-hours-client: 744
-      refresh-token-validity-days-client: 912
-      issuer: "bus-route-system"
+      admin:
+        secret: ${JWT_ADMIN_SECRET:${JWT_SECRET:at-least-32-characters-long-secret-key-here}}
+        access-token-expiration: "PT1H"    # 1 hour
+        refresh-token-expiration: "P7D"    # 7 days
+        issuer: "bus-route-system"
+      client:
+        secret: ${JWT_CLIENT_SECRET:${JWT_SECRET:at-least-32-characters-long-secret-key-here}}
+        access-token-expiration: "P31D"   # 744 hours (31 days)
+        refresh-token-expiration: "P90D"  # 912 days
+        issuer: "bus-route-system"
 
   storage:
     avatars:

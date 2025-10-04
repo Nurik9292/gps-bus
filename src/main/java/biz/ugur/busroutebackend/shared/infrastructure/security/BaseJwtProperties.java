@@ -1,28 +1,22 @@
 package biz.ugur.busroutebackend.shared.infrastructure.security;
 
-
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.Duration;
 
-@ConfigurationProperties(prefix = "app.security.jwt")
-@Component
-public class JwtProperties {
+/**
+ * Base class for JWT configuration properties.
+ * Provides common validation logic for JWT settings.
+ */
+@Getter
+@Setter
+public abstract class BaseJwtProperties {
 
     private String secret;
     private Duration accessTokenExpiration;
     private Duration refreshTokenExpiration;
     private String issuer;
-
-    public JwtProperties() {}
-
-
-
-    public String secret() { return secret; }
-    public Duration accessTokenExpiration() { return accessTokenExpiration; }
-    public Duration refreshTokenExpiration() { return refreshTokenExpiration; }
-    public String issuer() { return issuer; }
 
     public void setSecret(String secret) {
         if (secret != null && secret.length() < 32) {
@@ -54,30 +48,34 @@ public class JwtProperties {
 
     @jakarta.annotation.PostConstruct
     public void validate() {
+        String context = getContext();
+
         if (secret == null) {
-            throw new IllegalArgumentException("JWT secret is required");
+            throw new IllegalArgumentException(context + " JWT secret is required");
         }
         if (accessTokenExpiration == null) {
-            throw new IllegalArgumentException("Access token expiration is required");
+            throw new IllegalArgumentException(context + " access token expiration is required");
         }
         if (refreshTokenExpiration == null) {
-            throw new IllegalArgumentException("Refresh token expiration is required");
+            throw new IllegalArgumentException(context + " refresh token expiration is required");
         }
         if (issuer == null) {
-            throw new IllegalArgumentException("JWT issuer is required");
+            throw new IllegalArgumentException(context + " JWT issuer is required");
         }
 
         if (refreshTokenExpiration.compareTo(accessTokenExpiration) <= 0) {
             throw new IllegalArgumentException(
-                    String.format("Refresh token expiration (%s) must be longer than access token expiration (%s)",
-                            refreshTokenExpiration, accessTokenExpiration)
+                    String.format("%s refresh token expiration (%s) must be longer than access token expiration (%s)",
+                            context, refreshTokenExpiration, accessTokenExpiration)
             );
         }
     }
 
+    protected abstract String getContext();
+
     @Override
     public String toString() {
-        return String.format("JwtProperties{issuer='%s', accessTokenExpiration=%s, refreshTokenExpiration=%s}",
-                issuer, accessTokenExpiration, refreshTokenExpiration);
+        return String.format("%s{issuer='%s', accessTokenExpiration=%s, refreshTokenExpiration=%s}",
+                getClass().getSimpleName(), issuer, accessTokenExpiration, refreshTokenExpiration);
     }
 }

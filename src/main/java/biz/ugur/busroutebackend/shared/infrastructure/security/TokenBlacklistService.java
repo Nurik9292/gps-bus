@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.shared.infrastructure.security;
 
+import biz.ugur.busroutebackend.admin.infrastructure.security.AdminJwtProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
@@ -14,7 +15,7 @@ import java.time.Duration;
 public class TokenBlacklistService {
 
     private final ReactiveStringRedisTemplate redisTemplate;
-    private final JwtProperties jwtProperties;
+    private final AdminJwtProperties jwtProperties;
 
     private static final String ACCESS_BLACKLIST_PREFIX = "blacklist:access:";
     private static final String REFRESH_BLACKLIST_PREFIX = "blacklist:refresh:";
@@ -27,7 +28,7 @@ public class TokenBlacklistService {
         }
 
         String key = ACCESS_BLACKLIST_PREFIX + token;
-        Duration ttl = jwtProperties.accessTokenExpiration();
+        Duration ttl = jwtProperties.getAccessTokenExpiration();
 
         log.debug("Blacklisting access token with key: {} for duration: {}", key, ttl);
 
@@ -51,7 +52,7 @@ public class TokenBlacklistService {
         }
 
         String key = REFRESH_BLACKLIST_PREFIX + token;
-        Duration ttl = jwtProperties.refreshTokenExpiration();
+        Duration ttl = jwtProperties.getRefreshTokenExpiration();
 
         log.debug("Blacklisting refresh token with key: {} for duration: {}", key, ttl);
 
@@ -181,8 +182,7 @@ public class TokenBlacklistService {
     public Mono<Long> cleanupExpiredTokens() {
         log.info("Manual cleanup of expired blacklisted tokens");
 
-        // Redis автоматически удаляет ключи с TTL, но если нужно принудительно:
-        return Mono.just(0L) // Заглушка, Redis handles TTL automatically
+        return Mono.just(0L)
                 .doOnNext(count -> log.info("Cleaned up {} expired blacklisted tokens", count));
     }
 

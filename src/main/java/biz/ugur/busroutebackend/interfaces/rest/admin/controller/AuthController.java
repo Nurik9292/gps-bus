@@ -8,7 +8,7 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.request.admin.LoginRequest
 import biz.ugur.busroutebackend.interfaces.rest.admin.request.admin.RefreshTokenRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.admin.AdminProfileResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.admin.AuthResponse;
-import biz.ugur.busroutebackend.shared.infrastructure.security.AdminPrincipal;
+import biz.ugur.busroutebackend.admin.infrastructure.security.AdminPrincipal;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
@@ -64,7 +64,7 @@ public class AuthController extends BaseController {
     public Mono<ResponseEntity<Void>> logout(@RequestHeader("Authorization") String authHeader) {
         return getCurrentPrincipal().flatMap(principal -> {
             String token = extractTokenFromHeader(authHeader);
-            return logoutUseCase.execute(Mono.just(new LogoutUseCase.Request(principal.id(), token)));
+            return logoutUseCase.execute(Mono.just(new LogoutUseCase.Request(principal.getId(), token)));
         }).then(noContent());
     }
 
@@ -73,7 +73,7 @@ public class AuthController extends BaseController {
     public Mono<ResponseEntity<ApiResponse<AdminProfileResponse>>> getCurrentAdmin() {
         return ok(getCurrentPrincipal()
                 .flatMap(principal -> {
-                    return getCurrentAdminUseCase.execute(Mono.just(new GetCurrentAdminUseCase.Query(principal.id())))
+                    return getCurrentAdminUseCase.execute(Mono.just(new GetCurrentAdminUseCase.Query(principal.getId())))
                             .map(AdminProfileResponse::fromDomain);
                 }));
     }

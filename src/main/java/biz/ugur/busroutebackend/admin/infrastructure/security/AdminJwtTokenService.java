@@ -1,16 +1,15 @@
-package biz.ugur.busroutebackend.shared.infrastructure.security;
+package biz.ugur.busroutebackend.admin.infrastructure.security;
 
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
+import biz.ugur.busroutebackend.shared.infrastructure.security.BaseJwtTokenService;
+import biz.ugur.busroutebackend.shared.infrastructure.security.JwtTokenException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.jsonwebtoken.*;
-import io.jsonwebtoken.security.Keys;
-import lombok.RequiredArgsConstructor;
+import io.jsonwebtoken.Jwts;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import javax.crypto.SecretKey;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
@@ -18,21 +17,35 @@ import java.util.Set;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
-public class JwtService {
+public class AdminJwtTokenService extends BaseJwtTokenService<AdminPrincipal> {
 
-    private final JwtProperties jwtProperties;
-    private final ObjectMapper objectMapper;
+    private final AdminJwtProperties adminJwtProperties;
 
-    private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(jwtProperties.secret().getBytes());
+    public AdminJwtTokenService(ObjectMapper objectMapper, AdminJwtProperties adminJwtProperties) {
+        super(objectMapper, adminJwtProperties.getSecret(), adminJwtProperties.getIssuer());
+        this.adminJwtProperties = adminJwtProperties;
+    }
+
+    @Override
+    public Mono<String> generateAccessToken(String subjectId, Object... additionalParams) {
+        if (additionalParams.length < 3) {
+            return Mono.error(new IllegalArgumentException(
+                    "AdminJwtTokenService requires username, roles, and isSuperAdmin parameters"));
+        }
+
+        String username = (String) additionalParams[0];
+        @SuppressWarnings("unchecked")
+        Set<String> roles = (Set<String>) additionalParams[1];
+        boolean isSuperAdmin = (boolean) additionalParams[2];
+
+        return generateAccessToken(AdminId.of(subjectId), username, roles, isSuperAdmin);
     }
 
     public Mono<String> generateAccessToken(AdminId adminId, String username, Set<String> roles, boolean isSuperAdmin) {
         return Mono.fromCallable(() -> {
             try {
                 Instant now = Instant.now();
-                Instant expiration = now.plus(jwtProperties.accessTokenExpiration());
+                Instant expiration = now.plus(adminJwtProperties.getAccessTokenExpiration());
 
                 Map<String, Object> claims = Map.of(
                         "sub", adminId.getValue(),
@@ -44,7 +57,7 @@ public class JwtService {
 
                 return Jwts.builder()
                         .claims(claims)
-                        .issuer(jwtProperties.issuer())
+                        .issuer(issuer)
                         .issuedAt(Date.from(now))
                         .expiration(Date.from(expiration))
                         .signWith(getSigningKey())
@@ -60,16 +73,21 @@ public class JwtService {
         });
     }
 
+    @Override
+    public Mono<String> generateRefreshToken(String subjectId) {
+        return generateRefreshToken(AdminId.of(subjectId));
+    }
+
     public Mono<String> generateRefreshToken(AdminId adminId) {
         return Mono.fromCallable(() -> {
             try {
                 Instant now = Instant.now();
-                Instant expiration = now.plus(jwtProperties.refreshTokenExpiration());
+                Instant expiration = now.plus(adminJwtProperties.getRefreshTokenExpiration());
 
                 return Jwts.builder()
                         .subject(adminId.getValue())
                         .claim("type", "refresh")
-                        .issuer(jwtProperties.issuer())
+                        .issuer(issuer)
                         .issuedAt(Date.from(now))
                         .expiration(Date.from(expiration))
                         .signWith(getSigningKey())
@@ -82,49 +100,16 @@ public class JwtService {
         });
     }
 
-    public Mono<Claims> validateAndExtractClaims(String token) {
-        return Mono.fromCallable(() -> {
-            try {
-                return Jwts.parser()
-                        .verifyWith(getSigningKey())
-                        .requireIssuer(jwtProperties.issuer())
-                        .build()
-                        .parseSignedClaims(token)
-                        .getPayload();
-
-            } catch (ExpiredJwtException e) {
-                log.warn("JWT token expired for subject: {}", e.getClaims().getSubject());
-                throw JwtTokenException.fromExpiredJwtException(e, token);
-            } catch (UnsupportedJwtException e) {
-                log.warn("Unsupported JWT token: {}", e.getMessage());
-                throw JwtTokenException.fromUnsupportedJwtException(e, token);
-            } catch (MalformedJwtException e) {
-                log.warn("Malformed JWT token: {}", e.getMessage());
-                throw JwtTokenException.fromMalformedJwtException(e, token);
-            } catch (SecurityException e) {
-                log.warn("Invalid JWT signature: {}", e.getMessage());
-                throw JwtTokenException.fromSecurityException(e, token);
-            } catch (IllegalArgumentException e) {
-                log.warn("JWT token compact handler are invalid: {}", e.getMessage());
-                throw JwtTokenException.invalidToken(token);
-            }
-        });
-    }
-
-    public Mono<AdminPrincipal> extractAdminPrincipal(String token) {
+    @Override
+    public Mono<AdminPrincipal> extractPrincipal(String token) {
         return validateAndExtractClaims(token)
+                .flatMap(claims -> validateTokenType(claims, "access"))
                 .handle((claims, sink) -> {
                     try {
                         String adminIdStr = claims.getSubject();
                         String username = claims.get("username", String.class);
                         String rolesJson = claims.get("roles", String.class);
                         Boolean isSuperAdmin = claims.get("isSuperAdmin", Boolean.class);
-                        String tokenType = claims.get("type", String.class);
-
-                        if (!"access".equals(tokenType)) {
-                            sink.error(JwtTokenException.invalidTokenType("access", tokenType));
-                            return;
-                        }
 
                         @SuppressWarnings("unchecked")
                         Set<String> roles = objectMapper.readValue(rolesJson, Set.class);
@@ -146,28 +131,15 @@ public class JwtService {
                 });
     }
 
-    public Mono<Boolean> isRefreshToken(String token) {
-        return validateAndExtractClaims(token)
-                .map(claims -> "refresh".equals(claims.get("type", String.class)))
-                .onErrorReturn(false);
-    }
-
-    public Mono<Boolean> isTokenExpired(String token) {
-        return validateAndExtractClaims(token)
-                .map(claims -> claims.getExpiration().before(new Date()))
-                .onErrorReturn(true);
-    }
-
-    public Mono<String> extractUsernameFromToken(String token) {
+    public Mono<String> extractUsername(String token) {
         return validateAndExtractClaims(token)
                 .map(claims -> claims.get("username", String.class))
                 .doOnNext(username -> log.trace("Extracted username from token: {}", username));
     }
 
-    public Mono<AdminId> extractAdminIdFromToken(String token) {
+    public Mono<AdminId> extractAdminId(String token) {
         return validateAndExtractClaims(token)
                 .map(claims -> AdminId.of(claims.getSubject()))
                 .doOnNext(adminId -> log.trace("Extracted admin ID from token: {}", adminId.getValue()));
     }
-
 }

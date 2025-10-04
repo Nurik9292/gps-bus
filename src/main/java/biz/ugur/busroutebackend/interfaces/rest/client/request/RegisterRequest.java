@@ -8,7 +8,10 @@ public record RegisterRequest(
         String name,
 
         @NotBlank(message = "Phone is required")
-        @Pattern(regexp = "^(\\+993|993)?[1-9]\\d{7}$", message = "Invalid Turkmenistan phone number")
+        @Pattern(
+                regexp = "^(?:\\+993|993)[1-9][0-9]{7}$",
+                message = "Invalid Turkmenistan phone number"
+        )
         String phone,
 
         @NotBlank(message = "Platform is required")

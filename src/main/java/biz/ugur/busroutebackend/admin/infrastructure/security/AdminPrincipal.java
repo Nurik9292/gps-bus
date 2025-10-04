@@ -1,23 +1,39 @@
-package biz.ugur.busroutebackend.shared.infrastructure.security;
+package biz.ugur.busroutebackend.admin.infrastructure.security;
 
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
-import java.security.Principal;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
-public record AdminPrincipal(
-        AdminId id,
-        String username,
-        Set<String> roles,
-        boolean isSuperAdmin
-) implements Principal {
+@Getter
+public class AdminPrincipal implements UserDetails {
 
-    public AdminPrincipal {
+    private final AdminId id;
+    private final String username;
+    private final Set<String> roles;
+    private final boolean isSuperAdmin;
+    private final boolean accountNonExpired;
+    private final boolean accountNonLocked;
+    private final boolean credentialsNonExpired;
+    private final boolean enabled;
+
+    public AdminPrincipal(AdminId id, String username, Set<String> roles, boolean isSuperAdmin) {
+        this(id, username, roles, isSuperAdmin, true, true, true, true);
+    }
+
+    public AdminPrincipal(AdminId id, String username, Set<String> roles, boolean isSuperAdmin,
+                          boolean accountNonExpired, boolean accountNonLocked,
+                          boolean credentialsNonExpired, boolean enabled) {
         Objects.requireNonNull(id, "Admin ID cannot be null");
         Objects.requireNonNull(username, "Username cannot be null");
         Objects.requireNonNull(roles, "Roles cannot be null");
@@ -30,15 +46,56 @@ public record AdminPrincipal(
             throw new IllegalArgumentException("Admin must have at least one role");
         }
 
-        roles = Collections.unmodifiableSet(roles);
+        this.id = id;
+        this.username = username;
+        this.roles = Collections.unmodifiableSet(roles);
+        this.isSuperAdmin = isSuperAdmin;
+        this.accountNonExpired = accountNonExpired;
+        this.accountNonLocked = accountNonLocked;
+        this.credentialsNonExpired = credentialsNonExpired;
+        this.enabled = enabled;
 
         log.debug("Created AdminPrincipal for user: {} with roles: {}", username, roles);
     }
 
     @Override
-    public String getName() {
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return roles.stream()
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                .toList();
+    }
+
+    @Override
+    public String getPassword() {
+        return null; // JWT-based authentication, no password stored
+    }
+
+    @Override
+    public String getUsername() {
         return username;
     }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return accountNonExpired;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return accountNonLocked;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return credentialsNonExpired;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    // Domain-specific methods
 
     public boolean hasRole(String role) {
         if (role == null || role.trim().isEmpty()) {
@@ -68,7 +125,7 @@ public record AdminPrincipal(
 
     public boolean hasAllRoles(String... rolesToCheck) {
         if (rolesToCheck == null || rolesToCheck.length == 0) {
-            return true; // Если роли не указаны, считаем что все есть
+            return true;
         }
 
         for (String role : rolesToCheck) {
@@ -123,7 +180,6 @@ public record AdminPrincipal(
         return canModify;
     }
 
-
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
@@ -139,6 +195,19 @@ public record AdminPrincipal(
         return Objects.hash(id, username);
     }
 
+    @Override
+    public String toString() {
+        return "AdminPrincipal{" +
+                "id=" + id.getValue() +
+                ", username='" + username + '\'' +
+                ", roles=" + roles +
+                ", isSuperAdmin=" + isSuperAdmin +
+                ", enabled=" + enabled +
+                '}';
+    }
+
+    // Factory methods
+
     public static AdminPrincipal fromAdmin(biz.ugur.busroutebackend.admin.domain.model.Admin admin) {
         Objects.requireNonNull(admin, "Admin cannot be null");
 
@@ -150,7 +219,11 @@ public record AdminPrincipal(
                 admin.getId(),
                 admin.getUsername(),
                 roles,
-                admin.getIsSuperAdmin()
+                admin.getIsSuperAdmin(),
+                true,  // accountNonExpired
+                true,  // accountNonLocked
+                true,  // credentialsNonExpired
+                admin.getIsActive()  // enabled
         );
     }
 

@@ -4,37 +4,21 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
-import java.util.Set;
-import java.util.stream.Collectors;
-
 @Slf4j
 @RequiredArgsConstructor
-public class JwtAuthenticationFilter implements WebFilter {
+public abstract class BaseJwtAuthenticationFilter<P extends UserDetails> implements WebFilter {
 
     private static final String TOKEN_PREFIX = "Bearer ";
-    private static final Set<String> PUBLIC_PATHS = Set.of(
-            "/admin/auth/login",
-            "/admin/auth/refresh",
-            "/public",
-            "/client",
-            "/mobile",
-            "/routes",
-            "/stops",
-            "/trips",
-            "/vehicles",
-            "/trip-planning",
-            "/ws"
-    );
 
-    private final JwtService jwtService;
-    private final TokenBlacklistService tokenBlacklistService;
+    protected final BaseJwtTokenService<P> tokenService;
+    protected final TokenBlacklistService tokenBlacklistService;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
@@ -47,7 +31,7 @@ public class JwtAuthenticationFilter implements WebFilter {
 
         return extractToken(exchange)
                 .flatMap(this::validateTokenNotBlacklisted)
-                .flatMap(jwtService::extractAdminPrincipal)
+                .flatMap(tokenService::extractPrincipal)
                 .map(this::createAuthentication)
                 .flatMap(auth -> {
                     log.debug("JWT authentication successful for path: {} - User: {}",
@@ -56,22 +40,12 @@ public class JwtAuthenticationFilter implements WebFilter {
                             .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth));
                 })
                 .onErrorResume(throwable -> {
-                    log.debug("JWT authentication failed for path {}: {}", path, throwable.getMessage());
-
+                    log.warn("JWT authentication failed for path {}: {}", path, throwable.getMessage());
                     return chain.filter(exchange);
                 });
     }
 
-    private boolean isPublicPath(String path) {
-        return PUBLIC_PATHS.stream().anyMatch(path::startsWith) ||
-                path.startsWith("/actuator") ||
-                path.startsWith("/swagger") ||
-                path.startsWith("/api/v1/client") ||
-                path.startsWith("/api/v1/mobile") ||
-                path.startsWith("/api-docs");
-    }
-
-    private Mono<String> extractToken(ServerWebExchange exchange) {
+    protected Mono<String> extractToken(ServerWebExchange exchange) {
         return Mono.justOrEmpty(exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION))
                 .filter(header -> header.startsWith(TOKEN_PREFIX))
                 .map(header -> header.substring(TOKEN_PREFIX.length()))
@@ -79,7 +53,7 @@ public class JwtAuthenticationFilter implements WebFilter {
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("No valid token found")));
     }
 
-    private Mono<String> validateTokenNotBlacklisted(String token) {
+    protected Mono<String> validateTokenNotBlacklisted(String token) {
         return tokenBlacklistService.isAccessTokenBlacklisted(token)
                 .flatMap(isBlacklisted -> {
                     if (isBlacklisted) {
@@ -89,20 +63,21 @@ public class JwtAuthenticationFilter implements WebFilter {
                     return Mono.just(token);
                 })
                 .onErrorResume(error -> {
+                    if ("Token is blacklisted".equals(error.getMessage())) {
+                        return Mono.error(error);
+                    }
                     log.warn("Error checking token blacklist: {}", error.getMessage());
                     return Mono.error(new IllegalArgumentException("Token validation failed"));
                 });
     }
 
-    private UsernamePasswordAuthenticationToken createAuthentication(AdminPrincipal principal) {
-        var authorities = principal.getRoles().stream()
-                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-                .collect(Collectors.toList());
+    protected abstract boolean isPublicPath(String path);
 
+    protected UsernamePasswordAuthenticationToken createAuthentication(P principal) {
         return new UsernamePasswordAuthenticationToken(
                 principal,
                 null,
-                authorities
+                principal.getAuthorities()
         );
     }
 }

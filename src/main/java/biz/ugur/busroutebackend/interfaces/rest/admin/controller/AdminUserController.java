@@ -9,7 +9,7 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.request.admin.AvatarUpdate
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.admin.AdminListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.response.admin.AdminResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.request.admin.AdminUpdateRequest;
-import biz.ugur.busroutebackend.shared.infrastructure.security.AdminPrincipal;
+import biz.ugur.busroutebackend.admin.infrastructure.security.AdminPrincipal;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
@@ -117,7 +117,7 @@ public class AdminUserController extends BaseController {
     public Mono<ResponseEntity<ApiResponse<AdminProfileResponse>>> updateProfile(@Valid @RequestBody AdminUpdateProfileRequest request) {
         return ok(getCurrentPrincipal().flatMap(principal -> {
             UpdateCurrentAdminProfileUseCase.Request req = new UpdateCurrentAdminProfileUseCase.Request(
-                    principal.id(),
+                    principal.getId(),
                     request.getUsername(),
                     request.getFullName()
             );
@@ -132,7 +132,7 @@ public class AdminUserController extends BaseController {
     public Mono<ResponseEntity<ApiResponse<AdminProfileResponse>>> updateAvatar(@Valid @RequestBody AvatarUpdateRequest request) {
         return ok(getCurrentPrincipal().flatMap(principal -> {
             UpdateCurrentAdminAvatarUseCase.Request req = new UpdateCurrentAdminAvatarUseCase.Request(
-                    principal.id(),
+                    principal.getId(),
                     request.avatar()
             );
 
@@ -147,7 +147,7 @@ public class AdminUserController extends BaseController {
     @DeleteMapping("/profile/avatar")
     public Mono<ResponseEntity<ApiResponse<AdminProfileResponse>>> removeAvatar() {
         return ok(getCurrentPrincipal().flatMap(principal -> {
-            return removeCurrentAdminAvatarUseCase.execute(Mono.just(principal.id()))
+            return removeCurrentAdminAvatarUseCase.execute(Mono.just(principal.getId()))
                     .map(AdminProfileResponse::fromDomain);
         }));
     }

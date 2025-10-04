@@ -3,7 +3,7 @@ package biz.ugur.busroutebackend.client.application.usecase;
 import biz.ugur.busroutebackend.client.domain.enums.Platform;
 import biz.ugur.busroutebackend.client.domain.model.Client;
 import biz.ugur.busroutebackend.client.domain.repository.ClientRepository;
-import biz.ugur.busroutebackend.client.infrastructure.security.JwtTokenService;
+import biz.ugur.busroutebackend.client.infrastructure.security.ClientJwtTokenService;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
@@ -17,15 +17,15 @@ public class CenterRegisterClientUseCase extends
         BaseUseCase<Mono<CenterRegisterClientUseCase.Command>, CenterRegisterClientUseCase.Result> {
 
     private final ClientRepository clientRepository;
-    private final JwtTokenService jwtTokenService;
+    private final ClientJwtTokenService clientJwtTokenService;
 
     public CenterRegisterClientUseCase(ClientRepository clientRepository,
-                                       JwtTokenService jwtTokenService,
+                                       ClientJwtTokenService clientJwtTokenService,
                                        CorrelationContextService correlationContextService,
                                        EventBus eventBus) {
         super(correlationContextService, eventBus);
         this.clientRepository = clientRepository;
-        this.jwtTokenService = jwtTokenService;
+        this.clientJwtTokenService = clientJwtTokenService;
     }
 
     @Override
@@ -50,22 +50,25 @@ public class CenterRegisterClientUseCase extends
 
     private Mono<Client> findOrCreateClient(Command command) {
         return clientRepository.findByPhone(command.phone)
-                .map(this::authenticateExistingClient)
+                .flatMap(this::authenticateExistingClient)
                 .switchIfEmpty(Mono.defer(() -> createNewClient(command)));
     }
 
-    private Client authenticateExistingClient(Client client) {
-        String accessToken = jwtTokenService.generateAccessToken(client.getId().getValue());
-        String refreshToken = jwtTokenService.generateRefreshToken(client.getId().getValue());
-        client.authenticate(accessToken, refreshToken);
-        return client;
+    private Mono<Client> authenticateExistingClient(Client client) {
+        return Mono.zip(
+                clientJwtTokenService.generateAccessToken(client.getId().getValue()),
+                clientJwtTokenService.generateRefreshToken(client.getId().getValue())
+        ).map(tokens -> {
+            client.authenticate(tokens.getT1(), tokens.getT2());
+            return client;
+        });
     }
 
     private Mono<Client> createNewClient(Command command) {
         Client client = Client.create("Center", command.phone, Platform.MOBILE_WEB);
         client.generateOtpForCenter();
         client.verifyOtpCenter(client.getOtpCode());
-        return Mono.just(authenticateExistingClient(client));
+        return authenticateExistingClient(client);
     }
 
     private Result buildResult(Client savedClient) {

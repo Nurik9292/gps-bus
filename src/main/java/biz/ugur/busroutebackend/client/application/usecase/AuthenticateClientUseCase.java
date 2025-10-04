@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.client.application.usecase;
 
 import biz.ugur.busroutebackend.client.domain.repository.ClientRepository;
-import biz.ugur.busroutebackend.client.infrastructure.security.JwtTokenService;
+import biz.ugur.busroutebackend.client.infrastructure.security.ClientJwtTokenService;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
@@ -14,15 +14,15 @@ import reactor.core.publisher.Mono;
 public class AuthenticateClientUseCase extends BaseUseCase<Mono<AuthenticateClientUseCase.Command>, AuthenticateClientUseCase.Result> {
 
     private final ClientRepository clientRepository;
-    private final JwtTokenService jwtTokenService;
+    private final ClientJwtTokenService clientJwtTokenService;
 
     public AuthenticateClientUseCase(ClientRepository clientRepository,
-                                     JwtTokenService jwtTokenService,
+                                     ClientJwtTokenService clientJwtTokenService,
                                      CorrelationContextService correlationContextService,
                                      EventBus eventBus) {
         super(correlationContextService, eventBus);
         this.clientRepository = clientRepository;
-        this.jwtTokenService = jwtTokenService;
+        this.clientJwtTokenService = clientJwtTokenService;
     }
 
 
@@ -52,18 +52,20 @@ public class AuthenticateClientUseCase extends BaseUseCase<Mono<AuthenticateClie
                             return Mono.error(new IllegalArgumentException("Client account not active"));
                         }
 
-                        String accessToken = jwtTokenService.generateAccessToken(client.getId().getValue());
-                        String refreshToken = jwtTokenService.generateRefreshToken(client.getId().getValue());
+                        return Mono.zip(
+                                clientJwtTokenService.generateAccessToken(client.getId().getValue()),
+                                clientJwtTokenService.generateRefreshToken(client.getId().getValue())
+                        ).flatMap(tokens -> {
+                            client.authenticate(tokens.getT1(), tokens.getT2());
 
-                        client.authenticate(accessToken, refreshToken);
-
-                        return clientRepository.save(client)
-                                .map(savedClient -> new Result(
-                                        savedClient.getId().getValue(),
-                                        accessToken,
-                                        refreshToken,
-                                        savedClient.getStatus().name()
-                                ));
+                            return clientRepository.save(client)
+                                    .map(savedClient -> new Result(
+                                            savedClient.getId().getValue(),
+                                            tokens.getT1(),
+                                            tokens.getT2(),
+                                            savedClient.getStatus().name()
+                                    ));
+                        });
                     });
         });
     }

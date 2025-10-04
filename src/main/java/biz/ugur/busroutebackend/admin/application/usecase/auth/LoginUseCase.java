@@ -6,8 +6,8 @@ import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
-import biz.ugur.busroutebackend.shared.infrastructure.security.JwtProperties;
-import biz.ugur.busroutebackend.shared.infrastructure.security.JwtService;
+import biz.ugur.busroutebackend.admin.infrastructure.security.AdminJwtProperties;
+import biz.ugur.busroutebackend.admin.infrastructure.security.AdminJwtTokenService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -19,18 +19,18 @@ import java.util.Set;
 public class LoginUseCase extends BaseUseCase<Mono<LoginUseCase.Request>, LoginUseCase.Response> {
 
     private final AdminRepository adminRepository;
-    private final JwtService jwtService;
-    private final JwtProperties jwtProperties;
+    private final AdminJwtTokenService adminJwtTokenService;
+    private final AdminJwtProperties adminJwtProperties;
 
     public LoginUseCase(AdminRepository adminRepository,
-                        JwtService jwtService,
-                        JwtProperties jwtProperties,
+                        AdminJwtTokenService adminJwtTokenService,
+                        AdminJwtProperties adminJwtProperties,
                         CorrelationContextService correlationService,
                         EventBus eventBus) {
         super(correlationService, eventBus);
         this.adminRepository = adminRepository;
-        this.jwtService = jwtService;
-        this.jwtProperties = jwtProperties;
+        this.adminJwtTokenService = adminJwtTokenService;
+        this.adminJwtProperties = adminJwtProperties;
     }
 
     @Override
@@ -74,13 +74,13 @@ public class LoginUseCase extends BaseUseCase<Mono<LoginUseCase.Request>, LoginU
         Set<String> roles = admin.getIsSuperAdmin() ? Set.of("ADMIN", "SUPER_ADMIN") : Set.of("ADMIN");
 
         return Mono.zip(
-                jwtService.generateAccessToken(admin.getId(), admin.getUsername(), roles, admin.getIsSuperAdmin()),
-                jwtService.generateRefreshToken(admin.getId())
+                adminJwtTokenService.generateAccessToken(admin.getId(), admin.getUsername(), roles, admin.getIsSuperAdmin()),
+                adminJwtTokenService.generateRefreshToken(admin.getId())
         ).map(tokens -> new Response(
                 tokens.getT1(),
                 tokens.getT2(),
                 "Bearer",
-                jwtProperties.accessTokenExpiration().toSeconds(),
+                adminJwtProperties.getAccessTokenExpiration().toSeconds(),
                 admin
         ));
     }
