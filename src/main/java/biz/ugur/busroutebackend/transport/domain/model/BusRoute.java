@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.transport.domain.enums.RouteDirection;
 import biz.ugur.busroutebackend.transport.domain.event.RouteGeometryUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
@@ -19,6 +20,7 @@ import java.util.Objects;
 
 @Getter
 @Table("bus_routes")
+@Builder
 public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
 
     @Id
@@ -26,7 +28,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
     private BusRouteId id;
 
     @Column("route_number")
-    private String routeNumber; // "29", "7A"
+    private String routeNumber;
 
     @Column("route_name")
     private String routeName;
@@ -38,7 +40,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
     private String nameEn;
 
     @Column("route_color")
-    private String routeColor; // "#E53935" - HEX цвет для карты
+    private String routeColor;
 
     @Column("is_active")
     private Boolean isActive;
@@ -65,71 +67,6 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
 
     @Transient
     private List<BusStop> busStops = new ArrayList<>();
-
-
-    public BusRoute(String routeNumber,
-                    String routeName,
-                    String nameTm,
-                    String nameEn,
-                    String routeColor,
-                    String cityId,
-                    Integer estimatedDurationMinutes) {
-        this.id = BusRouteId.generate();
-        this.routeNumber = validateRouteNumber(routeNumber);
-        this.routeName = validateRouteName(routeName);
-        this.nameTm = nameTm;
-        this.nameEn = nameEn;
-        this.routeColor = validateRouteColor(routeColor);
-        this.cityId = cityId;
-        this.isActive = true;
-        this.estimatedDurationMinutes = estimatedDurationMinutes;
-        this.createdAt = Instant.now();
-        this.updatedAt = Instant.now();
-    }
-
-
-    public BusRoute(String routeNumber,
-                    String routeName,
-                    String nameTm,
-                    String nameEn,
-                    String routeColor) {
-        this.id = BusRouteId.generate();
-        this.routeNumber = validateRouteNumber(routeNumber);
-        this.routeName = validateRouteName(routeName);
-        this.nameTm = nameTm;
-        this.nameEn = nameEn;
-        this.routeColor = validateRouteColor(routeColor);
-        this.isActive = true;
-        this.estimatedDurationMinutes = 60;
-    }
-
-    public BusRoute(BusRouteId id,
-                    String routeNumber,
-                    String routeName,
-                    String nameTm,
-                    String nameEn,
-                    String routeColor,
-                    String cityId,
-                    Boolean isActive,
-                    Integer estimatedDurationMinutes,
-                    String routeGeometryForward,
-                    String routeGeometryBackward,
-                    Integer totalDistanceForwardMeters,
-                    Integer totalDistanceBackwardMeters) {
-        this.id = id;
-        this.routeNumber = routeNumber;
-        this.routeName = routeName;
-        this.nameEn = nameEn;
-        this.nameTm = nameTm;
-        this.routeColor = routeColor;
-        this.cityId = cityId;
-        this.isActive = isActive;
-        this.estimatedDurationMinutes = estimatedDurationMinutes;
-        this.routeGeometryForward = routeGeometryForward;
-        this.routeGeometryBackward = routeGeometryBackward;
-        this.totalDistanceForwardMeters = totalDistanceForwardMeters;
-        this.totalDistanceBackwardMeters = totalDistanceBackwardMeters;
-    }
 
     public void updateRouteGeometry(RouteGeometry forwardGeometry, RouteGeometry backwardGeometry) {
         boolean hasChanges = false;

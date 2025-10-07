@@ -5,10 +5,7 @@ import biz.ugur.busroutebackend.shared.infrastructure.security.TokenBlacklistSer
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/**
- * JWT authentication filter for Client endpoints.
- * Handles authentication for client-specific routes.
- */
+
 @Component
 @Slf4j
 public class ClientAuthenticationFilter extends BaseJwtAuthenticationFilter<ClientPrincipal> {
@@ -33,5 +30,4 @@ public class ClientAuthenticationFilter extends BaseJwtAuthenticationFilter<Clie
                 path.startsWith("/actuator/");
     }
 
-    // createAuthentication() method removed - using default implementation from base class
 }

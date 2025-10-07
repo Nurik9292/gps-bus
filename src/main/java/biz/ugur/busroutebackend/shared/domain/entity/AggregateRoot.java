@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.shared.domain.entity;
 
 import biz.ugur.busroutebackend.shared.base.BaseEntity;
 import biz.ugur.busroutebackend.shared.domain.event.DomainEvent;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;

@@ -361,21 +361,21 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
     }
 
     private BusRoute mapRowToBusRoute(Row row, RowMetadata metadata) {
-        BusRoute busRoute = new BusRoute(
-                BusRouteId.of(row.get("id", String.class)),
-                row.get("route_number", String.class),
-                row.get("route_name", String.class),
-                row.get("name_tm", String.class),
-                row.get("name_en", String.class),
-                row.get("route_color", String.class),
-                row.get("city_id", String.class),
-                row.get("is_active", Boolean.class),
-                row.get("estimated_duration_minutes", Integer.class),
-                row.get("route_geometry_forward", String.class),
-                row.get("route_geometry_backward", String.class),
-                row.get("total_distance_forward_meters", Integer.class),
-                row.get("total_distance_backward_meters", Integer.class)
-        );
+        BusRoute busRoute = BusRoute.builder()
+                .id(BusRouteId.of(row.get("id", String.class)))
+                .routeNumber(row.get("route_number", String.class))
+                .routeName(row.get("route_name", String.class))
+                .nameTm(row.get("name_tm", String.class))
+                .nameEn(row.get("name_en", String.class))
+                .routeColor(row.get("route_color", String.class))
+                .cityId(row.get("city_id", String.class))
+                .isActive(row.get("is_active", Boolean.class))
+                .estimatedDurationMinutes(row.get("estimated_duration_minutes", Integer.class))
+                .routeGeometryForward(row.get("route_geometry_forward", String.class))
+                .routeGeometryBackward(row.get("route_geometry_backward", String.class))
+                .totalDistanceForwardMeters(row.get("total_distance_forward_meters", Integer.class))
+                .totalDistanceBackwardMeters(row.get("total_distance_backward_meters", Integer.class))
+                .build();
 
         busRoute.setCreatedAt(row.get("created_at", Instant.class));
         busRoute.setUpdatedAt(row.get("updated_at", Instant.class));

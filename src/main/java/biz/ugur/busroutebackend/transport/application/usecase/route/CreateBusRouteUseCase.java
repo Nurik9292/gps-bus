@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.transport.application.dto.route.CreateRoute;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
+import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
 import lombok.extern.slf4j.Slf4j;
@@ -70,15 +71,16 @@ public class CreateBusRouteUseCase extends BaseUseCase<Mono<CreateRoute>, RouteD
     }
 
     private Mono<BusRoute> createBusRoute(CreateRoute command) {
-        BusRoute busRoute = new BusRoute(
-                command.routeNumber(),
-                command.routeName(),
-                command.nameTm(),
-                command.nameEn(),
-                command.routeColor(),
-                command.cityId(),
-                command.estimatedDurationMinutes()
-        );
+        BusRoute busRoute = BusRoute.builder()
+                .routeNumber(command.routeNumber())
+                .routeName(command.routeName())
+                .nameTm(command.nameTm())
+                .nameEn(command.nameEn())
+                .routeColor(command.routeColor())
+                .cityId(command.cityId())
+                .estimatedDurationMinutes(command.estimatedDurationMinutes())
+                .build();
+
 
         if (hasValidGeometry(command)) {
             processRouteGeometry(busRoute, command);
