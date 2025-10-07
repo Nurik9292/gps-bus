@@ -47,6 +47,7 @@ public class R2dbcAdminRepository extends BaseR2dbcRepository<Admin, AdminId> im
                 row.get("updated_at", Instant.class),
                 row.get("version", Long.class)
         );
+
     }
 
     @Override

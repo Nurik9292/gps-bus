@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.admin.domain.events.AdminPasswordChangedEvent;
 import biz.ugur.busroutebackend.admin.domain.events.AdminProfileUpdatedEvent;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
+import lombok.Builder;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
@@ -16,6 +17,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import java.time.Instant;
 import java.util.Objects;
 
+@Builder
 @Getter
 @Table("admins")
 public class Admin extends AggregateRoot<Admin, AdminId> {
@@ -45,27 +47,24 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     @Column("last_login_at")
     private Instant lastLoginAt;
 
-    @Transient
-    private boolean isNew;
-
     private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    private Admin() {}
 
     public static Admin create(String username,
                                String password,
                                String fullName,
                                Boolean isSuperAdmin,
                                Boolean isActive) {
-        Admin admin = new Admin();
-        admin.id = AdminId.generate();
-        admin.username = admin.validateUsername(username);
-        admin.passwordHash = passwordEncoder.encode(password);
-        admin.fullName = fullName;
-        admin.isActive = isActive;
-        admin.isSuperAdmin = isSuperAdmin != null ? isSuperAdmin : false;
-        admin.lastLoginAt = Instant.now();
-        admin.avatar = null;
+        Admin admin = builder()
+                .id(AdminId.generate())
+                .username(username)
+                .passwordHash(passwordEncoder.encode(password))
+                .fullName(fullName)
+                .isSuperAdmin(isSuperAdmin)
+                .isActive(isActive)
+                .lastLoginAt(Instant.now())
+                .avatar(null)
+                .build();
 
         admin.registerEvent(new AdminCreatedEvent(
                 admin.id.getValue(),
@@ -91,19 +90,20 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
             Instant updatedAt,
             Long version
     ) {
-        Admin admin = new Admin();
-        admin.id = id;
-        admin.username = username;
-        admin.passwordHash = passwordHash;
-        admin.fullName = fullName;
-        admin.avatar = avatar;
-        admin.isActive = isActive;
-        admin.isSuperAdmin = isSuperAdmin;
-        admin.lastLoginAt = lastLoginAt;
+        Admin admin = builder()
+                .id(id)
+                .username(username)
+                .passwordHash(passwordHash)
+                .fullName(fullName)
+                .avatar(avatar)
+                .isActive(isActive)
+                .isSuperAdmin(isSuperAdmin)
+                .lastLoginAt(lastLoginAt)
+                .build();
         admin.setCreatedAt(createdAt);
         admin.setUpdatedAt(updatedAt);
         admin.setVersion(version);
-        return admin;
+        return  admin;
     }
 
 
