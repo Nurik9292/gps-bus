@@ -2,13 +2,14 @@ package biz.ugur.busroutebackend.client.domain.model;
 
 import biz.ugur.busroutebackend.client.domain.enums.ClientStatus;
 import biz.ugur.busroutebackend.client.domain.enums.Platform;
-import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
-import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
-import biz.ugur.busroutebackend.client.domain.valueobject.Phone;
-import biz.ugur.busroutebackend.client.domain.valueobject.Otp;
-import biz.ugur.busroutebackend.client.domain.event.ClientRegisteredEvent;
 import biz.ugur.busroutebackend.client.domain.event.ClientAuthenticatedEvent;
 import biz.ugur.busroutebackend.client.domain.event.ClientOtpVerifiedEvent;
+import biz.ugur.busroutebackend.client.domain.event.ClientRegisteredEvent;
+import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
+import biz.ugur.busroutebackend.client.domain.valueobject.Otp;
+import biz.ugur.busroutebackend.client.domain.valueobject.Phone;
+import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
+import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
@@ -18,6 +19,7 @@ import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.Instant;
 
+@Builder
 @ToString
 @EqualsAndHashCode(callSuper = true)
 @Table("clients")
@@ -55,30 +57,35 @@ public class Client extends AggregateRoot<Client, ClientId> {
     @Column("refresh_token")
     private String refreshToken;
 
-    public Client() {}
 
-    private Client(String name, String phoneNumber, Platform platform) {
-        this.id = ClientId.generate();
-        this.name = validateName(name);
-        this.phoneNumber = validatePhoneNumber(phoneNumber);
-        this.platform = platform;
-        this.status = ClientStatus.INACTIVE;
-        this.otpVerify = false;
-        Instant now = Instant.now();
-        this.lastActivity = now;
-        this.createdAt = now;
-        this.updatedAt = now;
-        this.version = 0L;
-
-        registerEvent(new ClientRegisteredEvent(
-                this.id.getValue(),
-                this.phoneNumber,
-                platform.name()
-        ));
-    }
 
     public static Client create(String name, String phoneNumber, Platform platform) {
-        return new Client(name, phoneNumber, platform);
+        String validatedName = validateNameStatic(name);
+        String validatedPhone = validatePhoneStatic(phoneNumber);
+
+        Instant now = Instant.now();
+
+        Client client = Client.builder()
+                .id(ClientId.generate())
+                .name(validatedName)
+                .phoneNumber(validatedPhone)
+                .platform(platform)
+                .status(ClientStatus.INACTIVE)
+                .otpVerify(false)
+                .lastActivity(now)
+                .build();
+
+        client.createdAt = now;
+        client.updatedAt = now;
+        client.version = 0L;
+
+        client.registerEvent(new ClientRegisteredEvent(
+                client.id.getValue(),
+                client.phoneNumber,
+                platform.name()
+        ));
+
+        return client;
     }
 
     public static Client fromDatabase(ClientId id,
@@ -93,19 +100,24 @@ public class Client extends AggregateRoot<Client, ClientId> {
                                       String refreshToken,
                                       Instant createdAt,
                                       Instant updatedAt) {
-        Client client = new Client();
-        client.id = id;
-        client.name = name;
-        client.phoneNumber = phoneNumber;
-        client.otpCode = otpCode;
-        client.otpVerify = otpVerify;
-        client.platform = platform;
-        client.status = status;
-        client.lastActivity = lastActivity;
+
+
+        Client client = builder()
+                .id(id)
+                .name(name)
+                .phoneNumber(phoneNumber)
+                .otpCode(otpCode)
+                .otpVerify(otpVerify)
+                .platform(platform)
+                .status(status)
+                .lastActivity(lastActivity)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .build();
+
         client.createdAt = createdAt;
         client.updatedAt = updatedAt;
-        client.accessToken = accessToken;
-        client.refreshToken = refreshToken;
+
         return client;
     }
 
@@ -229,5 +241,21 @@ public class Client extends AggregateRoot<Client, ClientId> {
     @Override
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+
+    private static String validateNameStatic(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Client name cannot be null or empty");
+        }
+        if (name.length() > 100) {
+            throw new IllegalArgumentException("Client name cannot exceed 100 characters");
+        }
+        return name.trim();
+    }
+
+    private static String validatePhoneStatic(String phoneNumber) {
+        Phone phone = Phone.of(phoneNumber);
+        return phone.getValue();
     }
 }
