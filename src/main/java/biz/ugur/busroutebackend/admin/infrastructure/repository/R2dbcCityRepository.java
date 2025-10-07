@@ -96,12 +96,12 @@ public class R2dbcCityRepository extends BaseR2dbcRepository<City, CityId> imple
     }
 
     private City mapRowToCity(Row row, RowMetadata metadata) {
-        return new City(
-                CityId.of(row.get("id", String.class)),
-                row.get("name", String.class),
-                row.get("name_tm", String.class),
-                row.get("is_active", Boolean.class),
-                row.get("display_order", Integer.class)
-        );
+        return City.builder()
+                .id(CityId.of(row.get("id", String.class)))
+                .name(row.get("name", String.class))
+                .nameTm(row.get("name_tm", String.class))
+                .isActive(row.get("is_active", Boolean.class))
+                .displayOrder(row.get("display_order", Integer.class))
+                .build();
     }
 }

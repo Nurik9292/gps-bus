@@ -2,12 +2,13 @@ package biz.ugur.busroutebackend.admin.domain.model;
 
 import biz.ugur.busroutebackend.admin.domain.valueobjects.CityId;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
+import lombok.Builder;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+@Builder
 @Getter
 @Table("cities")
 public class City extends AggregateRoot<City, CityId> {
@@ -28,28 +29,20 @@ public class City extends AggregateRoot<City, CityId> {
     @Column("display_order")
     private Integer displayOrder;
 
-    @Transient
-    private boolean isNew;
 
-    public City(String name, String nameTm, Integer displayOrder) {
-        this.id = CityId.generate();
-        this.name = validateName(name);
-        this.nameTm = nameTm;
-        this.isActive = true;
-        this.displayOrder = displayOrder != null ? displayOrder : 0;
+    public static City create(String name, String nameTm, Integer displayOrder) {
+        String validatedName = validateNameStatic(name);
 
-        this.isNew = true;
+        return builder()
+                .id(CityId.generate())
+                .name(validatedName)
+                .nameTm(nameTm != null ? nameTm.trim() : null)
+                .displayOrder(displayOrder != null ? displayOrder : 0)
+                .isActive(true)
+                .build();
     }
 
-    public City(CityId id, String name, String nameTm, Boolean isActive, Integer displayOrder) {
-        this.id = id;
-        this.name = name;
-        this.nameTm = nameTm;
-        this.isActive = isActive;
-        this.displayOrder = displayOrder;
 
-        this.isNew = false;
-    }
 
     public void updateCity(String name, String nameTm, Integer displayOrder) {
         if (name != null && !name.trim().isEmpty()) {
@@ -71,9 +64,7 @@ public class City extends AggregateRoot<City, CityId> {
         this.isActive = true;
     }
 
-    public void markAsExisting() {
-        isNew = false;
-    }
+
 
     @Override
     public CityId getId() {
@@ -81,6 +72,13 @@ public class City extends AggregateRoot<City, CityId> {
     }
 
     private String validateName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("City name cannot be null or empty");
+        }
+        return name.trim();
+    }
+
+    private static String validateNameStatic(String name) {
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("City name cannot be null or empty");
         }
