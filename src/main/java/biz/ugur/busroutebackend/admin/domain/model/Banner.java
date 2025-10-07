@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.admin.domain.model;
 import biz.ugur.busroutebackend.admin.domain.events.BannerCreatedEvent;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.BannerId;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
@@ -12,6 +13,7 @@ import org.springframework.data.relational.core.mapping.Table;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
+@Builder
 @Getter
 @Table("banners")
 public class Banner extends AggregateRoot<Banner, BannerId> {
@@ -47,40 +49,50 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
     @Column("end_date")
     private LocalDateTime endDate;
 
-    public Banner() {}
 
-    public Banner(String title, String type, String imageUrl, String targetUrl, Integer displayOrder) {
-        this.id = BannerId.generate();
-        this.title = validateTitle(title);
-        this.type = type;
-        this.imageUrl = validateImageUrl(imageUrl);
-        this.targetUrl = targetUrl;
-        this.isActive = true;
-        this.displayOrder = displayOrder != null ? displayOrder : 0;
-        this.startDate = LocalDateTime.now();
-        this.endDate = null;
+    public static Banner create(String title, String type, String imageUrl, String targetUrl, Integer displayOrder) {
+        Banner banner = builder()
+                .id(BannerId.generate())
+                .title(title)
+                .type(type)
+                .imageUrl(imageUrl)
+                .targetUrl(targetUrl)
+                .isActive(true)
+                .displayOrder( displayOrder != null ? displayOrder : 0)
+                .startDate(LocalDateTime.now())
+                .endDate(null)
+                .build();
 
-        registerEvent(new BannerCreatedEvent(
-                this.id.getValue(),
-                this.title,
-                this.type,
-                this.imageUrl
+        banner.registerEvent(new BannerCreatedEvent(
+                banner.id.getValue(),
+                banner.title,
+                banner.type,
+                banner.imageUrl
         ));
+
+        return banner;
     }
 
-    public static Banner restore(BannerId id, String title, String type, String imageUrl, String targetUrl,
-                                 Boolean isActive, Integer displayOrder, LocalDateTime startDate, LocalDateTime endDate) {
-        Banner banner = new Banner();
-        banner.id = id;
-        banner.title = title;
-        banner.type = type;
-        banner.imageUrl = imageUrl;
-        banner.targetUrl = targetUrl;
-        banner.isActive = isActive;
-        banner.displayOrder = displayOrder;
-        banner.startDate = startDate;
-        banner.endDate = endDate;
-        return banner;
+    public static Banner restore(BannerId id,
+                                 String title,
+                                 String type,
+                                 String imageUrl,
+                                 String targetUrl,
+                                 Boolean isActive,
+                                 Integer displayOrder,
+                                 LocalDateTime startDate,
+                                 LocalDateTime endDate) {
+        return builder()
+                .id(id)
+                .title(title)
+                .type(type)
+                .imageUrl(imageUrl)
+                .targetUrl(targetUrl)
+                .isActive(isActive)
+                .displayOrder(displayOrder)
+                .startDate(startDate)
+                .endDate(endDate)
+                .build();
     }
 
     public void updateBanner(String title, String type, String imageUrl, String targetUrl, Integer displayOrder) {

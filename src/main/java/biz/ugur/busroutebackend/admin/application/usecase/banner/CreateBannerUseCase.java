@@ -49,13 +49,13 @@ public class CreateBannerUseCase extends BaseUseCase<Mono<BannerCreateRequest>, 
 
             return processImageUrl(request.getImageUrl())
                     .flatMap(processedImageUrl -> {
-                        Banner banner = new Banner(
+                        Banner banner = Banner.create(
                                 request.getTitle(),
                                 request.getType(),
                                 processedImageUrl,
                                 request.getTargetUrl(),
-                                request.getDisplayOrder()
-                        );
+                                request.getDisplayOrder());
+
 
                         if (request.getStartDate() != null) {
                             banner.setStartDate(request.getStartDate());
