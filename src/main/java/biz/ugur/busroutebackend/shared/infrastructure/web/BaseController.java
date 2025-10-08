@@ -1,23 +1,16 @@
 package biz.ugur.busroutebackend.shared.infrastructure.web;
 
-import biz.ugur.busroutebackend.shared.domain.exception.AbstractDomainException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.FieldError;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.support.WebExchangeBindException;
-import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.*;
-import java.util.stream.Collectors;
 
 
 @Slf4j
@@ -150,31 +143,6 @@ public abstract class BaseController {
 
 
     @Getter
-    public enum ErrorCode {
-        INVALID_REQUEST("INVALID_REQUEST", "Invalid request parameters"),
-        VALIDATION_ERROR("VALIDATION_ERROR", "Validation failed"),
-        NOT_FOUND("NOT_FOUND", "Resource not found"),
-        UNAUTHORIZED("UNAUTHORIZED", "Authentication required"),
-        FORBIDDEN("FORBIDDEN", "Access denied"),
-        CONFLICT("CONFLICT", "Resource conflict"),
-
-        INTERNAL_ERROR("INTERNAL_ERROR", "An unexpected error occurred"),
-        SERVICE_UNAVAILABLE("SERVICE_UNAVAILABLE", "Service temporarily unavailable"),
-        EXTERNAL_SERVICE_ERROR("EXTERNAL_SERVICE_ERROR", "External service error");
-
-        private final String code;
-        private final String defaultMessage;
-
-        ErrorCode(String code, String defaultMessage) {
-            this.code = code;
-            this.defaultMessage = defaultMessage;
-        }
-
-    }
-
-
-
-    @Getter
     public static class ApiResponse<T> {
         private final boolean success;
         private final T data;
@@ -196,11 +164,6 @@ public abstract class BaseController {
 
         public static <T> ApiResponse<T> error(String errorCode, String errorMessage) {
             return new ApiResponse<>(false, null, errorCode, errorMessage);
-        }
-
-        public static ApiResponse<Map<String, String>> validationError(Map<String, String> errors) {
-            return new ApiResponse<>(false, errors, ErrorCode.VALIDATION_ERROR.getCode(),
-                    ErrorCode.VALIDATION_ERROR.getDefaultMessage());
         }
 
     }

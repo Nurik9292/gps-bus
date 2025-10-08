@@ -26,7 +26,6 @@ import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.i18n.LocaleContextResolver;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -38,6 +37,7 @@ public class GlobalExceptionHandler {
 
     private final MessageSource messageSource;
     private final LocaleContextResolver localeContextResolver;
+    private final ErrorResponseFactory errorResponseFactory;
 
     // ========================================
     // Admin Token Exceptions
@@ -52,7 +52,7 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getTokenErrorType(), ex.getTokenValue());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("tokenErrorType", ex.getTokenErrorType().name());
 
         if (ex.getTokenValue() != null) {
@@ -70,7 +70,7 @@ public class GlobalExceptionHandler {
         metadata.put("requiresReAuthentication", ex.requiresReAuthentication());
         metadata.put("isRetryable", ex.isRetryable());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -88,7 +88,7 @@ public class GlobalExceptionHandler {
                 ex.getUsername(), ex.getClientIp());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("authErrorType", ex.getAuthErrorType().name());
         metadata.put("attemptTime", ex.getAttemptTime());
 
@@ -96,7 +96,7 @@ public class GlobalExceptionHandler {
             metadata.put("clientIp", ex.getClientIp());
         }
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -113,11 +113,11 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getMessage());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("identifier", ex.getIdentifier());
         metadata.put("identifierType", ex.getIdentifierType());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -134,10 +134,9 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getMessage());
 
         HttpStatus status = HttpStatus.BAD_REQUEST;
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("adminId", ex.getAdminId());
+        Map<String, Object> metadata = errorResponseFactory.createMetadata("adminId", ex.getAdminId());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -155,11 +154,11 @@ public class GlobalExceptionHandler {
                 exchange.getRequest().getPath().value());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("field", "username");
         metadata.put("username", ex.getUsername());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -176,14 +175,14 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getOperationType(), ex.getOperationContext());
 
         HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("operationType", ex.getOperationType().name());
 
         if (ex.getOperationContext() != null) {
             metadata.put("operationContext", ex.getOperationContext());
         }
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -201,7 +200,7 @@ public class GlobalExceptionHandler {
                 ex.getExpectedVersion(), ex.getActualVersion());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("entityId", ex.getEntityId());
         metadata.put("expectedVersion", ex.getExpectedVersion());
         metadata.put("actualVersion", ex.getActualVersion());
@@ -212,7 +211,7 @@ public class GlobalExceptionHandler {
 
         metadata.put("suggestion", "Please refresh the data and try again");
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -229,18 +228,17 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getErrorType(), ex.getOperation());
 
         HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("errorType", ex.getErrorType().name());
         metadata.put("operation", ex.getOperation());
 
-        // Include technical details only in non-production environments
         if (!"production".equals(System.getProperty("spring.profiles.active"))) {
             if (ex.getRootCause() != null) {
                 metadata.put("technicalDetails", ex.getRootCause().getMessage());
             }
         }
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -258,7 +256,7 @@ public class GlobalExceptionHandler {
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
         Map<String, List<String>> fieldErrors = ex.getFieldErrors();
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
 
         if (ex.hasSingleFieldError()) {
             metadata.put("field", ex.getFailedField());
@@ -268,18 +266,9 @@ public class GlobalExceptionHandler {
         metadata.put("totalErrors", ex.getFieldErrors().size());
         metadata.put("affectedFields", ex.getFieldErrors().keySet());
 
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .status(status.value())
-                .errorCode(ex.getErrorCode())
-                .message(ex.getMessage())
-                .correlationId(ex.getCorrelationId().value())
-                .timestamp(ex.getTimestamp())
-                .severity(ex.getSeverity().getDisplayName())
-                .boundedContext(ex.getBoundedContext())
-                .path(exchange.getRequest().getPath().value())
-                .fieldErrors(fieldErrors)
-                .metadata(metadata)
-                .build();
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainExceptionWithFieldErrors(
+                ex, exchange, status, fieldErrors, metadata
+        );
 
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
@@ -297,7 +286,7 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getJwtErrorType(), ex.getTokenValue());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("jwtErrorType", ex.getJwtErrorType().name());
 
         if (ex.getTokenValue() != null) {
@@ -316,7 +305,7 @@ public class GlobalExceptionHandler {
         metadata.put("requiresReAuthentication", ex.requiresReAuthentication());
         metadata.put("isRetryable", ex.isRetryable());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -331,11 +320,11 @@ public class GlobalExceptionHandler {
     ) {
         log.warn("Access denied: {}", ex.getMessage());
 
-        ErrorResponse errorResponse = ErrorResponse.of(
+        ErrorResponse errorResponse = errorResponseFactory.fromGenericError(
                 HttpStatus.FORBIDDEN,
                 "ACCESS_DENIED",
                 "Insufficient permissions",
-                exchange.getRequest().getPath().value()
+                exchange
         );
 
         return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse));
@@ -348,11 +337,11 @@ public class GlobalExceptionHandler {
     ) {
         log.warn("Authentication error: {}", ex.getMessage());
 
-        ErrorResponse errorResponse = ErrorResponse.of(
+        ErrorResponse errorResponse = errorResponseFactory.fromGenericError(
                 HttpStatus.UNAUTHORIZED,
                 "AUTHENTICATION_REQUIRED",
                 "Authentication required",
-                exchange.getRequest().getPath().value()
+                exchange
         );
 
         return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse));
@@ -381,11 +370,11 @@ public class GlobalExceptionHandler {
                         )
                 ));
 
-        ErrorResponse errorResponse = ErrorResponse.withFieldErrors(
+        ErrorResponse errorResponse = errorResponseFactory.fromValidationError(
                 HttpStatus.BAD_REQUEST,
                 "VALIDATION_ERROR",
                 "Request validation failed",
-                exchange.getRequest().getPath().value(),
+                exchange,
                 fieldErrors
         );
 
@@ -406,18 +395,7 @@ public class GlobalExceptionHandler {
         log.error("Domain exception - CorrelationId: {} - ErrorCode: {} - Message: {} - Status: {}",
                 ex.getCorrelationId().value(), ex.getErrorCode(), ex.getMessage(), status.value());
 
-        String localizedMessage = getLocalizedMessage(ex.getErrorCode(), ex.getMessage(), exchange);
-
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .status(status.value())
-                .errorCode(ex.getErrorCode())
-                .message(localizedMessage)
-                .correlationId(ex.getCorrelationId().value())
-                .timestamp(ex.getTimestamp())
-                .severity(ex.getSeverity().getDisplayName())
-                .boundedContext(ex.getBoundedContext())
-                .path(exchange.getRequest().getPath().value())
-                .build();
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status);
 
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
@@ -435,11 +413,11 @@ public class GlobalExceptionHandler {
 
         String localizedMessage = getLocalizedMessage("INVALID_ARGUMENT", ex.getMessage(), exchange);
 
-        ErrorResponse errorResponse = ErrorResponse.of(
+        ErrorResponse errorResponse = errorResponseFactory.fromGenericError(
                 HttpStatus.BAD_REQUEST,
                 "INVALID_ARGUMENT",
                 localizedMessage,
-                exchange.getRequest().getPath().value()
+                exchange
         );
 
         return Mono.just(ResponseEntity.badRequest().body(errorResponse));
@@ -458,11 +436,11 @@ public class GlobalExceptionHandler {
                 exchange
         );
 
-        ErrorResponse errorResponse = ErrorResponse.of(
+        ErrorResponse errorResponse = errorResponseFactory.fromGenericError(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "INTERNAL_ERROR",
                 localizedMessage,
-                exchange.getRequest().getPath().value()
+                exchange
         );
 
         return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse));
@@ -481,11 +459,11 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getIdentifier(), ex.getIdentifierType());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("identifier", ex.getIdentifier());
         metadata.put("identifierType", ex.getIdentifierType());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -498,11 +476,11 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getIdentifier(), ex.getIdentifierType());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("identifier", ex.getIdentifier());
         metadata.put("identifierType", ex.getIdentifierType());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -516,7 +494,7 @@ public class GlobalExceptionHandler {
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
         Map<String, List<String>> fieldErrors = ex.getFieldErrors();
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
 
         if (ex.hasSingleFieldError()) {
             metadata.put("field", ex.getFailedField());
@@ -525,18 +503,9 @@ public class GlobalExceptionHandler {
         metadata.put("totalErrors", ex.getFieldErrors().size());
         metadata.put("affectedFields", ex.getFieldErrors().keySet());
 
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .status(status.value())
-                .errorCode(ex.getErrorCode())
-                .message(ex.getMessage())
-                .correlationId(ex.getCorrelationId().value())
-                .timestamp(ex.getTimestamp())
-                .severity(ex.getSeverity().getDisplayName())
-                .boundedContext(ex.getBoundedContext())
-                .path(exchange.getRequest().getPath().value())
-                .fieldErrors(fieldErrors)
-                .metadata(metadata)
-                .build();
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainExceptionWithFieldErrors(
+                ex, exchange, status, fieldErrors, metadata
+        );
 
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
@@ -550,7 +519,7 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getAuthErrorType(), ex.getEmail());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("authErrorType", ex.getAuthErrorType().name());
         metadata.put("attemptTime", ex.getAttemptTime());
 
@@ -558,7 +527,7 @@ public class GlobalExceptionHandler {
             metadata.put("clientIp", ex.getClientIp());
         }
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -575,11 +544,11 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getIdentifier(), ex.getIdentifierType());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("identifier", ex.getIdentifier());
         metadata.put("identifierType", ex.getIdentifierType());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -592,11 +561,11 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getIdentifier(), ex.getIdentifierType());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("identifier", ex.getIdentifier());
         metadata.put("identifierType", ex.getIdentifierType());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -609,10 +578,9 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getVehicleId());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("vehicleId", ex.getVehicleId());
+        Map<String, Object> metadata = errorResponseFactory.createMetadata("vehicleId", ex.getVehicleId());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -626,7 +594,7 @@ public class GlobalExceptionHandler {
                 ex.getVehicleId(), ex.getRouteCode());
 
         HttpStatus status = HttpStatus.SERVICE_UNAVAILABLE;
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("dataErrorType", ex.getDataErrorType().name());
 
         if (ex.getVehicleId() != null) {
@@ -639,7 +607,7 @@ public class GlobalExceptionHandler {
 
         metadata.put("isRetryable", ex.isRetryable());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -657,7 +625,7 @@ public class GlobalExceptionHandler {
                 ex.getOrigin(), ex.getDestination());
 
         HttpStatus status = HttpStatus.BAD_REQUEST;
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("planningErrorType", ex.getPlanningErrorType().name());
 
         if (ex.getOrigin() != null) {
@@ -670,7 +638,7 @@ public class GlobalExceptionHandler {
 
         metadata.put("isRetryable", ex.isRetryable());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -683,10 +651,9 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getReason());
 
         HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("reason", ex.getReason());
+        Map<String, Object> metadata = errorResponseFactory.createMetadata("reason", ex.getReason());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
@@ -699,11 +666,11 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getLocationType(), ex.getLocationValue());
 
         HttpStatus status = HttpStatusMapper.mapFromException(ex);
-        Map<String, Object> metadata = new LinkedHashMap<>();
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("locationType", ex.getLocationType());
         metadata.put("locationValue", ex.getLocationValue());
 
-        ErrorResponse errorResponse = ErrorResponse.from(ex, exchange, status, metadata);
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
