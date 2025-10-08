@@ -25,7 +25,7 @@ public class MessageSourceConfig {
         return messageSource;
     }
 
-    @Bean
+    @Bean(name = "customLocaleContextResolver")
     public LocaleContextResolver localeContextResolver() {
         AcceptHeaderLocaleContextResolver resolver = new AcceptHeaderLocaleContextResolver();
         resolver.setDefaultLocale(Locale.forLanguageTag("ru"));
