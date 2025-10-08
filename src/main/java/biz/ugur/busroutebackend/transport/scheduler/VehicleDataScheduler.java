@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @ConditionalOnProperty(prefix = "app.scheduling", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class VehicleDataScheduler {
 
+
     private final ResilientExternalApiService externalApiService;
     private final UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase;
     private final SyncBusRouteAssignmentsUseCase syncBusRouteAssignmentsUseCase;
