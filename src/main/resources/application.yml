@@ -71,6 +71,13 @@ app:
   scheduling:
     enabled: true
 
+  scheduler:
+    gps:
+      batch-size: ${SCHEDULER_GPS_BATCH_SIZE:100}
+      parallel-workers: ${SCHEDULER_GPS_PARALLEL_WORKERS:4}
+      batch-timeout: ${SCHEDULER_GPS_BATCH_TIMEOUT:30s}
+      total-timeout: ${SCHEDULER_GPS_TOTAL_TIMEOUT:60s}
+
 
   admin:
     default-username: ${ADMIN_DEFAULT_USERNAME:admin}
@@ -182,22 +189,91 @@ websocket:
 
 
 
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+    instances:
+      gpsApi:
+        base-config: default
+        sliding-window-size: 20
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 5m
+      busInfoApi:
+        base-config: default
+        sliding-window-size: 15
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 3m
+
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 10
+        limit-refresh-period: 1s
+        timeout-duration: 0s
+    instances:
+      gpsApi:
+        limit-for-period: 30
+        limit-refresh-period: 1s
+      busInfoApi:
+        limit-for-period: 20
+        limit-refresh-period: 1s
+
+  bulkhead:
+    configs:
+      default:
+        max-concurrent-calls: 10
+        max-wait-duration: 0ms
+    instances:
+      gpsApi:
+        max-concurrent-calls: 5
+      busInfoApi:
+        max-concurrent-calls: 3
+
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 60s
+    instances:
+      gpsApi:
+        timeout-duration: 60s
+      busInfoApi:
+        timeout-duration: 30s
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,circuitbreakers,ratelimiters
       base-path: /actuator
   endpoint:
     health:
       show-details: when_authorized
       show-components: always
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
   metrics:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+        resilience4j.circuitbreaker.calls: true
       percentiles:
         http.server.requests: 0.5, 0.9, 0.95, 0.99
+    tags:
+      application: ${spring.application.name}
 
 logging:
   level:

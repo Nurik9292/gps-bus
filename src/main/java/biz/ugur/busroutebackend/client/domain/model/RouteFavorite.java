@@ -27,7 +27,6 @@ public class RouteFavorite extends Entity<RouteFavoriteId> {
     @Column("route_id")
     private BusRouteId routeId;
 
-    public RouteFavorite() {}
 
     public static RouteFavorite create(ClientId clientId, BusRouteId routeId) {
         return builder()

@@ -23,5 +23,20 @@ public record VehiclePositionUpdateResult(
         return failedCount == 0 && invalidCount == 0 && conflictCount == 0;
     }
 
+    public static VehiclePositionUpdateResult failed(int batchSize) {
+        return new VehiclePositionUpdateResult(0, 0, batchSize, 0, 0, Instant.now(), List.of());
+    }
+
+    public static VehiclePositionUpdateResult merge(VehiclePositionUpdateResult r1, VehiclePositionUpdateResult r2) {
+        return new VehiclePositionUpdateResult(
+                r1.updatedCount() + r2.updatedCount(),
+                r1.createdCount() + r2.createdCount(),
+                r1.failedCount() + r2.failedCount(),
+                r1.invalidCount() + r2.invalidCount(),
+                r1.conflictCount() + r2.conflictCount(),
+                Instant.now(),
+                List.of()
+        );
+    }
 
 }

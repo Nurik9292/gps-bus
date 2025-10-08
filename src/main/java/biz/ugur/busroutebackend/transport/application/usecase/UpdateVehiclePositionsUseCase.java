@@ -15,7 +15,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Slf4j
@@ -43,16 +45,128 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
     private Mono<VehiclePositionUpdateResult> processInternal(List<GpsPositionDTO> gpsPositions) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-            log.info("Processing {} GPS positions from external API - CorrelationId: {}", gpsPositions.size(), correlationId);
+            log.info("Processing {} GPS positions (batch mode) - CorrelationId: {}", gpsPositions.size(), correlationId);
 
-            return Flux.fromIterable(gpsPositions)
+            // Filter valid positions
+            List<GpsPositionDTO> validPositions = gpsPositions.stream()
                     .filter(this::isValidGpsPosition)
-                    .flatMap(this::updateVehiclePosition)
-                    .collectList()
-                    .map(this::createResult)
-                    .doOnSuccess(result -> log.info("GPS update completed: {}", result))
-                    .doOnError(error -> log.error("GPS update failed", error));
+                    .toList();
+
+            if (validPositions.isEmpty()) {
+                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, gpsPositions.size() - validPositions.size(), 0, Instant.now(), List.of()));
+            }
+
+            // Extract device IDs for bulk lookup
+            List<String> deviceIds = validPositions.stream()
+                    .map(GpsPositionDTO::getDeviceId)
+                    .distinct()
+                    .toList();
+
+            // Batch fetch existing vehicles
+            return vehicleRepository.findByDeviceIds(deviceIds)
+                    .flatMap(existingVehiclesMap -> processBatch(validPositions, existingVehiclesMap))
+                    .doOnSuccess(result -> log.info("GPS batch update completed: {}", result))
+                    .doOnError(error -> log.error("GPS batch update failed", error));
         });
+    }
+
+    private Mono<VehiclePositionUpdateResult> processBatch(List<GpsPositionDTO> validPositions, Map<String, Vehicle> existingVehicles) {
+        List<Vehicle> vehiclesToUpdate = new ArrayList<>();
+        List<Vehicle> vehiclesToCreate = new ArrayList<>();
+        List<VehicleUpdateStatus> statuses = new ArrayList<>();
+
+        for (GpsPositionDTO gpsPosition : validPositions) {
+            try {
+                Vehicle vehicle = existingVehicles.get(gpsPosition.getDeviceId());
+
+                if (vehicle != null) {
+                    // Update existing vehicle
+                    Double oldLatitude = vehicle.getCurrentLatitude();
+                    Double oldLongitude = vehicle.getCurrentLongitude();
+                    Double oldSpeed = vehicle.getSpeedKmh();
+
+                    vehicle.updatePosition(
+                            gpsPosition.getLatitude(),
+                            gpsPosition.getLongitude(),
+                            gpsPosition.getSpeed(),
+                            gpsPosition.getFixTime(),
+                            gpsPosition.getCourse()
+                    );
+
+                    vehiclesToUpdate.add(vehicle);
+
+                    boolean shouldPublish = shouldPublishPositionEvent(
+                            oldLatitude, oldLongitude, oldSpeed,
+                            vehicle.getCurrentLatitude(),
+                            vehicle.getCurrentLongitude(),
+                            vehicle.getSpeedKmh()
+                    );
+
+                    if (shouldPublish) {
+                        VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
+                                vehicle.getId().getValue(),
+                                vehicle.getDeviceId(),
+                                vehicle.getLicensePlate(),
+                                vehicle.getRouteNumber(),
+                                vehicle.getCurrentLatitude(),
+                                vehicle.getCurrentLongitude(),
+                                vehicle.getSpeedKmh(),
+                                vehicle.getIsInMotion(),
+                                vehicle.getLastPositionUpdate(),
+                                vehicle.getCourse()
+                        );
+                        eventBus.publish(event);
+                    }
+
+                    statuses.add(VehicleUpdateStatus.updated(
+                            vehicle.getId().getValue(),
+                            vehicle.getDeviceId(),
+                            vehicle.getLicensePlate()
+                    ));
+
+                } else {
+                    // Create new vehicle
+                    String licensePlate = extractLicensePlateFromGps(gpsPosition);
+                    if (licensePlate != null) {
+                        Vehicle newVehicle = new Vehicle(gpsPosition.getDeviceId(), licensePlate);
+                        newVehicle.updatePosition(
+                                gpsPosition.getLatitude(),
+                                gpsPosition.getLongitude(),
+                                gpsPosition.getSpeed(),
+                                gpsPosition.getFixTime(),
+                                gpsPosition.getCourse()
+                        );
+                        vehiclesToCreate.add(newVehicle);
+                        statuses.add(VehicleUpdateStatus.created(
+                                newVehicle.getId().getValue(),
+                                newVehicle.getDeviceId(),
+                                newVehicle.getLicensePlate()
+                        ));
+                    } else {
+                        statuses.add(VehicleUpdateStatus.invalid(
+                                gpsPosition.getDeviceId(),
+                                "Cannot extract license plate"
+                        ));
+                    }
+                }
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid GPS data for device {}: {}", gpsPosition.getDeviceId(), e.getMessage());
+                statuses.add(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), e.getMessage()));
+            }
+        }
+
+        // Batch update and insert
+        Mono<Integer> updateMono = vehiclesToUpdate.isEmpty() ?
+                Mono.just(0) : vehicleRepository.batchUpdate(vehiclesToUpdate);
+
+        Mono<List<Vehicle>> insertMono = vehiclesToCreate.isEmpty() ?
+                Mono.just(List.of()) : vehicleRepository.batchInsert(vehiclesToCreate).collectList();
+
+        return Mono.zip(updateMono, insertMono)
+                .map(tuple -> {
+                    log.info("Batch operations: {} updated, {} created", tuple.getT1(), tuple.getT2().size());
+                    return createResult(statuses);
+                });
     }
 
     private Mono<VehicleUpdateStatus> updateVehiclePosition(GpsPositionDTO gpsPosition) {

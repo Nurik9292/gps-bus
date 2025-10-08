@@ -1,10 +1,11 @@
 package biz.ugur.busroutebackend.transport.scheduler;
 
-import biz.ugur.busroutebackend.shared.infrastructure.external.BusInfoApiClient;
-import biz.ugur.busroutebackend.shared.infrastructure.external.GpsApiClient;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
+import biz.ugur.busroutebackend.transport.application.service.ResilientExternalApiService;
 import biz.ugur.busroutebackend.transport.application.usecase.SyncBusRouteAssignmentsUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase;
+import biz.ugur.busroutebackend.transport.scheduler.dto.GpsUpdateStats;
+import biz.ugur.busroutebackend.transport.scheduler.dto.HealthStatus;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -12,7 +13,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -20,7 +20,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 
 @Slf4j
@@ -28,94 +27,90 @@ import java.util.concurrent.atomic.AtomicInteger;
 @ConditionalOnProperty(prefix = "app.scheduling", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class VehicleDataScheduler {
 
-    private final GpsApiClient gpsApiClient;
-    private final BusInfoApiClient busInfoApiClient;
+    private final ResilientExternalApiService externalApiService;
     private final UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase;
     private final SyncBusRouteAssignmentsUseCase syncBusRouteAssignmentsUseCase;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
+    private final SchedulerProperties schedulerProperties;
 
     private final AtomicBoolean gpsUpdateInProgress = new AtomicBoolean(false);
     private final AtomicBoolean busInfoSyncInProgress = new AtomicBoolean(false);
-
-    private final AtomicInteger failureCount = new AtomicInteger(0);
-    private final AtomicBoolean circuitOpen = new AtomicBoolean(false);
-    private volatile Instant lastFailure = Instant.now();
 
     private static final String GPS_UPDATE_STATS_KEY = "gps:update:stats";
     private static final String GPS_HEALTH_KEY = "gps:health";
     private static final String BUS_INFO_HEALTH_KEY = "bus_info:health";
 
-    public VehicleDataScheduler(GpsApiClient gpsApiClient,
-                                BusInfoApiClient busInfoApiClient,
+    public VehicleDataScheduler(ResilientExternalApiService externalApiService,
                                 UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase,
                                 SyncBusRouteAssignmentsUseCase syncBusRouteAssignmentsUseCase,
-                                ReactiveRedisTemplate<String, Object> redisTemplate) {
-        this.gpsApiClient = gpsApiClient;
-        this.busInfoApiClient = busInfoApiClient;
+                                ReactiveRedisTemplate<String, Object> redisTemplate,
+                                SchedulerProperties schedulerProperties) {
+        this.externalApiService = externalApiService;
         this.updateVehiclePositionsUseCase = updateVehiclePositionsUseCase;
         this.syncBusRouteAssignmentsUseCase = syncBusRouteAssignmentsUseCase;
         this.redisTemplate = redisTemplate;
+        this.schedulerProperties = schedulerProperties;
     }
 
 
     @Scheduled(cron = "0/30 * * * * *")
     public void updateVehiclePositions() {
-        if (circuitOpen.get()) {
-            if (Duration.between(lastFailure, Instant.now()).toMinutes() < 5) {
-                log.warn("Circuit breaker is OPEN, skipping GPS update");
-                return;
-            } else {
-                log.info("Circuit breaker reset after 5 minutes");
-                circuitOpen.set(false);
-                failureCount.set(0);
-            }
-        }
-
         if (!gpsUpdateInProgress.compareAndSet(false, true)) {
             log.warn("GPS update already in progress, skipping this cycle");
             return;
         }
 
         try {
-            log.debug("Starting scheduled GPS positions update");
             Instant startTime = Instant.now();
 
-            gpsApiClient.fetchAllVehiclePositions()
-                    .timeout(Duration.ofSeconds(60))
-                    .flatMap(positions -> {
-                        return Flux.fromIterable(positions)
-                                .buffer(20)
-                                .concatMap(batch ->
-                                        updateVehiclePositionsUseCase.execute(batch)
-                                                .timeout(Duration.ofSeconds(30))
-                                                .onErrorResume(error -> {
-                                                    log.error("Failed to process GPS batch of {} vehicles: {}",
-                                                            batch.size(), error.getMessage());
-                                                    return Mono.just(new VehiclePositionUpdateResult(0, 0, batch.size(), 0, 0, Instant.now(), List.of()));
-                                                })
-                                )
-                                .reduce(new VehiclePositionUpdateResult(0, 0, 0, 0, 0, Instant.now(), List.of()),
-                                        this::combineResults);
-                    })
+            int batchSize = schedulerProperties.getGps().getBatchSize();
+            int parallelWorkers = schedulerProperties.getGps().getParallelWorkers();
+            Duration batchTimeout = schedulerProperties.getGps().getBatchTimeout();
+            Duration totalTimeout = schedulerProperties.getGps().getTotalTimeout();
+
+            externalApiService.fetchAllVehiclePositions()
+                    .timeout(totalTimeout)
+                    .doOnNext(positions -> log.debug("Fetched {} GPS positions, processing in batches of {}",
+                            positions.size(), batchSize))
+                    .flatMapIterable(positions -> positions)
+                    .buffer(batchSize)
+                    .parallel(parallelWorkers)
+                    .runOn(Schedulers.parallel())
+                    .flatMap(batch ->
+                            updateVehiclePositionsUseCase.execute(batch)
+                                    .timeout(batchTimeout)
+                                    .onErrorResume(error -> {
+                                        log.error("Failed to process GPS batch of {} vehicles: {}",
+                                                batch.size(), error.getMessage());
+                                        return Mono.just(VehiclePositionUpdateResult.failed(batch.size()));
+                                    })
+                    )
+                    .sequential()
+                    .reduce(new VehiclePositionUpdateResult(0, 0, 0, 0, 0, Instant.now(), List.of()),
+                            VehiclePositionUpdateResult::merge)
                     .publishOn(Schedulers.boundedElastic())
                     .doOnSuccess(result -> {
                         Duration duration = Duration.between(startTime, Instant.now());
-                        log.info("GPS update completed in {}ms: {}", duration.toMillis(), result);
-                        failureCount.set(0);
+                        log.info("GPS update completed: duration={}ms, updated={}, created={}, failed={}, invalid={}, conflict={}",
+                                duration.toMillis(),
+                                result.updatedCount(),
+                                result.createdCount(),
+                                result.failedCount(),
+                                result.invalidCount(),
+                                result.conflictCount());
                         saveGpsUpdateStats(result, duration).subscribe();
                     })
                     .doOnError(error -> {
                         Duration duration = Duration.between(startTime, Instant.now());
                         log.error("GPS update failed after {}ms", duration.toMillis(), error);
-                        handleFailure();
                         saveGpsUpdateError(error, duration).subscribe();
                     })
+                    .onErrorResume(error -> Mono.empty())
                     .doFinally(signal -> gpsUpdateInProgress.set(false))
                     .subscribe();
 
         } catch (Exception e) {
             log.error("Unexpected error in GPS update scheduler", e);
-            handleFailure();
             gpsUpdateInProgress.set(false);
         }
     }
@@ -124,7 +119,6 @@ public class VehicleDataScheduler {
 
     @Scheduled(cron = "0 */2 * * * *")
     public void syncBusRouteAssignments() {
-        log.info("🔥🔥🔥 SCHEDULER TRIGGERED! Current time: {}", Instant.now());
         if (!busInfoSyncInProgress.compareAndSet(false, true)) {
             log.warn("Bus info sync already in progress, skipping this cycle");
             return;
@@ -134,7 +128,7 @@ public class VehicleDataScheduler {
             log.info("Starting scheduled bus route assignments sync");
             Instant startTime = Instant.now();
 
-            busInfoApiClient.fetchAllBusInfo()
+            externalApiService.fetchAllBusInfo()
                     .flatMap(busInfos -> {
                         log.info("Fetched {} bus route assignments, processing...", busInfos.size());
                         return syncBusRouteAssignmentsUseCase.execute(busInfos);
@@ -147,6 +141,7 @@ public class VehicleDataScheduler {
                         Duration duration = Duration.between(startTime, Instant.now());
                         log.error("Bus route sync failed after {}ms", duration.toMillis(), error);
                     })
+                    .onErrorResume(error -> Mono.empty())
                     .doFinally(signal -> busInfoSyncInProgress.set(false))
                     .subscribe();
 
@@ -157,33 +152,23 @@ public class VehicleDataScheduler {
     }
 
 
-    @Scheduled(cron = "* * 6 * * *")
+    @Scheduled(cron = "0 * 6 * * *")
     public void checkExternalApisHealth() {
-        log.debug("Checking external APIs health");
 
-        gpsApiClient.healthCheck()
-                .publishOn(Schedulers.boundedElastic())
-                .doOnNext(healthy -> {
-                    log.debug("GPS API health: {}", healthy ? "OK" : "FAILED");
-                    saveHealthStatus(GPS_HEALTH_KEY, healthy).subscribe();
-                })
-                .onErrorResume(error -> {
-                    log.warn("GPS API health check failed", error);
-                    return saveHealthStatus(GPS_HEALTH_KEY, false).thenReturn(false);
-                })
-                .subscribe();
+        Mono<Boolean> gpsHealth = externalApiService.gpsHealthCheck()
+                .doOnNext(healthy -> log.debug("GPS API health: {}", healthy ? "OK" : "FAILED"))
+                .flatMap(healthy -> saveHealthStatus(GPS_HEALTH_KEY, healthy).thenReturn(healthy));
 
-        busInfoApiClient.healthCheck()
+        Mono<Boolean> busInfoHealth = externalApiService.busInfoHealthCheck()
+                .doOnNext(healthy -> log.debug("Bus Info API health: {}", healthy ? "OK" : "FAILED"))
+                .flatMap(healthy -> saveHealthStatus(BUS_INFO_HEALTH_KEY, healthy).thenReturn(healthy));
+
+        Mono.zip(gpsHealth, busInfoHealth)
                 .publishOn(Schedulers.boundedElastic())
-                .doOnNext(healthy -> {
-                    log.debug("Bus Info API health: {}", healthy ? "OK" : "FAILED");
-                    saveHealthStatus(BUS_INFO_HEALTH_KEY, healthy).subscribe();
-                })
-                .onErrorResume(error -> {
-                    log.warn("Bus Info API health check failed", error);
-                    return saveHealthStatus(BUS_INFO_HEALTH_KEY, false).thenReturn(false);
-                })
-                .subscribe();
+                .subscribe(
+                        tuple -> log.debug("Health check completed: GPS={}, BusInfo={}", tuple.getT1(), tuple.getT2()),
+                        error -> log.error("Health check failed", error)
+                );
     }
 
 
@@ -201,43 +186,41 @@ public class VehicleDataScheduler {
 
     }
 
-
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady(ApplicationReadyEvent event) {
-        log.info("🚀 Application ready - triggering initial route sync");
+        log.info("Application ready - triggering initial route sync");
 
         Mono.delay(Duration.ofSeconds(10))
                 .then(Mono.defer(this::performInitialRouteSync))
                 .subscribeOn(Schedulers.boundedElastic())
                 .subscribe(
-                        result -> log.info("✅ Initial route sync completed: {}", result),
-                        error -> log.error("❌ Initial route sync failed", error)
+                        result -> log.info("Initial route sync completed: {}", result),
+                        error -> log.error("Initial route sync failed", error)
                 );
     }
 
     private Mono<SyncBusRouteAssignmentsUseCase.BusRouteAssignmentResult> performInitialRouteSync() {
-        log.info("🔄 Performing initial route synchronization...");
+        log.info("Performing initial route synchronization...");
 
-        return busInfoApiClient.fetchAllBusInfo()
+        return externalApiService.fetchAllBusInfo()
                 .flatMap(busInfos -> {
                     if (busInfos.isEmpty()) {
-                        log.warn("⚠️ No bus info available for initial sync");
+                        log.warn("No bus info available for initial sync");
                         return Mono.empty();
                     }
-
-                    log.info("📡 Initial sync: processing {} bus assignments", busInfos.size());
                     return syncBusRouteAssignmentsUseCase.execute(busInfos);
                 })
                 .doOnSuccess(result -> {
                     if (result != null && result.assignedCount() > 0) {
-                        log.info("🎯 Initial route sync successful: {} vehicles assigned to routes",
-                                result.assignedCount());
+                        log.info("Initial route sync successful: assigned={}, unassigned={}, total={}",
+                                result.assignedCount(),
+                                result.unchangedCount(),
+                                result.processedAt());
                     } else {
-                        log.info("ℹ️ Initial route sync: no assignments needed");
+                        log.info("Initial route sync: no assignments needed");
                     }
                 });
     }
-
 
 
     private Mono<Void> saveGpsUpdateStats(VehiclePositionUpdateResult result, Duration duration) {
@@ -256,7 +239,11 @@ public class VehicleDataScheduler {
 
         return redisTemplate.opsForValue()
                 .set(key, stats, Duration.ofDays(7))
-                .then();
+                .then()
+                .onErrorResume(error -> {
+                    log.warn("Failed to save GPS stats to Redis: {}", error.getMessage());
+                    return Mono.empty();
+                });
     }
 
     private Mono<Void> saveGpsUpdateError(Throwable error, Duration duration) {
@@ -272,7 +259,11 @@ public class VehicleDataScheduler {
 
         return redisTemplate.opsForValue()
                 .set(key, stats, Duration.ofDays(7))
-                .then();
+                .then()
+                .onErrorResume(redisError -> {
+                    log.warn("Failed to save GPS error stats to Redis: {}", redisError.getMessage());
+                    return Mono.empty();
+                });
     }
 
     private Mono<Void> saveHealthStatus(String key, boolean healthy) {
@@ -280,7 +271,11 @@ public class VehicleDataScheduler {
 
         return redisTemplate.opsForValue()
                 .set(key, status, Duration.ofMinutes(10))
-                .then();
+                .then()
+                .onErrorResume(error -> {
+                    log.warn("Failed to save health status to Redis: {}", error.getMessage());
+                    return Mono.empty();
+                });
     }
 
     private boolean isOlderThanDays(String key, int days) {
@@ -294,73 +289,4 @@ public class VehicleDataScheduler {
         }
     }
 
-    private VehiclePositionUpdateResult combineResults(VehiclePositionUpdateResult a, VehiclePositionUpdateResult b) {
-        return new VehiclePositionUpdateResult(
-                a.updatedCount() + b.updatedCount(),
-                a.createdCount() + b.createdCount(),
-                a.failedCount() + b.failedCount(),
-                a.invalidCount() + b.invalidCount(),
-                a.conflictCount() + b.conflictCount(),
-                Instant.now(),
-                List.of()
-        );
-    }
-
-    private void handleFailure() {
-        int failures = failureCount.incrementAndGet();
-        lastFailure = Instant.now();
-
-        if (failures >= 3) {
-            log.error("GPS Circuit breaker OPENED after {} failures", failures);
-            circuitOpen.set(true);
-        }
-    }
-
-
-    public static class GpsUpdateStats {
-        public long updatedCount;
-        public long createdCount;
-        public long failedCount;
-        public long invalidCount;
-        public long conflictCount;
-        public long durationMs;
-        public Instant timestamp;
-        public boolean successful;
-        public String errorMessage;
-
-        public GpsUpdateStats() {}
-
-        public GpsUpdateStats(long updatedCount, long createdCount, long failedCount,
-                              long invalidCount, long conflictCount, long durationMs,
-                              Instant timestamp, boolean successful) {
-            this(updatedCount, createdCount, failedCount, invalidCount, conflictCount,
-                    durationMs, timestamp, successful, null);
-        }
-
-        public GpsUpdateStats(long updatedCount, long createdCount, long failedCount,
-                              long invalidCount, long conflictCount, long durationMs,
-                              Instant timestamp, boolean successful, String errorMessage) {
-            this.updatedCount = updatedCount;
-            this.createdCount = createdCount;
-            this.failedCount = failedCount;
-            this.invalidCount = invalidCount;
-            this.conflictCount = conflictCount;
-            this.durationMs = durationMs;
-            this.timestamp = timestamp;
-            this.successful = successful;
-            this.errorMessage = errorMessage;
-        }
-    }
-
-    public static class HealthStatus {
-        public boolean healthy;
-        public Instant lastCheck;
-
-        public HealthStatus() {}
-
-        public HealthStatus(boolean healthy, Instant lastCheck) {
-            this.healthy = healthy;
-            this.lastCheck = lastCheck;
-        }
-    }
 }

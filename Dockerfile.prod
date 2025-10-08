@@ -1,4 +1,4 @@
-FROM eclipse-temurin:24-jdk AS build
+FROM eclipse-temurin:24-jdk-alpine AS build
 
 WORKDIR /workspace
 COPY pom.xml ./
@@ -10,13 +10,13 @@ RUN ./mvnw dependency:go-offline -B
 COPY src ./src
 RUN ./mvnw clean package -DskipTests -B
 
-FROM eclipse-temurin:24-jre
+FROM eclipse-temurin:24-jre-alpine
 
-RUN apt-get update && apt-get install -y \
+RUN apk add --no-cache \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/cache/apk/*
 
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN addgroup -S appuser && adduser -S appuser -G appuser
 WORKDIR /app
 COPY --from=build /workspace/target/*.jar app.jar
 

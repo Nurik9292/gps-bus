@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
@@ -330,5 +331,104 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             log.debug("Column '{}' not found, using default value: {}", columnName, defaultValue);
             return defaultValue;
         }
+    }
+
+    @Override
+    public Mono<Map<String, Vehicle>> findByDeviceIds(List<String> deviceIds) {
+        if (deviceIds == null || deviceIds.isEmpty()) {
+            return Mono.just(Map.of());
+        }
+
+        String placeholders = String.join(",", deviceIds.stream()
+                .map(id -> "?")
+                .toList());
+
+        String sql = "SELECT * FROM vehicles WHERE device_id IN (" + placeholders + ")";
+
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
+        for (int i = 0; i < deviceIds.size(); i++) {
+            spec = spec.bind(i, deviceIds.get(i));
+        }
+
+        return spec.map(getRowMapper())
+                .all()
+                .collectMap(Vehicle::getDeviceId)
+                .doOnSuccess(map -> log.debug("Found {} vehicles by device IDs", map.size()));
+    }
+
+    @Override
+    @Transactional
+    public Mono<Integer> batchUpdate(List<Vehicle> vehicles) {
+        if (vehicles == null || vehicles.isEmpty()) {
+            return Mono.just(0);
+        }
+
+        String sql = """
+            UPDATE vehicles SET
+                current_latitude = :latitude,
+                current_longitude = :longitude,
+                speed_kmh = :speed,
+                is_in_motion = :inMotion,
+                last_position_update = :lastUpdate,
+                course = :course,
+                updated_at = :updatedAt,
+                version = version + 1
+            WHERE id = :id AND version = :version
+            """;
+
+        return Flux.fromIterable(vehicles)
+                .flatMap(vehicle -> {
+                    return databaseClient.sql(sql)
+                            .bind("latitude", vehicle.getCurrentLatitude())
+                            .bind("longitude", vehicle.getCurrentLongitude())
+                            .bind("speed", vehicle.getSpeedKmh())
+                            .bind("inMotion", vehicle.getIsInMotion())
+                            .bind("lastUpdate", vehicle.getLastPositionUpdate())
+                            .bind("course", vehicle.getCourse())
+                            .bind("updatedAt", Instant.now())
+                            .bind("id", vehicle.getId().getValue())
+                            .bind("version", vehicle.getVersion())
+                            .fetch()
+                            .rowsUpdated()
+                            .map(Long::intValue);
+                })
+                .reduce(0, Integer::sum)
+                .doOnSuccess(count -> log.info("Batch updated {} vehicles", count));
+    }
+
+    @Override
+    @Transactional
+    public Flux<Vehicle> batchInsert(List<Vehicle> vehicles) {
+        if (vehicles == null || vehicles.isEmpty()) {
+            return Flux.empty();
+        }
+
+        String sql = """
+            INSERT INTO vehicles (
+                id, device_id, license_plate, current_latitude, current_longitude,
+                speed_kmh, is_in_motion, last_position_update, assigned_route_id,
+                route_number, is_active, course, created_at, updated_at, version
+            ) VALUES (
+                :id, :device_id, :license_plate, :current_latitude, :current_longitude,
+                :speed_kmh, :is_in_motion, :last_position_update, :assigned_route_id,
+                :route_number, :is_active, :course, :created_at, :updated_at, :version
+            ) RETURNING *
+            """;
+
+        return Flux.fromIterable(vehicles)
+                .flatMap(vehicle -> {
+                    Map<String, Object> values = mapEntityToColumns(vehicle);
+                    values.put("created_at", Instant.now());
+                    values.put("updated_at", Instant.now());
+                    values.put("version", 1L);
+
+                    DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
+                    for (Map.Entry<String, Object> entry : values.entrySet()) {
+                        spec = bindValue(spec, entry.getKey(), entry.getValue());
+                    }
+
+                    return spec.map(getRowMapper()).one();
+                })
+                .doOnComplete(() -> log.info("Batch inserted {} vehicles", vehicles.size()));
     }
 }

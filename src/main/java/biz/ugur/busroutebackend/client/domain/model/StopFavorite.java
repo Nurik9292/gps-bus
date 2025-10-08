@@ -28,7 +28,6 @@ public class StopFavorite extends Entity<StopFavoriteId> {
     @Column("stop_id")
     private BusStopId stopId;
 
-    public StopFavorite() {}
 
     public static StopFavorite create(ClientId clientId, BusStopId stopId) {
         return builder().id(StopFavoriteId.generate()).clientId(clientId).stopId(stopId).build();
