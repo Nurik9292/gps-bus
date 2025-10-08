@@ -127,85 +127,6 @@ public abstract class BaseController {
         return okListBuffered(data, 200);
     }
 
-
-
-    @ExceptionHandler(AbstractDomainException.class)
-    public Mono<ResponseEntity<ApiResponse<Void>>> handleDomainException(AbstractDomainException ex) {
-        log.error("[{}] Domain exception: {} - {}", getControllerName(), ex.getErrorCode(), ex.getMessage(), ex);
-
-        String localizedMessage = getLocalizedMessage(ex.getErrorCode(), ex.getMessage());
-
-        return Mono.just(ResponseEntity
-                        .badRequest()
-                        .body(ApiResponse.error(ex.getErrorCode(), localizedMessage))
-        );
-    }
-
-    @ExceptionHandler(ResponseStatusException.class)
-    public Mono<ResponseEntity<ApiResponse<Void>>> handleResponseStatusException(ResponseStatusException ex) {
-        log.error("[{}] Response status exception: {}", getControllerName(), ex.getMessage(), ex);
-
-        String errorCode = "HTTP_" + ex.getStatusCode().value();
-        String message = ex.getReason() != null ? ex.getReason() : ex.getStatusCode().toString();
-
-        return Mono.just(ResponseEntity.status(ex.getStatusCode())
-                .body(ApiResponse.error(errorCode, message)));
-    }
-
-
-    @ExceptionHandler(WebExchangeBindException.class)
-    public Mono<ResponseEntity<ApiResponse<Map<String, String>>>> handleWebFluxValidationException(WebExchangeBindException ex) {
-        log.error("[{}] WebFlux validation exception", getControllerName(), ex);
-
-        Map<String, String> errors = extractValidationErrors(ex.getFieldErrors());
-
-        return Mono.just(ResponseEntity.badRequest()
-                .body(ApiResponse.validationError(errors)));
-    }
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public Mono<ResponseEntity<ApiResponse<Map<String, String>>>> handleWebMvcValidationException(MethodArgumentNotValidException ex) {
-        log.error("[{}] WebMVC validation exception", getControllerName(), ex);
-
-        Map<String, String> errors = extractValidationErrors(ex.getBindingResult().getFieldErrors());
-
-        return Mono.just(ResponseEntity.badRequest()
-                .body(ApiResponse.validationError(errors)));
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public Mono<ResponseEntity<ApiResponse<Void>>> handleIllegalArgumentException(IllegalArgumentException ex) {
-        log.error("[{}] Illegal argument: {}", getControllerName(), ex.getMessage(), ex);
-
-        String localizedMessage = getLocalizedMessage(ErrorCode.INVALID_REQUEST.getCode(), ex.getMessage());
-
-        return Mono.just(ResponseEntity.badRequest()
-                .body(ApiResponse.error(ErrorCode.INVALID_REQUEST.getCode(), localizedMessage)));
-    }
-
-    @ExceptionHandler(Exception.class)
-    public Mono<ResponseEntity<ApiResponse<Void>>> handleGenericException(Exception ex) {
-        log.error("[{}] Unexpected error", getControllerName(), ex);
-
-        String localizedMessage = getLocalizedMessage(
-                ErrorCode.INTERNAL_ERROR.getCode(),
-                ErrorCode.INTERNAL_ERROR.getDefaultMessage()
-        );
-
-        return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error(ErrorCode.INTERNAL_ERROR.getCode(), localizedMessage)));
-    }
-
-
-    private Map<String, String> extractValidationErrors(List<FieldError> fieldErrors) {
-        return fieldErrors.stream()
-                .collect(Collectors.toMap(
-                        FieldError::getField,
-                        error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "Invalid value",
-                        (existing, replacement) -> existing
-                ));
-    }
-
     private String getLocalizedMessage(String code, String defaultMessage) {
         try {
             Locale locale = LocaleContextHolder.getLocale();
@@ -230,7 +151,6 @@ public abstract class BaseController {
 
     @Getter
     public enum ErrorCode {
-        // Client errors (4xx)
         INVALID_REQUEST("INVALID_REQUEST", "Invalid request parameters"),
         VALIDATION_ERROR("VALIDATION_ERROR", "Validation failed"),
         NOT_FOUND("NOT_FOUND", "Resource not found"),

@@ -7,11 +7,11 @@ import org.springframework.context.support.ReloadableResourceBundleMessageSource
 import org.springframework.web.server.i18n.AcceptHeaderLocaleContextResolver;
 import org.springframework.web.server.i18n.LocaleContextResolver;
 
+import java.util.Arrays;
 import java.util.Locale;
 
 @Configuration
 public class MessageSourceConfig {
-
 
     @Bean
     public MessageSource messageSource() {
@@ -23,5 +23,17 @@ public class MessageSourceConfig {
         messageSource.setUseCodeAsDefaultMessage(false);
         messageSource.setCacheSeconds(3600);
         return messageSource;
+    }
+
+    @Bean
+    public LocaleContextResolver localeContextResolver() {
+        AcceptHeaderLocaleContextResolver resolver = new AcceptHeaderLocaleContextResolver();
+        resolver.setDefaultLocale(Locale.forLanguageTag("ru"));
+        resolver.setSupportedLocales(Arrays.asList(
+                Locale.ENGLISH,
+                Locale.forLanguageTag("ru"),
+                Locale.forLanguageTag("tk")
+        ));
+        return resolver;
     }
 }
