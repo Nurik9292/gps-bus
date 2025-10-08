@@ -81,8 +81,11 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                                  Boolean isActive,
                                  Integer displayOrder,
                                  LocalDateTime startDate,
-                                 LocalDateTime endDate) {
-        return builder()
+                                 LocalDateTime endDate,
+                                 java.time.Instant createdAt,
+                                 java.time.Instant updatedAt,
+                                 Long version) {
+        Banner banner = builder()
                 .id(id)
                 .title(title)
                 .type(type)
@@ -93,6 +96,12 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .startDate(startDate)
                 .endDate(endDate)
                 .build();
+
+        banner.createdAt = createdAt;
+        banner.updatedAt = updatedAt;
+        banner.version = version != null ? version : 0L;
+
+        return banner;
     }
 
     public void updateBanner(String title, String type, String imageUrl, String targetUrl, Integer displayOrder) {

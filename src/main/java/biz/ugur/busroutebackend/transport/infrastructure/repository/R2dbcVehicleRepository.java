@@ -115,13 +115,13 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 updated_at = :updated_at,
                 course = :course,
                 version = :version
-            WHERE id = :id
+            WHERE id = :id AND version = :old_version
             RETURNING *
             """;
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
-                .bind("id", entity.getId().getValue());
-//                .bind("old_version", entity.getVersion());
+                .bind("id", entity.getId().getValue())
+                .bind("old_version", entity.getVersion());
 
         for (Map.Entry<String, Object> entry : values.entrySet()) {
             if (!entry.getKey().equals("id")) {
@@ -132,8 +132,13 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         return spec.map(getRowMapper())
                 .one()
                 .switchIfEmpty(Mono.defer(() -> {
-                    String msg = "Version conflict for " + entityClass.getSimpleName()
-                            + " with id: " + entity.getId();
+                    String msg = String.format(
+                            "Optimistic lock failure for %s with id: %s. " +
+                            "Entity was modified by another transaction (expected version: %d)",
+                            entityClass.getSimpleName(),
+                            entity.getId(),
+                            entity.getVersion()
+                    );
                     log.error(msg);
                     return Mono.error(new org.springframework.dao.OptimisticLockingFailureException(msg));
                 }))

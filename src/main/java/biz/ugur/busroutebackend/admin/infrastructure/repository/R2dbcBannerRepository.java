@@ -148,6 +148,11 @@ public class R2dbcBannerRepository extends BaseR2dbcRepository<Banner, BannerId>
         LocalDateTime startDate = row.get("start_date", LocalDateTime.class);
         LocalDateTime endDate = row.get("end_date", LocalDateTime.class);
 
-        return Banner.restore(id, title, type, imageUrl, targetUrl, isActive, displayOrder, startDate, endDate);
+        return Banner.restore(
+                id, title, type, imageUrl, targetUrl, isActive, displayOrder, startDate, endDate,
+                row.get("created_at", java.time.Instant.class),
+                row.get("updated_at", java.time.Instant.class),
+                row.get("version", Long.class)
+        );
     }
 }

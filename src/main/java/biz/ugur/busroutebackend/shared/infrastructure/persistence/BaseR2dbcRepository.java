@@ -168,21 +168,16 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
                 .filter(o -> !o.equals("id"))
                 .map(o -> o + " = :" + o)
                 .collect(Collectors.joining(", "));
-//
-//        String sql = String.format(
-//                "UPDATE %s SET %s WHERE id = :id AND version = :old_version RETURNING *",
-//                tableName, setClause
-//        );
 
         String sql = String.format(
-                "UPDATE %s SET %s WHERE id = :id RETURNING *",
+                "UPDATE %s SET %s WHERE id = :id AND version = :old_version RETURNING *",
                 tableName, setClause
         );
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
-                .bind("id", convertIdToDatabase(entity.getId()));
-//                .bind("old_version", entity.getVersion());
-//
+                .bind("id", convertIdToDatabase(entity.getId()))
+                .bind("old_version", entity.getVersion());
+
         for (Map.Entry<String, Object> entry : values.entrySet()) {
             if (!entry.getKey().equals("id")) {
                 spec = bindValue(spec, entry.getKey(), entry.getValue());
@@ -192,8 +187,13 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
         return spec.map(getRowMapper())
                 .one()
                 .switchIfEmpty(Mono.defer(() -> {
-                    String msg = "Version conflict for " + entityClass.getSimpleName()
-                            + " with id: " + entity.getId();
+                    String msg = String.format(
+                            "Optimistic lock failure for %s with id: %s. " +
+                            "Entity was modified by another transaction (expected version: %d)",
+                            entityClass.getSimpleName(),
+                            entity.getId(),
+                            entity.getVersion()
+                    );
                     log.error(msg);
                     return Mono.error(new OptimisticLockingFailureException(msg));
                 }));

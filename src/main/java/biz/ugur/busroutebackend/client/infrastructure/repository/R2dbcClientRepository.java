@@ -139,7 +139,8 @@ public class R2dbcClientRepository extends BaseR2dbcRepository<Client, ClientId>
                 row.get("access_token", String.class),
                 row.get("refresh_token", String.class),
                 row.get("created_at", Instant.class),
-                row.get("updated_at", Instant.class)
+                row.get("updated_at", Instant.class),
+                row.get("version", Long.class)
         );
     }
 }

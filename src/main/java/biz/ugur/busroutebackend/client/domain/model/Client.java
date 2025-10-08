@@ -99,7 +99,8 @@ public class Client extends AggregateRoot<Client, ClientId> {
                                       String accessToken,
                                       String refreshToken,
                                       Instant createdAt,
-                                      Instant updatedAt) {
+                                      Instant updatedAt,
+                                      Long version) {
 
 
         Client client = builder()
@@ -117,6 +118,7 @@ public class Client extends AggregateRoot<Client, ClientId> {
 
         client.createdAt = createdAt;
         client.updatedAt = updatedAt;
+        client.version = version != null ? version : 0L;
 
         return client;
     }
