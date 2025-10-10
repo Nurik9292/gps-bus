@@ -29,6 +29,7 @@ CREATE TABLE banners (
                          type VARCHAR(100)  DEFAULT 'main' NOT NULL,
                          image_url TEXT NOT NULL,
                          target_url TEXT,
+                         content TEXT,
                          is_active BOOLEAN DEFAULT true,
                          display_order INTEGER DEFAULT 0,
                          start_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
