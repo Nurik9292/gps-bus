@@ -78,7 +78,7 @@ app:
 
   storage:
     avatars:
-      base-path: ${AVATAR_STORAGE_PATH:/home/user/backend_bus_route/app/data/avatars}
+      base-path: ${AVATAR_STORAGE_PATH:/home/developer/projects/bus/ugur_v4/bus-route-backend/app/data/avatars}
       base-url: ${AVATAR_BASE_URL:http://localhost:8080/uploads/avatars}
       max-size-mb: ${AVATAR_MAX_SIZE_MB:2}
       create-thumbnails: ${AVATAR_CREATE_THUMBNAILS:false}
@@ -86,7 +86,7 @@ app:
       jpeg-quality: ${AVATAR_JPEG_QUALITY:0.85}
 
     banners:
-      base-path: /home/user/backend_bus_route/app/data/banners
+      base-path: /home/developer/projects/bus/ugur_v4/bus-route-backend/app/data/banners
       base-url: http://localhost:8080/banners
       max-size-mb: 10
       create-thumbnails: false

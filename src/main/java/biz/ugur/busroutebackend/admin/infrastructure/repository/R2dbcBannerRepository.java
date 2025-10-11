@@ -147,11 +147,13 @@ public class R2dbcBannerRepository extends BaseR2dbcRepository<Banner, BannerId>
         Integer displayOrder = row.get("display_order", Integer.class);
         LocalDateTime startDate = row.get("start_date", LocalDateTime.class);
         LocalDateTime endDate = row.get("end_date", LocalDateTime.class);
+        String content = row.get("content", String.class);
 
         return Banner.restore(
                 id, title, type, imageUrl, targetUrl, isActive, displayOrder, startDate, endDate,
                 row.get("created_at", java.time.Instant.class),
                 row.get("updated_at", java.time.Instant.class),
+                content,
                 row.get("version", Long.class)
         );
     }

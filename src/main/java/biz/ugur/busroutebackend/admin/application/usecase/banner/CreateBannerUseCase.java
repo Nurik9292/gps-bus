@@ -54,7 +54,9 @@ public class CreateBannerUseCase extends BaseUseCase<Mono<BannerCreateRequest>, 
                                 request.getType(),
                                 processedImageUrl,
                                 request.getTargetUrl(),
-                                request.getDisplayOrder());
+                                request.getDisplayOrder(),
+                                request.getContent()
+                        );
 
 
                         if (request.getStartDate() != null) {

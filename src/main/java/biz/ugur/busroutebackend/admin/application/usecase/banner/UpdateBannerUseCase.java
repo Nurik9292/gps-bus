@@ -100,7 +100,8 @@ public class UpdateBannerUseCase extends BaseUseCase<Mono<UpdateBannerUseCase.Re
                 updateData.getType(),
                 banner.getImageUrl(),
                 updateData.getTargetUrl(),
-                updateData.getDisplayOrder()
+                updateData.getDisplayOrder(),
+                updateData.getContent()
         );
 
         if (updateData.getStartDate() != null) {

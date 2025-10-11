@@ -35,4 +35,7 @@ public class BannerUpdateRequest {
 
     @JsonProperty("start_date")
     private LocalDateTime startDate;
+
+    @JsonProperty("content")
+    private String content;
 }

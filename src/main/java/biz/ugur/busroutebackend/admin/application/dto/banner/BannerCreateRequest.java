@@ -34,4 +34,7 @@ public class BannerCreateRequest {
 
     @JsonProperty("starDate")
     private LocalDateTime startDate;
+
+    @JsonProperty("content")
+    String content;
 }

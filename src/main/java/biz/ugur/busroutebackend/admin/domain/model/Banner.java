@@ -10,6 +10,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
@@ -49,8 +50,10 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
     @Column("end_date")
     private LocalDateTime endDate;
 
+    @Column("content")
+    private String content;
 
-    public static Banner create(String title, String type, String imageUrl, String targetUrl, Integer displayOrder) {
+    public static Banner create(String title, String type, String imageUrl, String targetUrl, Integer displayOrder, String content) {
         Banner banner = builder()
                 .id(BannerId.generate())
                 .title(title)
@@ -61,6 +64,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .displayOrder( displayOrder != null ? displayOrder : 0)
                 .startDate(LocalDateTime.now())
                 .endDate(null)
+                .content(content)
                 .build();
 
         banner.registerEvent(new BannerCreatedEvent(
@@ -82,8 +86,9 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                                  Integer displayOrder,
                                  LocalDateTime startDate,
                                  LocalDateTime endDate,
-                                 java.time.Instant createdAt,
-                                 java.time.Instant updatedAt,
+                                 Instant createdAt,
+                                 Instant updatedAt,
+                                 String content,
                                  Long version) {
         Banner banner = builder()
                 .id(id)
@@ -95,6 +100,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .displayOrder(displayOrder)
                 .startDate(startDate)
                 .endDate(endDate)
+                .content(content)
                 .build();
 
         banner.createdAt = createdAt;
@@ -104,7 +110,13 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
         return banner;
     }
 
-    public void updateBanner(String title, String type, String imageUrl, String targetUrl, Integer displayOrder) {
+    public void updateBanner(
+            String title,
+            String type,
+            String imageUrl,
+            String targetUrl,
+            Integer displayOrder,
+            String content) {
         if (title != null && !title.trim().isEmpty()) {
             this.title = title.trim();
         }
@@ -123,6 +135,10 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
 
         if (displayOrder != null) {
             this.displayOrder = displayOrder;
+        }
+
+        if(content != null) {
+            this.content = content.trim();
         }
 
     }
@@ -166,12 +182,13 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 Objects.equals(isActive, banner.isActive) &&
                 Objects.equals(displayOrder, banner.displayOrder) &&
                 Objects.equals(startDate, banner.startDate) &&
+                Objects.equals(content, banner.content) &&
                 Objects.equals(endDate, banner.endDate);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), id, title, type, imageUrl, targetUrl, isActive, displayOrder, startDate, endDate);
+        return Objects.hash(super.hashCode(), id, title, type, imageUrl, targetUrl, isActive, displayOrder, startDate, content, endDate);
     }
 
     @Override
@@ -188,6 +205,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 ", endDate=" + endDate +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
+                ", content=" + content +
                 '}';
     }
 }
