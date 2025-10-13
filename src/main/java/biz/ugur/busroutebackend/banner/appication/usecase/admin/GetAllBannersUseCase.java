@@ -1,9 +1,9 @@
-package biz.ugur.busroutebackend.admin.application.usecase.banner;
+package biz.ugur.busroutebackend.banner.appication.usecase.admin;
 
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerListResponse;
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerResponse;
-import biz.ugur.busroutebackend.admin.domain.model.Banner;
-import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
+import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerListResponse;
+import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerResponse;
+import biz.ugur.busroutebackend.banner.domain.model.Banner;
+import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
@@ -15,9 +15,9 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerListResponse> {
 
-    private final BannerRepository bannerRepository;
+    private final AdminBannerRepository bannerRepository;
 
-    public GetAllBannersUseCase(BannerRepository bannerRepository,
+    public GetAllBannersUseCase(AdminBannerRepository bannerRepository,
                                 CorrelationContextService correlationContextService,
                                 EventBus eventBus) {
         super(correlationContextService, eventBus);

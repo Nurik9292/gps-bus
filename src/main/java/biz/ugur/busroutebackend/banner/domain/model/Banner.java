@@ -1,8 +1,8 @@
-package biz.ugur.busroutebackend.admin.domain.model;
+package biz.ugur.busroutebackend.banner.domain.model;
 
-import biz.ugur.busroutebackend.admin.domain.enums.BannerType;
+import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
 import biz.ugur.busroutebackend.admin.domain.events.BannerCreatedEvent;
-import biz.ugur.busroutebackend.admin.domain.valueobjects.BannerId;
+import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import lombok.Builder;
 import lombok.Getter;

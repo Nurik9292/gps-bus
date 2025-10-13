@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.controller;
 
-import biz.ugur.busroutebackend.admin.application.dto.banner.*;
-import biz.ugur.busroutebackend.admin.application.usecase.banner.*;
+import biz.ugur.busroutebackend.banner.appication.dto.admin.*;
+import biz.ugur.busroutebackend.banner.appication.usecase.admin.*;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
@@ -55,7 +55,7 @@ public class AdminBannerController extends BaseController {
                     .as(getAllBannersUseCase::execute));
         }
 
-        BannerPaginationQuery query = new BannerPaginationQuery(page, size, camelToSnake(sort), order, active);
+        BannerPaginationQuery query = BannerPaginationQuery.create(page, size, camelToSnake(sort), order, active);
 
         return ok(Mono.just(query)
                 .as(getBannersWithPaginationUseCase::execute));

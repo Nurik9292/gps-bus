@@ -1,10 +1,10 @@
-package biz.ugur.busroutebackend.admin.application.usecase.banner;
+package biz.ugur.busroutebackend.banner.appication.usecase.admin;
 
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerCreateRequest;
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerResponse;
-import biz.ugur.busroutebackend.admin.domain.enums.BannerType;
-import biz.ugur.busroutebackend.admin.domain.model.Banner;
-import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
+import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerCreateRequest;
+import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerResponse;
+import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
+import biz.ugur.busroutebackend.banner.domain.model.Banner;
+import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
@@ -19,11 +19,11 @@ import java.util.Objects;
 @Slf4j
 public class CreateBannerUseCase extends BaseUseCase<Mono<BannerCreateRequest>, BannerResponse> {
 
-    private final BannerRepository bannerRepository;
+    private final AdminBannerRepository bannerRepository;
     private final BannerStorageService bannerStorageService;
 
 
-    public CreateBannerUseCase(BannerRepository bannerRepository,
+    public CreateBannerUseCase(AdminBannerRepository bannerRepository,
                                CorrelationContextService correlationService,
                                EventBus eventBus,
                                BannerStorageService bannerStorageService) {

@@ -1,10 +1,11 @@
 package biz.ugur.busroutebackend.interfaces.rest.mobile.controller;
 
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerListResponse;
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerPaginationQuery;
-import biz.ugur.busroutebackend.admin.application.usecase.banner.GetAllBannersUseCase;
-import biz.ugur.busroutebackend.admin.application.usecase.banner.GetBannersByTypeUseCase;
-import biz.ugur.busroutebackend.admin.application.usecase.banner.GetBannersWithPaginationUseCase;
+import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerListResponse;
+import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerPaginationQuery;
+import biz.ugur.busroutebackend.banner.appication.usecase.admin.GetAllBannersUseCase;
+import biz.ugur.busroutebackend.banner.appication.usecase.admin.GetBannersByTypeUseCase;
+import biz.ugur.busroutebackend.banner.appication.usecase.admin.GetBannersWithPaginationUseCase;
+import biz.ugur.busroutebackend.banner.appication.usecase.client.GetBannersWithPaginationByTypeUseCase;
 import biz.ugur.busroutebackend.client.application.usecase.RouteIsFavoriteUseCase;
 import biz.ugur.busroutebackend.client.infrastructure.security.ClientPrincipal;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.response.*;
@@ -21,11 +22,11 @@ import biz.ugur.busroutebackend.transport.application.usecase.stop.GetAllBusStop
 import biz.ugur.busroutebackend.transport.application.usecase.stop.GetBusStopByIdUseCase;
 import biz.ugur.busroutebackend.transport.infrastructure.services.BusStopRealTimeServiceImpl;
 import org.springframework.context.MessageSource;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.reactive.accept.RequestedContentTypeResolver;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -40,7 +41,7 @@ public class MobileApiController extends BaseController {
     private final GetAllBusStopsUseCase getAllStopsUseCase;
     private final GetAllBannersUseCase getAllBannersUseCase;
     private final GetAllBusRoutesWithPaginationUseCase  getAllBusRoutesWithPaginationUseCase;
-    private final GetBannersWithPaginationUseCase getBannersWithPaginationUseCase;
+    private final GetBannersWithPaginationByTypeUseCase getBannersWithPaginationUseCase;
     private final GetRouteByNumberUseCase getRouteByNumberUseCase;
     private final GetRouteByIdUseCase getRouteByIdUseCase;
     private final GetBusStopByIdUseCase getBusStopByIdUseCase;
@@ -51,12 +52,13 @@ public class MobileApiController extends BaseController {
     private final CountVehicleUseCase countVehicleUseCase;
     private final ActiveCountVehicleUseCase activeCountVehicleUseCase;
     private final BusStopRealTimeServiceImpl busStopRealTimeService;
+    private final RequestedContentTypeResolver requestedContentTypeResolver;
 
     public MobileApiController(GetAllBusRoutesUseCase getAllRoutesUseCase,
                                GetAllBusStopsUseCase getAllStopsUseCase,
                                GetAllBannersUseCase getAllBannersUseCase,
                                GetAllBusRoutesWithPaginationUseCase getAllBusRoutesWithPaginationUseCase,
-                               GetBannersWithPaginationUseCase getBannersWithPaginationUseCase,
+                               GetBannersWithPaginationByTypeUseCase getBannersWithPaginationUseCase,
                                GetRouteByNumberUseCase getRouteByNumberUseCase,
                                GetRouteByIdUseCase getRouteByIdUseCase,
                                GetBusStopByIdUseCase getBusStopByIdUseCase,
@@ -67,7 +69,8 @@ public class MobileApiController extends BaseController {
                                CountVehicleUseCase countVehicleUseCase,
                                ActiveCountVehicleUseCase activeCountVehicleUseCase,
                                BusStopRealTimeServiceImpl busStopRealTimeService,
-                               MessageSource messageSource) {
+                               MessageSource messageSource,
+                               RequestedContentTypeResolver requestedContentTypeResolver) {
         super(messageSource);
         this.getAllRoutesUseCase = getAllRoutesUseCase;
         this.getAllStopsUseCase = getAllStopsUseCase;
@@ -84,6 +87,7 @@ public class MobileApiController extends BaseController {
         this.countVehicleUseCase = countVehicleUseCase;
         this.activeCountVehicleUseCase = activeCountVehicleUseCase;
         this.busStopRealTimeService = busStopRealTimeService;
+        this.requestedContentTypeResolver = requestedContentTypeResolver;
     }
 
     @Override
@@ -318,15 +322,18 @@ public class MobileApiController extends BaseController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "displayOrder") String sortField,
-            @RequestParam(defaultValue = "asc") String sortOrder) {
+            @RequestParam(defaultValue = "asc") String sortOrder,
+            @RequestParam(defaultValue = "main") String type
+    ) {
 
 
-        BannerPaginationQuery query = new BannerPaginationQuery(
+        BannerPaginationQuery query =  BannerPaginationQuery.createWithType(
                 page,
                 size,
                 sortField,
                 sortOrder,
-                true
+                true,
+                type
         );
 
         return ok(Mono.just(query).as(getBannersWithPaginationUseCase::execute));

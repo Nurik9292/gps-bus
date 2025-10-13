@@ -1,13 +1,13 @@
-package biz.ugur.busroutebackend.admin.domain.repository;
+package biz.ugur.busroutebackend.banner.domain.repository;
 
-import biz.ugur.busroutebackend.admin.domain.model.Banner;
-import biz.ugur.busroutebackend.admin.domain.valueobjects.BannerId;
+import biz.ugur.busroutebackend.banner.domain.model.Banner;
+import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId;
 import biz.ugur.busroutebackend.shared.base.BaseRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 
-public interface BannerRepository extends BaseRepository<Banner, BannerId> {
+public interface AdminBannerRepository extends BaseRepository<Banner, BannerId> {
 
     Flux<Banner> findActiveBanners();
 

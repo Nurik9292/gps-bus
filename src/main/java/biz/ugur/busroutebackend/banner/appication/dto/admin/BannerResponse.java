@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.admin.application.dto.banner;
+package biz.ugur.busroutebackend.banner.appication.dto.admin;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;

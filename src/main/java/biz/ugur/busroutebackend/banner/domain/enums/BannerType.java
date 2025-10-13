@@ -1,7 +1,6 @@
-package biz.ugur.busroutebackend.admin.domain.enums;
+package biz.ugur.busroutebackend.banner.domain.enums;
 
 
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
 

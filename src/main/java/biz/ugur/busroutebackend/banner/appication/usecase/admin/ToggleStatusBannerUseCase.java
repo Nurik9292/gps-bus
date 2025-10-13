@@ -1,9 +1,9 @@
-package biz.ugur.busroutebackend.admin.application.usecase.banner;
+package biz.ugur.busroutebackend.banner.appication.usecase.admin;
 
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerResponse;
-import biz.ugur.busroutebackend.admin.domain.model.Banner;
-import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
-import biz.ugur.busroutebackend.admin.domain.valueobjects.BannerId;
+import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerResponse;
+import biz.ugur.busroutebackend.banner.domain.model.Banner;
+import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
+import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
@@ -19,11 +19,11 @@ public class ToggleStatusBannerUseCase extends BaseUseCase<Mono<ToggleStatusBann
 
     private static final String BANNER_NOT_FOUND_MSG = "Banner not found: ";
 
-    private final BannerRepository bannerRepository;
+    private final AdminBannerRepository bannerRepository;
 
     public ToggleStatusBannerUseCase(CorrelationContextService correlationContextService,
                                      EventBus eventBus,
-                                     BannerRepository bannerRepository) {
+                                     AdminBannerRepository bannerRepository) {
         super(correlationContextService, eventBus);
         this.bannerRepository = bannerRepository;
     }

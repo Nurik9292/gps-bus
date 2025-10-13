@@ -1,7 +1,7 @@
-package biz.ugur.busroutebackend.admin.application.usecase.banner;
+package biz.ugur.busroutebackend.banner.appication.usecase.admin;
 
-import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
-import biz.ugur.busroutebackend.admin.domain.valueobjects.BannerId;
+import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
+import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
@@ -14,11 +14,11 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class DeleteBannerUseCase extends BaseUseCase<Mono<String>, Void> {
 
-    private final BannerRepository bannerRepository;
+    private final AdminBannerRepository bannerRepository;
     private final BannerStorageService bannerStorageService;
 
 
-    public DeleteBannerUseCase(BannerRepository bannerRepository,
+    public DeleteBannerUseCase(AdminBannerRepository bannerRepository,
                                BannerStorageService bannerStorageService,
                                CorrelationContextService  correlationContextService,
                                EventBus eventBus

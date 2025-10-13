@@ -1,10 +1,10 @@
-package biz.ugur.busroutebackend.admin.application.usecase.banner;
+package biz.ugur.busroutebackend.banner.appication.usecase.admin;
 
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerListResponse;
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerPaginationQuery;
-import biz.ugur.busroutebackend.admin.application.dto.banner.BannerResponse;
-import biz.ugur.busroutebackend.admin.domain.model.Banner;
-import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
+import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerListResponse;
+import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerPaginationQuery;
+import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerResponse;
+import biz.ugur.busroutebackend.banner.domain.model.Banner;
+import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
@@ -21,9 +21,9 @@ import java.util.List;
 @Slf4j
 public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPaginationQuery>, BannerListResponse> {
 
-    private final BannerRepository bannerRepository;
+    private final AdminBannerRepository bannerRepository;
 
-    public GetBannersWithPaginationUseCase(BannerRepository bannerRepository,
+    public GetBannersWithPaginationUseCase(AdminBannerRepository bannerRepository,
                                            CorrelationContextService correlationContextService,
                                            EventBus eventBus) {
         super(correlationContextService, eventBus);
@@ -43,14 +43,12 @@ public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPagi
 
     private Mono<BannerListResponse> processInternal(BannerPaginationQuery query) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-            log.debug("Fetching banners with pagination: page={}, size={}, sort={}, order={}, active={}",
+            log.debug("Fetching banners with pagination admin: page={}, size={}, sort={}, order={}, active={}",
                     query.getPage(), query.getSize(), query.getSortField(), query.getSortOrder(), query.getActiveOnly());
 
             Pageable pageable = createPageable(query);
 
-            var bannerFlux = bannerRepository.findAll(pageable);
-
-            return bannerFlux
+            return  bannerRepository.findAll(pageable)
                     .map(this::toResponse)
                     .collectList()
                     .zipWith(bannerRepository.countActiveBanners())
