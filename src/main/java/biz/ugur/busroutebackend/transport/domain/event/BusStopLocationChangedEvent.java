@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.transport.domain.event;
 
 import biz.ugur.busroutebackend.shared.domain.event.DomainEvent;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 
 import java.math.BigDecimal;
@@ -15,6 +16,20 @@ public record BusStopLocationChangedEvent(
 
     public BusStopLocationChangedEvent(BusStopId stopId, BigDecimal newLatitude, BigDecimal newLongitude) {
         this(stopId, newLatitude, newLongitude, Instant.now());
+    }
+
+    /**
+     * Convenience constructor using Coordinates value object
+     */
+    public BusStopLocationChangedEvent(BusStopId stopId, Coordinates coordinates) {
+        this(stopId, coordinates.getLatitude(), coordinates.getLongitude(), Instant.now());
+    }
+
+    /**
+     * Get coordinates as value object
+     */
+    public Coordinates getCoordinates() {
+        return Coordinates.of(newLatitude, newLongitude);
     }
 
     @Override

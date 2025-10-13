@@ -1,27 +1,31 @@
 package biz.ugur.busroutebackend.routing.application.dto;
 
 import biz.ugur.busroutebackend.interfaces.rest.routing.dto.request.TripSearchRequest;
-import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripSearchCriteria;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 
 import java.util.UUID;
 
+/**
+ * Search context for trip planning.
+ * Migrated from Location to Coordinates as part of geospatial module consolidation.
+ */
 public record SearchContext(
         String searchId,
-        Location fromLocation,
-        Location toLocation,
+        Coordinates fromLocation,
+        Coordinates toLocation,
         TripSearchCriteria searchCriteria,
         long startTime
 ) {
 
-    public static SearchContext of(Location fromLocation, Location toLocation, TripSearchCriteria searchCriteria) {
+    public static SearchContext of(Coordinates fromLocation, Coordinates toLocation, TripSearchCriteria searchCriteria) {
         return new SearchContext(UUID.randomUUID().toString(), fromLocation, toLocation, searchCriteria, System.currentTimeMillis());
     }
 
     public static SearchContext from(TripSearchRequest request, String correlationId) {
         String searchId = generateSearchId(request);
-        Location fromLocation = createLocationFromDTO(request.getFrom());
-        Location toLocation = createLocationFromDTO(request.getTo());
+        Coordinates fromLocation = createCoordinatesFromDTO(request.getFrom());
+        Coordinates toLocation = createCoordinatesFromDTO(request.getTo());
         TripSearchCriteria criteria = createSearchCriteria(request.getPreferences());
         return new SearchContext(searchId, fromLocation, toLocation, criteria, System.currentTimeMillis());
     }
@@ -32,11 +36,10 @@ public record SearchContext(
                 Integer.toHexString(request.hashCode()).substring(0, 4).toUpperCase());
     }
 
-    private static Location createLocationFromDTO(TripSearchRequest.LocationDTO dto) {
-        return new Location(
+    private static Coordinates createCoordinatesFromDTO(TripSearchRequest.LocationDTO dto) {
+        return Coordinates.of(
                 dto.getLatitude(),
-                dto.getLongitude(),
-                dto.getDescription() != null ? dto.getDescription() : "Location"
+                dto.getLongitude()
         );
     }
 

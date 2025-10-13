@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.transport.application.usecase.stop;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.geospatial.domain.constants.TurkmenistanBounds;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopData;
 import biz.ugur.busroutebackend.transport.application.dto.stop.UpdateStop;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
@@ -98,15 +99,14 @@ public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopData
                 });
     }
 
+    /**
+     * Validate bus stop coordinates.
+     * Now uses centralized TurkmenistanBounds for strict validation (bus stops are fixed infrastructure).
+     *
+     * @since 1.5.0 (Phase 3 - migrated to use TurkmenistanBounds)
+     */
     private void validateCoordinates(BigDecimal latitude, BigDecimal longitude) {
-        if (latitude.compareTo(new BigDecimal("35.1")) < 0 ||
-                latitude.compareTo(new BigDecimal("42.8")) > 0) {
-            throw new IllegalArgumentException("Latitude must be within Turkmenistan bounds (35.1-42.8)");
-        }
-
-        if (longitude.compareTo(new BigDecimal("52.5")) < 0 ||
-                longitude.compareTo(new BigDecimal("66.7")) > 0) {
-            throw new IllegalArgumentException("Longitude must be within Turkmenistan bounds (52.5-66.7)");
-        }
+        // Use strict bounds for bus stops (they are fixed infrastructure)
+        TurkmenistanBounds.validateStrictBounds(latitude, longitude);
     }
 }

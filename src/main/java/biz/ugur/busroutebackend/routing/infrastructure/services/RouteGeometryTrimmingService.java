@@ -1,6 +1,9 @@
 package biz.ugur.busroutebackend.routing.infrastructure.services;
 
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Distance;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -8,9 +11,16 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Service for trimming route geometry between two stops.
+ * Now uses centralized DistanceCalculationService for all distance calculations.
+ */
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class RouteGeometryTrimmingService {
+
+    private final DistanceCalculationService distanceService;
 
     private static final Pattern LINESTRING_PATTERN = Pattern.compile(
             "LINESTRING\\s*\\(\\s*([^)]+)\\s*\\)", Pattern.CASE_INSENSITIVE
@@ -104,18 +114,18 @@ public class RouteGeometryTrimmingService {
         return wkt.toString();
     }
 
+    /**
+     * Calculate Haversine distance using centralized service.
+     *
+     * @param lat1 Starting latitude
+     * @param lon1 Starting longitude
+     * @param lat2 Ending latitude
+     * @param lon2 Ending longitude
+     * @return Distance in meters
+     */
     private double calculateHaversineDistance(double lat1, double lon1, double lat2, double lon2) {
-        final double R = 6371000;
-        double latRad1 = Math.toRadians(lat1);
-        double latRad2 = Math.toRadians(lat2);
-        double deltaLat = Math.toRadians(lat2 - lat1);
-        double deltaLon = Math.toRadians(lon2 - lon1);
-
-        double a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-                Math.cos(latRad1) * Math.cos(latRad2) *
-                        Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
+        Distance distance = distanceService.calculateDistance(lat1, lon1, lat2, lon2);
+        return distance.getMeters();
     }
 
     private int insertStopIntoGeometry(List<double[]> coordinates, BusStop stop) {

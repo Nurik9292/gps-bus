@@ -104,7 +104,9 @@ public class RouteDuplicationDetector {
         return route.getRouteSegments().stream()
                 .filter(segment -> segment.getType() == SegmentType.BUS_RIDE)
                 .findFirst()
-                .map(segment -> segment.getFromLocation().getDescription())
+                .map(segment -> String.format("%.4f, %.4f",
+                        segment.getFromLocation().getLatitudeAsDouble(),
+                        segment.getFromLocation().getLongitudeAsDouble()))
                 .orElse("Unknown");
     }
 
@@ -112,7 +114,9 @@ public class RouteDuplicationDetector {
         return route.getRouteSegments().stream()
                 .filter(segment -> segment.getType() == SegmentType.BUS_RIDE)
                 .reduce((first, second) -> second)
-                .map(segment -> segment.getToLocation().getDescription())
+                .map(segment -> String.format("%.4f, %.4f",
+                        segment.getToLocation().getLatitudeAsDouble(),
+                        segment.getToLocation().getLongitudeAsDouble()))
                 .orElse("Unknown");
     }
 

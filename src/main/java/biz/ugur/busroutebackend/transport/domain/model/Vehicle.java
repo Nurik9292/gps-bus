@@ -1,6 +1,8 @@
 package biz.ugur.busroutebackend.transport.domain.model;
 
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
+import biz.ugur.busroutebackend.geospatial.domain.constants.TurkmenistanBounds;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleAssignedToRouteEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent;
@@ -222,12 +224,33 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
             throw new IllegalArgumentException("Coordinates cannot be null");
         }
 
-        if (latitude < 35.0 || latitude > 43.0) {
-            throw new IllegalArgumentException("Latitude outside Turkmenistan bounds");
+        if (!TurkmenistanBounds.isWithinStandardBounds(latitude, longitude)) {
+            throw new IllegalArgumentException(
+                String.format("Coordinates (%.6f, %.6f) are outside Turkmenistan bounds", latitude, longitude)
+            );
         }
-        if (longitude < 52.0 || longitude > 67.0) {
-            throw new IllegalArgumentException("Longitude outside Turkmenistan bounds");
+    }
+
+    /**
+     * Convert current vehicle position to Coordinates value object
+     * @return Coordinates or null if position not set
+     */
+    public Coordinates toCoordinates() {
+        if (currentLatitude == null || currentLongitude == null) {
+            return null;
         }
+        return Coordinates.of(currentLatitude, currentLongitude);
+    }
+
+    /**
+     * Create Vehicle from Coordinates
+     * @param coordinates the coordinates to set
+     */
+    public void updatePositionFromCoordinates(Coordinates coordinates, Double speed, Instant fixTime, Double course) {
+        if (coordinates == null) {
+            throw new IllegalArgumentException("Coordinates cannot be null");
+        }
+        updatePosition(coordinates.getLatitudeAsDouble(), coordinates.getLongitudeAsDouble(), speed, fixTime, course);
     }
 
 

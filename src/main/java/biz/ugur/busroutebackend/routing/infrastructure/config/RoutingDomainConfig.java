@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
 import biz.ugur.busroutebackend.routing.infrastructure.services.GraphRouteCalculationService;
 import biz.ugur.busroutebackend.routing.infrastructure.services.LiveETACalculationService;
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
@@ -33,7 +34,8 @@ public class RoutingDomainConfig {
     @Bean
     public ETACalculationService etaCalculationService(VehicleRepository vehicleRepository,
                                                        DatabaseClient databaseClient,
-                                                       ReactiveRedisTemplate<String, Object> redisTemplate) {
-        return new LiveETACalculationService(vehicleRepository, databaseClient, redisTemplate);
+                                                       ReactiveRedisTemplate<String, Object> redisTemplate,
+                                                       DistanceCalculationService distanceService) {
+        return new LiveETACalculationService(vehicleRepository, databaseClient, redisTemplate, distanceService);
     }
 }

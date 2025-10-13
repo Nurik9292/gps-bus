@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.routing.infrastructure.services;
 
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
-import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
@@ -11,7 +11,6 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.r2dbc.spi.ReadableMetadata;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.Getter;
@@ -103,17 +102,13 @@ public class GraphRouteCalculationService implements RouteCalculationService {
     }
 
     @Override
-    public Flux<BusStop> findNearbyStops(Location location, double radiusKm) {
-        log.debug("Finding stops within {}km of ({}, {})", radiusKm, location.getLatitude(), location.getLongitude());
+    public Flux<BusStop> findNearbyStops(Coordinates location, double radiusKm) {
+        log.debug("Finding stops within {}km of ({}, {})", radiusKm, location.getLatitudeAsDouble(), location.getLongitudeAsDouble());
 
         String cacheKey = buildNearbyStopsCacheKey(location, radiusKm);
 
         return getCachedNearbyStops(cacheKey)
-                .switchIfEmpty(searchAndCacheNearbyStops(location, radiusKm, cacheKey))
-                .doOnNext(stop -> log.trace("Found nearby stop: {} at distance {}m",
-                        stop.getStopName(), location.distanceTo(
-                                stop.getLatitude().doubleValue(),
-                                stop.getLongitude().doubleValue())));
+                .switchIfEmpty(searchAndCacheNearbyStops(location, radiusKm, cacheKey));
     }
 
     @Override
@@ -927,9 +922,9 @@ public class GraphRouteCalculationService implements RouteCalculationService {
         T map(Row row, RowMetadata metadata);
     }
 
-    private String buildNearbyStopsCacheKey(Location location, double radiusKm) {
+    private String buildNearbyStopsCacheKey(Coordinates location, double radiusKm) {
         return String.format("nearby_stops:%.6f:%.6f:%.1f",
-                location.getLatitude(), location.getLongitude(), radiusKm);
+                location.getLatitudeAsDouble(), location.getLongitudeAsDouble(), radiusKm);
     }
 
     private Flux<BusStop> getCachedNearbyStops(String cacheKey) {
@@ -947,10 +942,10 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                 });
     }
 
-    private Flux<BusStop> searchAndCacheNearbyStops(Location location, double radiusKm, String cacheKey) {
+    private Flux<BusStop> searchAndCacheNearbyStops(Coordinates location, double radiusKm, String cacheKey) {
         return busStopRepository.findStopsWithinRadius(
-                        location.getLatitude(),
-                        location.getLongitude(),
+                        location.getLatitudeAsDouble(),
+                        location.getLongitudeAsDouble(),
                         radiusKm
                 )
                 .collectList()

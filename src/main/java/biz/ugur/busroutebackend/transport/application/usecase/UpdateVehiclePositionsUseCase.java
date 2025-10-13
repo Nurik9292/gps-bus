@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.transport.application.usecase;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.geospatial.domain.constants.TurkmenistanBounds;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
@@ -11,7 +12,6 @@ import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
@@ -47,7 +47,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Processing {} GPS positions (batch mode) - CorrelationId: {}", gpsPositions.size(), correlationId);
 
-            // Filter valid positions
             List<GpsPositionDTO> validPositions = gpsPositions.stream()
                     .filter(this::isValidGpsPosition)
                     .toList();
@@ -300,6 +299,12 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 );
     }
 
+    /**
+     * Validate GPS position data.
+     * Now uses centralized TurkmenistanBounds for validation.
+     *
+     * @since 1.5.0 (Phase 3 - migrated to use TurkmenistanBounds)
+     */
     private boolean isValidGpsPosition(GpsPositionDTO gpsPosition) {
         if (gpsPosition == null) return false;
         if (gpsPosition.getDeviceId() == null || gpsPosition.getDeviceId().trim().isEmpty()) return false;
@@ -308,13 +313,10 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         double lat = gpsPosition.getLatitude();
         double lon = gpsPosition.getLongitude();
 
-        if (lat < 35.0 || lat > 43.0) {
-            log.warn("Latitude {} outside Turkmenistan bounds for device {}", lat, gpsPosition.getDeviceId());
-            return false;
-        }
-
-        if (lon < 52.0 || lon > 67.0) {
-            log.warn("Longitude {} outside Turkmenistan bounds for device {}", lon, gpsPosition.getDeviceId());
+        // Use centralized TurkmenistanBounds for validation
+        if (!TurkmenistanBounds.isWithinStandardBounds(lat, lon)) {
+            log.warn("Coordinates ({}, {}) outside Turkmenistan bounds for device {}",
+                lat, lon, gpsPosition.getDeviceId());
             return false;
         }
 

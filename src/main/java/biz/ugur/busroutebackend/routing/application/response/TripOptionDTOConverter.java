@@ -3,9 +3,9 @@ package biz.ugur.busroutebackend.routing.application.response;
 import biz.ugur.busroutebackend.routing.application.dto.RouteSegmentDTO;
 import biz.ugur.busroutebackend.routing.application.dto.TripOptionDTO;
 import biz.ugur.busroutebackend.routing.domain.enums.SegmentType;
-import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -65,11 +65,11 @@ public class TripOptionDTOConverter {
         }
     }
 
-    private RouteSegmentDTO.LocationPointDTO createLocationPointDTO(Location location) {
+    private RouteSegmentDTO.LocationPointDTO createLocationPointDTO(Coordinates coordinates) {
         return new RouteSegmentDTO.LocationPointDTO(
-                location.getLatitude(),
-                location.getLongitude(),
-                location.getDescription()
+                coordinates.getLatitudeAsDouble(),
+                coordinates.getLongitudeAsDouble(),
+                null  // Coordinates doesn't have description
         );
     }
 }

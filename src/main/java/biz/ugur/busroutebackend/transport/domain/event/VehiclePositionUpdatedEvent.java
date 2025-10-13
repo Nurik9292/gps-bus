@@ -1,9 +1,9 @@
 package biz.ugur.busroutebackend.transport.domain.event;
 
 import biz.ugur.busroutebackend.shared.domain.event.DomainEvent;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import lombok.Getter;
 import lombok.ToString;
-import org.springframework.context.ApplicationEvent;
 
 import java.time.Instant;
 
@@ -38,6 +38,24 @@ public class VehiclePositionUpdatedEvent implements DomainEvent{
         this.eventOccurredAt = Instant.now();
         this.routeNumber = routeNumber;
         this.course = course;
+    }
+
+    /**
+     * Convenience constructor using Coordinates value object
+     */
+    public VehiclePositionUpdatedEvent(String vehicleId, String deviceId, String licensePlate,
+                                       String routeNumber, Coordinates coordinates, Double speedKmh,
+                                       Boolean isInMotion, Instant positionTimestamp, Double course) {
+        this(vehicleId, deviceId, licensePlate, routeNumber,
+                coordinates.getLatitudeAsDouble(), coordinates.getLongitudeAsDouble(),
+                speedKmh, isInMotion, positionTimestamp, course);
+    }
+
+    /**
+     * Get coordinates as value object
+     */
+    public Coordinates getCoordinates() {
+        return Coordinates.of(latitude, longitude);
     }
 
     @Override

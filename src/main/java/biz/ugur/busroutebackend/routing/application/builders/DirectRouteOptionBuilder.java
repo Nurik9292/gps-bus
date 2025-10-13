@@ -4,10 +4,10 @@ import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
-import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.routing.infrastructure.services.RouteGeometryTrimmingService;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -43,8 +43,8 @@ public class DirectRouteOptionBuilder {
 
     private Mono<TripOption> buildDirectOption(RouteCalculationService.DirectRouteResult directRoute,
                                          SearchContext context) {
-        Location fromStopLocation = createLocationFromStop(directRoute.fromStop());
-        Location toStopLocation = createLocationFromStop(directRoute.toStop());
+        Coordinates fromStopLocation = createCoordinatesFromStop(directRoute.fromStop());
+        Coordinates toStopLocation = createCoordinatesFromStop(directRoute.toStop());
 
         int walkingToStop = walkingTimeCalculator.calculateWalkingTime(
                 context.fromLocation(), fromStopLocation);
@@ -143,7 +143,7 @@ public class DirectRouteOptionBuilder {
         }
     }
 
-    private RouteSegment createBusSegmentWithGeometry(Location from, Location to, int durationMinutes,
+    private RouteSegment createBusSegmentWithGeometry(Coordinates from, Coordinates to, int durationMinutes,
                                                       String routeNumber, String geometry, Integer distance) {
         if (geometry != null) {
             return RouteSegment.busRideSegmentWithGeometry(from, to, durationMinutes, routeNumber, geometry, distance);
@@ -152,11 +152,10 @@ public class DirectRouteOptionBuilder {
         }
     }
 
-    private Location createLocationFromStop(BusStop stop) {
-        return new Location(
+    private Coordinates createCoordinatesFromStop(BusStop stop) {
+        return Coordinates.of(
                 stop.getLatitude().doubleValue(),
-                stop.getLongitude().doubleValue(),
-                stop.getStopName()
+                stop.getLongitude().doubleValue()
         );
     }
 }

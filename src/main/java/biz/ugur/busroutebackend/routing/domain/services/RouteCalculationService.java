@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.routing.domain.services;
 
-import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import reactor.core.publisher.Flux;
@@ -8,9 +8,13 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 
+/**
+ * Route calculation service interface.
+ * Migrated from Location to Coordinates as part of geospatial module consolidation.
+ */
 public interface RouteCalculationService {
 
-    Flux<BusStop> findNearbyStops(Location location, double radiusKm);
+    Flux<BusStop> findNearbyStops(Coordinates location, double radiusKm);
 
     Flux<DirectRouteResult> findDirectRoutes(List<BusStop> fromStops, List<BusStop> toStops);
 

@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.repository;
 
+import biz.ugur.busroutebackend.geospatial.infrastructure.postgis.PostGISQueryBuilder;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
@@ -73,21 +74,27 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
     public Flux<BusStop> findStopsWithinRadius(Double centerLat, Double centerLon, Double radiusKm) {
         log.debug("Searching for stops within {}km of ({}, {})", radiusKm, centerLat, centerLon);
 
-        String sql = """
+        // Generate PostGIS query fragments using centralized utility
+        PostGISQueryBuilder.QueryFragment query = PostGISQueryBuilder.nearbyPointsQuery(
+                "longitude", "latitude",
+                ":centerLon", ":centerLat",
+                ":radiusMeters",
+                "distance_km", "km"
+        );
+
+        String sql = String.format("""
             SELECT *,
-                   ST_Distance(
-                       ST_SetSRID(ST_Point(longitude, latitude), 4326)::geography,
-                       ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326)::geography
-                   ) / 1000.0 as distance_km
+                   %s
             FROM bus_stops
             WHERE is_active = true
-            AND ST_Distance(
-                ST_SetSRID(ST_Point(longitude, latitude), 4326)::geography,
-                ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326)::geography
-            ) <= :radiusMeters
-            ORDER BY distance_km
+            AND %s
+            ORDER BY %s
             LIMIT 15
-            """;
+            """,
+                query.distanceColumn(),
+                query.withinRadiusCondition(),
+                query.orderByClause()
+        );
 
         return databaseClient.sql(sql)
                 .bind("centerLat", centerLat)

@@ -5,6 +5,8 @@ import biz.ugur.busroutebackend.routing.application.dto.SearchResult;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripPlanId;
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.util.function.Tuple3;
@@ -15,7 +17,10 @@ import java.util.stream.Collectors;
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class TripPlanCombiner {
+
+    private final DistanceCalculationService distanceService;
 
     public TripPlan combine(SearchContext context,
                             Tuple3<SearchResult, SearchResult, SearchResult> results) {
@@ -55,7 +60,8 @@ public class TripPlanCombiner {
                 TripPlanId.generate(),
                 context.fromLocation(),
                 context.toLocation(),
-                context.searchCriteria()
+                context.searchCriteria(),
+                distanceService
         );
 
 

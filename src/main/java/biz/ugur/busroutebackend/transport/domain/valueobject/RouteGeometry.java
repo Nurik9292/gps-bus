@@ -1,6 +1,8 @@
 package biz.ugur.busroutebackend.transport.domain.valueobject;
 
 import biz.ugur.busroutebackend.shared.domain.valueObjects.ValueObject;
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
@@ -12,9 +14,12 @@ import java.util.stream.Collectors;
 @EqualsAndHashCode(callSuper = false)
 public class RouteGeometry extends ValueObject {
 
-    private final List<RoutePoint> points;
+    private final List<Coordinates> points;
 
-    public RouteGeometry(List<RoutePoint> points) {
+    // Service for distance calculations
+    private static DistanceCalculationService distanceService;
+
+    public RouteGeometry(List<Coordinates> points) {
         if (points == null || points.isEmpty()) {
             throw new IllegalArgumentException("Route geometry must contain at least one point");
         }
@@ -26,17 +31,25 @@ public class RouteGeometry extends ValueObject {
         this.points = List.copyOf(points);
     }
 
+    /**
+     * Set the distance calculation service (for dependency injection).
+     */
+    public static void setDistanceCalculationService(DistanceCalculationService service) {
+        distanceService = service;
+    }
+
     public static RouteGeometry fromCoordinates(List<List<Double>> coordinates) {
         if (coordinates == null || coordinates.isEmpty()) {
             throw new IllegalArgumentException("Coordinates cannot be empty");
         }
 
-        List<RoutePoint> points = coordinates.stream()
+        List<Coordinates> points = coordinates.stream()
                 .map(coord -> {
                     if (coord.size() != 2) {
                         throw new IllegalArgumentException("Each coordinate must have exactly 2 values [longitude, latitude]");
                     }
-                    return new RoutePoint(coord.get(0), coord.get(1));
+                    // GeoJSON format: [longitude, latitude]
+                    return Coordinates.of(coord.get(1), coord.get(0));
                 })
                 .toList();
 
@@ -48,12 +61,13 @@ public class RouteGeometry extends ValueObject {
             throw new IllegalArgumentException("Coordinates cannot be empty");
         }
 
-        List<RoutePoint> points = coordinates.stream()
+        List<Coordinates> points = coordinates.stream()
                 .map(coord -> {
                     if (coord.length != 2) {
                         throw new IllegalArgumentException("Each coordinate must have exactly 2 values [longitude, latitude]");
                     }
-                    return new RoutePoint(coord[0], coord[1]);
+                    // GeoJSON format: [longitude, latitude]
+                    return Coordinates.of(coord[1], coord[0]);
                 })
                 .toList();
 
@@ -63,7 +77,8 @@ public class RouteGeometry extends ValueObject {
 
     public String toWKT() {
         String pointsWKT = points.stream()
-                .map(point -> String.format("%.6f %.6f", point.getLongitude(), point.getLatitude()))
+                .map(point -> String.format("%.6f %.6f",
+                    point.getLongitudeAsDouble(), point.getLatitudeAsDouble()))
                 .collect(Collectors.joining(", "));
 
         return String.format("LINESTRING(%s)", pointsWKT);
@@ -78,7 +93,6 @@ public class RouteGeometry extends ValueObject {
             throw new IllegalArgumentException("Invalid WKT format. Expected LINESTRING(...)");
         }
 
-
         String coordinatesStr = wkt.substring(11, wkt.length() - 1);
 
         if (coordinatesStr.trim().isEmpty()) {
@@ -86,7 +100,7 @@ public class RouteGeometry extends ValueObject {
         }
 
         String[] pointStrings = coordinatesStr.split(",");
-        List<RoutePoint> points = Arrays.stream(pointStrings)
+        List<Coordinates> points = Arrays.stream(pointStrings)
                 .map(String::trim)
                 .map(pointStr -> {
                     String[] coords = pointStr.split("\\s+");
@@ -97,7 +111,7 @@ public class RouteGeometry extends ValueObject {
                     try {
                         double longitude = Double.parseDouble(coords[0]);
                         double latitude = Double.parseDouble(coords[1]);
-                        return new RoutePoint(longitude, latitude);
+                        return Coordinates.of(latitude, longitude);
                     } catch (NumberFormatException e) {
                         throw new IllegalArgumentException("Invalid coordinate values in WKT: " + pointStr, e);
                     }
@@ -109,47 +123,46 @@ public class RouteGeometry extends ValueObject {
 
     public List<List<Double>> toCoordinates() {
         return points.stream()
-                .map(point -> List.of(point.getLongitude(), point.getLatitude()))
+                .map(point -> List.of(point.getLongitudeAsDouble(), point.getLatitudeAsDouble()))
                 .toList();
     }
 
     public List<Double[]> toCoordinateArrays() {
         return points.stream()
-                .map(point -> new Double[]{point.getLongitude(), point.getLatitude()})
+                .map(point -> new Double[]{point.getLongitudeAsDouble(), point.getLatitudeAsDouble()})
                 .toList();
     }
 
+    /**
+     * Calculate total distance of the route in meters.
+     * Uses DistanceCalculationService for accurate calculations.
+     *
+     * @return Total distance in meters
+     */
     public double calculateDistanceMeters() {
         if (points.size() < 2) {
             return 0.0;
         }
 
+        if (distanceService == null) {
+            throw new IllegalStateException(
+                "DistanceCalculationService not initialized. " +
+                "Ensure GeospatialServiceInitializer has been executed during application startup."
+            );
+        }
+
         double totalDistance = 0.0;
 
         for (int i = 1; i < points.size(); i++) {
-            RoutePoint prev = points.get(i - 1);
-            RoutePoint curr = points.get(i);
-            totalDistance += haversineDistance(prev, curr);
+            Coordinates prev = points.get(i - 1);
+            Coordinates curr = points.get(i);
+            totalDistance += distanceService.calculateDistance(
+                prev.getLatitudeAsDouble(), prev.getLongitudeAsDouble(),
+                curr.getLatitudeAsDouble(), curr.getLongitudeAsDouble()
+            ).getMeters();
         }
 
         return totalDistance;
-    }
-
-    private double haversineDistance(RoutePoint point1, RoutePoint point2) {
-        final double R = 6371000;
-
-        double lat1Rad = Math.toRadians(point1.getLatitude());
-        double lat2Rad = Math.toRadians(point2.getLatitude());
-        double deltaLatRad = Math.toRadians(point2.getLatitude() - point1.getLatitude());
-        double deltaLonRad = Math.toRadians(point2.getLongitude() - point1.getLongitude());
-
-        double a = Math.sin(deltaLatRad / 2) * Math.sin(deltaLatRad / 2) +
-                Math.cos(lat1Rad) * Math.cos(lat2Rad) *
-                        Math.sin(deltaLonRad / 2) * Math.sin(deltaLonRad / 2);
-
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-        return R * c;
     }
 
     public int getPointCount() {
@@ -161,18 +174,36 @@ public class RouteGeometry extends ValueObject {
             return false;
         }
 
-
-        return points.stream().allMatch(RoutePoint::isValid);
+        // All Coordinates are valid by construction (validated in Coordinates class)
+        return true;
     }
 
     public RouteGeometry reverse() {
-        List<RoutePoint> reversedPoints = points.reversed();
+        List<Coordinates> reversedPoints = points.reversed();
         return new RouteGeometry(reversedPoints);
     }
 
-    public boolean containsPoint(RoutePoint point, double toleranceMeters) {
+    /**
+     * Check if route contains a point within tolerance.
+     * Uses DistanceCalculationService for accurate distance calculations.
+     *
+     * @param point Point to check
+     * @param toleranceMeters Tolerance in meters
+     * @return true if route contains point within tolerance
+     */
+    public boolean containsPoint(Coordinates point, double toleranceMeters) {
+        if (distanceService == null) {
+            throw new IllegalStateException(
+                "DistanceCalculationService not initialized. " +
+                "Ensure GeospatialServiceInitializer has been executed during application startup."
+            );
+        }
+
         return points.stream()
-                .anyMatch(p -> haversineDistance(p, point) <= toleranceMeters);
+                .anyMatch(p -> distanceService.calculateDistance(
+                    p.getLatitudeAsDouble(), p.getLongitudeAsDouble(),
+                    point.getLatitudeAsDouble(), point.getLongitudeAsDouble()
+                ).getMeters() <= toleranceMeters);
     }
 
     @Override

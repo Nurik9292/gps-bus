@@ -1,7 +1,9 @@
 package biz.ugur.busroutebackend.routing.infrastructure.services;
 
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
-import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
+import biz.ugur.busroutebackend.geospatial.domain.constants.GeoConstants;
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
@@ -12,7 +14,12 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
-
+/**
+ * Live ETA calculation service with real-time data and traffic conditions.
+ * Now uses centralized GeoConstants for all geospatial parameters.
+ *
+ * @since 1.5.0 (Phase 3 - migrated to use GeoConstants)
+ */
 @Service
 @Slf4j
 public class LiveETACalculationService implements ETACalculationService {
@@ -20,18 +27,22 @@ public class LiveETACalculationService implements ETACalculationService {
     private final VehicleRepository vehicleRepository;
     private final DatabaseClient databaseClient;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
+    private final DistanceCalculationService distanceService;
 
-    private static final double AVERAGE_WALKING_SPEED_KMH = 5.0;
-    private static final double AVERAGE_WALKING_SPEED_M_PER_MIN = AVERAGE_WALKING_SPEED_KMH * 1000 / 60;
-    private static final int MAX_REASONABLE_WALKING_TIME = 20;
-    private static final int MIN_WALKING_TIME = 1;
+    // Use centralized constants from GeoConstants
+    private static final double AVERAGE_WALKING_SPEED_KMH = GeoConstants.AVERAGE_WALKING_SPEED_KMH;
+    private static final double AVERAGE_WALKING_SPEED_M_PER_MIN = GeoConstants.AVERAGE_WALKING_SPEED_M_PER_MIN;
+    private static final int MAX_REASONABLE_WALKING_TIME = GeoConstants.MAX_WALKING_TIME_MINUTES;
+    private static final int MIN_WALKING_TIME = GeoConstants.MIN_WALKING_TIME_MINUTES;
 
     public LiveETACalculationService(VehicleRepository vehicleRepository,
                                      DatabaseClient databaseClient,
-                                     ReactiveRedisTemplate<String, Object> redisTemplate) {
+                                     ReactiveRedisTemplate<String, Object> redisTemplate,
+                                     DistanceCalculationService distanceService) {
         this.vehicleRepository = vehicleRepository;
         this.databaseClient = databaseClient;
         this.redisTemplate = redisTemplate;
+        this.distanceService = distanceService;
     }
 
     @Override
@@ -49,8 +60,11 @@ public class LiveETACalculationService implements ETACalculationService {
     }
 
     @Override
-    public int calculateWalkingTimeMinutes(Location from, Location to) {
-        double distanceMeters = from.distanceTo(to);
+    public int calculateWalkingTimeMinutes(Coordinates from, Coordinates to) {
+        double distanceMeters = distanceService.calculateDistance(
+                from.getLatitudeAsDouble(), from.getLongitudeAsDouble(),
+                to.getLatitudeAsDouble(), to.getLongitudeAsDouble()
+        ).getMeters();
 
         // Базовый расчет времени ходьбы
         int walkingMinutes = (int) Math.ceil(distanceMeters / AVERAGE_WALKING_SPEED_M_PER_MIN);
@@ -62,7 +76,7 @@ public class LiveETACalculationService implements ETACalculationService {
         walkingMinutes = Math.max(MIN_WALKING_TIME, Math.min(MAX_REASONABLE_WALKING_TIME, walkingMinutes));
 
         log.trace("Walking time from {} to {}: {} minutes ({}m)",
-                from.getDescription(), to.getDescription(), walkingMinutes, Math.round(distanceMeters));
+                from, to, walkingMinutes, Math.round(distanceMeters));
 
         return walkingMinutes;
     }
@@ -353,31 +367,32 @@ public class LiveETACalculationService implements ETACalculationService {
     }
 
     /**
-     * Корректировка времени поездки с учетом пробок
+     * Корректировка времени поездки с учетом пробок.
+     * Now uses centralized traffic multipliers from GeoConstants.
      */
     private int adjustForTrafficConditions(int baseTime) {
         LocalDateTime now = LocalDateTime.now();
         int hour = now.getHour();
         int dayOfWeek = now.getDayOfWeek().getValue();
 
-        // Коэффициент пробок
-        double trafficMultiplier = 1.0;
+        // Используем централизованные коэффициенты пробок из GeoConstants
+        double trafficMultiplier = GeoConstants.TRAFFIC_MULTIPLIER_NO_TRAFFIC;
 
         // Час пик утром (7-9)
         if (hour >= 7 && hour <= 9) {
-            trafficMultiplier = 1.3;
+            trafficMultiplier = GeoConstants.TRAFFIC_MULTIPLIER_MODERATE;
         }
         // Час пик вечером (17-19)
         else if (hour >= 17 && hour <= 19) {
-            trafficMultiplier = 1.4; // Вечерние пробки обычно хуже
+            trafficMultiplier = GeoConstants.TRAFFIC_MULTIPLIER_HEAVY; // Вечерние пробки обычно хуже
         }
         // Дневное время (10-16)
         else if (hour >= 10 && hour <= 16) {
-            trafficMultiplier = 1.1;
+            trafficMultiplier = GeoConstants.TRAFFIC_MULTIPLIER_LIGHT;
         }
         // Вечернее время (20-22)
         else if (hour >= 20 && hour <= 22) {
-            trafficMultiplier = 1.1;
+            trafficMultiplier = GeoConstants.TRAFFIC_MULTIPLIER_LIGHT;
         }
 
         // Выходные дни - меньше пробок

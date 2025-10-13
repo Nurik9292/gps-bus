@@ -1,9 +1,9 @@
 package biz.ugur.busroutebackend.interfaces.rest.mobile.response;
 
 
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
-import biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint;
 import lombok.Builder;
 import lombok.Data;
 
@@ -22,8 +22,8 @@ public class MobileRouteResponse {
     private String cityId;
     private Boolean isActive;
     private Integer estimatedDurationMinutes;
-    private List<RoutePoint> backwardGeometry;
-    private List<RoutePoint> forwardGeometry;
+    private List<Coordinates> backwardGeometry;
+    private List<Coordinates> forwardGeometry;
     private List<String> forwardStops;
     private List<String> backwardStops;
     private Boolean isFavourite;
