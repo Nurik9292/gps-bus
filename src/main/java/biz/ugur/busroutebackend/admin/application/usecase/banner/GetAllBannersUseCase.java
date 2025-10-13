@@ -57,7 +57,7 @@ public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerListR
         return new BannerResponse(
                 banner.getId().getValue(),
                 banner.getTitle(),
-                banner.getType(),
+                banner.getType().getValue(),
                 banner.getImageUrl(),
                 banner.getTargetUrl(),
                 banner.getIsActive(),

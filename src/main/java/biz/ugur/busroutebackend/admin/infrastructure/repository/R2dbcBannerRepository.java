@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.admin.infrastructure.repository;
 
+import biz.ugur.busroutebackend.admin.domain.enums.BannerType;
 import biz.ugur.busroutebackend.admin.domain.model.Banner;
 import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.BannerId;
@@ -150,7 +151,15 @@ public class R2dbcBannerRepository extends BaseR2dbcRepository<Banner, BannerId>
         String content = row.get("content", String.class);
 
         return Banner.restore(
-                id, title, type, imageUrl, targetUrl, isActive, displayOrder, startDate, endDate,
+                id,
+                title,
+                BannerType.fromValue(type),
+                imageUrl,
+                targetUrl,
+                isActive,
+                displayOrder,
+                startDate,
+                endDate,
                 row.get("created_at", java.time.Instant.class),
                 row.get("updated_at", java.time.Instant.class),
                 content,

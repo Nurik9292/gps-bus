@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.admin.application.usecase.banner;
 
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerCreateRequest;
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerResponse;
+import biz.ugur.busroutebackend.admin.domain.enums.BannerType;
 import biz.ugur.busroutebackend.admin.domain.model.Banner;
 import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
@@ -51,7 +52,7 @@ public class CreateBannerUseCase extends BaseUseCase<Mono<BannerCreateRequest>, 
                     .flatMap(processedImageUrl -> {
                         Banner banner = Banner.create(
                                 request.getTitle(),
-                                request.getType(),
+                                BannerType.fromValue(request.getType()),
                                 processedImageUrl,
                                 request.getTargetUrl(),
                                 request.getDisplayOrder(),
@@ -87,7 +88,7 @@ public class CreateBannerUseCase extends BaseUseCase<Mono<BannerCreateRequest>, 
         return new BannerResponse(
                 banner.getId().getValue(),
                 banner.getTitle(),
-                banner.getType(),
+                banner.getType().getValue(),
                 banner.getImageUrl(),
                 banner.getTargetUrl(),
                 banner.getIsActive(),

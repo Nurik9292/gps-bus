@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.admin.domain.model;
 
+import biz.ugur.busroutebackend.admin.domain.enums.BannerType;
 import biz.ugur.busroutebackend.admin.domain.events.BannerCreatedEvent;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.BannerId;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
@@ -27,7 +28,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
     private String title;
 
     @Column("type")
-    private String type;
+    private BannerType type;
 
     @Setter
     @Column("image_url")
@@ -53,7 +54,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
     @Column("content")
     private String content;
 
-    public static Banner create(String title, String type, String imageUrl, String targetUrl, Integer displayOrder, String content) {
+    public static Banner create(String title, BannerType type, String imageUrl, String targetUrl, Integer displayOrder, String content) {
         Banner banner = builder()
                 .id(BannerId.generate())
                 .title(title)
@@ -70,7 +71,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
         banner.registerEvent(new BannerCreatedEvent(
                 banner.id.getValue(),
                 banner.title,
-                banner.type,
+                banner.type.getValue(),
                 banner.imageUrl
         ));
 
@@ -79,7 +80,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
 
     public static Banner restore(BannerId id,
                                  String title,
-                                 String type,
+                                 BannerType type,
                                  String imageUrl,
                                  String targetUrl,
                                  Boolean isActive,
@@ -112,7 +113,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
 
     public void updateBanner(
             String title,
-            String type,
+            BannerType type,
             String imageUrl,
             String targetUrl,
             Integer displayOrder,
@@ -121,8 +122,8 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
             this.title = title.trim();
         }
 
-        if (type != null && !type.trim().isEmpty()) {
-            this.type = type.trim();
+        if (type != null) {
+            this.type = type;
         }
 
         if (targetUrl != null) {

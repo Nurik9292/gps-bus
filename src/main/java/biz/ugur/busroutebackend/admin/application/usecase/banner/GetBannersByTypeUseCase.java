@@ -58,7 +58,7 @@ public class GetBannersByTypeUseCase extends BaseUseCase<Mono<String>, BannerLis
         return new BannerResponse(
                 banner.getId().getValue(),
                 banner.getTitle(),
-                banner.getType(),
+                banner.getType().getValue(),
                 banner.getImageUrl(),
                 banner.getTargetUrl(),
                 banner.getIsActive(),

@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.admin.application.usecase.banner;
 
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerResponse;
 import biz.ugur.busroutebackend.admin.application.dto.banner.BannerUpdateRequest;
+import biz.ugur.busroutebackend.admin.domain.enums.BannerType;
 import biz.ugur.busroutebackend.admin.domain.model.Banner;
 import biz.ugur.busroutebackend.admin.domain.repository.BannerRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.BannerId;
@@ -97,7 +98,7 @@ public class UpdateBannerUseCase extends BaseUseCase<Mono<UpdateBannerUseCase.Re
 
         banner.updateBanner(
                 updateData.getTitle(),
-                updateData.getType(),
+                BannerType.fromValue(updateData.getType()),
                 banner.getImageUrl(),
                 updateData.getTargetUrl(),
                 updateData.getDisplayOrder(),
@@ -119,7 +120,7 @@ public class UpdateBannerUseCase extends BaseUseCase<Mono<UpdateBannerUseCase.Re
         return new BannerResponse(
                 banner.getId().getValue(),
                 banner.getTitle(),
-                banner.getType(),
+                banner.getType().getValue(),
                 banner.getImageUrl(),
                 banner.getTargetUrl(),
                 banner.getIsActive(),
