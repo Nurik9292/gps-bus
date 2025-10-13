@@ -2,6 +2,8 @@ package biz.ugur.busroutebackend.routing.domain.valueobjects;
 
 import biz.ugur.busroutebackend.routing.domain.enums.SegmentType;
 import biz.ugur.busroutebackend.shared.domain.valueObjects.ValueObject;
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
@@ -9,15 +11,18 @@ import lombok.extern.log4j.Log4j2;
 import java.util.ArrayList;
 import java.util.List;
 
-
+/**
+ * Route segment value object.
+ * Migrated from Location to Coordinates as part of geospatial module consolidation.
+ */
 @Log4j2
 @Getter
 @EqualsAndHashCode(callSuper = false)
 public class RouteSegment extends ValueObject {
 
     private final SegmentType type;
-    private final Location fromLocation;
-    private final Location toLocation;
+    private final Coordinates fromLocation;
+    private final Coordinates toLocation;
     private final int durationMinutes;
     private final String routeNumber;
     private final String instruction;
@@ -27,7 +32,7 @@ public class RouteSegment extends ValueObject {
     private  Integer totalDistanceMeters;
     private  List<Double[]> walkingPath;
 
-    public RouteSegment(SegmentType type, Location fromLocation, Location toLocation,
+    public RouteSegment(SegmentType type, Coordinates fromLocation, Coordinates toLocation,
                         int durationMinutes, String routeNumber, String instruction) {
         this.type = type;
         this.fromLocation = fromLocation;
@@ -38,7 +43,7 @@ public class RouteSegment extends ValueObject {
         this.detailedDescription = generateDetailedDescription();
     }
 
-    public RouteSegment(SegmentType type, Location fromLocation, Location toLocation,
+    public RouteSegment(SegmentType type, Coordinates fromLocation, Coordinates toLocation,
                         int durationMinutes, String routeNumber, String instruction,
                         String routeGeometryWkt, Integer totalDistanceMeters) {
         this.type = type;
@@ -54,25 +59,23 @@ public class RouteSegment extends ValueObject {
         this.detailedDescription = generateDetailedDescription();
     }
 
-    public static RouteSegment walkingSegment(Location from, Location to, int minutes) {
-        String instruction = String.format("Walk %d minutes to %s", minutes, to.getDescription());
+    public static RouteSegment walkingSegment(Coordinates from, Coordinates to, int minutes) {
+        String instruction = String.format("Walk %d minutes", minutes);
         return new RouteSegment(SegmentType.WALKING, from, to, minutes, null, instruction);
     }
 
-    public static RouteSegment busRideSegment(Location from, Location to, int minutes, String routeNumber) {
-        String instruction = String.format("Take bus %s from %s to %s (%d min)",
-                routeNumber, from.getDescription(), to.getDescription(), minutes);
+    public static RouteSegment busRideSegment(Coordinates from, Coordinates to, int minutes, String routeNumber) {
+        String instruction = String.format("Take bus %s (%d min)", routeNumber, minutes);
         return new RouteSegment(SegmentType.BUS_RIDE, from, to, minutes, routeNumber, instruction);
     }
 
-    public static RouteSegment transferSegment(Location transferLocation, int waitMinutes) {
-        String instruction = String.format("Transfer at %s (wait %d min)",
-                transferLocation.getDescription(), waitMinutes);
+    public static RouteSegment transferSegment(Coordinates transferLocation, int waitMinutes) {
+        String instruction = String.format("Transfer (wait %d min)", waitMinutes);
         return new RouteSegment(SegmentType.TRANSFER, transferLocation, transferLocation,
                 waitMinutes, null, instruction);
     }
 
-    public static RouteSegment busRideSegmentWithGeometry(Location from, Location to,
+    public static RouteSegment busRideSegmentWithGeometry(Coordinates from, Coordinates to,
                                                           int durationMinutes, String routeNumber,
                                                           String routeGeometryWkt, Integer distanceMeters) {
         return new RouteSegment(
@@ -81,20 +84,27 @@ public class RouteSegment extends ValueObject {
                 to,
                 durationMinutes,
                 routeNumber,
-                String.format("Take bus %s from %s to %s (%d min)",
-                        routeNumber, from.getDescription(), to.getDescription(), durationMinutes),
+                String.format("Take bus %s (%d min)", routeNumber, durationMinutes),
                 routeGeometryWkt,
                 distanceMeters
         );
     }
 
     private String generateDetailedDescription() {
+        DistanceCalculationService distanceService = new DistanceCalculationService();
+
         return switch (type) {
-            case WALKING -> String.format("Walk %.0fm from %s to %s",
-                    fromLocation.distanceTo(toLocation), fromLocation.getDescription(), toLocation.getDescription());
-            case BUS_RIDE -> String.format("Bus route %s: %s → %s",
-                    routeNumber, fromLocation.getDescription(), toLocation.getDescription());
-            case TRANSFER -> String.format("Transfer at %s", fromLocation.getDescription());
+            case WALKING -> {
+                double distance = distanceService.calculateDistance(
+                    fromLocation.getLatitudeAsDouble(),
+                    fromLocation.getLongitudeAsDouble(),
+                    toLocation.getLatitudeAsDouble(),
+                    toLocation.getLongitudeAsDouble()
+                ).getMeters();
+                yield String.format("Walk %.0fm", distance);
+            }
+            case BUS_RIDE -> String.format("Bus route %s", routeNumber);
+            case TRANSFER -> "Transfer";
         };
     }
 

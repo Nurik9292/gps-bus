@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.transport.domain.model;
 
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.event.*;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.StopCode;
@@ -211,5 +212,33 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
             throw new IllegalArgumentException("Stop name cannot be null or empty");
         }
         return stopName.trim();
+    }
+
+    /**
+     * Convert bus stop location to Coordinates value object
+     * @return Coordinates representing the stop location
+     */
+    public Coordinates toCoordinates() {
+        return Coordinates.of(latitude, longitude);
+    }
+
+    /**
+     * Update bus stop location from Coordinates value object
+     * @param coordinates new coordinates for the stop
+     */
+    public void updateLocationFromCoordinates(Coordinates coordinates) {
+        if (coordinates == null) {
+            throw new IllegalArgumentException("Coordinates cannot be null");
+        }
+
+        boolean hasLocationChanged = !this.latitude.equals(coordinates.getLatitude())
+                || !this.longitude.equals(coordinates.getLongitude());
+
+        this.latitude = coordinates.getLatitude();
+        this.longitude = coordinates.getLongitude();
+
+        if (hasLocationChanged) {
+            registerEvent(new BusStopLocationChangedEvent(this.id, latitude, longitude));
+        }
     }
 }

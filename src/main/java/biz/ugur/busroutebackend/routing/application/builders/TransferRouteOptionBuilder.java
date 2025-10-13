@@ -4,10 +4,10 @@ import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
-import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.routing.infrastructure.services.RouteGeometryTrimmingService;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import lombok.extern.slf4j.Slf4j;
@@ -53,9 +53,9 @@ public class TransferRouteOptionBuilder {
     private TripOption buildOneTransferOption(RouteCalculationService.TransferRouteResult transferRoute,
                                               SearchContext context) {
 
-        Location firstStopLocation = createLocationFromStop(transferRoute.fromStop());
-        Location transferStopLocation = createLocationFromStop(transferRoute.transferStop());
-        Location lastStopLocation = createLocationFromStop(transferRoute.toStop());
+        Coordinates firstStopLocation = createCoordinatesFromStop(transferRoute.fromStop());
+        Coordinates transferStopLocation = createCoordinatesFromStop(transferRoute.transferStop());
+        Coordinates lastStopLocation = createCoordinatesFromStop(transferRoute.toStop());
 
         int walkingToFirst = walkingTimeCalculator.calculateWalkingTime(
                 context.fromLocation(), firstStopLocation);
@@ -110,10 +110,10 @@ public class TransferRouteOptionBuilder {
     private TripOption buildTwoTransferOption(RouteCalculationService.TwoTransferRouteResult twoTransferRoute,
                                               SearchContext context) {
 
-        Location firstStopLocation = createLocationFromStop(twoTransferRoute.fromStop());
-        Location firstTransferLocation = createLocationFromStop(twoTransferRoute.firstTransferStop());
-        Location secondTransferLocation = createLocationFromStop(twoTransferRoute.secondTransferStop());
-        Location finalStopLocation = createLocationFromStop(twoTransferRoute.toStop());
+        Coordinates firstStopLocation = createCoordinatesFromStop(twoTransferRoute.fromStop());
+        Coordinates firstTransferLocation = createCoordinatesFromStop(twoTransferRoute.firstTransferStop());
+        Coordinates secondTransferLocation = createCoordinatesFromStop(twoTransferRoute.secondTransferStop());
+        Coordinates finalStopLocation = createCoordinatesFromStop(twoTransferRoute.toStop());
 
         int walkingToFirst = walkingTimeCalculator.calculateWalkingTime(
                 context.fromLocation(), firstStopLocation);
@@ -177,11 +177,10 @@ public class TransferRouteOptionBuilder {
         return new TripOption(TripType.TWO_TRANSFERS, segments);
     }
 
-    private Location createLocationFromStop(BusStop stop) {
-        return new Location(
+    private Coordinates createCoordinatesFromStop(BusStop stop) {
+        return Coordinates.of(
                 stop.getLatitude().doubleValue(),
-                stop.getLongitude().doubleValue(),
-                stop.getStopName()
+                stop.getLongitude().doubleValue()
         );
     }
 
@@ -244,7 +243,7 @@ public class TransferRouteOptionBuilder {
         }
     }
 
-    private RouteSegment createBusSegmentWithGeometry(Location from, Location to, int durationMinutes,
+    private RouteSegment createBusSegmentWithGeometry(Coordinates from, Coordinates to, int durationMinutes,
                                                       String routeNumber, String geometry, Integer distance) {
         if (geometry != null) {
             return RouteSegment.busRideSegmentWithGeometry(from, to, durationMinutes, routeNumber, geometry, distance);

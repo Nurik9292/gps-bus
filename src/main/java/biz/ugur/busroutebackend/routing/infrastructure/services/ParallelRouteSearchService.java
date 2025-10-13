@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.routing.application.dto.SearchResult;
 import biz.ugur.busroutebackend.routing.application.dto.StopsContext;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -21,6 +22,7 @@ public class ParallelRouteSearchService {
     private final NearbyStopsService nearbyStopsService;
     private final TripPlanCombiner tripPlanCombiner;
     private final RouteDeduplicationService deduplicationService;
+    private final DistanceCalculationService distanceService;
     private StopBasedRouteSearchService stopBasedSearch;
 
     public ParallelRouteSearchService(DirectRouteSearchService directRouteSearch,
@@ -28,13 +30,15 @@ public class ParallelRouteSearchService {
                                       TwoTransferRouteSearchService twoTransferSearch,
                                       NearbyStopsService nearbyStopsService,
                                       TripPlanCombiner tripPlanCombiner,
-                                      RouteDeduplicationService deduplicationService) {
+                                      RouteDeduplicationService deduplicationService,
+                                      DistanceCalculationService distanceService) {
         this.directRouteSearch = directRouteSearch;
         this.oneTransferSearch = oneTransferSearch;
         this.twoTransferSearch = twoTransferSearch;
         this.nearbyStopsService = nearbyStopsService;
         this.tripPlanCombiner = tripPlanCombiner;
         this.deduplicationService = deduplicationService;
+        this.distanceService = distanceService;
     }
 
     public Mono<TripPlan> searchAllRoutes(SearchContext context) {
@@ -44,7 +48,8 @@ public class ParallelRouteSearchService {
                     if (stopsContext.hasInsufficientStops()) {
                         return Mono.just(TripPlan.empty(context.fromLocation(),
                                 context.toLocation(),
-                                context.searchCriteria()));
+                                context.searchCriteria(),
+                                distanceService));
                     }
 
                     return executeSearchesInParallel(context, stopsContext);

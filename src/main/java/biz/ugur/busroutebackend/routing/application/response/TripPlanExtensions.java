@@ -6,11 +6,15 @@ import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripPlanId;
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class TripPlanExtensions {
+
+    // NOTE: This method needs DistanceCalculationService - should be provided by caller
+    private static DistanceCalculationService distanceService;
 
     public static List<TripOption> getDirectOptions(TripPlan tripPlan) {
         return tripPlan.getTripOptions().stream()
@@ -43,12 +47,13 @@ public class TripPlanExtensions {
                 .collect(Collectors.toList());
     }
 
-    public static TripPlan empty(SearchContext context) {
+    public static TripPlan empty(SearchContext context, DistanceCalculationService distanceService) {
         return new TripPlan(
                 TripPlanId.generate(),
                 context.fromLocation(),
                 context.toLocation(),
-                context.searchCriteria()
+                context.searchCriteria(),
+                distanceService
         );
     }
 

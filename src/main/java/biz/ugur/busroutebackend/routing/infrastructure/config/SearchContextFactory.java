@@ -2,8 +2,8 @@ package biz.ugur.busroutebackend.routing.infrastructure.config;
 
 import biz.ugur.busroutebackend.interfaces.rest.routing.dto.request.TripSearchRequest;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
-import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripSearchCriteria;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -11,8 +11,8 @@ public class SearchContextFactory {
 
     public SearchContext createFromRequest(TripSearchRequest request, String correlationId) {
         String searchId = generateSearchId(request);
-        Location fromLocation = createLocationFromDTO(request.getFrom());
-        Location toLocation = createLocationFromDTO(request.getTo());
+        Coordinates fromLocation = createCoordinatesFromDTO(request.getFrom());
+        Coordinates toLocation = createCoordinatesFromDTO(request.getTo());
         TripSearchCriteria criteria = createSearchCriteria(request.getPreferences());
 
         return new SearchContext(searchId, fromLocation, toLocation, criteria, System.currentTimeMillis());
@@ -24,11 +24,10 @@ public class SearchContextFactory {
                 Integer.toHexString(request.hashCode()).substring(0, 4).toUpperCase());
     }
 
-    private Location createLocationFromDTO(TripSearchRequest.LocationDTO dto) {
-        return new Location(
+    private Coordinates createCoordinatesFromDTO(TripSearchRequest.LocationDTO dto) {
+        return Coordinates.of(
                 dto.getLatitude(),
-                dto.getLongitude(),
-                dto.getDescription() != null ? dto.getDescription() : "Location"
+                dto.getLongitude()
         );
     }
 

@@ -3,11 +3,13 @@ package biz.ugur.busroutebackend.routing.domain.model;
 import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.events.TripOptionsCalculatedEvent;
 import biz.ugur.busroutebackend.routing.domain.events.TripPlanCreatedEvent;
-import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripPlanId;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripSearchCriteria;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
+import biz.ugur.busroutebackend.geospatial.domain.constants.TurkmenistanBounds;
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
@@ -20,6 +22,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Trip plan aggregate root.
+ * Migrated from Location to Coordinates as part of geospatial module consolidation.
+ */
 @Getter
 @Table("trip_plans")
 public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
@@ -27,8 +33,9 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
     @Id
     private TripPlanId tripPlanId;
 
-    private final Location originLocation;
-    private final Location destinationLocation;
+    private final Coordinates originLocation;
+    private final Coordinates destinationLocation;
+    private final DistanceCalculationService distanceService;
     private final List<TripOption> tripOptions;
     private final LocalDateTime searchTime;
     private final TripSearchCriteria searchCriteria;
@@ -59,20 +66,22 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
 
 
     public TripPlan(TripPlanId tripPlanId,
-                    Location originLocation,
-                    Location destinationLocation,
-                    TripSearchCriteria searchCriteria) {
+                    Coordinates originLocation,
+                    Coordinates destinationLocation,
+                    TripSearchCriteria searchCriteria,
+                    DistanceCalculationService distanceService) {
         this.tripPlanId = tripPlanId != null ? tripPlanId : TripPlanId.generate();
-        this.originLocation = validateLocation(originLocation, "Origin");
-        this.destinationLocation = validateLocation(destinationLocation, "Destination");
+        this.originLocation = validateCoordinates(originLocation, "Origin");
+        this.destinationLocation = validateCoordinates(destinationLocation, "Destination");
+        this.distanceService = distanceService != null ? distanceService : new DistanceCalculationService();
         this.tripOptions = new ArrayList<>();
         this.searchTime = LocalDateTime.now();
         this.searchCriteria = searchCriteria != null ? searchCriteria : TripSearchCriteria.defaultCriteria();
 
-        this.originLatitude = originLocation.getLatitude();
-        this.originLongitude = originLocation.getLongitude();
-        this.destinationLatitude = destinationLocation.getLatitude();
-        this.destinationLongitude = destinationLocation.getLongitude();
+        this.originLatitude = originLocation.getLatitudeAsDouble();
+        this.originLongitude = originLocation.getLongitudeAsDouble();
+        this.destinationLatitude = destinationLocation.getLatitudeAsDouble();
+        this.destinationLongitude = destinationLocation.getLongitudeAsDouble();
         this.searchTimeDb = this.searchTime;
         this.optionsCount = 0;
         this.maxTransfers = this.searchCriteria.getMaxTransfers();
@@ -82,16 +91,21 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         this.updatedAt = Instant.now();
         this.version = 0L;
 
-        if (originLocation.distanceTo(destinationLocation) < 100) {
+        double distance = this.distanceService.calculateDistance(
+            originLocation.getLatitudeAsDouble(), originLocation.getLongitudeAsDouble(),
+            destinationLocation.getLatitudeAsDouble(), destinationLocation.getLongitudeAsDouble()
+        ).getMeters();
+
+        if (distance < 100) {
             throw new IllegalArgumentException("Origin and destination are too close. Minimum distance: 100m");
         }
 
         registerEvent(new TripPlanCreatedEvent(
                 this.tripPlanId.getValue(),
-                originLocation.getLatitude(),
-                originLocation.getLongitude(),
-                destinationLocation.getLatitude(),
-                destinationLocation.getLongitude()
+                originLocation.getLatitudeAsDouble(),
+                originLocation.getLongitudeAsDouble(),
+                destinationLocation.getLatitudeAsDouble(),
+                destinationLocation.getLongitudeAsDouble()
         ));
     }
 
@@ -114,8 +128,9 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         this.maxTransfers = maxTransfers;
         this.maxWalkingDistanceMeters = maxWalkingDistanceMeters;
 
-        this.originLocation = new Location(originLatitude, originLongitude, "Origin");
-        this.destinationLocation = new Location(destinationLatitude, destinationLongitude, "Destination");
+        this.originLocation = Coordinates.of(originLatitude, originLongitude);
+        this.destinationLocation = Coordinates.of(destinationLatitude, destinationLongitude);
+        this.distanceService = new DistanceCalculationService();
         this.searchTime = searchTime;
         this.searchCriteria = new TripSearchCriteria(
                 maxWalkingDistanceMeters != null ? maxWalkingDistanceMeters : 1200,
@@ -125,8 +140,8 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         this.tripOptions = new ArrayList<>();
     }
 
-    public TripPlan(Location originLocation, Location destinationLocation) {
-        this(TripPlanId.generate(), originLocation, destinationLocation, TripSearchCriteria.defaultCriteria());
+    public TripPlan(Coordinates originLocation, Coordinates destinationLocation, DistanceCalculationService distanceService) {
+        this(TripPlanId.generate(), originLocation, destinationLocation, TripSearchCriteria.defaultCriteria(), distanceService);
     }
 
     public void addTripOption(TripOption option) {
@@ -214,14 +229,20 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
 
 
     public boolean isWalkable() {
-        double distanceMeters = originLocation.distanceTo(destinationLocation);
+        double distanceMeters = distanceService.calculateDistance(
+            originLocation.getLatitudeAsDouble(), originLocation.getLongitudeAsDouble(),
+            destinationLocation.getLatitudeAsDouble(), destinationLocation.getLongitudeAsDouble()
+        ).getMeters();
         return distanceMeters <= searchCriteria.getMaxWalkingDistanceMeters();
     }
 
     public int getWalkingTimeMinutes() {
         if (!isWalkable()) return -1;
 
-        double distanceMeters = originLocation.distanceTo(destinationLocation);
+        double distanceMeters = distanceService.calculateDistance(
+            originLocation.getLatitudeAsDouble(), originLocation.getLongitudeAsDouble(),
+            destinationLocation.getLatitudeAsDouble(), destinationLocation.getLongitudeAsDouble()
+        ).getMeters();
         return (int) Math.ceil(distanceMeters / 83.33);
     }
 
@@ -234,12 +255,19 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         return new ArrayList<>(tripOptions);
     }
 
-    private Location validateLocation(Location location, String type) {
-        if (location == null) {
-            throw new IllegalArgumentException(type + " location cannot be null");
+    private Coordinates validateCoordinates(Coordinates coordinates, String type) {
+        if (coordinates == null) {
+            throw new IllegalArgumentException(type + " coordinates cannot be null");
         }
-        location.validateTurkmenistanBounds();
-        return location;
+        // Validate using centralized TurkmenistanBounds
+        if (!TurkmenistanBounds.isWithinStandardBounds(
+            coordinates.getLatitudeAsDouble(),
+            coordinates.getLongitudeAsDouble())) {
+            throw new IllegalArgumentException(
+                type + " coordinates are outside Turkmenistan bounds: " + coordinates
+            );
+        }
+        return coordinates;
     }
 
     private boolean isOptionAcceptable(TripOption option) {
@@ -294,12 +322,13 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         return Integer.compare(a.getTotalWalkingMinutes(), b.getTotalWalkingMinutes());
     }
 
-    public static TripPlan empty(Location fromLocation, Location toLocation, TripSearchCriteria searchCriteria) {
+    public static TripPlan empty(Coordinates fromLocation, Coordinates toLocation, TripSearchCriteria searchCriteria, DistanceCalculationService distanceService) {
         return new TripPlan(
                 TripPlanId.generate(),
                 fromLocation,
                 toLocation,
-                searchCriteria
+                searchCriteria,
+                distanceService
         );
     }
 

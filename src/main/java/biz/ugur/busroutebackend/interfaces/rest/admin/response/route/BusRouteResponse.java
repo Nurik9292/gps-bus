@@ -1,8 +1,8 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.response.route;
 
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
-import biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -56,10 +56,10 @@ public class BusRouteResponse {
     private Long activeVehiclesCount;
 
     @JsonProperty("backword_geometry")
-    private List<RoutePoint> backwardGeometry;
+    private List<Coordinates> backwardGeometry;
 
     @JsonProperty("forward_geometry")
-    private List<RoutePoint> forwardGeometry;
+    private List<Coordinates> forwardGeometry;
 
     @JsonProperty("forward_stops_ids")
     private List<String> forwardStopsIds;
@@ -86,8 +86,8 @@ public class BusRouteResponse {
                             Integer backwardStopsCount,
                             BigDecimal totalDistanceForwardKm,
                             BigDecimal totalDistanceBackwardKm,
-                            List<RoutePoint> backwardGeometry,
-                            List<RoutePoint> forwardGeometry,
+                            List<Coordinates> backwardGeometry,
+                            List<Coordinates> forwardGeometry,
                             List<String> forwardStopsIds,
                             List<String> backwardStopsIds,
                             Long activeVehiclesCount,

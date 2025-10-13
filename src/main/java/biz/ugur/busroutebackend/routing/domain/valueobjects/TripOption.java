@@ -3,6 +3,8 @@ package biz.ugur.busroutebackend.routing.domain.valueobjects;
 import biz.ugur.busroutebackend.routing.domain.enums.SegmentType;
 import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.shared.domain.valueObjects.ValueObject;
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
@@ -106,20 +108,32 @@ public class TripOption extends ValueObject {
         return String.join(", ", routes);
     }
 
-    public boolean isValidForTrip(Location origin, Location destination) {
+    public boolean isValidForTrip(Coordinates origin, Coordinates destination) {
         if (routeSegments.isEmpty()) return false;
 
         RouteSegment firstSegment = routeSegments.getFirst();
         RouteSegment lastSegment = routeSegments.getLast();
 
+        DistanceCalculationService distanceService = new DistanceCalculationService();
 
-        double startDistance = firstSegment.getFromLocation().distanceTo(origin);
+        double startDistance = distanceService.calculateDistance(
+            firstSegment.getFromLocation().getLatitudeAsDouble(),
+            firstSegment.getFromLocation().getLongitudeAsDouble(),
+            origin.getLatitudeAsDouble(),
+            origin.getLongitudeAsDouble()
+        ).getMeters();
+
         if (startDistance > 1000) {
             return false;
         }
 
+        double endDistance = distanceService.calculateDistance(
+            lastSegment.getToLocation().getLatitudeAsDouble(),
+            lastSegment.getToLocation().getLongitudeAsDouble(),
+            destination.getLatitudeAsDouble(),
+            destination.getLongitudeAsDouble()
+        ).getMeters();
 
-        double endDistance = lastSegment.getToLocation().distanceTo(destination);
         if (endDistance > 1000) {
             return false;
         }
@@ -174,12 +188,20 @@ public class TripOption extends ValueObject {
             throw new IllegalArgumentException("Route segments cannot be null or empty");
         }
 
+        DistanceCalculationService distanceService = new DistanceCalculationService();
 
         for (int i = 1; i < segments.size(); i++) {
-            Location prevEnd = segments.get(i - 1).getToLocation();
-            Location currentStart = segments.get(i).getFromLocation();
+            Coordinates prevEnd = segments.get(i - 1).getToLocation();
+            Coordinates currentStart = segments.get(i).getFromLocation();
 
-            if (prevEnd.distanceTo(currentStart) > 100) {
+            double distance = distanceService.calculateDistance(
+                prevEnd.getLatitudeAsDouble(),
+                prevEnd.getLongitudeAsDouble(),
+                currentStart.getLatitudeAsDouble(),
+                currentStart.getLongitudeAsDouble()
+            ).getMeters();
+
+            if (distance > 100) {
                 throw new IllegalArgumentException("Route segments are not connected");
             }
         }

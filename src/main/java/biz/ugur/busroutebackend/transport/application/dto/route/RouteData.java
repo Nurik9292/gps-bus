@@ -1,8 +1,8 @@
 package biz.ugur.busroutebackend.transport.application.dto.route;
 
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
-import biz.ugur.busroutebackend.transport.domain.valueobject.RoutePoint;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -23,8 +23,8 @@ public record RouteData(
         Integer backwardStopsCount,
         BigDecimal totalDistanceForwardKm,
         BigDecimal totalDistanceBackwardKm,
-        List<RoutePoint> backwardGeometry,
-        List<RoutePoint> forwardGeometry,
+        List<Coordinates> backwardGeometry,
+        List<Coordinates> forwardGeometry,
         Long activeVehiclesCount,
         Instant createdAt,
         Instant updatedAt,

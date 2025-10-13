@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.repository;
 
+import biz.ugur.busroutebackend.geospatial.infrastructure.postgis.PostGISQueryBuilder;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
@@ -221,22 +222,29 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Flux<Vehicle> findVehiclesWithinRadius(Double centerLat, Double centerLon, Integer radiusMeters) {
-        String sql = """
-            SELECT *, 
-                   ST_Distance(
-                       ST_Transform(ST_SetSRID(ST_Point(current_longitude, current_latitude), 4326), 3857),
-                       ST_Transform(ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326), 3857)
-                   ) as distance_meters
-            FROM vehicles 
-            WHERE is_active = true 
-            AND current_latitude IS NOT NULL 
+        // Generate PostGIS query fragments using centralized utility
+        // NOTE: Migrated from Web Mercator (EPSG:3857) to geography for better accuracy
+        PostGISQueryBuilder.QueryFragment query = PostGISQueryBuilder.nearbyPointsQuery(
+                "current_longitude", "current_latitude",
+                ":centerLon", ":centerLat",
+                ":radiusMeters",
+                "distance_meters", "m"
+        );
+
+        String sql = String.format("""
+            SELECT *,
+                   %s
+            FROM vehicles
+            WHERE is_active = true
+            AND current_latitude IS NOT NULL
             AND current_longitude IS NOT NULL
-            AND ST_Distance(
-                ST_Transform(ST_SetSRID(ST_Point(current_longitude, current_latitude), 4326), 3857),
-                ST_Transform(ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326), 3857)
-            ) <= :radiusMeters
-            ORDER BY distance_meters
-            """;
+            AND %s
+            ORDER BY %s
+            """,
+                query.distanceColumn(),
+                query.withinRadiusCondition(),
+                query.orderByClause()
+        );
 
         return databaseClient.sql(sql)
                 .bind("centerLat", centerLat)

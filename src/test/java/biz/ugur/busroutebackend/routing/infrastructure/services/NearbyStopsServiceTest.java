@@ -3,10 +3,12 @@ package biz.ugur.busroutebackend.routing.infrastructure.services;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.dto.StopsContext;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
-import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripSearchCriteria;
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,13 +38,18 @@ class NearbyStopsServiceTest {
     private RouteCalculationService routeCalculationService;
 
     private SearchContext testContext;
-    private Location fromLocation;
-    private Location toLocation;
+    private Coordinates fromLocation;
+    private Coordinates toLocation;
+    private DistanceCalculationService distanceService;
 
     @BeforeEach
     void setUp() {
-        fromLocation = new Location(38.32323, 58.34343, "Test From Location");
-        toLocation = new Location(38.434343, 58.33433, "Test To Location");
+        // Initialize DistanceCalculationService for RouteGeometry
+        distanceService = new DistanceCalculationService();
+        RouteGeometry.setDistanceCalculationService(distanceService);
+
+        fromLocation = Coordinates.of(38.32323, 58.34343);
+        toLocation = Coordinates.of(38.434343, 58.33433);
 
         testContext = new SearchContext(
                 "test-search-123",
@@ -137,7 +144,7 @@ class NearbyStopsServiceTest {
                 createBusStop("major-connected", true, null)   // Major: getServingRoutesCount() = 5
         );
 
-        when(routeCalculationService.findNearbyStops(any(Location.class), anyDouble()))
+        when(routeCalculationService.findNearbyStops(any(Coordinates.class), anyDouble()))
                 .thenReturn(Flux.fromIterable(mixedStops));
 
         // When: поиск с приоритизацией

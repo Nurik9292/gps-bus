@@ -6,8 +6,8 @@ import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.response.ResponseBuilder;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.repository.TripPlanRepository;
-import biz.ugur.busroutebackend.routing.domain.valueobjects.Location;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripSearchCriteria;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.routing.infrastructure.config.RouteSearchConfig;
 import biz.ugur.busroutebackend.routing.infrastructure.config.SearchContextFactory;
 import biz.ugur.busroutebackend.routing.infrastructure.services.ParallelRouteSearchService;
@@ -183,13 +183,13 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
     }
 
     private String createCacheKey(SearchContext context) {
-        Location from = context.fromLocation();
-        Location to = context.toLocation();
+        Coordinates from = context.fromLocation();
+        Coordinates to = context.toLocation();
         TripSearchCriteria criteria = context.searchCriteria();
 
         return String.format("trip_search:%.4f:%.4f:%.4f:%.4f:%d:%d:%s:%s",
-                from.getLatitude(), from.getLongitude(),
-                to.getLatitude(), to.getLongitude(),
+                from.getLatitudeAsDouble(), from.getLongitudeAsDouble(),
+                to.getLatitudeAsDouble(), to.getLongitudeAsDouble(),
                 criteria.getMaxWalkingDistanceMeters(),
                 criteria.getMaxTransfers(),
                 criteria.isPrioritizeSpeed(),
