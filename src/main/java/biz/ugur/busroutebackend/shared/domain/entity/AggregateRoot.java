@@ -2,18 +2,15 @@ package biz.ugur.busroutebackend.shared.domain.entity;
 
 import biz.ugur.busroutebackend.shared.base.BaseEntity;
 import biz.ugur.busroutebackend.shared.domain.event.DomainEvent;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.annotation.Version;
-import org.springframework.data.domain.AbstractAggregateRoot;
 import org.springframework.data.relational.core.mapping.Column;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -43,7 +40,7 @@ public abstract class AggregateRoot<T extends AggregateRoot<T, ID>, ID> implemen
     }
 
     public List<DomainEvent> getDomainEvents() {
-        return Collections.unmodifiableList(domainEvents);
+        return List.copyOf(domainEvents);
     }
 
     public void clearEvents() {
