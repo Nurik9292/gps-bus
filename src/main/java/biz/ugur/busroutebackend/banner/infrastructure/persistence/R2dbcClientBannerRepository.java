@@ -29,7 +29,7 @@ public class R2dbcClientBannerRepository extends BannerBaseRepository implements
         """;
 
         return databaseClient.sql(sql)
-                .bind("type", type.getValue())
+                .bind("type", type.getValue().toUpperCase())
                 .bind("limit", pageable.getPageSize())
                 .bind("offset", pageable.getOffset())
                 .map(getRowMapper())
