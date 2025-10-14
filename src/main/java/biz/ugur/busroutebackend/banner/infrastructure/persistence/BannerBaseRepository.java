@@ -9,6 +9,7 @@ import io.r2dbc.spi.RowMetadata;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -69,8 +70,8 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
                 displayOrder,
                 startDate,
                 endDate,
-                row.get("created_at", java.time.Instant.class),
-                row.get("updated_at", java.time.Instant.class),
+                row.get("created_at", Instant.class),
+                row.get("updated_at", Instant.class),
                 content,
                 row.get("version", Long.class)
         );

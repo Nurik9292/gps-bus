@@ -47,7 +47,6 @@ public class CreateBannerUseCase extends BaseUseCase<Mono<BannerCreateRequest>, 
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Creating new banner: CorrelationId - {} BannerTitle  {}", correlationId, request.getTitle());
 
-
             return processImageUrl(request.getImageUrl())
                     .flatMap(processedImageUrl -> {
                         Banner banner = Banner.create(
@@ -67,6 +66,7 @@ public class CreateBannerUseCase extends BaseUseCase<Mono<BannerCreateRequest>, 
                         if (request.getEndDate() != null) {
                             banner.setEndDate(request.getEndDate());
                         }
+                        log.info("startDate = {}, type = {}", banner.getStartDate(), banner.getStartDate().getClass());
 
                         return bannerRepository.save(banner).map(this::toResponse);
                     })

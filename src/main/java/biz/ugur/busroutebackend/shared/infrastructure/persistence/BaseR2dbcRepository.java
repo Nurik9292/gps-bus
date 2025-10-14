@@ -13,9 +13,11 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -209,6 +211,10 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
             return spec.bindNull(name, Object.class);
         }
 
+        if (value instanceof LocalDateTime) {
+            return spec.bind(name, value);
+        }
+
         if (value instanceof Instant) {
             return spec.bind(name, OffsetDateTime.ofInstant((Instant) value, ZoneOffset.UTC));
         }
@@ -217,7 +223,7 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
             return spec.bind(name, ((Enum<?>) value).name());
         }
 
-        if (value instanceof java.util.UUID) {
+        if (value instanceof UUID) {
             return spec.bind(name, value);
         }
 

@@ -54,7 +54,12 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
     @Column("content")
     private String content;
 
-    public static Banner create(String title, BannerType type, String imageUrl, String targetUrl, Integer displayOrder, String content) {
+    public static Banner create(String title,
+                                BannerType type,
+                                String imageUrl,
+                                String targetUrl,
+                                Integer displayOrder,
+                                String content) {
         Banner banner = builder()
                 .id(BannerId.generate())
                 .title(title)
