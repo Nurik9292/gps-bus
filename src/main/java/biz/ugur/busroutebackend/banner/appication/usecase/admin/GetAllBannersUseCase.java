@@ -63,7 +63,8 @@ public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerListR
                 banner.getIsActive(),
                 banner.getDisplayOrder(),
                 banner.getStartDate(),
-                banner.getEndDate()
+                banner.getEndDate(),
+                banner.getContent()
         );
     }
 }

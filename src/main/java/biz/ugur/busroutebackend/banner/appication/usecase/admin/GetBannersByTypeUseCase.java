@@ -63,7 +63,8 @@ public class GetBannersByTypeUseCase extends BaseUseCase<Mono<String>, BannerLis
                 banner.getIsActive(),
                 banner.getDisplayOrder(),
                 banner.getStartDate(),
-                banner.getEndDate()
+                banner.getEndDate(),
+                banner.getContent()
         );
     }
     }

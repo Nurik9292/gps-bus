@@ -73,7 +73,8 @@ public class ToggleStatusBannerUseCase extends BaseUseCase<Mono<ToggleStatusBann
                 banner.getIsActive(),
                 banner.getDisplayOrder(),
                 banner.getStartDate(),
-                banner.getEndDate()
+                banner.getEndDate(),
+                banner.getContent()
         );
     }
 

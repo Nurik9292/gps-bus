@@ -36,6 +36,9 @@ public class BannerResponse {
     @JsonProperty("end_date")
     private Instant endDate;
 
+    @JsonProperty("content")
+    private String content;
+
      public BannerResponse(String id,
                            String title,
                            String type,
@@ -44,7 +47,8 @@ public class BannerResponse {
                            Boolean isActive,
                            Integer displayOrder,
                            LocalDateTime startDate,
-                           LocalDateTime endDate) {
+                           LocalDateTime endDate,
+                           String content) {
          this.id = id;
          this.title = title;
          this.type = type;
@@ -54,6 +58,6 @@ public class BannerResponse {
          this.displayOrder = displayOrder;
          this.startDate = Instant.ofEpochSecond(startDate.getSecond());
          this.endDate = Instant.ofEpochSecond(endDate.getSecond());
-         ;
+         this.content = content;
      }
 }

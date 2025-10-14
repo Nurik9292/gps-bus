@@ -126,7 +126,8 @@ public class UpdateBannerUseCase extends BaseUseCase<Mono<UpdateBannerUseCase.Re
                 banner.getIsActive(),
                 banner.getDisplayOrder(),
                 banner.getStartDate(),
-                banner.getEndDate()
+                banner.getEndDate(),
+                banner.getContent()
         );
     }
 

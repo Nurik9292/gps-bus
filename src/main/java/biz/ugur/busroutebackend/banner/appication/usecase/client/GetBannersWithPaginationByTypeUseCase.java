@@ -80,7 +80,8 @@ public class GetBannersWithPaginationByTypeUseCase extends BaseUseCase<Mono<Bann
                 banner.getIsActive(),
                 banner.getDisplayOrder(),
                 banner.getStartDate(),
-                banner.getEndDate()
+                banner.getEndDate(),
+                banner.getContent()
         );
     }
 }

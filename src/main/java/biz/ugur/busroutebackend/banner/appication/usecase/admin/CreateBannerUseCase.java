@@ -94,7 +94,8 @@ public class CreateBannerUseCase extends BaseUseCase<Mono<BannerCreateRequest>, 
                 banner.getIsActive(),
                 banner.getDisplayOrder(),
                 banner.getStartDate(),
-                banner.getEndDate()
+                banner.getEndDate(),
+                banner.getContent()
         );
     }
 }
