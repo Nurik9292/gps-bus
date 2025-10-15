@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.routing.application.response;
 
-import biz.ugur.busroutebackend.interfaces.rest.routing.dto.response.TripSearchResponse;
+import biz.ugur.busroutebackend.interfaces.rest.routing.V1.response.TripSearchResponse;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.dto.TripOptionDTO;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;

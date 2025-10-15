@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.routing.application.dto;
 
-import biz.ugur.busroutebackend.interfaces.rest.routing.dto.request.TripSearchRequest;
+import biz.ugur.busroutebackend.interfaces.rest.routing.V1.request.TripSearchRequest;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripSearchCriteria;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 

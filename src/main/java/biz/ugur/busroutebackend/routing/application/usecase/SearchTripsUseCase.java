@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.routing.application.usecase;
 
-import biz.ugur.busroutebackend.interfaces.rest.routing.dto.request.TripSearchRequest;
-import biz.ugur.busroutebackend.interfaces.rest.routing.dto.response.TripSearchResponse;
+import biz.ugur.busroutebackend.interfaces.rest.routing.V1.request.TripSearchRequest;
+import biz.ugur.busroutebackend.interfaces.rest.routing.V1.response.TripSearchResponse;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.response.ResponseBuilder;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;

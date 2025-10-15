@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.transport.infrastructure.services;
 
 import biz.ugur.busroutebackend.admin.domain.exceptions.BusStopException;
-import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.BusStopArrivalsResponse;
+import biz.ugur.busroutebackend.interfaces.rest.transport.V1.response.BusStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.application.dto.BusArrivalInfo;
 import biz.ugur.busroutebackend.transport.application.dto.NearbyStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;

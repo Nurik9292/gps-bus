@@ -13,6 +13,8 @@ import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAd
 import java.util.HashMap;
 import java.util.Map;
 
+import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.API_V1;
+
 @Log4j2
 @Configuration
 public class WebSocketConfig {
@@ -30,7 +32,7 @@ public class WebSocketConfig {
     public HandlerMapping webSocketHandlerMapping() {
         log.info("🗺️ Registering WebSocket handler mappings...");
         Map<String, WebSocketHandler> map = new HashMap<>();
-        map.put("/ws/vehicle-positions", vehiclePositionHandler);
+        map.put(API_V1 + "/ws/vehicle-positions", vehiclePositionHandler);
 
         SimpleUrlHandlerMapping mapping = new SimpleUrlHandlerMapping();
         mapping.setUrlMap(map);

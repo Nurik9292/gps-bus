@@ -18,7 +18,6 @@ public abstract class BaseController {
 
     private final MessageSource messageSource;
 
-
     protected BaseController(MessageSource messageSource) {
         this.messageSource = messageSource;
     }
@@ -40,6 +39,15 @@ public abstract class BaseController {
                 .defaultIfEmpty(ResponseEntity.ok(ApiResponse.success(null)))
                 .doOnSuccess(response -> logResponse("OK", response))
                 .doOnError(error -> logError("OK", error));
+    }
+
+    protected <T> Mono<ResponseEntity<ApiResponse<T>>> okWithVersion(Mono<T> data, String version) {
+        return data.map(d -> ResponseEntity.ok()
+                        .header("X-API-Version", version)
+                        .body(ApiResponse.success(d)))
+                .defaultIfEmpty(ResponseEntity.ok()
+                        .header("X-API-Version", version)
+                        .body(ApiResponse.success(null)));
     }
 
 

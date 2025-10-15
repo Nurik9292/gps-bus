@@ -49,7 +49,6 @@ spring:
     schemas: public
 
   webflux:
-    base-path: /api/v1
     multipart:
       max-in-memory-size: 5MB
       max-disk-usage-per-part: 10MB

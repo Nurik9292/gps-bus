@@ -2,7 +2,7 @@ package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.UseCase;
-import biz.ugur.busroutebackend.interfaces.rest.transport.dto.request.RouteGeometryRequest;
+import biz.ugur.busroutebackend.interfaces.rest.transport.V1.request.RouteGeometryRequest;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.application.mapper.RouteDtoMappingService;

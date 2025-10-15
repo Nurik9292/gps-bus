@@ -8,7 +8,7 @@ import biz.ugur.busroutebackend.banner.appication.usecase.client.GetBannersWithP
 import biz.ugur.busroutebackend.client.application.usecase.RouteIsFavoriteUseCase;
 import biz.ugur.busroutebackend.client.infrastructure.security.ClientPrincipal;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.response.*;
-import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.BusStopArrivalsResponse;
+import biz.ugur.busroutebackend.interfaces.rest.transport.V1.response.BusStopArrivalsResponse;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteStops;

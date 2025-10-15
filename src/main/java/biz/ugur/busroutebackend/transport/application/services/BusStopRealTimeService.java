@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.transport.application.services;
 
-import biz.ugur.busroutebackend.interfaces.rest.transport.dto.response.BusStopArrivalsResponse;
+import biz.ugur.busroutebackend.interfaces.rest.transport.V1.response.BusStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.application.dto.NearbyStopArrivalsResponse;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
