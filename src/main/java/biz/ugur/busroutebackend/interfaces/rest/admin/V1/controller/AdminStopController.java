@@ -17,10 +17,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN;
+import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN_STOPS;
 
 @RestController
-@RequestMapping(V1_ADMIN + "/stops")
+@RequestMapping(V1_ADMIN_STOPS)
 @CrossOrigin(origins = "*")
 public class AdminStopController extends BaseController {
 

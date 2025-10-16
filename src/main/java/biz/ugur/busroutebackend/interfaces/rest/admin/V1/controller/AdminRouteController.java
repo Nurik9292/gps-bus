@@ -15,10 +15,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN;
+import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN_ROUTES;
 
 @RestController
-@RequestMapping(V1_ADMIN + "/routes")
+@RequestMapping(V1_ADMIN_ROUTES)
 @CrossOrigin(origins = "*")
 public class AdminRouteController extends BaseController {
 

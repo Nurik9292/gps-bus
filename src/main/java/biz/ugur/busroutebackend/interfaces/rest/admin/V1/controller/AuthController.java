@@ -18,10 +18,10 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN;
+import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN_AUTH;
 
 @RestController
-@RequestMapping(V1_ADMIN + "/auth")
+@RequestMapping(V1_ADMIN_AUTH)
 @CrossOrigin(origins = "*")
 public class AuthController extends BaseController {
 
