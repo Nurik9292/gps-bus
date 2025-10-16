@@ -16,12 +16,14 @@ public class ApiVersionConfig {
     public static final String BANNERS = "/banners";
     public static final String CITIES = "/cities";
     public static final String USERS = "/users";
+    public static final String FAVORITES = "/favorites";
 
     public static final String V1_MOBILE = API_V1 + MOBILE;
     public static final String V1_ADMIN = API_V1 + ADMIN;
     public static final String V1_CLIENT = API_V1 + CLIENT;
     public static final String V1_ROUTING = API_V1 + ROUTING;
-
+    public static final String V1_ROUTES = API_V1 + ROUTES;
+    public static final String V1_STOPS = API_V1 + STOPS;
 
     public static final String V1_MOBILE_BANNERS = API_V1 + V1_MOBILE + BANNERS;
     public static final String V1_MOBILE_ROUTES = API_V1 + V1_MOBILE + ROUTES;
@@ -35,4 +37,8 @@ public class ApiVersionConfig {
     public static final String V1_ADMIN_ROUTES = API_V1 + V1_ADMIN + ROUTES;
     public static final String V1_ADMIN_STOPS = API_V1 + V1_ADMIN + STOPS;
     public static final String V1_ADMIN_USERS = API_V1 + V1_ADMIN + USERS;
+
+
+    public static final String V1_CLIENT_AUTH = API_V1 + V1_CLIENT + AUTH;
+    public static final String V1_CLIENT_FAVORITES = API_V1 + V1_CLIENT + FAVORITES;
 }

@@ -12,10 +12,10 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_CLIENT;
+import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_CLIENT_FAVORITES;
 
 @RestController
-@RequestMapping(V1_CLIENT + "/favorites")
+@RequestMapping(V1_CLIENT_FAVORITES)
 @CrossOrigin(origins = "*")
 public class FavoritesController extends BaseController {
 

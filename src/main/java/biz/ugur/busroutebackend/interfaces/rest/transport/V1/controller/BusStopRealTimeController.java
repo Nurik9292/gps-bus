@@ -13,10 +13,10 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 
-import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.API_V1;
+import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_STOPS;
 
 @RestController
-@RequestMapping(API_V1 + "/stops")
+@RequestMapping(V1_STOPS)
 @CrossOrigin(origins = "*")
 public class BusStopRealTimeController extends BaseController {
 

@@ -14,10 +14,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_CLIENT;
+import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_CLIENT_AUTH;
 
 @RestController
-@RequestMapping(V1_CLIENT + "/auth")
+@RequestMapping(V1_CLIENT_AUTH)
 @CrossOrigin(origins = "*")
 public class ClientAuthController extends BaseController {
 

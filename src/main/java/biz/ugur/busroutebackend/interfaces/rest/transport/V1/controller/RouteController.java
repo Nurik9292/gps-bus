@@ -19,10 +19,10 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 
-import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.API_V1;
+import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ROUTES;
 
 @RestController
-@RequestMapping( API_V1 + "/routes")
+@RequestMapping( V1_ROUTES)
 @CrossOrigin("*")
 public class RouteController extends BaseController {
 
