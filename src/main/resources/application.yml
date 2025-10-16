@@ -322,3 +322,21 @@ routing:
       transfer-distances: [0.3, 0.4, 0.5]
       max-stops-per-layer: [4, 6, 8]
 
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+  swagger-ui:
+    enabled: true
+    path: /docs
+    display-request-duration: true
+    groups-order: DESC
+    operations-sorter: method
+    tags-sorter: alpha
+    doc-expansion: none
+  show-actuator: false
+  group-configs:
+    - group: v1
+      paths-to-match: /api/v1/**
+      display-name: "API V1 (Current)"

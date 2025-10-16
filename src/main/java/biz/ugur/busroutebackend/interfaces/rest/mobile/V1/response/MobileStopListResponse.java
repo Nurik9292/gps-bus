@@ -1,4 +1,4 @@
-    package biz.ugur.busroutebackend.interfaces.rest.mobile.response;
+    package biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response;
 
     import lombok.Builder;
     import lombok.Data;
@@ -7,8 +7,8 @@
 
     @Data
     @Builder
-    public class MobileRouteListResponse {
-        private List<MobileRouteResponse> routes;
+    public class MobileStopListResponse {
+        private List<MobileStopResponse> stops;
         private Integer totalCount;
         private Long activeCount;
     }

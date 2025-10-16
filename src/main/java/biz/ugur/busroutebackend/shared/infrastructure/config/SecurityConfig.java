@@ -64,10 +64,6 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.POST, "/client/auth/**").permitAll()
 
                         .pathMatchers(HttpMethod.GET, "/public/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/routes/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/stops/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/cities/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/trips/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/vehicles/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/trip-planning/**").permitAll()
                         .pathMatchers(HttpMethod.POST, "/trip-planning/**").permitAll()
@@ -76,8 +72,13 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/avatars/**").permitAll()
                         .pathMatchers("/api/v1/banners/**").permitAll()
 
+                        .pathMatchers("/swagger-ui.html").permitAll()
+                        .pathMatchers("/swagger-ui/**").permitAll()
+                        .pathMatchers("/v3/api-docs/**").permitAll()
+                        .pathMatchers("/api-docs/**").permitAll()
+                        .pathMatchers("/docs/**").permitAll()
+
                         .pathMatchers("/ws/**").permitAll()
-//                        .pathMatchers("/mobile/**").permitAll()
 
 
 //                        .pathMatchers(HttpMethod.GET, "/admin/auth/me").hasRole("ADMIN")

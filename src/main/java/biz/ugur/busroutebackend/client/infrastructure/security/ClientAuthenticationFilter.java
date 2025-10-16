@@ -27,6 +27,9 @@ public class ClientAuthenticationFilter extends BaseJwtAuthenticationFilter<Clie
                 path.startsWith("/vehicles/") ||
                 path.startsWith("/trip-planning/") ||
                 path.startsWith("/ws/") ||
+                path.startsWith("/docs") ||
+                path.startsWith("/api-docs") ||
+                path.startsWith("/swagger-ui") ||
                 path.startsWith("/actuator/");
     }
 

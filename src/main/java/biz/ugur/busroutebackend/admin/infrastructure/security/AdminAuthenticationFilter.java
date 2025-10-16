@@ -38,7 +38,9 @@ public class AdminAuthenticationFilter extends BaseJwtAuthenticationFilter<Admin
                 path.startsWith("/swagger") ||
                 path.startsWith("/api/v1/client") ||
                 path.startsWith("/api/v1/mobile") ||
-                path.startsWith("/api-docs");
+                path.startsWith("/docs") ||
+                path.startsWith("/api-docs") ||
+                path.startsWith("/swagger-ui");
     }
 
 }

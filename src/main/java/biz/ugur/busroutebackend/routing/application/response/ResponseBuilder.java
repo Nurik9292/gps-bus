@@ -12,8 +12,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Component
 @Slf4j
+@Component("customResponseBuilder")
 public class ResponseBuilder {
 
     private final TripOptionDTOConverter dtoConverter;

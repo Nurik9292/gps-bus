@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.interfaces.rest.mobile.response;
+package biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response;
 
 import lombok.Builder;
 import lombok.Data;
