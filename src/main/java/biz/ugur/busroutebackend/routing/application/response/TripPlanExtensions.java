@@ -13,7 +13,6 @@ import java.util.stream.Collectors;
 
 public class TripPlanExtensions {
 
-    // NOTE: This method needs DistanceCalculationService - should be provided by caller
     private static DistanceCalculationService distanceService;
 
     public static List<TripOption> getDirectOptions(TripPlan tripPlan) {

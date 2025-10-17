@@ -59,14 +59,14 @@ public class SecurityConfig {
                 .addFilterAfter(adminAuthenticationFilter, SecurityWebFiltersOrder.AUTHENTICATION)
 
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers(HttpMethod.POST, "/admin/auth/login").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/admin/auth/refresh").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/client/auth/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/v1/admin/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/v1/admin/auth/refresh").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/**").permitAll()
 
                         .pathMatchers(HttpMethod.GET, "/public/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/vehicles/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/trip-planning/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/trip-planning/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/api/v1/vehicles/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/api/v1/trip-planning/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/v1/trip-planning/**").permitAll()
                         .pathMatchers("/avatars/**").permitAll()
                         .pathMatchers("/banners/**").permitAll()
                         .pathMatchers("/api/v1/avatars/**").permitAll()
@@ -79,6 +79,7 @@ public class SecurityConfig {
                         .pathMatchers("/docs/**").permitAll()
 
                         .pathMatchers("/ws/**").permitAll()
+                        .pathMatchers("/api/v1/ws/**").permitAll()
 
 
 //                        .pathMatchers(HttpMethod.GET, "/admin/auth/me").hasRole("ADMIN")

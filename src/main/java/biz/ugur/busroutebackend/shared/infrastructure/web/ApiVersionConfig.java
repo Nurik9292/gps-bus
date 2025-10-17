@@ -40,5 +40,5 @@ public class ApiVersionConfig {
 
 
     public static final String V1_CLIENT_AUTH = V1_CLIENT + AUTH;
-    public static final String V1_CLIENT_FAVORITES =V1_CLIENT + FAVORITES;
+    public static final String V1_CLIENT_FAVORITES = V1_CLIENT + FAVORITES;
 }

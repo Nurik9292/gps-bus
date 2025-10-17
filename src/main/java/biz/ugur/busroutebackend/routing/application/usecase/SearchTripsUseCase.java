@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.interfaces.rest.routing.V1.request.TripSearchReq
 import biz.ugur.busroutebackend.interfaces.rest.routing.V1.response.TripSearchResponse;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.response.ResponseBuilder;
+import biz.ugur.busroutebackend.routing.domain.exceptions.TripPlanningException;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.repository.TripPlanRepository;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripSearchCriteria;
@@ -74,7 +75,7 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
         ValidationResult validation = validateRequest(request);
 
         if (!validation.isValid()) {
-            return responseBuilder.createErrorResponse(validation.getErrorMessage());
+            return responseBuilder.createErrorResponse(validation.getErrorType(), validation.getErrorMessage());
         }
 
         String cacheKey = createCacheKey(context);
@@ -145,16 +146,22 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
 
     private ValidationResult validateRequest(TripSearchRequest request) {
         if (request.getFrom() == null || request.getTo() == null) {
-            return ValidationResult.invalid("From and To locations are required");
+            return ValidationResult.invalid(
+                    TripPlanningException.PlanningErrorType.MISSING_LOCATION
+            );
         }
 
         if (!isLocationInTurkmenistan(request.getFrom()) || !isLocationInTurkmenistan(request.getTo())) {
-            return ValidationResult.invalid("Locations must be within Turkmenistan");
+            return ValidationResult.invalid(
+                    TripPlanningException.PlanningErrorType.LOCATION_OUT_OF_BOUNDS
+            );
         }
 
         double distance = calculateDistance(request.getFrom(), request.getTo());
         if (distance < 100) {
-            return ValidationResult.invalid("Minimum distance is 100 meters");
+            return ValidationResult.invalid(
+                    TripPlanningException.PlanningErrorType.DISTANCE_TOO_SHORT
+            );
         }
 
         return ValidationResult.valid();
@@ -227,18 +234,22 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
     private static class ValidationResult {
         private final boolean valid;
         private final String errorMessage;
+        private final biz.ugur.busroutebackend.routing.domain.exceptions.TripPlanningException.PlanningErrorType errorType;
 
-        private ValidationResult(boolean valid, String errorMessage) {
+        private ValidationResult(boolean valid, String errorMessage,
+                biz.ugur.busroutebackend.routing.domain.exceptions.TripPlanningException.PlanningErrorType errorType) {
             this.valid = valid;
             this.errorMessage = errorMessage;
+            this.errorType = errorType;
         }
 
         public static ValidationResult valid() {
-            return new ValidationResult(true, null);
+            return new ValidationResult(true, null, null);
         }
 
-        public static ValidationResult invalid(String message) {
-            return new ValidationResult(false, message);
+        public static ValidationResult invalid(
+                biz.ugur.busroutebackend.routing.domain.exceptions.TripPlanningException.PlanningErrorType errorType) {
+            return new ValidationResult(false, errorType.getDefaultMessage(), errorType);
         }
 
     }

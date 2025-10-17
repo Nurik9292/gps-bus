@@ -13,16 +13,18 @@ import java.util.Set;
 public class AdminAuthenticationFilter extends BaseJwtAuthenticationFilter<AdminPrincipal> {
 
     private static final Set<String> PUBLIC_PATHS = Set.of(
-            "/admin/auth/login",
-            "/admin/auth/refresh",
+            "/api/v1/admin/auth/login",
+            "api/v1/admin/auth/refresh",
             "/public",
-            "/client",
-            "/mobile",
-            "/routes",
-            "/stops",
-            "/trips",
-            "/vehicles",
-            "/trip-planning",
+            "api/v1/client",
+            "/api/v1/client/auth",
+            "api/v1/mobile",
+            "api/v1/routes",
+            "api/v1/stops",
+            "api/v1/trips",
+            "api/v1/vehicles",
+            "api/v1/trip-planning",
+            "api/v1/ws",
             "/ws"
     );
 
