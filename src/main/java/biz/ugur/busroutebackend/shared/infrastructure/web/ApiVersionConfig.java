@@ -17,6 +17,8 @@ public class ApiVersionConfig {
     public static final String CITIES = "/cities";
     public static final String USERS = "/users";
     public static final String FAVORITES = "/favorites";
+    public static final String AVATARS = "/avatars";
+    public static final String Banners = "/banners";
 
     public static final String V1_MOBILE = API_V1 + MOBILE;
     public static final String V1_ADMIN = API_V1 + ADMIN;
@@ -24,6 +26,8 @@ public class ApiVersionConfig {
     public static final String V1_ROUTING = API_V1 + ROUTING;
     public static final String V1_ROUTES = API_V1 + ROUTES;
     public static final String V1_STOPS = API_V1 + STOPS;
+    public static final String V1_AVATARS = API_V1 + AVATARS;
+    public static final String V1_BANNERS = API_V1 + BANNERS;
 
     public static final String V1_MOBILE_BANNERS = V1_MOBILE + BANNERS;
     public static final String V1_MOBILE_ROUTES = V1_MOBILE + ROUTES;

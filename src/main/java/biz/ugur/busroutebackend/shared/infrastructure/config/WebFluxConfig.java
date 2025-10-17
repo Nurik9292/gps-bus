@@ -11,6 +11,9 @@ import org.springframework.web.reactive.config.EnableWebFlux;
 import org.springframework.web.reactive.config.ResourceHandlerRegistry;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 
+import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_AVATARS;
+import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_BANNERS;
+
 @Slf4j
 @Configuration
 @EnableWebFlux
@@ -39,10 +42,10 @@ public class WebFluxConfig implements WebFluxConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/avatars/**")
+        registry.addResourceHandler(V1_AVATARS + "/**")
                 .addResourceLocations("file:" + avatarsBasePath + "/");
 
-        registry.addResourceHandler("/banners/**")
+        registry.addResourceHandler(V1_BANNERS + "/**")
                 .addResourceLocations("file:" + bannersBasePath + "/");
     }
 }
