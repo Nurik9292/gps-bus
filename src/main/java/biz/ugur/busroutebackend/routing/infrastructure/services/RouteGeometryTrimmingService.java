@@ -11,10 +11,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Service for trimming route geometry between two stops.
- * Now uses centralized DistanceCalculationService for all distance calculations.
- */
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -114,15 +111,7 @@ public class RouteGeometryTrimmingService {
         return wkt.toString();
     }
 
-    /**
-     * Calculate Haversine distance using centralized service.
-     *
-     * @param lat1 Starting latitude
-     * @param lon1 Starting longitude
-     * @param lat2 Ending latitude
-     * @param lon2 Ending longitude
-     * @return Distance in meters
-     */
+
     private double calculateHaversineDistance(double lat1, double lon1, double lat2, double lon2) {
         Distance distance = distanceService.calculateDistance(lat1, lon1, lat2, lon2);
         return distance.getMeters();

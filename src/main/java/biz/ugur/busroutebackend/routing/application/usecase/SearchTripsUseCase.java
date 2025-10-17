@@ -22,7 +22,6 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.concurrent.TimeoutException;
 
 @Service
 @Slf4j
@@ -208,13 +207,19 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
     private Mono<TripSearchResponse> handleSearchError(Throwable error, SearchContext context) {
         long duration = System.currentTimeMillis() - context.startTime();
 
-        if (error instanceof TimeoutException) {
-            log.error("[{}] Trip search timeout after {}ms", context.searchId(), duration);
-            return responseBuilder.createErrorResponse("Search took too long, please try again");
+        if (error instanceof biz.ugur.busroutebackend.routing.domain.exceptions.TripPlanningException tripEx) {
+            log.warn("[{}] Trip planning error after {}ms: {} - {}",
+                    context.searchId(), duration,
+                    tripEx.getPlanningErrorType(), tripEx.getMessage());
+            return responseBuilder.createErrorResponseFromException(tripEx);
         }
 
-        log.error("[{}] Trip search error after {}ms: {}", context.searchId(), duration, error.getMessage());
-        return responseBuilder.createErrorResponse("Search failed: " + error.getMessage());
+        // ТЕХНИЧЕСКИЕ ОШИБКИ → пробрасываем в GlobalExceptionHandler (HTTP 5xx)
+        // НЕ преобразуем в TripPlanningException!
+        log.error("[{}] Technical error during trip search after {}ms: {}",
+                context.searchId(), duration, error.getMessage(), error);
+
+        return Mono.error(error);
     }
 
 

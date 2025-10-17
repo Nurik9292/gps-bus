@@ -17,6 +17,9 @@ public class TripSearchResponse {
     @JsonProperty("message")
     private String message;
 
+    @JsonProperty("error_type")
+    private String errorType;
+
     @JsonProperty("search_time")
     private LocalDateTime searchTime;
 
@@ -26,12 +29,24 @@ public class TripSearchResponse {
     @JsonProperty("summary")
     private SearchSummary summary;
 
+    // Конструктор для успешных ответов
     public TripSearchResponse(String status, String message, List<TripOptionDTO> tripOptions) {
         this.status = status;
         this.message = message;
+        this.errorType = null;
         this.searchTime = LocalDateTime.now();
         this.tripOptions = tripOptions != null ? tripOptions : Collections.emptyList();
         this.summary = new SearchSummary(this.tripOptions);
+    }
+
+    // Конструктор для ответов с ошибками
+    public TripSearchResponse(String status, String message, String errorType) {
+        this.status = status;
+        this.message = message;
+        this.errorType = errorType;
+        this.searchTime = LocalDateTime.now();
+        this.tripOptions = Collections.emptyList();
+        this.summary = new SearchSummary(Collections.emptyList());
     }
 
     @Data

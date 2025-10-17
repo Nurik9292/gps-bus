@@ -614,33 +614,8 @@ public class GlobalExceptionHandler {
     // ========================================
     // Routing Context Exceptions
     // ========================================
-
-    @ExceptionHandler(TripPlanningException.class)
-    public Mono<ResponseEntity<ErrorResponse>> handleTripPlanningException(
-            TripPlanningException ex,
-            ServerWebExchange exchange
-    ) {
-        log.warn("Trip planning error - CorrelationId: {} - Type: {} - Origin: {} - Destination: {}",
-                ex.getCorrelationId().value(), ex.getPlanningErrorType(),
-                ex.getOrigin(), ex.getDestination());
-
-        HttpStatus status = HttpStatus.BAD_REQUEST;
-        Map<String, Object> metadata = errorResponseFactory.createMetadata();
-        metadata.put("planningErrorType", ex.getPlanningErrorType().name());
-
-        if (ex.getOrigin() != null) {
-            metadata.put("origin", ex.getOrigin());
-        }
-
-        if (ex.getDestination() != null) {
-            metadata.put("destination", ex.getDestination());
-        }
-
-        metadata.put("isRetryable", ex.isRetryable());
-
-        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
-        return Mono.just(ResponseEntity.status(status).body(errorResponse));
-    }
+    // NOTE: TripPlanningException is handled in SearchTripsUseCase and returns TripSearchResponse
+    // Only technical routing errors are handled here
 
     @ExceptionHandler(RouteCalculationException.class)
     public Mono<ResponseEntity<ErrorResponse>> handleRouteCalculationException(

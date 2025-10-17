@@ -22,10 +22,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * Trip plan aggregate root.
- * Migrated from Location to Coordinates as part of geospatial module consolidation.
- */
+
 @Getter
 @Table("trip_plans")
 public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
@@ -259,7 +256,6 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         if (coordinates == null) {
             throw new IllegalArgumentException(type + " coordinates cannot be null");
         }
-        // Validate using centralized TurkmenistanBounds
         if (!TurkmenistanBounds.isWithinStandardBounds(
             coordinates.getLatitudeAsDouble(),
             coordinates.getLongitudeAsDouble())) {
