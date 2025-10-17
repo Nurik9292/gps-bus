@@ -25,20 +25,20 @@ public class ApiVersionConfig {
     public static final String V1_ROUTES = API_V1 + ROUTES;
     public static final String V1_STOPS = API_V1 + STOPS;
 
-    public static final String V1_MOBILE_BANNERS = API_V1 + V1_MOBILE + BANNERS;
-    public static final String V1_MOBILE_ROUTES = API_V1 + V1_MOBILE + ROUTES;
-    public static final String V1_MOBILE_STOPS = API_V1 + V1_MOBILE + STOPS;
-    public static final String V1_MOBILE_VEHICLES = API_V1 + V1_MOBILE + VEHICLES;
+    public static final String V1_MOBILE_BANNERS = V1_MOBILE + BANNERS;
+    public static final String V1_MOBILE_ROUTES = V1_MOBILE + ROUTES;
+    public static final String V1_MOBILE_STOPS = V1_MOBILE + STOPS;
+    public static final String V1_MOBILE_VEHICLES = V1_MOBILE + VEHICLES;
 
 
-    public static final String V1_ADMIN_AUTH =  API_V1 + V1_ADMIN + AUTH;
-    public static final String V1_ADMIN_BANNERS = API_V1 + V1_ADMIN + BANNERS;
-    public static final String V1_ADMIN_CITIES = API_V1 + V1_ADMIN + CITIES;
-    public static final String V1_ADMIN_ROUTES = API_V1 + V1_ADMIN + ROUTES;
-    public static final String V1_ADMIN_STOPS = API_V1 + V1_ADMIN + STOPS;
-    public static final String V1_ADMIN_USERS = API_V1 + V1_ADMIN + USERS;
+    public static final String V1_ADMIN_AUTH =  V1_ADMIN + AUTH;
+    public static final String V1_ADMIN_BANNERS = V1_ADMIN + BANNERS;
+    public static final String V1_ADMIN_CITIES = V1_ADMIN + CITIES;
+    public static final String V1_ADMIN_ROUTES = V1_ADMIN + ROUTES;
+    public static final String V1_ADMIN_STOPS = V1_ADMIN + STOPS;
+    public static final String V1_ADMIN_USERS = V1_ADMIN + USERS;
 
 
-    public static final String V1_CLIENT_AUTH = API_V1 + V1_CLIENT + AUTH;
-    public static final String V1_CLIENT_FAVORITES = API_V1 + V1_CLIENT + FAVORITES;
+    public static final String V1_CLIENT_AUTH = V1_CLIENT + AUTH;
+    public static final String V1_CLIENT_FAVORITES =V1_CLIENT + FAVORITES;
 }
