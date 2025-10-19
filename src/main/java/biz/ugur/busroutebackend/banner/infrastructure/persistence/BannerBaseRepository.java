@@ -45,6 +45,7 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
         values.put("display_order", banner.getDisplayOrder());
         values.put("start_date", banner.getStartDate());
         values.put("end_date", banner.getEndDate());
+        values.put("content", banner.getContent());
         return values;
     }
 
