@@ -1,10 +1,9 @@
 package biz.ugur.busroutebackend.banner.appication.usecase.client;
 
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerListResponse;
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerPaginationQuery;
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerResponse;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerPaginationQuery;
+import biz.ugur.busroutebackend.banner.appication.mapper.BannerResponseMapper;
 import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
-import biz.ugur.busroutebackend.banner.domain.model.Banner;
 import biz.ugur.busroutebackend.banner.domain.repository.ClientBannerRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
@@ -22,12 +21,15 @@ import reactor.core.publisher.Mono;
 public class GetBannersWithPaginationByTypeUseCase extends BaseUseCase<Mono<BannerPaginationQuery>, BannerListResponse> {
 
     private final ClientBannerRepository bannerRepository;
+    private final BannerResponseMapper bannerResponseMapper;
 
     public GetBannersWithPaginationByTypeUseCase(CorrelationContextService correlationService,
                                                  EventBus eventBus,
-                                                 ClientBannerRepository clientBannerRepository) {
+                                                 ClientBannerRepository clientBannerRepository,
+                                                 BannerResponseMapper bannerResponseMapper) {
         super(correlationService, eventBus);
         this.bannerRepository = clientBannerRepository;
+        this.bannerResponseMapper = bannerResponseMapper;
     }
 
     @Override
@@ -47,18 +49,13 @@ public class GetBannersWithPaginationByTypeUseCase extends BaseUseCase<Mono<Bann
         Pageable pageable = createPageable(query);
 
         return bannerRepository.findActiveBannersByTypeWithPagination(BannerType.fromValue(query.getType()), pageable)
-                .map(this::toResponse)
+                .flatMap(bannerResponseMapper::toResponse)
                 .collectList()
                 .map(banners -> {
                     return new BannerListResponse(banners, (long) banners.size(),banners.size() == query.getSize());
                 })  .doOnSuccess(response -> log.debug("Retrieved {} banners ({} active, {} total)",
                         response.getBanners().size(), response.getActiveCount(), response.getTotalCount()));
-
-
-
     }
-
-
 
     private Pageable createPageable(BannerPaginationQuery query) {
         Sort sort = Sort.by(
@@ -68,20 +65,5 @@ public class GetBannersWithPaginationByTypeUseCase extends BaseUseCase<Mono<Bann
         );
 
         return PageRequest.of(query.getPage() - 1, query.getSize(), sort);
-    }
-
-    private BannerResponse toResponse(Banner banner) {
-        return new BannerResponse(
-                banner.getId().getValue(),
-                banner.getTitle(),
-                banner.getType().getValue(),
-                banner.getImageUrl(),
-                banner.getTargetUrl(),
-                banner.getIsActive(),
-                banner.getDisplayOrder(),
-                banner.getStartDate(),
-                banner.getEndDate(),
-                banner.getContent()
-        );
     }
 }

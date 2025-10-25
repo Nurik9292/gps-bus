@@ -1,9 +1,9 @@
 package biz.ugur.busroutebackend.banner.appication.usecase.admin;
 
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerListResponse;
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerPaginationQuery;
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerResponse;
-import biz.ugur.busroutebackend.banner.domain.model.Banner;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerPaginationQuery;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerResponse;
+import biz.ugur.busroutebackend.banner.appication.mapper.BannerResponseMapper;
 import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
@@ -22,12 +22,15 @@ import java.util.List;
 public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPaginationQuery>, BannerListResponse> {
 
     private final AdminBannerRepository bannerRepository;
+    private final BannerResponseMapper bannerResponseMapper;
 
     public GetBannersWithPaginationUseCase(AdminBannerRepository bannerRepository,
                                            CorrelationContextService correlationContextService,
-                                           EventBus eventBus) {
+                                           EventBus eventBus,
+                                           BannerResponseMapper bannerResponseMapper) {
         super(correlationContextService, eventBus);
         this.bannerRepository = bannerRepository;
+        this.bannerResponseMapper = bannerResponseMapper;
     }
 
 
@@ -43,13 +46,13 @@ public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPagi
 
     private Mono<BannerListResponse> processInternal(BannerPaginationQuery query) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-            log.debug("Fetching banners with pagination admin: page={}, size={}, sort={}, order={}, active={}",
-                    query.getPage(), query.getSize(), query.getSortField(), query.getSortOrder(), query.getActiveOnly());
+            log.debug("Fetching banners with pagination CorrelationId: {} - admin: page={}, size={}, sort={}, order={}, active={}",
+                    correlationId, query.getPage(), query.getSize(), query.getSortField(), query.getSortOrder(), query.getActiveOnly());
 
             Pageable pageable = createPageable(query);
 
             return  bannerRepository.findAll(pageable)
-                    .map(this::toResponse)
+                    .flatMap(bannerResponseMapper::toResponse)
                     .collectList()
                     .zipWith(bannerRepository.countActiveBanners())
                     .map(tuple -> {
@@ -71,21 +74,6 @@ public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPagi
         );
 
         return PageRequest.of(query.getPage() - 1, query.getSize(), sort);
-    }
-
-    private BannerResponse toResponse(Banner banner) {
-        return new BannerResponse(
-                banner.getId().getValue(),
-                banner.getTitle(),
-                banner.getType().getValue(),
-                banner.getImageUrl(),
-                banner.getTargetUrl(),
-                banner.getIsActive(),
-                banner.getDisplayOrder(),
-                banner.getStartDate(),
-                banner.getEndDate(),
-                banner.getContent()
-        );
     }
 
 }

@@ -1,8 +1,7 @@
 package biz.ugur.busroutebackend.banner.appication.usecase.admin;
 
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerListResponse;
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerResponse;
-import biz.ugur.busroutebackend.banner.domain.model.Banner;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.appication.mapper.BannerResponseMapper;
 import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
@@ -16,12 +15,15 @@ import reactor.core.publisher.Mono;
 public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerListResponse> {
 
     private final AdminBannerRepository bannerRepository;
+    private final BannerResponseMapper bannerResponseMapper;
 
     public GetAllBannersUseCase(AdminBannerRepository bannerRepository,
                                 CorrelationContextService correlationContextService,
-                                EventBus eventBus) {
+                                EventBus eventBus,
+                                BannerResponseMapper bannerResponseMapper) {
         super(correlationContextService, eventBus);
         this.bannerRepository = bannerRepository;
+        this.bannerResponseMapper = bannerResponseMapper;
     }
 
 
@@ -39,32 +41,17 @@ public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerListR
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.debug("Fetching banners (activeOnly: {}) - CorrelationId: {}", activeOnly, correlationId);
 
-            var bannerFlux = activeOnly != null && activeOnly ?
+            var bannerFlux = activeOnly ?
                     bannerRepository.findActiveBanners() :
                     bannerRepository.findAll();
 
             return bannerFlux
-                    .map(this::toResponse)
+                    .flatMap(bannerResponseMapper::toResponse)
                     .collectList()
                     .flatMap(banners -> bannerRepository.countActiveBanners()
                             .map(activeCount -> new BannerListResponse(banners, activeCount)))
                     .doOnSuccess(response -> log.debug("Retrieved {} banners ({} active)",
                             response.getBanners().size(), response.getActiveCount()));
         });
-    }
-
-    private BannerResponse toResponse(Banner banner) {
-        return new BannerResponse(
-                banner.getId().getValue(),
-                banner.getTitle(),
-                banner.getType().getValue(),
-                banner.getImageUrl(),
-                banner.getTargetUrl(),
-                banner.getIsActive(),
-                banner.getDisplayOrder(),
-                banner.getStartDate(),
-                banner.getEndDate(),
-                banner.getContent()
-        );
     }
 }

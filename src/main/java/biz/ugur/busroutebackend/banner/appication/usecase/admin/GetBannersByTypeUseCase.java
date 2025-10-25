@@ -1,8 +1,8 @@
 package biz.ugur.busroutebackend.banner.appication.usecase.admin;
 
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerListResponse;
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerResponse;
-import biz.ugur.busroutebackend.banner.domain.model.Banner;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.appication.mapper.BannerResponseMapper;
+import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
 import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
@@ -16,12 +16,15 @@ import reactor.core.publisher.Mono;
 public class GetBannersByTypeUseCase extends BaseUseCase<Mono<String>, BannerListResponse> {
 
     private final AdminBannerRepository bannerRepository;
+    private final BannerResponseMapper bannerResponseMapper;
 
     protected GetBannersByTypeUseCase(CorrelationContextService correlationService,
                                       EventBus eventBus,
-                                      AdminBannerRepository bannerRepository) {
+                                      AdminBannerRepository bannerRepository,
+                                      BannerResponseMapper bannerResponseMapper) {
         super(correlationService, eventBus);
         this.bannerRepository = bannerRepository;
+        this.bannerResponseMapper = bannerResponseMapper;
     }
 
     @Override
@@ -35,12 +38,14 @@ public class GetBannersByTypeUseCase extends BaseUseCase<Mono<String>, BannerLis
     }
 
     private Mono<BannerListResponse> executeWithType(String type) {
-        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
+        BannerType bannerType = BannerType.fromValue(type);
 
-            return bannerRepository.findByTypeAndActive(type)
-                    .map(this::toResponse)
+        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
+            log.info("Get banner by type CorrelationId: {} - Banner Type: {}", correlationId, type);
+            return bannerRepository.findByTypeAndActive(bannerType)
+                    .flatMap(bannerResponseMapper::toResponse)
                     .collectList()
-                    .flatMap(banners -> bannerRepository.countByType(type)
+                    .flatMap(banners -> bannerRepository.countByType(bannerType)
                             .map(totalCount -> new BannerListResponse(banners, totalCount)))
                     .doOnSuccess(response -> log.debug("Retrieved {} banners of type {} ({} total)",
                             response.getBanners().size(), type, response.getActiveCount()))
@@ -50,21 +55,4 @@ public class GetBannersByTypeUseCase extends BaseUseCase<Mono<String>, BannerLis
                     });
         });
     }
-
-
-
-    private BannerResponse toResponse(Banner banner) {
-        return new BannerResponse(
-                banner.getId().getValue(),
-                banner.getTitle(),
-                banner.getType().getValue(),
-                banner.getImageUrl(),
-                banner.getTargetUrl(),
-                banner.getIsActive(),
-                banner.getDisplayOrder(),
-                banner.getStartDate(),
-                banner.getEndDate(),
-                banner.getContent()
-        );
-    }
-    }
+}

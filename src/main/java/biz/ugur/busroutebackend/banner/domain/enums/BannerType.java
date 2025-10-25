@@ -31,16 +31,4 @@ public enum BannerType {
         }
         throw new IllegalArgumentException("Unknown BannerType: " + value);
     }
-
-
-    public boolean isSameAs(BannerType type) {
-        return this == type;
-    }
-
-    public boolean isOneOf(EnumSet<BannerType> types) {
-        return types != null && types.contains(this);
-    }
-
-    public static final EnumSet<BannerType> HOME_PAGE = EnumSet.of(MAIN, POPUP);
-    public static final EnumSet<BannerType> TRANSPORT = EnumSet.of(STOPS, ROUTES);
 }

@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.banner.appication.usecase.admin;
 
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerResponse;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerResponse;
+import biz.ugur.busroutebackend.banner.appication.mapper.BannerResponseMapper;
 import biz.ugur.busroutebackend.banner.domain.model.Banner;
 import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId;
@@ -20,12 +21,15 @@ public class ToggleStatusBannerUseCase extends BaseUseCase<Mono<ToggleStatusBann
     private static final String BANNER_NOT_FOUND_MSG = "Banner not found: ";
 
     private final AdminBannerRepository bannerRepository;
+    private final BannerResponseMapper bannerResponseMapper;
 
     public ToggleStatusBannerUseCase(CorrelationContextService correlationContextService,
                                      EventBus eventBus,
-                                     AdminBannerRepository bannerRepository) {
+                                     AdminBannerRepository bannerRepository,
+                                     BannerResponseMapper bannerResponseMapper) {
         super(correlationContextService, eventBus);
         this.bannerRepository = bannerRepository;
+        this.bannerResponseMapper = bannerResponseMapper;
     }
 
 
@@ -49,7 +53,7 @@ public class ToggleStatusBannerUseCase extends BaseUseCase<Mono<ToggleStatusBann
                     return bannerRepository.findById(BannerId.of(request.id))
                             .switchIfEmpty(Mono.error(() -> new IllegalArgumentException(BANNER_NOT_FOUND_MSG + request.id)))
                             .flatMap(banner -> updateBanner(banner, request.active))
-                            .map(this::toResponse)
+                            .flatMap(bannerResponseMapper::toResponse)
                             .doOnSuccess(b -> log.info("Banner status updated | BannerId={} | Active={}", request.id(), b.getIsActive()));
                 });
     }
@@ -61,21 +65,6 @@ public class ToggleStatusBannerUseCase extends BaseUseCase<Mono<ToggleStatusBann
             banner.deactivate();
         }
         return bannerRepository.save(banner);
-    }
-
-    private BannerResponse toResponse(Banner banner) {
-        return new BannerResponse(
-                banner.getId().getValue(),
-                banner.getTitle(),
-                banner.getType().getValue(),
-                banner.getImageUrl(),
-                banner.getTargetUrl(),
-                banner.getIsActive(),
-                banner.getDisplayOrder(),
-                banner.getStartDate(),
-                banner.getEndDate(),
-                banner.getContent()
-        );
     }
 
     public record Request(String id, Boolean active) {}

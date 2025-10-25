@@ -3,11 +3,13 @@ package biz.ugur.busroutebackend.banner.domain.valueobjects;
 import biz.ugur.busroutebackend.shared.domain.valueObjects.ValueObject;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.ToString;
 
 import java.util.UUID;
 
 @Getter
 @EqualsAndHashCode(callSuper = false)
+@ToString(callSuper = false)
 public class BannerId extends ValueObject {
 
     private final String value;
@@ -27,8 +29,4 @@ public class BannerId extends ValueObject {
         return new BannerId(value);
     }
 
-    @Override
-    public String toString() {
-        return value;
-    }
 }

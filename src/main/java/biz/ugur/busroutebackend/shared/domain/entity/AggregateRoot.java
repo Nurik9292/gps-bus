@@ -35,7 +35,7 @@ public abstract class AggregateRoot<T extends AggregateRoot<T, ID>, ID> implemen
     public abstract ID getId();
 
 
-    protected void registerEvent(DomainEvent event) {
+    public void registerEvent(DomainEvent event) {
         domainEvents.add(event);
     }
 

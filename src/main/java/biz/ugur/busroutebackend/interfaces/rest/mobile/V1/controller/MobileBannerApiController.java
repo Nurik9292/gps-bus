@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.interfaces.rest.mobile.V1.controller;
 
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerListResponse;
-import biz.ugur.busroutebackend.banner.appication.dto.admin.BannerPaginationQuery;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerPaginationQuery;
 import biz.ugur.busroutebackend.banner.appication.usecase.admin.GetAllBannersUseCase;
 import biz.ugur.busroutebackend.banner.appication.usecase.admin.GetBannersByTypeUseCase;
 import biz.ugur.busroutebackend.banner.appication.usecase.client.GetBannersWithPaginationByTypeUseCase;

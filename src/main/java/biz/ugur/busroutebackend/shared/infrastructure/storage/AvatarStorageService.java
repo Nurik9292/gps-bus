@@ -242,7 +242,6 @@ public class AvatarStorageService {
     private record AvatarMetadata(String extension, byte[] decodedData, String mimeType) {}
     private record OptimizedImages(byte[] original, byte[] thumbnail, int originalSize, int thumbnailSize) {}
     private record AvatarPaths(String originalPath, String thumbnailPath) {}
-
     public record AvatarResult(String originalPath, String thumbnailPath, int originalSize, int thumbnailSize) {
         public String getDisplayUrl() {
             return thumbnailPath != null ? thumbnailPath : originalPath;
@@ -252,4 +251,5 @@ public class AvatarStorageService {
             return baseUrl + getDisplayUrl();
         }
     }
+
 }

@@ -1,7 +1,11 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
-import biz.ugur.busroutebackend.banner.appication.dto.admin.*;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerPaginationQuery;
+import biz.ugur.busroutebackend.banner.appication.dto.BannerResponse;
 import biz.ugur.busroutebackend.banner.appication.usecase.admin.*;
+import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.banner.BannerCreateRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.banner.BannerUpdateRequest;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
@@ -65,18 +69,14 @@ public class AdminBannerController extends BaseController {
 
     @PostMapping
     public Mono<ResponseEntity<ApiResponse<BannerResponse>>> createBanner(@Valid @RequestBody BannerCreateRequest request) {
-        return created(Mono.just(request)
+        return created(Mono.just(request.toCommand())
                 .as(createBannerUseCase::execute));
     }
 
     @PutMapping("/{bannerId}")
     public Mono<ResponseEntity<ApiResponse<BannerResponse>>> updateBanner(@PathVariable String bannerId,
             @Valid @RequestBody BannerUpdateRequest request) {
-
-        UpdateBannerUseCase.Request updateRequest = new UpdateBannerUseCase.Request(bannerId, request);
-
-        return ok(Mono.just(updateRequest)
-                .as(updateBannerUseCase::execute));
+        return ok(Mono.just(request.toCommand(bannerId)).as(updateBannerUseCase::execute));
     }
 
 

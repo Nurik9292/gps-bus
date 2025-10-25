@@ -57,14 +57,14 @@ logging:
 external:
   api:
     gps:
-      base-url: https://gps.tugdk.gov.tm # http://localhost:8082/mock/gps
+      base-url: https://gps.tugdk.gov.tm
       token: RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0  #mock-token
       timeout: 5s
       retry:
         max-attempts: 2
         initial-interval: 1s
     bus-info:
-      base-url: https://edu.ayauk.gov.tm #http://localhost:8082/mock/bus-info
+      base-url: https://edu.ayauk.gov.tm
       username: turkmenportal #test
       password: turkmenportal #test
       timeout: 5s

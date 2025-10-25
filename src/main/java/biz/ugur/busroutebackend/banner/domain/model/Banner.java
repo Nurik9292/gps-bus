@@ -1,101 +1,84 @@
 package biz.ugur.busroutebackend.banner.domain.model;
 
 import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
-import biz.ugur.busroutebackend.admin.domain.events.BannerCreatedEvent;
+import biz.ugur.busroutebackend.banner.domain.events.*;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId;
+import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerImage;
+import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerPeriod;
+import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerTitle;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import lombok.Setter;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.Objects;
+import java.util.HashMap;
+import java.util.Map;
 
 @Builder
 @Getter
-@Table("banners")
+@EqualsAndHashCode(callSuper = false)
 public class Banner extends AggregateRoot<Banner, BannerId> {
 
-    @Id
-    @Column("id")
     private BannerId id;
-
-    @Column("title")
-    private String title;
-
-    @Column("type")
+    private BannerTitle title;
     private BannerType type;
-
-    @Setter
-    @Column("image_url")
-    private String imageUrl;
-
-    @Column("target_url")
+    private BannerPeriod period;
+    private BannerImage imageUrl;
+    private String content;
     private String targetUrl;
-
-    @Column("is_active")
     private Boolean isActive;
-
-    @Column("display_order")
     private Integer displayOrder;
 
-    @Setter
-    @Column("start_date")
-    private LocalDateTime startDate;
-
-    @Setter
-    @Column("end_date")
-    private LocalDateTime endDate;
-
-    @Column("content")
-    private String content;
-
-    public static Banner create(String title,
+    public static Banner create(BannerTitle title,
                                 BannerType type,
-                                String imageUrl,
+                                BannerPeriod period,
+                                BannerImage imageUrl,
                                 String targetUrl,
                                 Integer displayOrder,
                                 String content) {
+
         Banner banner = builder()
                 .id(BannerId.generate())
                 .title(title)
                 .type(type)
+                .period(period)
                 .imageUrl(imageUrl)
                 .targetUrl(targetUrl)
                 .isActive(true)
                 .displayOrder( displayOrder != null ? displayOrder : 0)
-                .startDate(LocalDateTime.now())
-                .endDate(null)
                 .content(content)
                 .build();
 
+        // Регистрация события создания баннера для Event Sourcing
         banner.registerEvent(new BannerCreatedEvent(
                 banner.id.getValue(),
-                banner.title,
+                banner.title.getValue(),
                 banner.type.getValue(),
-                banner.imageUrl
+                banner.imageUrl.getValue(),
+                banner.targetUrl,
+                banner.period.getStartTime(),
+                banner.period.getEndTime(),
+                banner.displayOrder,
+                banner.content
         ));
 
         return banner;
     }
 
     public static Banner restore(BannerId id,
-                                 String title,
+                                 BannerTitle title,
                                  BannerType type,
-                                 String imageUrl,
+                                 BannerPeriod period,
+                                 BannerImage imageUrl,
                                  String targetUrl,
                                  Boolean isActive,
                                  Integer displayOrder,
-                                 LocalDateTime startDate,
-                                 LocalDateTime endDate,
+                                 String content,
                                  Instant createdAt,
                                  Instant updatedAt,
-                                 String content,
                                  Long version) {
+
         Banner banner = builder()
                 .id(id)
                 .title(title)
@@ -104,8 +87,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .targetUrl(targetUrl)
                 .isActive(isActive)
                 .displayOrder(displayOrder)
-                .startDate(startDate)
-                .endDate(endDate)
+                .period(period)
                 .content(content)
                 .build();
 
@@ -117,44 +99,86 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
     }
 
     public void updateBanner(
-            String title,
+            BannerTitle title,
             BannerType type,
-            String imageUrl,
+            BannerPeriod  period,
+            BannerImage imageUrl,
             String targetUrl,
             Integer displayOrder,
             String content) {
-        if (title != null && !title.trim().isEmpty()) {
-            this.title = title.trim();
+
+        if (title == null) {
+            throw new IllegalArgumentException("Title cannot be null");
+        }
+        if (type == null) {
+            throw new IllegalArgumentException("Type cannot be null");
+        }
+        if (period == null) {
+            throw new IllegalArgumentException("Period cannot be null");
+        }
+        if (imageUrl == null) {
+            throw new IllegalArgumentException("Image URL cannot be null");
         }
 
-        if (type != null) {
+        // Отслеживание изменений для BannerUpdatedEvent
+        Map<String, Object> changes = new HashMap<>();
+
+        if (!this.title.equals(title)) {
+            changes.put("title", title.getValue());
+            this.title = title;
+        }
+
+        if (!this.type.equals(type)) {
+            changes.put("type", type.getValue());
             this.type = type;
         }
 
-        if (targetUrl != null) {
+        if (!this.period.equals(period)) {
+            changes.put("startDate", period.getStartTime());
+            changes.put("endDate", period.getEndTime());
+            this.period = period;
+        }
+
+        if (!this.imageUrl.equals(imageUrl)) {
+            changes.put("imageUrl", imageUrl.getValue());
+            this.imageUrl = imageUrl;
+        }
+
+        if (targetUrl != null && !targetUrl.trim().equals(this.targetUrl)) {
+            changes.put("targetUrl", targetUrl.trim());
             this.targetUrl = targetUrl.trim();
         }
 
-        if(imageUrl != null) {
-            this.imageUrl = imageUrl.trim();
-        }
-
-        if (displayOrder != null) {
+        if (displayOrder != null && !displayOrder.equals(this.displayOrder)) {
+            changes.put("displayOrder", displayOrder);
             this.displayOrder = displayOrder;
         }
 
-        if(content != null) {
+        if (content != null && !content.trim().equals(this.content)) {
+            changes.put("content", content.trim());
             this.content = content.trim();
         }
 
+        // Регистрация события обновления, если были изменения
+        if (!changes.isEmpty()) {
+            registerEvent(new BannerUpdatedEvent(this.id.getValue(), changes));
+        }
     }
 
     public void deactivate() {
-        this.isActive = false;
+        if (Boolean.TRUE.equals(this.isActive)) {
+            this.isActive = false;
+            // Регистрация события деактивации для Event Sourcing
+            registerEvent(new BannerDeactivatedEvent(this.id.getValue()));
+        }
     }
 
     public void activate() {
-        this.isActive = true;
+        if (Boolean.FALSE.equals(this.isActive)) {
+            this.isActive = true;
+            // Регистрация события активации для Event Sourcing
+            registerEvent(new BannerActivatedEvent(this.id.getValue()));
+        }
     }
 
     @Override
@@ -162,56 +186,4 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
         return id;
     }
 
-    private String validateTitle(String title) {
-        if (title == null || title.trim().isEmpty()) {
-            throw new IllegalArgumentException("Banner title cannot be null or empty");
-        }
-        return title.trim();
-    }
-
-    private String validateImageUrl(String imageUrl) {
-        if (imageUrl == null || imageUrl.trim().isEmpty()) {
-            throw new IllegalArgumentException("Banner image URL cannot be null or empty");
-        }
-        return imageUrl.trim();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof Banner banner)) return false;
-        if (!super.equals(o)) return false;
-        return Objects.equals(id, banner.id) &&
-                Objects.equals(title, banner.title) &&
-                Objects.equals(type, banner.type) &&
-                Objects.equals(imageUrl, banner.imageUrl) &&
-                Objects.equals(targetUrl, banner.targetUrl) &&
-                Objects.equals(isActive, banner.isActive) &&
-                Objects.equals(displayOrder, banner.displayOrder) &&
-                Objects.equals(startDate, banner.startDate) &&
-                Objects.equals(content, banner.content) &&
-                Objects.equals(endDate, banner.endDate);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(super.hashCode(), id, title, type, imageUrl, targetUrl, isActive, displayOrder, startDate, content, endDate);
-    }
-
-    @Override
-    public String toString() {
-        return "Banner{" +
-                "id=" + id +
-                ", title='" + title + '\'' +
-                ", type='" + type + '\'' +
-                ", imageUrl='" + imageUrl + '\'' +
-                ", targetUrl='" + targetUrl + '\'' +
-                ", isActive=" + isActive +
-                ", displayOrder=" + displayOrder +
-                ", startDate=" + startDate +
-                ", endDate=" + endDate +
-                ", createdAt=" + createdAt +
-                ", updatedAt=" + updatedAt +
-                ", content=" + content +
-                '}';
-    }
 }
