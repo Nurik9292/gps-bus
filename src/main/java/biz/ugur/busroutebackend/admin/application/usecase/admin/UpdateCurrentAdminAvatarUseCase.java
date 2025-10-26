@@ -51,13 +51,13 @@ public class UpdateCurrentAdminAvatarUseCase extends BaseUseCase<Mono<UpdateCurr
                         String oldAvatarPath = admin.getAvatar();
                         if (request.avatar() == null) {
                             admin.removeAvatar();
-                            return avatarStorageService.deleteAvatar(oldAvatarPath)
+                            return avatarStorageService.delete(oldAvatarPath)
                                     .then(updateAvatarInDatabase(admin, null));
                         } else if (request.avatar().startsWith("data:image/")) {
-                            return avatarStorageService.saveAvatar(admin.getId().getValue(), request.avatar())
+                            return avatarStorageService.save(admin.getId().getValue(), request.avatar())
                                     .flatMap(result -> {
                                         admin.updateAvatar(result.originalPath());
-                                        return avatarStorageService.deleteAvatar(oldAvatarPath)
+                                        return avatarStorageService.delete(oldAvatarPath)
                                                 .then(updateAvatarInDatabase(admin, result.originalPath()));
                                     });
                         } else {
