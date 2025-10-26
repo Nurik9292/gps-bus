@@ -50,7 +50,7 @@ public class RemoveCurrentAdminAvatarUseCase extends BaseUseCase<Mono<AdminId>, 
                             .flatMap(admin -> {
                                 String oldAvatar = admin.getAvatar();
                                 admin.removeAvatar();
-                               return avatarStorageService.deleteAvatar(oldAvatar)
+                               return avatarStorageService.delete(oldAvatar)
                                        .then(updateAvatarInDatabase(admin));
 
                             })
