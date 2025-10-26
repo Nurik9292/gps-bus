@@ -12,20 +12,9 @@ import java.util.Set;
 @Component
 public class AdminAuthenticationFilter extends BaseJwtAuthenticationFilter<AdminPrincipal> {
 
-    private static final Set<String> PUBLIC_PATHS = Set.of(
+    private static final Set<String> PUBLIC_ADMIN_PATHS = Set.of(
             "/api/v1/admin/auth/login",
-            "api/v1/admin/auth/refresh",
-            "/public",
-            "api/v1/client",
-            "/api/v1/client/auth",
-            "api/v1/mobile",
-            "api/v1/routes",
-            "api/v1/stops",
-            "api/v1/trips",
-            "api/v1/vehicles",
-            "api/v1/trip-planning",
-            "api/v1/ws",
-            "/ws"
+            "/api/v1/admin/auth/refresh"
     );
 
     public AdminAuthenticationFilter(AdminJwtTokenService adminJwtTokenService,
@@ -33,16 +22,13 @@ public class AdminAuthenticationFilter extends BaseJwtAuthenticationFilter<Admin
         super(adminJwtTokenService, tokenBlacklistService);
     }
 
+
     @Override
     protected boolean isPublicPath(String path) {
-        return PUBLIC_PATHS.stream().anyMatch(path::startsWith) ||
-                path.startsWith("/actuator") ||
-                path.startsWith("/swagger") ||
-                path.startsWith("/api/v1/client") ||
-                path.startsWith("/api/v1/mobile") ||
-                path.startsWith("/docs") ||
-                path.startsWith("/api-docs") ||
-                path.startsWith("/swagger-ui");
+        boolean isPublic = PUBLIC_ADMIN_PATHS.contains(path);
+        if (isPublic) {
+            log.debug("Admin path is public: {}", path);
+        }
+        return isPublic;
     }
-
 }

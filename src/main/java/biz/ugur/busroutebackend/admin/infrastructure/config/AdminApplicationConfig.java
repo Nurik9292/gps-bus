@@ -11,5 +11,5 @@ import org.springframework.context.annotation.Configuration;
         "biz.ugur.busroutebackend.transport.infrastructure.repository"
 })
 public class AdminApplicationConfig {
-    // Конфигурация для обеспечения правильного сканирования компонентов
+
 }
