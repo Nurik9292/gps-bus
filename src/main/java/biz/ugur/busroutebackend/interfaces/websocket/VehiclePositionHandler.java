@@ -17,6 +17,7 @@ import reactor.core.publisher.Sinks;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -246,7 +247,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
                     totalSessions,
                     totalSessions,
                     subscriptionTypes,
-                    Instant.now()
+                    LocalDateTime.now()
             );
         });
     }
@@ -405,8 +406,8 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 vehicle.getSpeedKmh(),
                 vehicle.getIsInMotion(),
                 vehicle.getLastPositionUpdate() != null ?
-                        vehicle.getLastPositionUpdate().toInstant(ZoneOffset.UTC) :
-                        Instant.now(),
+                        vehicle.getLastPositionUpdate() :
+                        LocalDateTime.now(),
                 vehicle.getCourse()
         );
     }

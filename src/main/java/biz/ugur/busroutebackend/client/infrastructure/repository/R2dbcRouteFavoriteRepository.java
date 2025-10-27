@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -111,8 +111,8 @@ public class R2dbcRouteFavoriteRepository extends BaseR2dbcRepository<RouteFavor
                 RouteFavoriteId.of(row.get("id", String.class)),
                 ClientId.of(row.get("client_id", String.class)),
                 BusRouteId.of(row.get("route_id", String.class)),
-                row.get("created_at", Instant.class),
-                row.get("updated_at", Instant.class),
+                row.get("created_at", LocalDateTime.class),
+                row.get("updated_at", LocalDateTime.class),
                 row.get("version", Long.class)
         );
     }

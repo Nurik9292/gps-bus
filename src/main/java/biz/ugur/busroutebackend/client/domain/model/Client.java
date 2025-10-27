@@ -17,7 +17,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Builder
 @ToString
@@ -49,7 +49,7 @@ public class Client extends AggregateRoot<Client, ClientId> {
     private ClientStatus status;
 
     @Column("last_activity")
-    private Instant lastActivity;
+    private LocalDateTime lastActivity;
 
     @Column("access_token")
     private String accessToken;
@@ -57,13 +57,15 @@ public class Client extends AggregateRoot<Client, ClientId> {
     @Column("refresh_token")
     private String refreshToken;
 
-
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Long version;
 
     public static Client create(String name, String phoneNumber, Platform platform) {
         String validatedName = validateNameStatic(name);
         String validatedPhone = validatePhoneStatic(phoneNumber);
 
-        Instant now = Instant.now();
+        LocalDateTime now = LocalDateTime.now();
 
         Client client = Client.builder()
                 .id(ClientId.generate())
@@ -95,11 +97,11 @@ public class Client extends AggregateRoot<Client, ClientId> {
                                       Boolean otpVerify,
                                       Platform platform,
                                       ClientStatus status,
-                                      Instant lastActivity,
+                                      LocalDateTime lastActivity,
                                       String accessToken,
                                       String refreshToken,
-                                      Instant createdAt,
-                                      Instant updatedAt,
+                                      LocalDateTime createdAt,
+                                      LocalDateTime updatedAt,
                                       Long version) {
 
 
@@ -139,7 +141,7 @@ public class Client extends AggregateRoot<Client, ClientId> {
         if (this.otpCode != null && this.otpCode.equals(inputOtp)) {
             this.otpVerify = true;
             this.status = ClientStatus.ACTIVE;
-            this.updatedAt = Instant.now();
+            this.updatedAt = LocalDateTime.now();
             updateActivity();
             return true;
         }
@@ -150,7 +152,7 @@ public class Client extends AggregateRoot<Client, ClientId> {
         if (this.otpCode != null && this.otpCode.equals(inputOtp)) {
             this.otpVerify = true;
             this.status = ClientStatus.ACTIVE;
-            this.updatedAt = Instant.now();
+            this.updatedAt = LocalDateTime.now();
             updateActivity();
 
             registerEvent(new ClientOtpVerifiedEvent(
@@ -178,7 +180,7 @@ public class Client extends AggregateRoot<Client, ClientId> {
     }
 
     public void updateActivity() {
-        this.lastActivity = Instant.now();
+        this.lastActivity = LocalDateTime.now();
     }
 
     public void updateTokens(String accessToken, String refreshToken) {
@@ -236,15 +238,34 @@ public class Client extends AggregateRoot<Client, ClientId> {
     }
 
     @Override
-    public Instant getCreatedAt() {
+    public LocalDateTime getCreatedAt() {
         return createdAt;
     }
 
     @Override
-    public Instant getUpdatedAt() {
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    @Override
+    public LocalDateTime getUpdatedAt() {
         return updatedAt;
     }
 
+    @Override
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public Long getVersion() {
+        return version;
+    }
+
+    @Override
+    public void setVersion(Long version) {
+        this.version = version;
+    }
 
     private static String validateNameStatic(String name) {
         if (name == null || name.trim().isEmpty()) {

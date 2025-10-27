@@ -133,8 +133,8 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
 
     protected Mono<T> insert(T entity) {
         Map<String, Object> values = mapEntityToColumns(entity);
-        values.put("created_at", Instant.now());
-        values.put("updated_at", Instant.now());
+        values.put("created_at", LocalDateTime.now());
+        values.put("updated_at", LocalDateTime.now());
         values.put("version", 1L);
 
         String columns = String.join(", ", values.keySet());
@@ -163,7 +163,7 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
 
     protected Mono<T> update(T entity) {
         Map<String, Object> values = mapEntityToColumns(entity);
-        values.put("updated_at", Instant.now());
+        values.put("updated_at", LocalDateTime.now());
         values.put("version", entity.getVersion() + 1);
 
         String setClause = values.keySet().stream()

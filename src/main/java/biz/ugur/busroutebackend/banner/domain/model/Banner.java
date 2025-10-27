@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.banner.domain.model;
 
 import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
 import biz.ugur.busroutebackend.banner.domain.events.*;
+import biz.ugur.busroutebackend.banner.domain.exceptions.BannerValidationException;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerImage;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerPeriod;
@@ -12,23 +13,30 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
-@Builder
+@Builder(toBuilder = true)
 @Getter
 @EqualsAndHashCode(callSuper = false)
 public class Banner extends AggregateRoot<Banner, BannerId> {
 
-    private BannerId id;
-    private BannerTitle title;
-    private BannerType type;
-    private BannerPeriod period;
-    private BannerImage imageUrl;
-    private String content;
-    private String targetUrl;
-    private Boolean isActive;
-    private Integer displayOrder;
+    // Immutable business fields
+    private final BannerId id;
+    private final BannerTitle title;
+    private final BannerType type;
+    private final BannerPeriod period;
+    private final BannerImage imageUrl;
+    private final String content;
+    private final String targetUrl;
+    private final Boolean isActive;
+    private final Integer displayOrder;
+
+    // Mutable persistence fields (required by Spring Data R2DBC)
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Long version;
 
     public static Banner create(BannerTitle title,
                                 BannerType type,
@@ -48,9 +56,9 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .isActive(true)
                 .displayOrder( displayOrder != null ? displayOrder : 0)
                 .content(content)
+                .version(0L)
                 .build();
 
-        // Регистрация события создания баннера для Event Sourcing
         banner.registerEvent(new BannerCreatedEvent(
                 banner.id.getValue(),
                 banner.title.getValue(),
@@ -75,11 +83,11 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                                  Boolean isActive,
                                  Integer displayOrder,
                                  String content,
-                                 Instant createdAt,
-                                 Instant updatedAt,
+                                 LocalDateTime createdAt,
+                                 LocalDateTime updatedAt,
                                  Long version) {
 
-        Banner banner = builder()
+        return builder()
                 .id(id)
                 .title(title)
                 .type(type)
@@ -89,16 +97,20 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .displayOrder(displayOrder)
                 .period(period)
                 .content(content)
+                .createdAt(createdAt)
+                .updatedAt(updatedAt)
+                .version(version != null ? version : 0L)
                 .build();
-
-        banner.createdAt = createdAt;
-        banner.updatedAt = updatedAt;
-        banner.version = version != null ? version : 0L;
-
-        return banner;
     }
 
-    public void updateBanner(
+    /**
+     * Updates the banner and returns a new immutable instance with the changes.
+     * This method follows the immutable aggregate pattern - it doesn't modify the current instance,
+     * but creates and returns a new one.
+     *
+     * @return A new Banner instance with updated values
+     */
+    public Banner updateBanner(
             BannerTitle title,
             BannerType type,
             BannerPeriod  period,
@@ -108,82 +120,140 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
             String content) {
 
         if (title == null) {
-            throw new IllegalArgumentException("Title cannot be null");
+            throw new BannerValidationException("Title cannot be null");
         }
         if (type == null) {
-            throw new IllegalArgumentException("Type cannot be null");
+            throw new BannerValidationException("Type cannot be null");
         }
         if (period == null) {
-            throw new IllegalArgumentException("Period cannot be null");
+            throw new BannerValidationException("Period cannot be null");
         }
         if (imageUrl == null) {
-            throw new IllegalArgumentException("Image URL cannot be null");
+            throw new BannerValidationException("Image URL cannot be null");
         }
 
-        // Отслеживание изменений для BannerUpdatedEvent
         Map<String, Object> changes = new HashMap<>();
 
+        // Determine what changed
         if (!this.title.equals(title)) {
             changes.put("title", title.getValue());
-            this.title = title;
         }
-
         if (!this.type.equals(type)) {
             changes.put("type", type.getValue());
-            this.type = type;
         }
-
         if (!this.period.equals(period)) {
             changes.put("startDate", period.getStartTime());
             changes.put("endDate", period.getEndTime());
-            this.period = period;
         }
-
         if (!this.imageUrl.equals(imageUrl)) {
             changes.put("imageUrl", imageUrl.getValue());
-            this.imageUrl = imageUrl;
         }
 
-        if (targetUrl != null && !targetUrl.trim().equals(this.targetUrl)) {
-            changes.put("targetUrl", targetUrl.trim());
-            this.targetUrl = targetUrl.trim();
+        String normalizedTargetUrl = targetUrl != null ? targetUrl.trim() : this.targetUrl;
+        if (!normalizedTargetUrl.equals(this.targetUrl)) {
+            changes.put("targetUrl", normalizedTargetUrl);
         }
 
-        if (displayOrder != null && !displayOrder.equals(this.displayOrder)) {
-            changes.put("displayOrder", displayOrder);
-            this.displayOrder = displayOrder;
+        Integer finalDisplayOrder = displayOrder != null ? displayOrder : this.displayOrder;
+        if (!finalDisplayOrder.equals(this.displayOrder)) {
+            changes.put("displayOrder", finalDisplayOrder);
         }
 
-        if (content != null && !content.trim().equals(this.content)) {
-            changes.put("content", content.trim());
-            this.content = content.trim();
+        String normalizedContent = content != null ? content.trim() : this.content;
+        if (!normalizedContent.equals(this.content)) {
+            changes.put("content", normalizedContent);
         }
 
-        // Регистрация события обновления, если были изменения
+        // Create new instance with updated values
+        Banner updatedBanner = this.toBuilder()
+                .title(title)
+                .type(type)
+                .period(period)
+                .imageUrl(imageUrl)
+                .targetUrl(normalizedTargetUrl)
+                .displayOrder(finalDisplayOrder)
+                .content(normalizedContent)
+                .build();
+
+        // Register event on the new instance if there were changes
         if (!changes.isEmpty()) {
-            registerEvent(new BannerUpdatedEvent(this.id.getValue(), changes));
+            updatedBanner.registerEvent(new BannerUpdatedEvent(this.id.getValue(), changes));
         }
+
+        return updatedBanner;
     }
 
-    public void deactivate() {
-        if (Boolean.TRUE.equals(this.isActive)) {
-            this.isActive = false;
-            // Регистрация события деактивации для Event Sourcing
-            registerEvent(new BannerDeactivatedEvent(this.id.getValue()));
-        }
-    }
-
-    public void activate() {
+    /**
+     * Deactivates the banner and returns a new immutable instance.
+     * If already inactive, returns the same instance.
+     *
+     * @return A new Banner instance with isActive set to false, or the same instance if already inactive
+     */
+    public Banner deactivate() {
         if (Boolean.FALSE.equals(this.isActive)) {
-            this.isActive = true;
-            // Регистрация события активации для Event Sourcing
-            registerEvent(new BannerActivatedEvent(this.id.getValue()));
+            return this; // Already inactive, return same instance
         }
+
+        Banner deactivatedBanner = this.toBuilder()
+                .isActive(false)
+                .build();
+
+        deactivatedBanner.registerEvent(new BannerDeactivatedEvent(this.id.getValue()));
+        return deactivatedBanner;
+    }
+
+    /**
+     * Activates the banner and returns a new immutable instance.
+     * If already active, returns the same instance.
+     *
+     * @return A new Banner instance with isActive set to true, or the same instance if already active
+     */
+    public Banner activate() {
+        if (Boolean.TRUE.equals(this.isActive)) {
+            return this; // Already active, return same instance
+        }
+
+        Banner activatedBanner = this.toBuilder()
+                .isActive(true)
+                .build();
+
+        activatedBanner.registerEvent(new BannerActivatedEvent(this.id.getValue()));
+        return activatedBanner;
     }
 
     @Override
     public BannerId getId() {
         return id;
+    }
+
+    @Override
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    @Override
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    @Override
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public Long getVersion() {
+        return version;
+    }
+
+    @Override
+    public void setVersion(Long version) {
+        this.version = version;
     }
 
 }

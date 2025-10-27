@@ -18,7 +18,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -64,8 +64,8 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
     @Override
     protected Mono<BusRoute> insert(BusRoute entity) {
         Map<String, Object> values = mapEntityToColumns(entity);
-        values.put("created_at", Instant.now());
-        values.put("updated_at", Instant.now());
+        values.put("created_at", LocalDateTime.now());
+        values.put("updated_at", LocalDateTime.now());
         values.put("version", 1L);
 
         String sql = """
@@ -116,7 +116,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
     @Override
     protected Mono<BusRoute> update(BusRoute entity) {
         Map<String, Object> values = mapEntityToColumns(entity);
-        values.put("updated_at", Instant.now());
+        values.put("updated_at", LocalDateTime.now());
         values.put("version", entity.getVersion() + 1);
 
         String sql = """
@@ -377,8 +377,8 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 .totalDistanceBackwardMeters(row.get("total_distance_backward_meters", Integer.class))
                 .build();
 
-        busRoute.setCreatedAt(row.get("created_at", Instant.class));
-        busRoute.setUpdatedAt(row.get("updated_at", Instant.class));
+        busRoute.setCreatedAt(row.get("created_at", LocalDateTime.class));
+        busRoute.setUpdatedAt(row.get("updated_at", LocalDateTime.class));
         busRoute.setVersion(row.get("version", Long.class));
 
         return busRoute;

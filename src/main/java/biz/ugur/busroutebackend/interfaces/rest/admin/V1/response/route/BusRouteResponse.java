@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -68,10 +68,10 @@ public class BusRouteResponse {
     private List<String> backwardStopsIds;
 
     @JsonProperty("created_at")
-    private Instant createdAt;
+    private LocalDateTime createdAt;
 
     @JsonProperty("updated_at")
-    private Instant updatedAt;
+    private LocalDateTime updatedAt;
 
     public BusRouteResponse(String id,
                             String routeNumber,
@@ -91,8 +91,8 @@ public class BusRouteResponse {
                             List<String> forwardStopsIds,
                             List<String> backwardStopsIds,
                             Long activeVehiclesCount,
-                            Instant createdAt,
-                            Instant updatedAt) {
+                            LocalDateTime createdAt,
+                            LocalDateTime updatedAt) {
         this.id = id;
         this.routeNumber = routeNumber;
         this.routeName = routeName;

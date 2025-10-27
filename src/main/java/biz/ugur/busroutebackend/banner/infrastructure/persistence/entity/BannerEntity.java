@@ -54,11 +54,11 @@ public class BannerEntity {
 
     @CreatedDate
     @Column("created_at")
-    private Instant createdAt;
+    private LocalDateTime createdAt;
 
     @LastModifiedDate
     @Column("updated_at")
-    private Instant updatedAt;
+    private LocalDateTime updatedAt;
 
     private Long version;
 }

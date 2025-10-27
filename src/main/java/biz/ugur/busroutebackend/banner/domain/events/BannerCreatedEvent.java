@@ -9,6 +9,8 @@ import java.time.LocalDateTime;
 @Getter
 public class BannerCreatedEvent extends BannerDomainEvent {
 
+    public static final int CURRENT_VERSION = 1;
+
     private final String title;
     private final String type;
     private final String imageUrl;
@@ -17,6 +19,7 @@ public class BannerCreatedEvent extends BannerDomainEvent {
     private final LocalDateTime endDate;
     private final Integer displayOrder;
     private final String content;
+
 
     public BannerCreatedEvent(
             String bannerId,
@@ -39,10 +42,12 @@ public class BannerCreatedEvent extends BannerDomainEvent {
         this.content = content;
     }
 
+
     public BannerCreatedEvent(
             String eventId,
             String bannerId,
             Instant occurredAt,
+            int eventVersion,
             String title,
             String type,
             String imageUrl,
@@ -51,7 +56,7 @@ public class BannerCreatedEvent extends BannerDomainEvent {
             LocalDateTime endDate,
             Integer displayOrder,
             String content) {
-        super(eventId, bannerId, occurredAt);
+        super(eventId, bannerId, occurredAt, eventVersion);
         this.title = title;
         this.type = type;
         this.imageUrl = imageUrl;
@@ -60,6 +65,11 @@ public class BannerCreatedEvent extends BannerDomainEvent {
         this.endDate = endDate;
         this.displayOrder = displayOrder;
         this.content = content;
+    }
+
+    @Override
+    protected int getCurrentVersion() {
+        return CURRENT_VERSION;
     }
 
     @Override

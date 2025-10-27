@@ -2,7 +2,7 @@ package biz.ugur.busroutebackend.admin.application.dto.admin;
 
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 public record AdminResult(
     String id,
@@ -11,8 +11,8 @@ public record AdminResult(
     String avatar,
     Boolean isActive,
     Boolean isSuperAdmin,
-    Instant createdAt,
-    Instant lastLoginAt
+    LocalDateTime createdAt,
+    LocalDateTime lastLoginAt
 
 ) {
 

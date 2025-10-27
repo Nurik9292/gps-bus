@@ -1,10 +1,10 @@
 package biz.ugur.busroutebackend.interfaces.rest.mobile.V1.controller;
 
-import biz.ugur.busroutebackend.banner.appication.dto.BannerListResponse;
-import biz.ugur.busroutebackend.banner.appication.dto.BannerPaginationQuery;
-import biz.ugur.busroutebackend.banner.appication.usecase.admin.GetAllBannersUseCase;
-import biz.ugur.busroutebackend.banner.appication.usecase.admin.GetBannersByTypeUseCase;
-import biz.ugur.busroutebackend.banner.appication.usecase.client.GetBannersWithPaginationByTypeUseCase;
+import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerPaginationQuery;
+import biz.ugur.busroutebackend.banner.application.usecase.admin.GetAllBannersUseCase;
+import biz.ugur.busroutebackend.banner.application.usecase.admin.GetBannersByTypeUseCase;
+import biz.ugur.busroutebackend.banner.application.usecase.client.GetBannersWithPaginationByTypeUseCase;
 import biz.ugur.busroutebackend.client.application.usecase.RouteIsFavoriteUseCase;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;

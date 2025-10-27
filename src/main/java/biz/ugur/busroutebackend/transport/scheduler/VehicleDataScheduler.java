@@ -18,6 +18,7 @@ import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -87,7 +88,7 @@ public class VehicleDataScheduler {
                                     })
                     )
                     .sequential()
-                    .reduce(new VehiclePositionUpdateResult(0, 0, 0, 0, 0, Instant.now(), List.of()),
+                    .reduce(new VehiclePositionUpdateResult(0, 0, 0, 0, 0, LocalDateTime.now(), List.of()),
                             VehiclePositionUpdateResult::merge)
                     .publishOn(Schedulers.boundedElastic())
                     .doOnSuccess(result -> {

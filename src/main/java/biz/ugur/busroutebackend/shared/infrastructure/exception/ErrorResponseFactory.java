@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +30,7 @@ public class ErrorResponseFactory {
                 .errorCode(ex.getErrorCode())
                 .message(ex.getMessage())
                 .correlationId(ex.getCorrelationId().value())
-                .timestamp(ex.getTimestamp())
+                .timestamp(convertInstantToLocalDateTime(ex.getTimestamp()))
                 .severity(ex.getSeverity().getDisplayName())
                 .boundedContext(ex.getBoundedContext())
                 .path(exchange.getRequest().getPath().value())
@@ -55,7 +56,7 @@ public class ErrorResponseFactory {
                 .errorCode(ex.getErrorCode())
                 .message(ex.getMessage())
                 .correlationId(ex.getCorrelationId().value())
-                .timestamp(ex.getTimestamp())
+                .timestamp(convertInstantToLocalDateTime(ex.getTimestamp()))
                 .severity(ex.getSeverity().getDisplayName())
                 .boundedContext(ex.getBoundedContext())
                 .path(exchange.getRequest().getPath().value())
@@ -97,7 +98,7 @@ public class ErrorResponseFactory {
                 .errorCode(errorCode)
                 .message(message)
                 .correlationId(UUID.randomUUID().toString())
-                .timestamp(Instant.now())
+                .timestamp(LocalDateTime.now())
                 .severity("ERROR")
                 .boundedContext("system")
                 .path(path)
@@ -113,5 +114,9 @@ public class ErrorResponseFactory {
 
     public Map<String, Object> createMetadata() {
         return new LinkedHashMap<>();
+    }
+
+    private static LocalDateTime convertInstantToLocalDateTime(Instant instant) {
+        return LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
     }
 }

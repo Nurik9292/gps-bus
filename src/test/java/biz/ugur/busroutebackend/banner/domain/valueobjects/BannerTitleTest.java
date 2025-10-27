@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.banner.domain.valueobjects;
 
+import biz.ugur.busroutebackend.banner.domain.exceptions.BannerValidationException;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -17,13 +18,13 @@ class BannerTitleTest {
 
     @Test
     void createBannerTitleFailWhenValueIsNull() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> BannerTitle.of(null));
+        Exception exception = assertThrows(BannerValidationException.class, () -> BannerTitle.of(null));
         assertEquals("Banner title cannot be null or empty", exception.getMessage());
     }
 
     @Test
     void createBannerTitleSuccessfullyWithValue() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> BannerTitle.of(""));
+        Exception exception = assertThrows(BannerValidationException.class, () -> BannerTitle.of(""));
         assertEquals("Banner title cannot be null or empty", exception.getMessage());
     }
 }

@@ -8,7 +8,7 @@ import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 import org.springframework.security.web.server.authorization.ServerAccessDeniedHandler;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 
 @Slf4j
@@ -36,7 +36,7 @@ public final class SecurityExceptionHandlers {
                     "path": "%s"
                 }
                 """.formatted(
-                    Instant.now(),
+                    LocalDateTime.now(),
                     path
             );
 
@@ -63,7 +63,7 @@ public final class SecurityExceptionHandlers {
                     "path": "%s"
                 }
                 """.formatted(
-                    Instant.now(),
+                    LocalDateTime.now(),
                     path
             );
 

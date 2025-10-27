@@ -3,7 +3,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.messaging;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Data
 public class VehiclePositionWebSocketMessage {
@@ -30,7 +30,7 @@ public class VehiclePositionWebSocketMessage {
     private final Boolean isInMotion;
 
     @JsonProperty("timestamp")
-    private final Instant timestamp;
+    private final LocalDateTime timestamp;
 
     @JsonProperty("message_type")
     private final String messageType = "vehicle_position_update";
@@ -46,7 +46,7 @@ public class VehiclePositionWebSocketMessage {
             Double longitude,
             Double speedKmh,
             Boolean isInMotion,
-            Instant timestamp,
+            LocalDateTime timestamp,
             Double course) {
         this.vehicleId = vehicleId;
         this.licensePlate = licensePlate;

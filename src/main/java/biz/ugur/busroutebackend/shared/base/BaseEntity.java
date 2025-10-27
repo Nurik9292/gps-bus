@@ -1,20 +1,20 @@
 package biz.ugur.busroutebackend.shared.base;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 public interface BaseEntity<ID> {
 
     ID getId();
 
-    Instant getCreatedAt();
+    LocalDateTime getCreatedAt();
 
-    Instant getUpdatedAt();
+    LocalDateTime getUpdatedAt();
 
     Long getVersion();
 
-    void setCreatedAt(Instant createdAt);
+    void setCreatedAt(LocalDateTime createdAt);
 
-    void setUpdatedAt(Instant updatedAt);
+    void setUpdatedAt(LocalDateTime updatedAt);
 
     void setVersion(Long version);
 }

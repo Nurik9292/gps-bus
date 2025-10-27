@@ -4,7 +4,7 @@ import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 public record StopData(
         String id,
@@ -17,8 +17,8 @@ public record StopData(
         Boolean isActive,
         Boolean isMajorStop,
         Integer servingRouteCount,
-        Instant createdAt,
-        Instant updatedAt,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
         String cityId,
 
         /**

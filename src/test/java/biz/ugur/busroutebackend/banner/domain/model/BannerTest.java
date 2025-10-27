@@ -2,6 +2,8 @@ package biz.ugur.busroutebackend.banner.domain.model;
 
 import biz.ugur.busroutebackend.banner.domain.events.BannerCreatedEvent;
 import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
+import biz.ugur.busroutebackend.banner.domain.exceptions.BannerPeriodValidationException;
+import biz.ugur.busroutebackend.banner.domain.exceptions.BannerValidationException;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerImage;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerPeriod;
@@ -26,8 +28,8 @@ class BannerTest {
     private final static long VERSION = 1L;
     private final static String BANNER_ID = "1";
     private final static boolean IS_ACTIVE = true;
-    private final static Instant CREATED_AT = Instant.now();
-    private final static Instant UPDATED_AT = Instant.now();
+    private final static LocalDateTime CREATED_AT = LocalDateTime.now();
+    private final static LocalDateTime UPDATED_AT = LocalDateTime.now();
 
 
     private final static String UPDATE_TARGET_URL = "http:/test:8080/";
@@ -36,7 +38,7 @@ class BannerTest {
     private final static String UPDATE_CONTENT = "Banner NEW Content";
     private final static int UPDATE_DISPLAY_ORDER = 2;
     private final static long UPDATE_VERSION = 2L;
-    private final static Instant UPDATE_UPDATED_AT = Instant.now().minusSeconds(10);
+    private final static LocalDateTime UPDATE_UPDATED_AT = LocalDateTime.now().minusSeconds(10);
 
     private BannerTitle createTitle() {
         return BannerTitle.of(TITLE);
@@ -59,9 +61,6 @@ class BannerTest {
         BannerImage image = createImage();
 
         Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
-        banner.setCreatedAt(CREATED_AT);
-        banner.setUpdatedAt(UPDATED_AT);
-        banner.setVersion(VERSION);
 
         assertNotNull(banner);
         assertNotNull(banner.getId());
@@ -75,9 +74,7 @@ class BannerTest {
         assertEquals(TARGET_URL, banner.getTargetUrl());
         assertTrue(banner.getIsActive());
         assertEquals(DISPLAY_ORDER, banner.getDisplayOrder());
-        assertNotNull(banner.getCreatedAt());
-        assertNotNull(banner.getUpdatedAt());
-        assertEquals(VERSION, banner.getVersion());
+        assertEquals(0L, banner.getVersion());
 
         assertEquals(1, banner.getDomainEvents().size());
         assertInstanceOf(BannerCreatedEvent.class, banner.getDomainEvents().getFirst());
@@ -90,7 +87,7 @@ class BannerTest {
         BannerPeriod period = createPeriod();
         BannerImage image = createImage();
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () ->
+        Exception exception = assertThrows(BannerValidationException.class, () ->
                 Banner.create(BannerTitle.of(""), type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT));
 
         assertEquals("Banner title cannot be null or empty", exception.getMessage());
@@ -103,7 +100,7 @@ class BannerTest {
         BannerImage image = createImage();
         BannerTitle title = createTitle();
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () ->
+        Exception exception = assertThrows(BannerPeriodValidationException.class, () ->
                 Banner.create(title, type, BannerPeriod.between(LocalDateTime.now().plusDays(1), LocalDateTime.now()),
                 image, TARGET_URL, DISPLAY_ORDER, CONTENT
         ));
@@ -117,7 +114,7 @@ class BannerTest {
         BannerTitle title = createTitle();
         BannerPeriod period = createPeriod();
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () ->   Banner.create(
+        Exception exception = assertThrows(BannerValidationException.class, () ->   Banner.create(
                 title,
                 type,
                 period,
@@ -166,35 +163,24 @@ class BannerTest {
         BannerImage image = createImage();
 
         Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
-        banner.setCreatedAt(CREATED_AT);
-        banner.setUpdatedAt(UPDATED_AT);
-        banner.setVersion(VERSION);
-
 
         BannerTitle newTitle = BannerTitle.of(UPDATE_TITLE);
         BannerType newType = BannerType.ROUTES;
         BannerPeriod newPeriod = BannerPeriod.between(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(2));
         BannerImage newImage = BannerImage.of(UPDATE_IMAGE_PATH);
 
-        banner.updateBanner(newTitle, newType, newPeriod, newImage,
+        Banner updatedBanner = banner.updateBanner(newTitle, newType, newPeriod, newImage,
                 UPDATE_TARGET_URL, UPDATE_DISPLAY_ORDER, UPDATE_CONTENT);
 
-        banner.setVersion(UPDATE_VERSION);
-        banner.setUpdatedAt(UPDATE_UPDATED_AT);
-
-
-        assertNotNull(banner.getId());
-        assertEquals(UPDATE_TITLE, banner.getTitle().getValue());
-        assertEquals(newType, banner.getType());
-        assertTrue(newPeriod.getStartTime().isEqual(banner.getPeriod().getStartTime()));
-        assertTrue(newPeriod.getEndTime().isEqual(banner.getPeriod().getEndTime()));
-        assertEquals(UPDATE_IMAGE_PATH, banner.getImageUrl().getValue());
-        assertEquals(UPDATE_DISPLAY_ORDER, banner.getDisplayOrder());
-        assertEquals(UPDATE_CONTENT, banner.getContent());
-        assertEquals(UPDATE_TARGET_URL, banner.getTargetUrl());
-        assertEquals(UPDATE_VERSION, banner.getVersion());
-        assertEquals(UPDATE_UPDATED_AT, banner.getUpdatedAt());
-
+        assertNotNull(updatedBanner.getId());
+        assertEquals(UPDATE_TITLE, updatedBanner.getTitle().getValue());
+        assertEquals(newType, updatedBanner.getType());
+        assertTrue(newPeriod.getStartTime().isEqual(updatedBanner.getPeriod().getStartTime()));
+        assertTrue(newPeriod.getEndTime().isEqual(updatedBanner.getPeriod().getEndTime()));
+        assertEquals(UPDATE_IMAGE_PATH, updatedBanner.getImageUrl().getValue());
+        assertEquals(UPDATE_DISPLAY_ORDER, updatedBanner.getDisplayOrder());
+        assertEquals(UPDATE_CONTENT, updatedBanner.getContent());
+        assertEquals(UPDATE_TARGET_URL, updatedBanner.getTargetUrl());
     }
 
     @Test
@@ -205,31 +191,28 @@ class BannerTest {
         BannerImage image = createImage();
 
         Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
-        banner.setCreatedAt(CREATED_AT);
-        banner.setUpdatedAt(UPDATED_AT);
-        banner.setVersion(VERSION);
 
         BannerTitle newTitle = BannerTitle.of(UPDATE_TITLE);
         BannerType newType = BannerType.ROUTES;
         BannerPeriod newPeriod = BannerPeriod.between(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(2));
         BannerImage newImage = BannerImage.of(UPDATE_IMAGE_PATH);
 
-        banner.updateBanner(newTitle, newType, newPeriod, newImage,null, null, null);
+        Banner updatedBanner = banner.updateBanner(newTitle, newType, newPeriod, newImage,null, null, null);
 
-        banner.setVersion(UPDATE_VERSION);
-        banner.setUpdatedAt(UPDATE_UPDATED_AT);
+        updatedBanner.setVersion(UPDATE_VERSION);
+        updatedBanner.setUpdatedAt(UPDATE_UPDATED_AT);
 
-        assertNotNull(banner.getId());
-        assertEquals(UPDATE_TITLE, banner.getTitle().getValue());
-        assertEquals(newType, banner.getType());
-        assertTrue(newPeriod.getStartTime().isEqual(banner.getPeriod().getStartTime()));
-        assertTrue(newPeriod.getEndTime().isEqual(banner.getPeriod().getEndTime()));
-        assertEquals(UPDATE_IMAGE_PATH, banner.getImageUrl().getValue());
-        assertEquals(DISPLAY_ORDER, banner.getDisplayOrder());
-        assertEquals(CONTENT, banner.getContent());
-        assertEquals(TARGET_URL, banner.getTargetUrl());
-        assertEquals(UPDATE_VERSION, banner.getVersion());
-        assertEquals(UPDATE_UPDATED_AT, banner.getUpdatedAt());
+        assertNotNull(updatedBanner.getId());
+        assertEquals(UPDATE_TITLE, updatedBanner.getTitle().getValue());
+        assertEquals(newType, updatedBanner.getType());
+        assertTrue(newPeriod.getStartTime().isEqual(updatedBanner.getPeriod().getStartTime()));
+        assertTrue(newPeriod.getEndTime().isEqual(updatedBanner.getPeriod().getEndTime()));
+        assertEquals(UPDATE_IMAGE_PATH, updatedBanner.getImageUrl().getValue());
+        assertEquals(DISPLAY_ORDER, updatedBanner.getDisplayOrder());
+        assertEquals(CONTENT, updatedBanner.getContent());
+        assertEquals(TARGET_URL, updatedBanner.getTargetUrl());
+        assertEquals(UPDATE_VERSION, updatedBanner.getVersion());
+        assertEquals(UPDATE_UPDATED_AT, updatedBanner.getUpdatedAt());
     }
 
 
@@ -242,7 +225,7 @@ class BannerTest {
 
         Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () ->   banner.updateBanner(
+        Exception exception = assertThrows(BannerValidationException.class, () ->   banner.updateBanner(
                 BannerTitle.of(" "),
                 BannerType.POPUP,
                 BannerPeriod.between(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(2)),
@@ -265,7 +248,7 @@ class BannerTest {
 
         Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () ->   banner.updateBanner(
+        Exception exception = assertThrows(BannerPeriodValidationException.class, () ->   banner.updateBanner(
                 BannerTitle.of(UPDATE_TITLE),
                 BannerType.POPUP,
                 BannerPeriod.between(LocalDateTime.now().plusDays(1), LocalDateTime.now()),
@@ -287,7 +270,7 @@ class BannerTest {
 
         Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () ->   banner.updateBanner(
+        Exception exception = assertThrows(BannerValidationException.class, () ->   banner.updateBanner(
                 BannerTitle.of(UPDATE_TITLE),
                 BannerType.POPUP,
                 BannerPeriod.between(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(2)),
@@ -309,9 +292,9 @@ class BannerTest {
 
         Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
 
-        banner.deactivate();
+        Banner deactivatedBanner = banner.deactivate();
 
-        assertFalse(banner.getIsActive());
+        assertFalse(deactivatedBanner.getIsActive());
     }
 
     @Test
@@ -323,10 +306,10 @@ class BannerTest {
 
         Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
 
-        banner.deactivate();
-        banner.activate();
+        Banner deactivatedBanner = banner.deactivate();
+        Banner activatedBanner = deactivatedBanner.activate();
 
-        assertTrue(banner.getIsActive());
+        assertTrue(activatedBanner.getIsActive());
     }
 
     @Test
@@ -336,13 +319,13 @@ class BannerTest {
                 " originalUrl ", 1, " originalContent "
         );
 
-        banner.updateBanner(
+        Banner updatedBanner = banner.updateBanner(
                 BannerTitle.of("New Title"), BannerType.ROUTES, createPeriod(), createImage(),
                 " updatedUrl ", 2, " updatedContent "
         );
 
-        assertEquals("updatedUrl", banner.getTargetUrl());
-        assertEquals("updatedContent", banner.getContent());
+        assertEquals("updatedUrl", updatedBanner.getTargetUrl());
+        assertEquals("updatedContent", updatedBanner.getContent());
     }
 
     @Test
@@ -371,8 +354,6 @@ class BannerTest {
         assertEquals(TARGET_URL, banner.getTargetUrl());
         assertTrue(banner.getIsActive());
         assertEquals(DISPLAY_ORDER, banner.getDisplayOrder());
-        assertNotNull(banner.getCreatedAt());
-        assertNotNull(banner.getUpdatedAt());
         assertEquals(0L, banner.getVersion());
         assertEquals(CONTENT, banner.getContent());
         assertEquals(IMAGE_PATH, banner.getImageUrl().getValue());

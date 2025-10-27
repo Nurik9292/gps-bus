@@ -104,8 +104,8 @@ public class R2dbcCityRepository extends BaseR2dbcRepository<City, CityId> imple
                 .displayOrder(row.get("display_order", Integer.class))
                 .build();
 
-        city.setCreatedAt(row.get("created_at", java.time.Instant.class));
-        city.setUpdatedAt(row.get("updated_at", java.time.Instant.class));
+        city.setCreatedAt(row.get("created_at", java.time.LocalDateTime.class));
+        city.setUpdatedAt(row.get("updated_at", java.time.LocalDateTime.class));
         city.setVersion(row.get("version", Long.class));
 
         return city;

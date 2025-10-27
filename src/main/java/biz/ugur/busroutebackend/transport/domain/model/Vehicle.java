@@ -17,7 +17,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Log4j2
 @Table("vehicles")
@@ -49,7 +49,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     private Boolean isInMotion;
 
     @Column("last_position_update")
-    private Instant lastPositionUpdate;
+    private LocalDateTime lastPositionUpdate;
 
     @Column("assigned_route_id")
     private BusRouteId assignedRouteId;
@@ -63,6 +63,10 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     @Column("course ")
     private Double course;
 
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Long version;
+
     public Vehicle(String deviceId, String licensePlate) {
         this.id = VehicleId.generate();
         this.deviceId = validateDeviceId(deviceId);
@@ -71,7 +75,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         this.isInMotion = false;
         this.speedKmh = 0.0;
         this.course = 0.0;
-        this.lastPositionUpdate = Instant.now();
+        this.lastPositionUpdate = LocalDateTime.now();
 
         registerEvent(new VehicleRegisteredEvent(
                 this.id.getValue(),
@@ -87,7 +91,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                    Double currentLongitude,
                    Double speedKmh,
                    Boolean isInMotion,
-                   Instant lastPositionUpdate,
+                   LocalDateTime lastPositionUpdate,
                    BusRouteId assignedRouteId,
                    String routeNumber,
                    Boolean isActive,
@@ -106,14 +110,14 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         this.course = course;
     }
 
-    public void updatePosition(Double latitude, Double longitude, Double speed, Instant fixTime, Double course) {
+    public void updatePosition(Double latitude, Double longitude, Double speed, LocalDateTime fixTime, Double course) {
         validateCoordinates(latitude, longitude);
 
         this.currentLatitude = latitude;
         this.currentLongitude = longitude;
         this.speedKmh = speed != null ? speed : 0.0;
         this.isInMotion = this.speedKmh > 1.0;
-        this.lastPositionUpdate = fixTime != null ? fixTime : Instant.now();
+        this.lastPositionUpdate = fixTime != null ? fixTime : LocalDateTime.now();
         this.course = course != null ? course : 0.0;
 
 
@@ -180,7 +184,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
     public boolean hasRecentPosition() {
         if (lastPositionUpdate == null) return false;
-        return lastPositionUpdate.isAfter(Instant.now().minusSeconds(300));
+        return lastPositionUpdate.isAfter(LocalDateTime.now().minusSeconds(300));
     }
 
     public VehiclePosition getCurrentPosition() {
@@ -199,6 +203,35 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         return id;
     }
 
+    @Override
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    @Override
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    @Override
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public Long getVersion() {
+        return version;
+    }
+
+    @Override
+    public void setVersion(Long version) {
+        this.version = version;
+    }
 
     private String validateDeviceId(String deviceId) {
         if (deviceId == null || deviceId.trim().isEmpty()) {
@@ -246,7 +279,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
      * Create Vehicle from Coordinates
      * @param coordinates the coordinates to set
      */
-    public void updatePositionFromCoordinates(Coordinates coordinates, Double speed, Instant fixTime, Double course) {
+    public void updatePositionFromCoordinates(Coordinates coordinates, Double speed, LocalDateTime fixTime, Double course) {
         if (coordinates == null) {
             throw new IllegalArgumentException("Coordinates cannot be null");
         }

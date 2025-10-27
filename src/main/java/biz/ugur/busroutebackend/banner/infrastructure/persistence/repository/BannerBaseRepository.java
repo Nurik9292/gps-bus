@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.function.BiFunction;
 
@@ -66,22 +66,16 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
                 .targetUrl(row.get("target_url", String.class))
                 .isActive(row.get("is_active", Boolean.class))
                 .displayOrder(row.get("display_order", Integer.class))
-                .startDate(row.get("start_date", java.time.LocalDateTime.class))
-                .endDate(row.get("end_date", java.time.LocalDateTime.class))
+                .startDate(row.get("start_date", LocalDateTime.class))
+                .endDate(row.get("end_date", LocalDateTime.class))
                 .content(row.get("content", String.class))
-                .createdAt(row.get("created_at", Instant.class))
-                .updatedAt(row.get("updated_at", Instant.class))
+                .createdAt(row.get("created_at", LocalDateTime.class))
+                .updatedAt(row.get("updated_at", LocalDateTime.class))
                 .version(row.get("version", Long.class))
                 .build());
     }
 
-    /**
-     * Поиск баннеров по спецификации без пагинации.
-     * Конвертирует Specification в SQL WHERE clause и выполняет запрос.
-     *
-     * @param specification спецификация для фильтрации
-     * @return поток баннеров, удовлетворяющих спецификации
-     */
+
     public Flux<Banner> findBySpecification(Specification<Banner> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -92,7 +86,6 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind всех параметров из SqlCriteria
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }
@@ -102,14 +95,7 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
                 .all();
     }
 
-    /**
-     * Поиск баннеров по спецификации с пагинацией.
-     * Конвертирует Specification в SQL WHERE clause и выполняет запрос с LIMIT/OFFSET.
-     *
-     * @param specification спецификация для фильтрации
-     * @param pageable      параметры пагинации
-     * @return поток баннеров, удовлетворяющих спецификации
-     */
+
     public Flux<Banner> findBySpecification(Specification<Banner> specification, Pageable pageable) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -123,7 +109,6 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
                 .bind("limit", pageable.getPageSize())
                 .bind("offset", pageable.getOffset());
 
-        // Bind всех параметров из SqlCriteria
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }
@@ -133,12 +118,7 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
                 .all();
     }
 
-    /**
-     * Подсчет количества баннеров, удовлетворяющих спецификации.
-     *
-     * @param specification спецификация для фильтрации
-     * @return количество баннеров
-     */
+
     public Mono<Long> countBySpecification(Specification<Banner> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -149,7 +129,6 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind всех параметров из SqlCriteria
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }

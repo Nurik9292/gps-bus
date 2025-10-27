@@ -8,6 +8,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+import java.time.LocalDateTime;
+
 @Builder
 @Getter
 @Table("cities")
@@ -29,6 +31,9 @@ public class City extends AggregateRoot<City, CityId> {
     @Column("display_order")
     private Integer displayOrder;
 
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Long version;
 
     public static City create(String name, String nameTm, Integer displayOrder) {
         String validatedName = validateNameStatic(name);
@@ -69,6 +74,36 @@ public class City extends AggregateRoot<City, CityId> {
     @Override
     public CityId getId() {
         return id;
+    }
+
+    @Override
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    @Override
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    @Override
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public Long getVersion() {
+        return version;
+    }
+
+    @Override
+    public void setVersion(Long version) {
+        this.version = version;
     }
 
     private String validateName(String name) {

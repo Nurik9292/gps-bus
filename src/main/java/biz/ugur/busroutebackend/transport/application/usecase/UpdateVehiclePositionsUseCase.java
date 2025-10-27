@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +53,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     .toList();
 
             if (validPositions.isEmpty()) {
-                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, gpsPositions.size() - validPositions.size(), 0, Instant.now(), List.of()));
+                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, gpsPositions.size() - validPositions.size(), 0, LocalDateTime.now(), List.of()));
             }
 
             // Extract device IDs for bulk lookup
@@ -347,7 +348,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
         return new VehiclePositionUpdateResult(
                 updated, created, failed, invalid, conflicts,
-                Instant.now(), statuses
+                LocalDateTime.now(), statuses
         );
     }
 

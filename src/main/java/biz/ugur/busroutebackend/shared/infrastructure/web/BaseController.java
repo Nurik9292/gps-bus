@@ -9,7 +9,7 @@ import org.springframework.http.ResponseEntity;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.*;
 
 
@@ -156,14 +156,14 @@ public abstract class BaseController {
         private final T data;
         private final String errorCode;
         private final String errorMessage;
-        private final Instant timestamp;
+        private final LocalDateTime timestamp;
 
         private ApiResponse(boolean success, T data, String errorCode, String errorMessage) {
             this.success = success;
             this.data = data;
             this.errorCode = errorCode;
             this.errorMessage = errorMessage;
-            this.timestamp = Instant.now();
+            this.timestamp = LocalDateTime.now();
         }
 
         public static <T> ApiResponse<T> success(T data) {

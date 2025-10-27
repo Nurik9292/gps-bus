@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.banner.domain.valueobjects;
 
+import biz.ugur.busroutebackend.banner.domain.exceptions.BannerPeriodValidationException;
 import biz.ugur.busroutebackend.banner.domain.model.Banner;
 import org.junit.jupiter.api.Test;
 
@@ -88,8 +89,8 @@ class BannerPeriodTest {
         LocalDateTime start = LocalDateTime.now();
         LocalDateTime end = start.minusDays(1);
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+        BannerPeriodValidationException exception = assertThrows(
+                BannerPeriodValidationException.class,
                 () -> BannerPeriod.between(start, end)
         );
         assertEquals("Banner Period endTime cannot be before startTime", exception.getMessage());

@@ -215,8 +215,8 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 cityId
         );
 
-        busStop.setCreatedAt(safeGet(row, "created_at", java.time.Instant.class, null));
-        busStop.setUpdatedAt(safeGet(row, "updated_at", java.time.Instant.class, null));
+        busStop.setCreatedAt(safeGet(row, "created_at", java.time.LocalDateTime.class, null));
+        busStop.setUpdatedAt(safeGet(row, "updated_at", java.time.LocalDateTime.class, null));
         busStop.setVersion(safeGet(row, "version", Long.class, 0L));
 
         return busStop;

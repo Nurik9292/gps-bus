@@ -26,9 +26,7 @@ public class VehicleMapper {
         dto.setIsActive(vehicle.getIsActive());
 
         if (vehicle.getLastPositionUpdate() != null) {
-            dto.setLastPositionUpdate(LocalDateTime.ofInstant(
-                    vehicle.getLastPositionUpdate(), ZoneId.systemDefault()
-            ));
+            dto.setLastPositionUpdate(vehicle.getLastPositionUpdate());
         }
 
         dto.setCreatedAt(LocalDateTime.now()); // TODO: заменить на createdAt из сущности

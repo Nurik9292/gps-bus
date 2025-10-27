@@ -13,7 +13,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -42,9 +42,9 @@ public class R2dbcAdminRepository extends BaseR2dbcRepository<Admin, AdminId> im
                 row.get("avatar", String.class),
                 row.get("is_active", Boolean.class),
                 row.get("is_super_admin", Boolean.class),
-                row.get("last_login_at", Instant.class),
-                row.get("created_at", Instant.class),
-                row.get("updated_at", Instant.class),
+                row.get("last_login_at", LocalDateTime.class),
+                row.get("created_at", LocalDateTime.class),
+                row.get("updated_at", LocalDateTime.class),
                 row.get("version", Long.class)
         );
 
@@ -128,7 +128,7 @@ public class R2dbcAdminRepository extends BaseR2dbcRepository<Admin, AdminId> im
                 .flatMap(existing -> {
                     DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
                             .bind("id", adminId.getValue())
-                            .bind("updated_at", Instant.now())
+                            .bind("updated_at", LocalDateTime.now())
                             .bind("old_version", existing.getVersion());
 
                     spec = bindValue(spec, "avatar", avatar);

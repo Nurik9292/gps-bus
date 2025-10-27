@@ -14,6 +14,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -67,6 +68,10 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
 
     @Transient
     private List<BusStop> busStops = new ArrayList<>();
+
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Long version;
 
     public void updateRouteGeometry(RouteGeometry forwardGeometry, RouteGeometry backwardGeometry) {
         boolean hasChanges = false;
@@ -145,7 +150,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         this.routeColor = routeColor;
         this.estimatedDurationMinutes = estimatedDurationMinutes;
         this.cityId = cityId;
-        this.updatedAt = Instant.now();
+        this.updatedAt = LocalDateTime.now();
 
     }
 
@@ -156,7 +161,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
 
         this.routeGeometryForward = geometryWKT;
         this.totalDistanceForwardMeters = distanceMeters;
-        this.updatedAt = Instant.now();
+        this.updatedAt = LocalDateTime.now();
     }
 
     public void updateBackwardGeometry(String geometryWKT, Integer distanceMeters) {
@@ -166,7 +171,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
 
         this.routeGeometryBackward = geometryWKT;
         this.totalDistanceBackwardMeters = distanceMeters;
-        this.updatedAt = Instant.now();
+        this.updatedAt = LocalDateTime.now();
 
     }
 
@@ -228,6 +233,35 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         return id;
     }
 
+    @Override
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    @Override
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    @Override
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public Long getVersion() {
+        return version;
+    }
+
+    @Override
+    public void setVersion(Long version) {
+        this.version = version;
+    }
 
     private String validateRouteNumber(String routeNumber) {
         if (routeNumber == null || routeNumber.trim().isEmpty()) {
@@ -310,7 +344,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         this.routeGeometryBackward = null;
         this.totalDistanceForwardMeters = null;
         this.totalDistanceBackwardMeters = null;
-        this.updatedAt = Instant.now();
+        this.updatedAt = LocalDateTime.now();
 
     }
 
@@ -318,7 +352,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
     public void clearForwardGeometry() {
         this.routeGeometryForward = null;
         this.totalDistanceForwardMeters = null;
-        this.updatedAt = Instant.now();
+        this.updatedAt = LocalDateTime.now();
 
     }
 
@@ -326,7 +360,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
     public void clearBackwardGeometry() {
         this.routeGeometryBackward = null;
         this.totalDistanceBackwardMeters = null;
-        this.updatedAt = Instant.now();
+        this.updatedAt = LocalDateTime.now();
 
     }
 
@@ -374,17 +408,6 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
                 routeGeometryBackward,
                 totalDistanceForwardMeters,
                 totalDistanceBackwardMeters);
-    }
-
-
-    @Override
-    public Instant getCreatedAt() {
-        return super.getCreatedAt();
-    }
-
-    @Override
-    public Instant getUpdatedAt() {
-        return super.getUpdatedAt();
     }
 
     @Override

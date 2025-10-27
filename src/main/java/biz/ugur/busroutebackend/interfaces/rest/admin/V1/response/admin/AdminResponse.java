@@ -4,7 +4,7 @@ import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Data
 public class AdminResponse {
@@ -28,10 +28,10 @@ public class AdminResponse {
     private Boolean isSuperAdmin;
 
     @JsonProperty("last_login_at")
-    private Instant lastLoginAt;
+    private LocalDateTime lastLoginAt;
 
     @JsonProperty("created_at")
-    private Instant createdAt;
+    private LocalDateTime createdAt;
 
     public AdminResponse(
             String id,
@@ -40,8 +40,8 @@ public class AdminResponse {
             String avatar,
             Boolean isActive,
             Boolean isSuperAdmin,
-            Instant lastLoginAt,
-            Instant createdAt) {
+            LocalDateTime lastLoginAt,
+            LocalDateTime createdAt) {
         this.id = id;
         this.username = username;
         this.fullName = fullName;
@@ -58,8 +58,8 @@ public class AdminResponse {
             String fullName,
             Boolean isActive,
             Boolean isSuperAdmin,
-            Instant lastLoginAt) {
-        this(id, username, fullName, null, isActive, isSuperAdmin, lastLoginAt, Instant.now());
+            LocalDateTime lastLoginAt) {
+        this(id, username, fullName, null, isActive, isSuperAdmin, lastLoginAt, LocalDateTime.now());
     }
 
     public static AdminResponse fromResult(AdminResult result) {

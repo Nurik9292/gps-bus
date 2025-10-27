@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.banner;
 
-import biz.ugur.busroutebackend.banner.appication.dto.CreateBannerCommand;
+import biz.ugur.busroutebackend.banner.application.dto.CreateBannerCommand;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

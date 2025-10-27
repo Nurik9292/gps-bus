@@ -13,7 +13,7 @@ import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 @Builder
@@ -44,7 +44,11 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     private Boolean isSuperAdmin;
 
     @Column("last_login_at")
-    private Instant lastLoginAt;
+    private LocalDateTime lastLoginAt;
+
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Long version;
 
     private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -61,7 +65,7 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 .fullName(fullName)
                 .isSuperAdmin(isSuperAdmin)
                 .isActive(isActive)
-                .lastLoginAt(Instant.now())
+                .lastLoginAt(LocalDateTime.now())
                 .avatar(null)
                 .build();
 
@@ -84,9 +88,9 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
             String avatar,
             Boolean isActive,
             Boolean isSuperAdmin,
-            Instant lastLoginAt,
-            Instant createdAt,
-            Instant updatedAt,
+            LocalDateTime lastLoginAt,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt,
             Long version
     ) {
         Admin admin = builder()
@@ -99,9 +103,9 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 .isSuperAdmin(isSuperAdmin)
                 .lastLoginAt(lastLoginAt)
                 .build();
-        admin.setCreatedAt(createdAt);
-        admin.setUpdatedAt(updatedAt);
-        admin.setVersion(version);
+        admin.createdAt = createdAt;
+        admin.updatedAt = updatedAt;
+        admin.version = version;
         return  admin;
     }
 
@@ -120,7 +124,7 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     }
 
     public void updateLastLogin() {
-        this.lastLoginAt = Instant.now();
+        this.lastLoginAt = LocalDateTime.now();
     }
 
     public void deactivate() {
@@ -207,6 +211,36 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         return id;
     }
 
+    @Override
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    @Override
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    @Override
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public Long getVersion() {
+        return version;
+    }
+
+    @Override
+    public void setVersion(Long version) {
+        this.version = version;
+    }
+
     private String validateUsername(String username) {
         if (username == null || username.trim().isEmpty()) {
             throw new IllegalArgumentException("Username cannot be null or empty");
@@ -231,17 +265,6 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     }
 
     @Override
-    public Instant getCreatedAt() {
-        return super.getCreatedAt();
-    }
-
-    @Override
-    public Instant getUpdatedAt() {
-        return super.getUpdatedAt();
-    }
-
-
-    @Override
     public String toString() {
         return "Admin{" +
                 "id=" + id +
@@ -249,8 +272,8 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 ", fullName='" + fullName + '\'' +
                 ", isActive=" + isActive +
                 ", isSuperAdmin=" + isSuperAdmin +
-                ", createdAt=" + getCreatedAt() +
-                ", updatedAt=" + getUpdatedAt() +
+                ", createdAt=" + createdAt +
+                ", updatedAt=" + updatedAt +
                 ", lastLoginAt=" + lastLoginAt +
                 '}';
     }

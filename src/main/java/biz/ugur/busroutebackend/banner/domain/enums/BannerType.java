@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.banner.domain.enums;
 
 
+import biz.ugur.busroutebackend.banner.domain.exceptions.BannerValidationException;
 import lombok.Getter;
 import lombok.ToString;
 
@@ -29,6 +30,6 @@ public enum BannerType {
                 return type;
             }
         }
-        throw new IllegalArgumentException("Unknown BannerType: " + value);
+        throw new BannerValidationException("Unknown BannerType: " + value);
     }
 }

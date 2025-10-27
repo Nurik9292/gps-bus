@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -86,7 +86,7 @@ public class R2dbcClientRepository extends BaseR2dbcRepository<Client, ClientId>
     }
 
     @Override
-    public Flux<Client> findByLastActivityAfter(Instant since) {
+    public Flux<Client> findByLastActivityAfter(LocalDateTime since) {
         String sql = "SELECT * FROM clients WHERE last_activity > :since ORDER BY last_activity DESC";
 
         return databaseClient.sql(sql)
@@ -135,11 +135,11 @@ public class R2dbcClientRepository extends BaseR2dbcRepository<Client, ClientId>
                 row.get("otp_verify", Boolean.class),
                 Platform.valueOf(row.get("platform", String.class)),
                 ClientStatus.valueOf(row.get("status", String.class)),
-                row.get("last_activity", Instant.class),
+                row.get("last_activity", LocalDateTime.class),
                 row.get("access_token", String.class),
                 row.get("refresh_token", String.class),
-                row.get("created_at", Instant.class),
-                row.get("updated_at", Instant.class),
+                row.get("created_at", LocalDateTime.class),
+                row.get("updated_at", LocalDateTime.class),
                 row.get("version", Long.class)
         );
     }

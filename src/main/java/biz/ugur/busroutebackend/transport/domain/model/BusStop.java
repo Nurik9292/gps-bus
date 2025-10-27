@@ -11,7 +11,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Getter
 @Table("bus_stops")
@@ -48,6 +48,9 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
     @Column("is_major_stop")
     private Boolean isMajorStop;
 
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Long version;
 
     public BusStop(String stopName,
                    String nameEn,
@@ -190,21 +193,39 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
         registerEvent(new BusStopUpdatedEvent(this.id, stopName));
     }
 
-
-    @Override
-    public Instant getCreatedAt() {
-        return super.getCreatedAt();
-    }
-
-    @Override
-    public Instant getUpdatedAt() {
-        return super.getUpdatedAt();
-    }
-
-
     @Override
     public BusStopId getId() {
         return id;
+    }
+
+    @Override
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    @Override
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    @Override
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public Long getVersion() {
+        return version;
+    }
+
+    @Override
+    public void setVersion(Long version) {
+        this.version = version;
     }
 
     private String validateStopName(String stopName) {

@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.banner.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.banner.domain.events.*;
+import biz.ugur.busroutebackend.banner.domain.exceptions.BannerEventSerializationException;
 import biz.ugur.busroutebackend.banner.domain.repository.BannerEventStore;
 import biz.ugur.busroutebackend.banner.infrastructure.persistence.entity.BannerEventEntity;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -18,6 +19,7 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 
@@ -51,17 +53,17 @@ public class R2dbcBannerEventStore implements BannerEventStore {
                         .bind("eventId", UUID.fromString(event.getEventId()))
                         .bind("bannerId", UUID.fromString(event.getBannerId()))
                         .bind("eventType", event.getEventType())
-                        .bind("eventVersion", 1)
+                        .bind("eventVersion", event.getEventVersion())
                         .bind("payload", payload)
                         .bind("metadata", metadata)
                         .bind("occurredAt", event.getOccurredAt())
                         .bind("recordedAt", Instant.now())
                         .map(this::mapRowToEvent)
                         .one()
-                        .doOnSuccess(savedEvent -> log.debug("Saved event: {} for banner: {}",
-                                event.getEventType(), event.getBannerId()))
-                        .doOnError(error -> log.error("Failed to save event: {} for banner: {}",
-                                event.getEventType(), event.getBannerId(), error));
+                        .doOnSuccess(savedEvent -> log.debug("Saved event: {} v{} for banner: {}",
+                                event.getEventType(), event.getEventVersion(), event.getBannerId()))
+                        .doOnError(error -> log.error("Failed to save event: {} v{} for banner: {}",
+                                event.getEventType(), event.getEventVersion(), event.getBannerId(), error));
             } catch (Exception e) {
                 return Mono.error(new RuntimeException("Failed to serialize event", e));
             }
@@ -155,17 +157,21 @@ public class R2dbcBannerEventStore implements BannerEventStore {
             case BannerDeletedEvent e -> objectMapper.writeValueAsString(Map.of(
                     "reason", e.getReason() != null ? e.getReason() : ""
             ));
-            default -> throw new IllegalArgumentException("Unknown event type: " + event.getClass());
+            default -> throw new BannerEventSerializationException("Unknown event type: " + event.getClass());
         };
     }
 
 
     private BannerDomainEvent mapRowToEvent(Row row, RowMetadata metadata) {
-        String eventId = row.get("event_id", UUID.class).toString();
-        String bannerId = row.get("banner_id", UUID.class).toString();
+        String eventId = Objects.requireNonNull(row.get("event_id", UUID.class)).toString();
+        String bannerId = Objects.requireNonNull(row.get("banner_id", UUID.class)).toString();
         String eventType = row.get("event_type", String.class);
+        Integer eventVersion = row.get("event_version", Integer.class);
         String payload = row.get("payload", String.class);
         Instant occurredAt = row.get("occurred_at", Instant.class);
+
+        // Default to version 1 for backward compatibility with events stored before versioning
+        int version = eventVersion != null ? eventVersion : 1;
 
         try {
             JsonNode payloadNode = objectMapper.readTree(payload);
@@ -175,6 +181,7 @@ public class R2dbcBannerEventStore implements BannerEventStore {
                         eventId,
                         bannerId,
                         occurredAt,
+                        version,
                         payloadNode.get("title").asText(),
                         payloadNode.get("type").asText(),
                         payloadNode.get("imageUrl").asText(),
@@ -189,20 +196,20 @@ public class R2dbcBannerEventStore implements BannerEventStore {
                             payloadNode.get("changes"),
                             Map.class
                     );
-                    yield new BannerUpdatedEvent(eventId, bannerId, occurredAt, changes);
+                    yield new BannerUpdatedEvent(eventId, bannerId, occurredAt, version, changes);
                 }
-                case "BannerActivatedEvent" -> new BannerActivatedEvent(eventId, bannerId, occurredAt);
-                case "BannerDeactivatedEvent" -> new BannerDeactivatedEvent(eventId, bannerId, occurredAt);
+                case "BannerActivatedEvent" -> new BannerActivatedEvent(eventId, bannerId, occurredAt, version);
+                case "BannerDeactivatedEvent" -> new BannerDeactivatedEvent(eventId, bannerId, occurredAt, version);
                 case "BannerDeletedEvent" -> {
                     String reason = payloadNode.has("reason") ? payloadNode.get("reason").asText() : null;
-                    yield new BannerDeletedEvent(eventId, bannerId, occurredAt, reason);
+                    yield new BannerDeletedEvent(eventId, bannerId, occurredAt, version, reason);
                 }
                 case null -> null;
-                default -> throw new IllegalArgumentException("Unknown event type: " + eventType);
+                default -> throw new BannerEventSerializationException("Unknown event type: " + eventType);
             };
         } catch (Exception e) {
             log.error("Failed to deserialize event: {}", eventType, e);
-            throw new RuntimeException("Failed to deserialize event", e);
+            throw new BannerEventSerializationException("Failed to deserialize event", e);
         }
     }
 }

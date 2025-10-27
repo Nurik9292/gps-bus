@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.ToString;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 
 @ToString
 @Getter
@@ -19,14 +20,14 @@ public class VehiclePositionUpdatedEvent implements DomainEvent{
     private final Double longitude;
     private final Double speedKmh;
     private final Boolean isInMotion;
-    private final Instant positionTimestamp;
+    private final LocalDateTime positionTimestamp;
     private final Instant eventOccurredAt;
     private final Double course;
 
     public VehiclePositionUpdatedEvent(String vehicleId, String deviceId, String licensePlate,
                                        String routeNumber,
                                        Double latitude, Double longitude, Double speedKmh,
-                                       Boolean isInMotion, Instant positionTimestamp, Double course) {
+                                       Boolean isInMotion, LocalDateTime positionTimestamp, Double course) {
         this.vehicleId = vehicleId;
         this.deviceId = deviceId;
         this.licensePlate = licensePlate;
@@ -45,7 +46,7 @@ public class VehiclePositionUpdatedEvent implements DomainEvent{
      */
     public VehiclePositionUpdatedEvent(String vehicleId, String deviceId, String licensePlate,
                                        String routeNumber, Coordinates coordinates, Double speedKmh,
-                                       Boolean isInMotion, Instant positionTimestamp, Double course) {
+                                       Boolean isInMotion, LocalDateTime positionTimestamp, Double course) {
         this(vehicleId, deviceId, licensePlate, routeNumber,
                 coordinates.getLatitudeAsDouble(), coordinates.getLongitudeAsDouble(),
                 speedKmh, isInMotion, positionTimestamp, course);

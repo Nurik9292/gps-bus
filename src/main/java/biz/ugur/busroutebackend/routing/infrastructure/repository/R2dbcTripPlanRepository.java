@@ -12,7 +12,6 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -208,8 +207,8 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
                     row.get("max_transfers", Integer.class),
                     row.get("max_walking_distance_meters", Integer.class));
 
-            tripPlan.setCreatedAt(row.get("created_at", Instant.class));
-            tripPlan.setUpdatedAt(row.get("updated_at", Instant.class));
+            tripPlan.setCreatedAt(row.get("created_at", LocalDateTime.class));
+            tripPlan.setUpdatedAt(row.get("updated_at", LocalDateTime.class));
             tripPlan.setVersion(row.get("version", Long.class));
 
             return tripPlan;
@@ -234,10 +233,10 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
         return columns;
     }
 
-    private OffsetDateTime convertToOffsetDateTime(Instant instant) {
-        if (instant == null) {
+    private OffsetDateTime convertToOffsetDateTime(LocalDateTime localDateTime) {
+        if (localDateTime == null) {
             return OffsetDateTime.now();
         }
-        return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
+        return localDateTime.atOffset(ZoneOffset.UTC);
     }
 }

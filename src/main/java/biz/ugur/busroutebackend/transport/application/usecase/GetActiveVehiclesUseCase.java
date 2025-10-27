@@ -179,10 +179,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
         dto.setIsActive(vehicle.getIsActive());
 
         if (vehicle.getLastPositionUpdate() != null) {
-            dto.setLastPositionUpdate(LocalDateTime.ofInstant(
-                    vehicle.getLastPositionUpdate(),
-                    java.time.ZoneId.systemDefault()
-            ));
+            dto.setLastPositionUpdate(vehicle.getLastPositionUpdate());
         }
 
         dto.setCreatedAt(LocalDateTime.now()); // Placeholder

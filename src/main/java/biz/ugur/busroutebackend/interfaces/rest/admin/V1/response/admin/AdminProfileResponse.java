@@ -3,7 +3,7 @@ package biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.admin;
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 public record AdminProfileResponse(
         String id,
@@ -15,11 +15,11 @@ public record AdminProfileResponse(
         @JsonProperty("is_active")
         Boolean isActive,
         @JsonProperty("last_login_at")
-        Instant lastLoginAt,
+        LocalDateTime lastLoginAt,
         @JsonProperty("created_at")
-        Instant createdAt,
+        LocalDateTime createdAt,
         @JsonProperty("updated_at")
-        Instant updatedAt,
+        LocalDateTime updatedAt,
         @JsonProperty("avatar")
         String avatar
 ) {

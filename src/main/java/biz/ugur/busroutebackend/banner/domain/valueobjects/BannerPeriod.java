@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.banner.domain.valueobjects;
 
 
+import biz.ugur.busroutebackend.banner.domain.exceptions.BannerPeriodValidationException;
 import biz.ugur.busroutebackend.shared.domain.valueObjects.ValueObject;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -22,7 +23,7 @@ public class BannerPeriod extends ValueObject {
         }
 
         if (endTime != null && endTime.isBefore(startTime)) {
-            throw new IllegalArgumentException("Banner Period endTime cannot be before startTime");
+            throw new BannerPeriodValidationException("Banner Period endTime cannot be before startTime");
         }
 
         this.startTime = startTime;

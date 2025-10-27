@@ -1,9 +1,9 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
-import biz.ugur.busroutebackend.banner.appication.dto.BannerListResponse;
-import biz.ugur.busroutebackend.banner.appication.dto.BannerPaginationQuery;
-import biz.ugur.busroutebackend.banner.appication.dto.BannerResponse;
-import biz.ugur.busroutebackend.banner.appication.usecase.admin.*;
+import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerPaginationQuery;
+import biz.ugur.busroutebackend.banner.application.dto.BannerResponse;
+import biz.ugur.busroutebackend.banner.application.usecase.admin.*;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.banner.BannerCreateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.banner.BannerUpdateRequest;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;

@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.banner.domain.valueobjects;
 
+import biz.ugur.busroutebackend.banner.domain.exceptions.BannerValidationException;
 import biz.ugur.busroutebackend.shared.domain.valueObjects.ValueObject;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -15,7 +16,7 @@ public class BannerTitle extends ValueObject {
 
     private BannerTitle(String value) {
         if (value == null || value.trim().isEmpty()) {
-            throw new IllegalArgumentException("Banner title cannot be null or empty");
+            throw new BannerValidationException("Banner title cannot be null or empty");
         }
         this.value = value.trim();
     }

@@ -4,7 +4,7 @@ package biz.ugur.busroutebackend.transport.application.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Data
 public class GpsPositionDTO {
@@ -22,7 +22,7 @@ public class GpsPositionDTO {
     private Double speed;
 
     @JsonProperty("fixTime")
-    private Instant fixTime;
+    private LocalDateTime fixTime;
 
     @JsonProperty("course")
     private Double course;

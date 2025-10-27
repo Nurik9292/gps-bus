@@ -2,29 +2,11 @@ package biz.ugur.busroutebackend.shared.domain.entity;
 
 import biz.ugur.busroutebackend.shared.base.BaseEntity;
 import lombok.Getter;
-import lombok.Setter;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.annotation.Version;
-import org.springframework.data.relational.core.mapping.Column;
 
-import java.time.Instant;
 import java.util.Objects;
 
-@Setter
 @Getter
 public abstract class Entity<ID> implements BaseEntity<ID> {
-
-    @CreatedDate
-    @Column("created_at")
-    protected Instant createdAt;
-
-    @LastModifiedDate
-    @Column("updated_at")
-    protected Instant updatedAt;
-
-    @Version
-    protected Long version = 0L;
 
     public abstract ID getId();
 

@@ -6,7 +6,7 @@ import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public record RouteData(
@@ -26,8 +26,8 @@ public record RouteData(
         List<Coordinates> backwardGeometry,
         List<Coordinates> forwardGeometry,
         Long activeVehiclesCount,
-        Instant createdAt,
-        Instant updatedAt,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
         List<RouteStopDTO> forwardStops,
         List<RouteStopDTO> backwardStops
 ) {

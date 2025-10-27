@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,8 +63,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
     @Override
     protected Mono<Vehicle> insert(Vehicle entity) {
         Map<String, Object> values = mapEntityToColumns(entity);
-        values.put("created_at", Instant.now());
-        values.put("updated_at", Instant.now());
+        values.put("created_at", LocalDateTime.now());
+        values.put("updated_at", LocalDateTime.now());
         values.put("version", 1L);
 
         String sql = """
@@ -98,7 +98,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
     @Override
     protected Mono<Vehicle> update(Vehicle entity) {
         Map<String, Object> values = mapEntityToColumns(entity);
-        values.put("updated_at", Instant.now());
+        values.put("updated_at", LocalDateTime.now());
         values.put("version", entity.getVersion() + 1);
 
         String sql = """
@@ -322,15 +322,15 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 row.get("current_longitude", Double.class),
                 row.get("speed_kmh", Double.class),
                 row.get("is_in_motion", Boolean.class),
-                row.get("last_position_update", Instant.class),
+                row.get("last_position_update", LocalDateTime.class),
                 Optional.ofNullable(row.get("assigned_route_id", String.class)).map(BusRouteId::of).orElse(null),
                 row.get("route_number", String.class),
                 row.get("is_active", Boolean.class),
                 row.get("course", Double.class)
         );
 
-        vehicle.setCreatedAt(safeGet(row, "created_at", Instant.class, null));
-        vehicle.setUpdatedAt(safeGet(row, "updated_at", Instant.class, null));
+        vehicle.setCreatedAt(safeGet(row, "created_at", LocalDateTime.class, null));
+        vehicle.setUpdatedAt(safeGet(row, "updated_at", LocalDateTime.class, null));
         vehicle.setVersion(safeGet(row, "version", Long.class, 0L));
 
         return vehicle;
@@ -398,7 +398,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                             .bind("inMotion", vehicle.getIsInMotion())
                             .bind("lastUpdate", vehicle.getLastPositionUpdate())
                             .bind("course", vehicle.getCourse())
-                            .bind("updatedAt", Instant.now())
+                            .bind("updatedAt", LocalDateTime.now())
                             .bind("id", vehicle.getId().getValue())
                             .bind("version", vehicle.getVersion())
                             .fetch()
@@ -431,8 +431,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         return Flux.fromIterable(vehicles)
                 .flatMap(vehicle -> {
                     Map<String, Object> values = mapEntityToColumns(vehicle);
-                    values.put("created_at", Instant.now());
-                    values.put("updated_at", Instant.now());
+                    values.put("created_at", LocalDateTime.now());
+                    values.put("updated_at", LocalDateTime.now());
                     values.put("version", 1L);
 
                     DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);

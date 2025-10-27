@@ -15,7 +15,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Field;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -104,8 +104,8 @@ public class R2dbcStopFavoriteRepository extends BaseR2dbcRepository<StopFavorit
                 StopFavoriteId.of(row.get("id", String.class)),
                 ClientId.of(row.get("client_id", String.class)),
                 BusStopId.of(row.get("stop_id", String.class)),
-                row.get("created_at", Instant.class),
-                row.get("updated_at", Instant.class),
+                row.get("created_at", LocalDateTime.class),
+                row.get("updated_at", LocalDateTime.class),
                 row.get("version", Long.class)
         );
     }

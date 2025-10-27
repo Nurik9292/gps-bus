@@ -15,7 +15,6 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -36,6 +35,10 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
     private final List<TripOption> tripOptions;
     private final LocalDateTime searchTime;
     private final TripSearchCriteria searchCriteria;
+
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Long version;
 
     @Column("origin_latitude")
     private final Double originLatitude;
@@ -84,8 +87,8 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
         this.maxTransfers = this.searchCriteria.getMaxTransfers();
         this.maxWalkingDistanceMeters = this.searchCriteria.getMaxWalkingDistanceMeters();
 
-        this.createdAt = Instant.now();
-        this.updatedAt = Instant.now();
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
         this.version = 0L;
 
         double distance = this.distanceService.calculateDistance(
@@ -246,6 +249,36 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
     @Override
     public TripPlanId getId() {
         return tripPlanId;
+    }
+
+    @Override
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    @Override
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    @Override
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public Long getVersion() {
+        return version;
+    }
+
+    @Override
+    public void setVersion(Long version) {
+        this.version = version;
     }
 
     public List<TripOption> getTripOptions() {

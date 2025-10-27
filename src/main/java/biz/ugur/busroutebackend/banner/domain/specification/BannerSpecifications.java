@@ -145,7 +145,7 @@ public class BannerSpecifications {
         return new Specification<Banner>() {
             @Override
             public boolean isSatisfiedBy(Banner banner) {
-                return banner.getCreatedAt().isAfter(date.atZone(java.time.ZoneId.systemDefault()).toInstant());
+                return banner.getCreatedAt().isAfter(date);
             }
 
             @Override

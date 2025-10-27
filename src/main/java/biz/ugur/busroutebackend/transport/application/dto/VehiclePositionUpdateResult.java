@@ -3,7 +3,7 @@ package biz.ugur.busroutebackend.transport.application.dto;
 import biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase;
 import lombok.Data;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public record VehiclePositionUpdateResult(
@@ -12,7 +12,7 @@ public record VehiclePositionUpdateResult(
         long failedCount,
         long invalidCount,
         long conflictCount,
-        Instant processedAt,
+        LocalDateTime processedAt,
         List<UpdateVehiclePositionsUseCase.VehicleUpdateStatus> details) {
 
     public long getTotalProcessed() {
@@ -24,7 +24,7 @@ public record VehiclePositionUpdateResult(
     }
 
     public static VehiclePositionUpdateResult failed(int batchSize) {
-        return new VehiclePositionUpdateResult(0, 0, batchSize, 0, 0, Instant.now(), List.of());
+        return new VehiclePositionUpdateResult(0, 0, batchSize, 0, 0, LocalDateTime.now(), List.of());
     }
 
     public static VehiclePositionUpdateResult merge(VehiclePositionUpdateResult r1, VehiclePositionUpdateResult r2) {
@@ -34,7 +34,7 @@ public record VehiclePositionUpdateResult(
                 r1.failedCount() + r2.failedCount(),
                 r1.invalidCount() + r2.invalidCount(),
                 r1.conflictCount() + r2.conflictCount(),
-                Instant.now(),
+                LocalDateTime.now(),
                 List.of()
         );
     }

@@ -7,7 +7,7 @@ import biz.ugur.busroutebackend.shared.base.BaseRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 public interface ClientRepository extends BaseRepository<Client, ClientId> {
 
@@ -17,7 +17,7 @@ public interface ClientRepository extends BaseRepository<Client, ClientId> {
 
     Flux<Client> findActiveClients();
 
-    Flux<Client> findByLastActivityAfter(Instant since);
+    Flux<Client> findByLastActivityAfter(LocalDateTime since);
 
     Mono<Boolean> existsByPhone(String phone);
 

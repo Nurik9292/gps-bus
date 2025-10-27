@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ServerWebExchange;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -21,7 +22,7 @@ public class ErrorResponse {
     private final String errorCode;
     private final String message;
     private final String correlationId;
-    private final Instant timestamp;
+    private final LocalDateTime timestamp;
     private final String severity;
     private final String boundedContext;
     private final String path;
@@ -35,7 +36,7 @@ public class ErrorResponse {
                 .errorCode(ex.getErrorCode())
                 .message(ex.getMessage())
                 .correlationId(ex.getCorrelationId().value())
-                .timestamp(ex.getTimestamp())
+                .timestamp(convertInstantToLocalDateTime(ex.getTimestamp()))
                 .severity(ex.getSeverity().getDisplayName())
                 .boundedContext(ex.getBoundedContext())
                 .path(exchange.getRequest().getPath().value())
@@ -48,7 +49,7 @@ public class ErrorResponse {
                 .errorCode(ex.getErrorCode())
                 .message(ex.getMessage())
                 .correlationId(ex.getCorrelationId().value())
-                .timestamp(ex.getTimestamp())
+                .timestamp(convertInstantToLocalDateTime(ex.getTimestamp()))
                 .severity(ex.getSeverity().getDisplayName())
                 .boundedContext(ex.getBoundedContext())
                 .path(exchange.getRequest().getPath().value())
@@ -62,7 +63,7 @@ public class ErrorResponse {
                 .status(httpStatus.value())
                 .errorCode(errorCode)
                 .message(message)
-                .timestamp(Instant.now())
+                .timestamp(LocalDateTime.now())
                 .path(path)
                 .build();
     }
@@ -73,9 +74,13 @@ public class ErrorResponse {
                 .status(httpStatus.value())
                 .errorCode(errorCode)
                 .message(message)
-                .timestamp(Instant.now())
+                .timestamp(LocalDateTime.now())
                 .path(path)
                 .fieldErrors(fieldErrors)
                 .build();
+    }
+
+    private static LocalDateTime convertInstantToLocalDateTime(Instant instant) {
+        return LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
     }
 }

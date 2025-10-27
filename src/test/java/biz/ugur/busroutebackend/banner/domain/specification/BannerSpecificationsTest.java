@@ -45,8 +45,7 @@ class BannerSpecificationsTest {
             "target2.com",
             20,
             null
-        );
-        inactiveBanner.deactivate();
+        ).deactivate();
 
         expiredBanner = Banner.create(
             BannerTitle.of("Истекший баннер"),
