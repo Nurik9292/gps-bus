@@ -43,6 +43,7 @@ public class UpdateCityUseCase extends BaseUseCase<Mono<CityUpdate>, CityResult>
             return cityRepository.findById(CityId.of(update.id()))
                     .switchIfEmpty(Mono.error(new IllegalArgumentException("City not found with ID: " + update.id())))
                     .flatMap(city -> {
+                        // Check if name is changing and if new name already exists
                         if (!city.getName().equals(update.name())) {
                             return cityRepository.existsByNameAndIdNot(update.name(), CityId.of(update.id()))
                                     .flatMap(exists -> {
@@ -50,23 +51,21 @@ public class UpdateCityUseCase extends BaseUseCase<Mono<CityUpdate>, CityResult>
                                             return Mono.<City>error(new IllegalArgumentException(
                                                     "City already exists with name: " + update.name()));
                                         }
-
-                                        city.updateCity(update.name(), update.nameTm(), update.displayOrder());
-
-                                        if(update.isActive())
-                                            city.activate();
-                                        else city.deactivate();
-
-                                        return cityRepository.save(city).flatMap(Mono::just);
+                                        return Mono.just(city);
                                     });
-                        } else {
-                            city.updateCity(update.name(), update.nameTm(), update.displayOrder());
-                            if(update.isActive())
-                                city.activate();
-                            else city.deactivate();
-                            return cityRepository.save(city);
                         }
+                        return Mono.just(city);
                     })
+                    .map(city -> {
+                        // City is immutable - updateCity(), activate(), deactivate() return new instances
+                        City updatedCity = city.updateCity(update.name(), update.nameTm(), update.displayOrder());
+
+                        if (update.isActive())
+                            return updatedCity.activate();
+                        else
+                            return updatedCity.deactivate();
+                    })
+                    .flatMap(cityRepository::save)
                     .map(CityResult::fromDomain)
                     .doOnSuccess(response -> log.info("City updated successfully: {}", response.name()))
                     .doOnError(error -> log.error("Failed to update city with ID: {}", update.id(), error));

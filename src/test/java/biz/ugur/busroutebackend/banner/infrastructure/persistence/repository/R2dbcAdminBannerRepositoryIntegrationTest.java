@@ -24,12 +24,7 @@ import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Integration tests for R2dbcAdminBannerRepository using Testcontainers.
- * Tests actual database interactions with a real PostgreSQL instance.
- *
- * Note: This test creates a minimal schema. For full testing, use Flyway migrations.
- */
+
 @DataR2dbcTest
 @Testcontainers
 @Import(R2dbcAdminBannerRepository.class)

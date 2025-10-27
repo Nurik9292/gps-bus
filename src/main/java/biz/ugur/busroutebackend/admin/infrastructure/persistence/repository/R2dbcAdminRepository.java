@@ -1,11 +1,8 @@
-package biz.ugur.busroutebackend.admin.infrastructure.repository;
+package biz.ugur.busroutebackend.admin.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
-import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
-import io.r2dbc.spi.Row;
-import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -14,54 +11,18 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.BiFunction;
 
-
+/**
+ * R2DBC implementation of AdminRepository.
+ * Extends AdminBaseRepository which provides common mapping and CRUD operations.
+ * This class only contains admin-specific domain queries.
+ */
 @Repository
 @Slf4j
-public class R2dbcAdminRepository extends BaseR2dbcRepository<Admin, AdminId> implements AdminRepository {
+public class R2dbcAdminRepository extends AdminBaseRepository implements AdminRepository {
 
     public R2dbcAdminRepository(DatabaseClient databaseClient) {
-        super(databaseClient, "admins", Admin.class);
-    }
-
-    @Override
-    protected String convertIdToDatabase(AdminId id) {
-        return id.getValue();
-    }
-
-    @Override
-    protected BiFunction<Row, RowMetadata, Admin> getRowMapper() {
-        return (row, metadata) -> Admin.fromDatabase(
-                AdminId.of(row.get("id", String.class)),
-                row.get("username", String.class),
-                row.get("password_hash", String.class),
-                row.get("full_name", String.class),
-                row.get("avatar", String.class),
-                row.get("is_active", Boolean.class),
-                row.get("is_super_admin", Boolean.class),
-                row.get("last_login_at", LocalDateTime.class),
-                row.get("created_at", LocalDateTime.class),
-                row.get("updated_at", LocalDateTime.class),
-                row.get("version", Long.class)
-        );
-
-    }
-
-    @Override
-    protected Map<String, Object> mapEntityToColumns(Admin admin) {
-        Map<String, Object> values = new HashMap<>();
-        values.put("id", admin.getId().getValue());
-        values.put("username", admin.getUsername());
-        values.put("password_hash", admin.getPasswordHash());
-        values.put("full_name", admin.getFullName());
-        values.put("avatar", admin.getAvatar());
-        values.put("is_active", admin.getIsActive());
-        values.put("is_super_admin", admin.getIsSuperAdmin());
-        values.put("last_login_at", admin.getLastLoginAt());
-        return values;
+        super(databaseClient);
     }
 
     @Override
@@ -78,8 +39,8 @@ public class R2dbcAdminRepository extends BaseR2dbcRepository<Admin, AdminId> im
     @Override
     public Flux<Admin> findActiveAdmins() {
         String sql = """
-            SELECT * FROM admins 
-            WHERE is_active = true 
+            SELECT * FROM admins
+            WHERE is_active = true
             ORDER BY full_name
             """;
 
@@ -92,7 +53,7 @@ public class R2dbcAdminRepository extends BaseR2dbcRepository<Admin, AdminId> im
     public Mono<Boolean> existsByUsername(String username) {
         String sql = """
             SELECT EXISTS(
-                SELECT 1 FROM admins 
+                SELECT 1 FROM admins
                 WHERE username = :username
             ) AS exists_flag
             """;
@@ -115,11 +76,11 @@ public class R2dbcAdminRepository extends BaseR2dbcRepository<Admin, AdminId> im
     @Override
     public Mono<Admin> updateAvatar(AdminId adminId, String avatar) {
         String sql = """
-        UPDATE admins 
-        SET avatar = :avatar, 
+        UPDATE admins
+        SET avatar = :avatar,
             updated_at = :updated_at,
             version = version + 1
-        WHERE id = :id 
+        WHERE id = :id
           AND version = :old_version
         RETURNING *
         """;

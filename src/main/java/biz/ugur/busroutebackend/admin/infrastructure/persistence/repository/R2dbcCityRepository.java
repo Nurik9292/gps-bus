@@ -1,48 +1,25 @@
-package biz.ugur.busroutebackend.admin.infrastructure.repository;
+package biz.ugur.busroutebackend.admin.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.admin.domain.model.City;
 import biz.ugur.busroutebackend.admin.domain.repository.CityRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.CityId;
-import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
-import io.r2dbc.spi.Row;
-import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.BiFunction;
-
+/**
+ * R2DBC implementation of CityRepository.
+ * Extends CityBaseRepository which provides common mapping and CRUD operations.
+ * This class only contains city-specific domain queries.
+ */
 @Repository
 @Slf4j
-public class R2dbcCityRepository extends BaseR2dbcRepository<City, CityId> implements CityRepository {
+public class R2dbcCityRepository extends CityBaseRepository implements CityRepository {
 
     public R2dbcCityRepository(DatabaseClient databaseClient) {
-        super(databaseClient, "cities", City.class);
-    }
-
-    @Override
-    protected String convertIdToDatabase(CityId id) {
-        return id.getValue();
-    }
-
-    @Override
-    protected BiFunction<Row, RowMetadata, City> getRowMapper() {
-        return this::mapRowToCity;
-    }
-
-    @Override
-    protected Map<String, Object> mapEntityToColumns(City city) {
-        Map<String, Object> values = new HashMap<>();
-        values.put("id", city.getId().getValue());
-        values.put("name", city.getName());
-        values.put("name_tm", city.getNameTm());
-        values.put("is_active", city.getIsActive());
-        values.put("display_order", city.getDisplayOrder());
-        return values;
+        super(databaseClient);
     }
 
     @Override
@@ -81,8 +58,8 @@ public class R2dbcCityRepository extends BaseR2dbcRepository<City, CityId> imple
     @Override
     public Mono<Boolean> existsByNameAndIdNot(String name, CityId id) {
         String sql = """
-            SELECT COUNT(*) > 0 as exists 
-            FROM cities 
+            SELECT COUNT(*) > 0 as exists
+            FROM cities
             WHERE LOWER(name) = LOWER(:name) AND id != :id
             """;
 
@@ -93,21 +70,5 @@ public class R2dbcCityRepository extends BaseR2dbcRepository<City, CityId> imple
                 .one()
                 .doOnSuccess(exists -> log.debug("City exists check for name '{}' excluding ID {}: {}",
                         name, id.getValue(), exists));
-    }
-
-    private City mapRowToCity(Row row, RowMetadata metadata) {
-        City city = City.builder()
-                .id(CityId.of(row.get("id", String.class)))
-                .name(row.get("name", String.class))
-                .nameTm(row.get("name_tm", String.class))
-                .isActive(row.get("is_active", Boolean.class))
-                .displayOrder(row.get("display_order", Integer.class))
-                .build();
-
-        city.setCreatedAt(row.get("created_at", java.time.LocalDateTime.class));
-        city.setUpdatedAt(row.get("updated_at", java.time.LocalDateTime.class));
-        city.setVersion(row.get("version", Long.class));
-
-        return city;
     }
 }

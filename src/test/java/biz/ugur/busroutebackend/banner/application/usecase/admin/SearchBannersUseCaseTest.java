@@ -30,10 +30,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-/**
- * Тесты для SearchBannersUseCase.
- * Проверяют корректность построения Specification на основе SearchBannersQuery.
- */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("SearchBannersUseCase Tests")
 class SearchBannersUseCaseTest {
@@ -336,14 +332,12 @@ class SearchBannersUseCaseTest {
             })
             .verifyComplete();
 
-        // Проверяем, что использовалась комплексная спецификация
         ArgumentCaptor<Specification<Banner>> specCaptor = ArgumentCaptor.forClass(Specification.class);
         verify(bannerRepository).findBySpecification(specCaptor.capture(), any(Pageable.class));
 
         Specification<Banner> capturedSpec = specCaptor.getValue();
         assertNotNull(capturedSpec);
 
-        // Проверяем, что спецификация корректно работает с тестовым баннером
         assertTrue(capturedSpec.isSatisfiedBy(testBanner));
     }
 
@@ -371,7 +365,7 @@ class SearchBannersUseCaseTest {
         verify(bannerRepository).findBySpecification(any(Specification.class), pageableCaptor.capture());
 
         Pageable capturedPageable = pageableCaptor.getValue();
-        assertEquals(1, capturedPageable.getPageNumber()); // Page 2 в запросе = index 1
+        assertEquals(1, capturedPageable.getPageNumber());
         assertEquals(20, capturedPageable.getPageSize());
     }
 
@@ -407,7 +401,7 @@ class SearchBannersUseCaseTest {
     @DisplayName("Валидация - должна выбросить исключение при некорректных параметрах")
     void testValidation() {
         SearchBannersQuery query = SearchBannersQuery.builder()
-            .page(-1) // Некорректный page
+            .page(-1)
             .size(10)
             .build();
 

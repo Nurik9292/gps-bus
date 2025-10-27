@@ -1,31 +1,36 @@
 package biz.ugur.busroutebackend.admin.domain.events;
 
-import biz.ugur.busroutebackend.shared.domain.event.DomainEvent;
 import lombok.Getter;
 
 import java.time.Instant;
 
 @Getter
-public class AdminPasswordChangedEvent implements DomainEvent {
+public class AdminPasswordChangedEvent extends AdminDomainEvent {
 
-    private final String adminId;
+    public static final int CURRENT_VERSION = 1;
+
     private final String username;
-    private final Instant eventOccurredAt;
 
     public AdminPasswordChangedEvent(String adminId, String username) {
-        this.adminId = adminId;
+        super(adminId);
         this.username = username;
-        this.eventOccurredAt = Instant.now();
+    }
+
+    public AdminPasswordChangedEvent(String eventId, String adminId, Instant occurredAt, int eventVersion,
+                                    String username) {
+        super(eventId, adminId, occurredAt, eventVersion);
+        this.username = username;
     }
 
     @Override
-    public Instant getOccurredAt() {
-        return eventOccurredAt;
+    protected int getCurrentVersion() {
+        return CURRENT_VERSION;
     }
 
     @Override
     public String toString() {
-        return String.format("AdminPasswordChanged[id=%s, username=%s]", adminId, username);
+        return String.format("AdminPasswordChangedEvent[id=%s, username=%s, version=%d]",
+                getAdminId(), username, getEventVersion());
     }
 }
 

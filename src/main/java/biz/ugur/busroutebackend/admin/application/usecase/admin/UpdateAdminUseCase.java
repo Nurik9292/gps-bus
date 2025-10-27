@@ -70,18 +70,21 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
     }
 
     private Mono<Admin> applyUpdates(Admin admin, UpdateCommand command) {
-        admin.updateProfile(command.username(), command.fullName());
+        // Admin is immutable - each method returns a new instance
+        Admin updatedAdmin = admin.updateProfile(command.username(), command.fullName());
 
         if (command.newPassword() != null && !command.newPassword().trim().isEmpty()) {
-            admin.changePassword(command.newPassword());
+            updatedAdmin = updatedAdmin.changePassword(command.newPassword());
         }
 
         if (command.isActive() != null) {
-            if (command.isActive()) admin.activate();
-            else admin.deactivate();
+            if (command.isActive())
+                updatedAdmin = updatedAdmin.activate();
+            else
+                updatedAdmin = updatedAdmin.deactivate();
         }
 
-        return Mono.just(admin);
+        return Mono.just(updatedAdmin);
     }
 
 

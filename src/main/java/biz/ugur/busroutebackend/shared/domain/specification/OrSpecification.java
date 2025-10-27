@@ -1,11 +1,6 @@
 package biz.ugur.busroutebackend.shared.domain.specification;
 
-/**
- * Композитная спецификация для логического ИЛИ (OR).
- * Удовлетворяется когда хотя бы одна из спецификаций истинна.
- *
- * @param <T> тип объекта
- */
+
 public class OrSpecification<T> implements Specification<T> {
 
     private final Specification<T> left;

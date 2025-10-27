@@ -7,10 +7,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Event published when a Banner is updated.
- * Version 1 - Initial version with changes map.
- */
+
 @Getter
 public class BannerUpdatedEvent extends BannerDomainEvent {
 
@@ -18,17 +15,13 @@ public class BannerUpdatedEvent extends BannerDomainEvent {
 
     private final Map<String, Object> changes;
 
-    /**
-     * Constructor for creating new events.
-     */
+
     public BannerUpdatedEvent(String bannerId, Map<String, Object> changes) {
         super(bannerId);
         this.changes = new HashMap<>(changes);
     }
 
-    /**
-     * Constructor for restoring events from event store.
-     */
+
     public BannerUpdatedEvent(
             String eventId,
             String bannerId,
@@ -49,16 +42,10 @@ public class BannerUpdatedEvent extends BannerDomainEvent {
         return "BannerUpdatedEvent";
     }
 
-    /**
-     * Check if a specific field was changed.
-     */
     public boolean hasChange(String fieldName) {
         return changes.containsKey(fieldName);
     }
 
-    /**
-     * Get the value of a changed field.
-     */
     @SuppressWarnings("unchecked")
     public <T> T getChange(String fieldName, Class<T> type) {
         return (T) changes.get(fieldName);

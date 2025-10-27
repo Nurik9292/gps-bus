@@ -40,21 +40,21 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
     @Override
     protected Map<String, Object> mapEntityToColumns(Banner banner) {
         BannerEntity entity = BannerMapper.toEntity(banner);
-        return Map.ofEntries(
-                Map.entry("id", entity.getId()),
-                Map.entry("title", entity.getTitle()),
-                Map.entry("type", entity.getType()),
-                Map.entry("image_url", entity.getImageUrl()),
-                Map.entry("target_url", entity.getTargetUrl()),
-                Map.entry("is_active", entity.getIsActive()),
-                Map.entry("display_order", entity.getDisplayOrder()),
-                Map.entry("start_date", entity.getStartDate()),
-                Map.entry("end_date", entity.getEndDate()),
-                Map.entry("content", entity.getContent()),
-                Map.entry("version", entity.getVersion()),
-                Map.entry("created_at", entity.getCreatedAt()),
-                Map.entry("updated_at", entity.getUpdatedAt())
-        );
+        Map<String, Object> columns = new java.util.HashMap<>();
+        columns.put("id", entity.getId());
+        columns.put("title", entity.getTitle());
+        columns.put("type", entity.getType());
+        columns.put("image_url", entity.getImageUrl());
+        columns.put("target_url", entity.getTargetUrl());
+        columns.put("is_active", entity.getIsActive());
+        columns.put("display_order", entity.getDisplayOrder());
+        columns.put("start_date", entity.getStartDate());
+        columns.put("end_date", entity.getEndDate());
+        columns.put("content", entity.getContent());
+        columns.put("version", entity.getVersion());
+        columns.put("created_at", entity.getCreatedAt());
+        columns.put("updated_at", entity.getUpdatedAt());
+        return columns;
     }
 
     private Banner mapRowToBanner(Row row, RowMetadata metadata) {

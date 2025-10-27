@@ -1,9 +1,9 @@
 package biz.ugur.busroutebackend.banner.domain.exceptions;
 
-/**
- * Exception thrown when a Banner cannot be found in the repository.
- * This exception indicates that a requested Banner does not exist.
- */
+
+import lombok.Getter;
+
+@Getter
 public class BannerNotFoundException extends BannerDomainException {
 
     private final String bannerId;
@@ -18,7 +18,4 @@ public class BannerNotFoundException extends BannerDomainException {
         this.bannerId = bannerId;
     }
 
-    public String getBannerId() {
-        return bannerId;
-    }
 }

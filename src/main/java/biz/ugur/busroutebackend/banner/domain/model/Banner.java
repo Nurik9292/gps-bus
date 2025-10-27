@@ -22,7 +22,6 @@ import java.util.Map;
 @EqualsAndHashCode(callSuper = false)
 public class Banner extends AggregateRoot<Banner, BannerId> {
 
-    // Immutable business fields
     private final BannerId id;
     private final BannerTitle title;
     private final BannerType type;
@@ -33,7 +32,6 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
     private final Boolean isActive;
     private final Integer displayOrder;
 
-    // Mutable persistence fields (required by Spring Data R2DBC)
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long version;
@@ -103,13 +101,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .build();
     }
 
-    /**
-     * Updates the banner and returns a new immutable instance with the changes.
-     * This method follows the immutable aggregate pattern - it doesn't modify the current instance,
-     * but creates and returns a new one.
-     *
-     * @return A new Banner instance with updated values
-     */
+
     public Banner updateBanner(
             BannerTitle title,
             BannerType type,
@@ -134,7 +126,6 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
 
         Map<String, Object> changes = new HashMap<>();
 
-        // Determine what changed
         if (!this.title.equals(title)) {
             changes.put("title", title.getValue());
         }
@@ -175,7 +166,6 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .content(normalizedContent)
                 .build();
 
-        // Register event on the new instance if there were changes
         if (!changes.isEmpty()) {
             updatedBanner.registerEvent(new BannerUpdatedEvent(this.id.getValue(), changes));
         }
@@ -183,15 +173,10 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
         return updatedBanner;
     }
 
-    /**
-     * Deactivates the banner and returns a new immutable instance.
-     * If already inactive, returns the same instance.
-     *
-     * @return A new Banner instance with isActive set to false, or the same instance if already inactive
-     */
+
     public Banner deactivate() {
         if (Boolean.FALSE.equals(this.isActive)) {
-            return this; // Already inactive, return same instance
+            return this;
         }
 
         Banner deactivatedBanner = this.toBuilder()
@@ -202,15 +187,9 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
         return deactivatedBanner;
     }
 
-    /**
-     * Activates the banner and returns a new immutable instance.
-     * If already active, returns the same instance.
-     *
-     * @return A new Banner instance with isActive set to true, or the same instance if already active
-     */
     public Banner activate() {
         if (Boolean.TRUE.equals(this.isActive)) {
-            return this; // Already active, return same instance
+            return this;
         }
 
         Banner activatedBanner = this.toBuilder()

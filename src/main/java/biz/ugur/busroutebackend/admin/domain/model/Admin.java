@@ -6,7 +6,9 @@ import biz.ugur.busroutebackend.admin.domain.events.AdminProfileUpdatedEvent;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.ToString;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
@@ -16,35 +18,27 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
-@Builder
+@Builder(toBuilder = true)
 @Getter
-@Table("admins")
+@ToString
+@EqualsAndHashCode(callSuper = false)
 public class Admin extends AggregateRoot<Admin, AdminId> {
 
-    @Id
-    @Column("id")
-    private AdminId id;
+    private final AdminId id;
 
-    @Column("username")
-    private String username;
+    private final String username;
 
-    @Column("password_hash")
-    private String passwordHash;
+    private final String passwordHash;
 
-    @Column("full_name")
-    private String fullName;
+    private final String fullName;
 
-    @Column("avatar")
-    private String avatar;
+    private final String avatar;
 
-    @Column("is_active")
-    private Boolean isActive;
+    private final Boolean isActive;
 
-    @Column("is_super_admin")
-    private Boolean isSuperAdmin;
+    private final Boolean isSuperAdmin;
 
-    @Column("last_login_at")
-    private LocalDateTime lastLoginAt;
+    private final LocalDateTime lastLoginAt;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -110,99 +104,169 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     }
 
 
-    public void changePassword(String newPassword) {
-        this.passwordHash = passwordEncoder.encode(newPassword);
+    public Admin changePassword(String newPassword) {
+        Admin updatedAdmin = this.toBuilder()
+                .passwordHash(passwordEncoder.encode(newPassword))
+                .build();
 
-        registerEvent(new AdminPasswordChangedEvent(
+        updatedAdmin.registerEvent(new AdminPasswordChangedEvent(
                 this.id.getValue(),
                 this.username
         ));
+
+        return updatedAdmin;
     }
 
     public boolean checkPassword(String password) {
         return passwordEncoder.matches(password, this.passwordHash);
     }
 
-    public void updateLastLogin() {
-        this.lastLoginAt = LocalDateTime.now();
+    public Admin updateLastLogin() {
+        return this.toBuilder()
+                .lastLoginAt(LocalDateTime.now())
+                .build();
     }
 
-    public void deactivate() {
-        this.isActive = false;
-    }
-
-    public void activate() {
-        this.isActive = true;
-    }
-
-    public void updateAvatar(String avatar) {
-
-        if (!Objects.equals(avatar, this.avatar)) {
-            this.avatar = avatar;
-
-            registerEvent(new AdminProfileUpdatedEvent(
-                    this.id.getValue(),
-                    this.username,
-                    this.fullName,
-                    this.avatar,
-                    true
-            ));
-        }
-    }
-
-    public void removeAvatar() {
-        if (this.avatar != null) {
-            this.avatar = null;
-
-            registerEvent(new AdminProfileUpdatedEvent(
-                    this.id.getValue(),
-                    this.username,
-                    this.fullName,
-                    null,
-                    true
-            ));
-        }
-    }
-
-    public void updateProfile(String username, String fullName) {
-        if (username != null && !username.trim().isEmpty()) {
-            this.username = username.trim();
+    public Admin deactivate() {
+        if (Boolean.FALSE.equals(this.isActive)) {
+            return this;
         }
 
-        if (fullName != null && !fullName.trim().isEmpty()) {
-            this.fullName = fullName.trim();
-        }
+        return this.toBuilder()
+                .isActive(false)
+                .build();
     }
 
-    public void updateProfile(String username, String fullName, String avatar) {
-        String originalAvatar = this.avatar;
+    public Admin activate() {
+        if (Boolean.TRUE.equals(this.isActive)) {
+            return this;
+        }
 
+        return this.toBuilder()
+                .isActive(true)
+                .build();
+    }
+
+    public Admin updateAvatar(String avatar) {
+        if (Objects.equals(avatar, this.avatar)) {
+            return this;
+        }
+
+        Admin updatedAdmin = this.toBuilder()
+                .avatar(avatar)
+                .build();
+
+        updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
+                this.id.getValue(),
+                this.username,
+                this.fullName,
+                avatar,
+                true
+        ));
+
+        return updatedAdmin;
+    }
+
+
+    public Admin removeAvatar() {
+        if (this.avatar == null) {
+            return this;
+        }
+
+        Admin updatedAdmin = this.toBuilder()
+                .avatar(null)
+                .build();
+
+        updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
+                this.id.getValue(),
+                this.username,
+                this.fullName,
+                null,
+                true
+        ));
+
+        return updatedAdmin;
+    }
+
+
+    public Admin updateProfile(String username, String fullName) {
+        String newUsername = this.username;
+        String newFullName = this.fullName;
         boolean changed = false;
 
         if (username != null && !username.trim().isEmpty()) {
-            this.username = username.trim();
+            newUsername = username.trim();
+            changed = true;
+        }
+
+        if (fullName != null && !fullName.trim().isEmpty()) {
+            newFullName = fullName.trim();
+            changed = true;
+        }
+
+        if (!changed) {
+            return this;
+        }
+
+        Admin updatedAdmin = this.toBuilder()
+                .username(newUsername)
+                .fullName(newFullName)
+                .build();
+
+        updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
+                updatedAdmin.id.getValue(),
+                updatedAdmin.username,
+                updatedAdmin.fullName,
+                updatedAdmin.avatar,
+                false
+        ));
+
+        return updatedAdmin;
+    }
+
+
+    public Admin updateProfile(String username, String fullName, String avatar) {
+        String newUsername = this.username;
+        String newFullName = this.fullName;
+        String newAvatar = this.avatar;
+        boolean changed = false;
+        boolean avatarChanged = false;
+
+        if (username != null && !username.trim().isEmpty()) {
+            newUsername = username.trim();
             changed = true;
         }
 
         if (fullName != null && !fullName.trim().isEmpty() && !fullName.equals(this.fullName)) {
-            this.fullName = fullName.trim();
+            newFullName = fullName.trim();
             changed = true;
         }
 
         if (!Objects.equals(avatar, this.avatar)) {
-            this.avatar = avatar;
+            newAvatar = avatar;
             changed = true;
+            avatarChanged = true;
         }
 
-        if (changed) {
-            registerEvent(new AdminProfileUpdatedEvent(
-                    this.id.getValue(),
-                    this.username,
-                    this.fullName,
-                    this.avatar,
-                    !Objects.equals(originalAvatar, this.avatar)
-            ));
+        if (!changed) {
+            return this;
         }
+
+        Admin updatedAdmin = this.toBuilder()
+                .username(newUsername)
+                .fullName(newFullName)
+                .avatar(newAvatar)
+                .build();
+
+        updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
+                updatedAdmin.id.getValue(),
+                updatedAdmin.username,
+                updatedAdmin.fullName,
+                updatedAdmin.avatar,
+                avatarChanged
+        ));
+
+        return updatedAdmin;
     }
 
 
@@ -264,17 +328,5 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 BCrypt.gensalt());
     }
 
-    @Override
-    public String toString() {
-        return "Admin{" +
-                "id=" + id +
-                ", username='" + username + '\'' +
-                ", fullName='" + fullName + '\'' +
-                ", isActive=" + isActive +
-                ", isSuperAdmin=" + isSuperAdmin +
-                ", createdAt=" + createdAt +
-                ", updatedAt=" + updatedAt +
-                ", lastLoginAt=" + lastLoginAt +
-                '}';
-    }
+
 }

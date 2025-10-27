@@ -3,34 +3,26 @@ package biz.ugur.busroutebackend.admin.domain.model;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.CityId;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.ToString;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
 
-@Builder
+@Builder(toBuilder = true)
 @Getter
-@Table("cities")
+@ToString
+@EqualsAndHashCode(callSuper = false)
 public class City extends AggregateRoot<City, CityId> {
 
-    @Id
-    @Column("id")
-    private CityId id;
-
-    @Column("name")
-    private String name;
-
-    @Column("name_tm")
-    private String nameTm;
-
-    @Column("is_active")
-    private Boolean isActive;
-
-    @Column("display_order")
-    private Integer displayOrder;
-
+    private final CityId id;
+    private final String name;
+    private final String nameTm;
+    private final Boolean isActive;
+    private final Integer displayOrder;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long version;
@@ -49,24 +41,54 @@ public class City extends AggregateRoot<City, CityId> {
 
 
 
-    public void updateCity(String name, String nameTm, Integer displayOrder) {
+    public City updateCity(String name, String nameTm, Integer displayOrder) {
+        String newName = this.name;
+        String newNameTm = this.nameTm;
+        Integer newDisplayOrder = this.displayOrder;
+        boolean changed = false;
+
         if (name != null && !name.trim().isEmpty()) {
-            this.name = name.trim();
+            newName = name.trim();
+            changed = true;
         }
         if (nameTm != null) {
-            this.nameTm = nameTm.trim();
+            newNameTm = nameTm.trim();
+            changed = true;
         }
         if (displayOrder != null) {
-            this.displayOrder = displayOrder;
+            newDisplayOrder = displayOrder;
+            changed = true;
         }
+
+        if (!changed) {
+            return this; // No changes
+        }
+
+        return this.toBuilder()
+                .name(newName)
+                .nameTm(newNameTm)
+                .displayOrder(newDisplayOrder)
+                .build();
     }
 
-    public void deactivate() {
-        this.isActive = false;
+    public City deactivate() {
+        if (Boolean.FALSE.equals(this.isActive)) {
+            return this;
+        }
+
+        return this.toBuilder()
+                .isActive(false)
+                .build();
     }
 
-    public void activate() {
-        this.isActive = true;
+    public City activate() {
+        if (Boolean.TRUE.equals(this.isActive)) {
+            return this;
+        }
+
+        return this.toBuilder()
+                .isActive(true)
+                .build();
     }
 
 

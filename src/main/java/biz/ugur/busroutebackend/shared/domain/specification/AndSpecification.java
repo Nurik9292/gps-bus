@@ -1,11 +1,6 @@
 package biz.ugur.busroutebackend.shared.domain.specification;
 
-/**
- * Композитная спецификация для логического И (AND).
- * Удовлетворяется только когда обе спецификации истинны.
- *
- * @param <T> тип объекта
- */
+
 public class AndSpecification<T> implements Specification<T> {
 
     private final Specification<T> left;

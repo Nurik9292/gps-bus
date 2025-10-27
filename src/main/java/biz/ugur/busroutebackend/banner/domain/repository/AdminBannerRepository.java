@@ -20,28 +20,11 @@ public interface AdminBannerRepository extends BaseRepository<Banner, BannerId> 
 
     Mono<Long> countByType(BannerType type);
 
-    /**
-     * Поиск баннеров по спецификации без пагинации.
-     *
-     * @param specification спецификация для фильтрации
-     * @return поток баннеров, удовлетворяющих спецификации
-     */
+
     Flux<Banner> findBySpecification(Specification<Banner> specification);
 
-    /**
-     * Поиск баннеров по спецификации с пагинацией.
-     *
-     * @param specification спецификация для фильтрации
-     * @param pageable      параметры пагинации
-     * @return поток баннеров, удовлетворяющих спецификации
-     */
+
     Flux<Banner> findBySpecification(Specification<Banner> specification, Pageable pageable);
 
-    /**
-     * Подсчет количества баннеров, удовлетворяющих спецификации.
-     *
-     * @param specification спецификация для фильтрации
-     * @return количество баннеров
-     */
     Mono<Long> countBySpecification(Specification<Banner> specification);
 }

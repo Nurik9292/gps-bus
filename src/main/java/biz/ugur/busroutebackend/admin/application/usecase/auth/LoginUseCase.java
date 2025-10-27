@@ -54,8 +54,9 @@ public class LoginUseCase extends BaseUseCase<Mono<LoginUseCase.Request>, LoginU
                             .switchIfEmpty(Mono.error(new AdminAuthenticationException(
                                     AdminAuthenticationException.AuthErrorType.INVALID_CREDENTIALS, req.username(), correlationId)))
                             .flatMap(admin -> {
-                                admin.updateLastLogin();
-                                return adminRepository.save(admin);
+                                // Admin is immutable - updateLastLogin() returns a new instance
+                                Admin updatedAdmin = admin.updateLastLogin();
+                                return adminRepository.save(updatedAdmin);
                             })
                             .flatMap(this::generateTokens)
                             .doOnSuccess(result -> log.info("Successful login for admin: {}", result.admin().getUsername()))

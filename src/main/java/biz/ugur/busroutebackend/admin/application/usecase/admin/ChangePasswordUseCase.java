@@ -49,8 +49,9 @@ public class ChangePasswordUseCase extends BaseUseCase<Mono<ChangePasswordUseCas
                     .filter(admin -> admin.checkPassword(request.currentPassword()))
                     .switchIfEmpty(Mono.error(new IllegalArgumentException("Current password is incorrect")))
                     .flatMap(admin -> {
-                        admin.changePassword(request.newPassword());
-                        return adminRepository.save(admin);
+                        // Admin is immutable - changePassword() returns a new instance
+                        Admin updatedAdmin = admin.changePassword(request.newPassword());
+                        return adminRepository.save(updatedAdmin);
                     })
                     .flatMap(admin -> {
                         return tokenBlacklistService.blacklistAccessToken(request.currentAccessToken())

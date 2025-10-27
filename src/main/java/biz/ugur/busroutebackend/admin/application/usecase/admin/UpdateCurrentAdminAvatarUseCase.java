@@ -50,18 +50,21 @@ public class UpdateCurrentAdminAvatarUseCase extends BaseUseCase<Mono<UpdateCurr
                     .flatMap(admin -> {
                         String oldAvatarPath = admin.getAvatar();
                         if (request.avatar() == null) {
-                            admin.removeAvatar();
+                            // Admin is immutable - removeAvatar() returns a new instance
+                            Admin updatedAdmin = admin.removeAvatar();
                             return avatarStorageService.delete(oldAvatarPath)
-                                    .then(updateAvatarInDatabase(admin, null));
+                                    .then(updateAvatarInDatabase(updatedAdmin, null));
                         } else if (request.avatar().startsWith("data:image/")) {
                             return avatarStorageService.save(admin.getId().getValue(), request.avatar())
                                     .flatMap(result -> {
-                                        admin.updateAvatar(result.originalPath());
+                                        // Admin is immutable - updateAvatar() returns a new instance
+                                        Admin updatedAdmin = admin.updateAvatar(result.originalPath());
                                         return avatarStorageService.delete(oldAvatarPath)
-                                                .then(updateAvatarInDatabase(admin, result.originalPath()));
+                                                .then(updateAvatarInDatabase(updatedAdmin, result.originalPath()));
                                     });
                         } else {
-                            return updateAvatarInDatabase(admin, request.avatar());
+                            Admin updatedAdmin = admin.updateAvatar(request.avatar());
+                            return updateAvatarInDatabase(updatedAdmin, request.avatar());
                         }
                     })
                     .doOnSuccess(admin -> log.info("Avatar updated successfully for admin: {}", admin.getUsername()))
