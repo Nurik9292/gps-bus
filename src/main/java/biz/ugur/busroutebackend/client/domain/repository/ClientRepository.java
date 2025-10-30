@@ -4,6 +4,8 @@ import biz.ugur.busroutebackend.client.domain.enums.ClientStatus;
 import biz.ugur.busroutebackend.client.domain.model.Client;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
 import biz.ugur.busroutebackend.shared.base.BaseRepository;
+import biz.ugur.busroutebackend.shared.domain.specification.Specification;
+import org.springframework.data.domain.Pageable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -24,4 +26,11 @@ public interface ClientRepository extends BaseRepository<Client, ClientId> {
     Mono<Long> countByStatus(ClientStatus status);
 
     Mono<Long> countActiveClients();
+
+    // Specification Pattern Support
+    Flux<Client> findBySpecification(Specification<Client> specification);
+
+    Flux<Client> findBySpecification(Specification<Client> specification, Pageable pageable);
+
+    Mono<Long> countBySpecification(Specification<Client> specification);
 }

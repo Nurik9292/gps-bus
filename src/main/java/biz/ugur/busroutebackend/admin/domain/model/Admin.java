@@ -25,21 +25,13 @@ import java.util.Objects;
 public class Admin extends AggregateRoot<Admin, AdminId> {
 
     private final AdminId id;
-
     private final String username;
-
     private final String passwordHash;
-
     private final String fullName;
-
     private final String avatar;
-
     private final Boolean isActive;
-
     private final Boolean isSuperAdmin;
-
     private final LocalDateTime lastLoginAt;
-
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long version;

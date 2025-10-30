@@ -5,6 +5,8 @@ import biz.ugur.busroutebackend.client.domain.enums.Platform;
 import biz.ugur.busroutebackend.client.domain.event.ClientAuthenticatedEvent;
 import biz.ugur.busroutebackend.client.domain.event.ClientOtpVerifiedEvent;
 import biz.ugur.busroutebackend.client.domain.event.ClientRegisteredEvent;
+import biz.ugur.busroutebackend.client.domain.exceptions.ClientAuthenticationException;
+import biz.ugur.busroutebackend.client.domain.exceptions.ClientValidationException;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
 import biz.ugur.busroutebackend.client.domain.valueobject.Otp;
 import biz.ugur.busroutebackend.client.domain.valueobject.Phone;
@@ -13,57 +15,35 @@ import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
 
 @Builder
 @ToString
 @EqualsAndHashCode(callSuper = true)
-@Table("clients")
 @Getter
 public class Client extends AggregateRoot<Client, ClientId> {
 
-    @Id
-    @Column("id")
+    private static final String TEST_CENTER_OTP = "11111";
+    private static final int MAX_NAME_LENGTH = 100;
+
     private ClientId id;
-
-    @Column("name")
     private String name;
-
-    @Column("phone")
     private String phoneNumber;
-
-    @Column("otp")
     private String otpCode;
-
-    @Column("otp_verify")
     private Boolean otpVerify;
-
-    @Column("platform")
     private Platform platform;
-
-    @Column("status")
     private ClientStatus status;
-
-    @Column("last_activity")
     private LocalDateTime lastActivity;
-
-    @Column("access_token")
     private String accessToken;
-
-    @Column("refresh_token")
     private String refreshToken;
-
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long version;
 
     public static Client create(String name, String phoneNumber, Platform platform) {
-        String validatedName = validateNameStatic(name);
-        String validatedPhone = validatePhoneStatic(phoneNumber);
+        String validatedName = validateName(name);
+        String validatedPhone = validatePhone(phoneNumber);
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -132,9 +112,8 @@ public class Client extends AggregateRoot<Client, ClientId> {
     }
 
     public void generateOtpForCenter() {
-        this.otpCode = "11111";
+        this.otpCode = TEST_CENTER_OTP;
         this.otpVerify = true;
-
     }
 
     public boolean verifyOtpCenter(String inputOtp) {
@@ -166,7 +145,10 @@ public class Client extends AggregateRoot<Client, ClientId> {
 
     public void authenticate(String accessToken, String refreshToken) {
         if (!status.canLogin()) {
-            throw new IllegalStateException("Client cannot login with status: " + status);
+            throw new ClientAuthenticationException(
+                ClientAuthenticationException.AuthErrorType.ACCOUNT_DISABLED,
+                this.phoneNumber
+            );
         }
 
         this.accessToken = accessToken;
@@ -205,20 +187,27 @@ public class Client extends AggregateRoot<Client, ClientId> {
         this.status = ClientStatus.ACTIVE;
     }
 
-    private String validateName(String name) {
+
+    private static String validateName(String name) {
         if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("Client name cannot be null or empty");
+            throw new ClientValidationException("name", "Client name cannot be null or empty");
         }
-        if (name.length() > 100) {
-            throw new IllegalArgumentException("Client name cannot exceed 100 characters");
+        if (name.length() > MAX_NAME_LENGTH) {
+            throw new ClientValidationException("name", "Client name cannot exceed " + MAX_NAME_LENGTH + " characters");
         }
         return name.trim();
     }
 
-    private String validatePhoneNumber(String phoneNumber) {
-        Phone phone = Phone.of(phoneNumber);
-        return phone.getValue();
+
+    private static String validatePhone(String phoneNumber) {
+        try {
+            Phone phone = Phone.of(phoneNumber);
+            return phone.getValue();
+        } catch (IllegalArgumentException e) {
+            throw new ClientValidationException("phone", "Invalid phone number: " + e.getMessage());
+        }
     }
+
 
     @Override
     public ClientId getId() {
@@ -236,6 +225,7 @@ public class Client extends AggregateRoot<Client, ClientId> {
     public boolean hasValidTokens() {
         return this.accessToken != null && this.refreshToken != null;
     }
+
 
     @Override
     public LocalDateTime getCreatedAt() {
@@ -265,20 +255,5 @@ public class Client extends AggregateRoot<Client, ClientId> {
     @Override
     public void setVersion(Long version) {
         this.version = version;
-    }
-
-    private static String validateNameStatic(String name) {
-        if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("Client name cannot be null or empty");
-        }
-        if (name.length() > 100) {
-            throw new IllegalArgumentException("Client name cannot exceed 100 characters");
-        }
-        return name.trim();
-    }
-
-    private static String validatePhoneStatic(String phoneNumber) {
-        Phone phone = Phone.of(phoneNumber);
-        return phone.getValue();
     }
 }

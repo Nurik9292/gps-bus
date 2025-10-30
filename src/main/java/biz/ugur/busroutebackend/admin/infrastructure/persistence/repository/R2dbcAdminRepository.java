@@ -12,11 +12,6 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 
-/**
- * R2DBC implementation of AdminRepository.
- * Extends AdminBaseRepository which provides common mapping and CRUD operations.
- * This class only contains admin-specific domain queries.
- */
 @Repository
 @Slf4j
 public class R2dbcAdminRepository extends AdminBaseRepository implements AdminRepository {

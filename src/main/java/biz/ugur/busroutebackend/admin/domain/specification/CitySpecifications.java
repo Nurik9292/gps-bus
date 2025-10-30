@@ -8,27 +8,8 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Specification implementations for City aggregate.
- * Provides composable query conditions following the Specification pattern.
- *
- * <p>Examples:
- * <pre>
- * // Find active cities with high priority
- * Specification<City> spec = isActive().and(displayOrderLessThan(10));
- *
- * // Search cities by name (English or Turkmen)
- * Specification<City> spec = nameContains("ashgabat").or(nameTmContains("aşgabat"));
- *
- * // Find recently created cities
- * Specification<City> spec = createdAfter(LocalDateTime.now().minusDays(7));
- * </pre>
- */
 public class CitySpecifications {
 
-    /**
-     * Matches active cities (is_active = true).
-     */
     public static Specification<City> isActive() {
         return new Specification<City>() {
             @Override
@@ -43,9 +24,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches inactive cities (is_active = false).
-     */
     public static Specification<City> isInactive() {
         return new Specification<City>() {
             @Override
@@ -60,11 +38,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities whose name contains the given text (case-insensitive).
-     *
-     * @param searchText text to search for in name
-     */
     public static Specification<City> nameContains(String searchText) {
         return new Specification<City>() {
             @Override
@@ -85,11 +58,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities whose Turkmen name contains the given text (case-insensitive).
-     *
-     * @param searchText text to search for in Turkmen name
-     */
     public static Specification<City> nameTmContains(String searchText) {
         return new Specification<City>() {
             @Override
@@ -110,11 +78,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities with a specific name (exact match, case-sensitive).
-     *
-     * @param name exact name to match
-     */
     public static Specification<City> hasName(String name) {
         return new Specification<City>() {
             @Override
@@ -129,11 +92,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities with a specific ID.
-     *
-     * @param id city ID to match
-     */
     public static Specification<City> hasId(String id) {
         return new Specification<City>() {
             @Override
@@ -148,12 +106,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities with display order less than the specified value.
-     * Lower display order means higher priority.
-     *
-     * @param maxOrder maximum display order (exclusive)
-     */
     public static Specification<City> displayOrderLessThan(int maxOrder) {
         return new Specification<City>() {
             @Override
@@ -172,11 +124,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities with display order greater than the specified value.
-     *
-     * @param minOrder minimum display order (exclusive)
-     */
     public static Specification<City> displayOrderGreaterThan(int minOrder) {
         return new Specification<City>() {
             @Override
@@ -195,12 +142,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities with display order between the specified range (inclusive).
-     *
-     * @param min minimum display order (inclusive)
-     * @param max maximum display order (inclusive)
-     */
     public static Specification<City> displayOrderBetween(int min, int max) {
         return new Specification<City>() {
             @Override
@@ -222,11 +163,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities created after the specified date.
-     *
-     * @param date the date to compare against
-     */
     public static Specification<City> createdAfter(LocalDateTime date) {
         return new Specification<City>() {
             @Override
@@ -241,11 +177,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities created before the specified date.
-     *
-     * @param date the date to compare against
-     */
     public static Specification<City> createdBefore(LocalDateTime date) {
         return new Specification<City>() {
             @Override
@@ -260,11 +191,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities that have been updated after the specified date.
-     *
-     * @param date the date to compare against
-     */
     public static Specification<City> updatedAfter(LocalDateTime date) {
         return new Specification<City>() {
             @Override
@@ -279,9 +205,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities that have a Turkmen name set.
-     */
     public static Specification<City> hasTurkmenName() {
         return new Specification<City>() {
             @Override
@@ -300,9 +223,6 @@ public class CitySpecifications {
         };
     }
 
-    /**
-     * Matches cities that don't have a Turkmen name set.
-     */
     public static Specification<City> noTurkmenName() {
         return new Specification<City>() {
             @Override
@@ -321,50 +241,25 @@ public class CitySpecifications {
         };
     }
 
-    // ============= Composite Specifications (combinations) =============
 
-    /**
-     * Matches active cities with high priority (display order < 10).
-     * Useful for highlighting major cities.
-     */
     public static Specification<City> isActiveWithHighPriority() {
         return isActive().and(displayOrderLessThan(10));
     }
 
-    /**
-     * Matches recently created cities (within specified days).
-     *
-     * @param daysAgo number of days to look back
-     */
     public static Specification<City> isRecentlyCreated(int daysAgo) {
         LocalDateTime cutoffDate = LocalDateTime.now().minusDays(daysAgo);
         return createdAfter(cutoffDate);
     }
 
-    /**
-     * Matches recently updated cities (within specified days).
-     *
-     * @param daysAgo number of days to look back
-     */
     public static Specification<City> isRecentlyUpdated(int daysAgo) {
         LocalDateTime cutoffDate = LocalDateTime.now().minusDays(daysAgo);
         return updatedAfter(cutoffDate);
     }
 
-    /**
-     * Searches cities by text in name OR Turkmen name.
-     * Useful for general search functionality.
-     *
-     * @param searchText text to search for
-     */
     public static Specification<City> searchByText(String searchText) {
         return nameContains(searchText).or(nameTmContains(searchText));
     }
 
-    /**
-     * Matches cities that are active AND have both English and Turkmen names set.
-     * Useful for ensuring data completeness.
-     */
     public static Specification<City> isCompleteAndActive() {
         return isActive().and(hasTurkmenName());
     }

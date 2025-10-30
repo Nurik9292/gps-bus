@@ -1,49 +1,21 @@
-package biz.ugur.busroutebackend.client.infrastructure.repository;
+package biz.ugur.busroutebackend.client.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.client.domain.model.RouteFavorite;
 import biz.ugur.busroutebackend.client.domain.repository.RouteFavoriteRepository;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
-import biz.ugur.busroutebackend.client.domain.valueobject.RouteFavoriteId;
-import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
-import io.r2dbc.spi.Row;
-import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.BiFunction;
-
 @Repository
 @Slf4j
-public class R2dbcRouteFavoriteRepository extends BaseR2dbcRepository<RouteFavorite, RouteFavoriteId> implements RouteFavoriteRepository {
+public class R2dbcRouteFavoriteRepository extends RouteFavoriteBaseRepository implements RouteFavoriteRepository {
 
     public R2dbcRouteFavoriteRepository(DatabaseClient databaseClient) {
-        super(databaseClient, "route_favorites", RouteFavorite.class);
-    }
-
-    @Override
-    protected String convertIdToDatabase(RouteFavoriteId id) {
-        return id.getValue();
-    }
-
-    @Override
-    protected BiFunction<Row, RowMetadata, RouteFavorite> getRowMapper() {
-        return this::mapRowToRouteFavorite;
-    }
-
-    @Override
-    protected Map<String, Object> mapEntityToColumns(RouteFavorite routeFavorite) {
-        Map<String, Object> values = new HashMap<>();
-        values.put("id", routeFavorite.getId().getValue());
-        values.put("client_id", routeFavorite.getClientId());
-        values.put("route_id", routeFavorite.getRouteId());
-        return values;
+        super(databaseClient);
     }
 
     @Override
@@ -104,16 +76,5 @@ public class R2dbcRouteFavoriteRepository extends BaseR2dbcRepository<RouteFavor
                 .doOnError(error -> log.error("Failed to delete route favorite: clientId={}, routeId={}",
                         clientId.getValue(), routeId.getValue(), error))
                 .then();
-    }
-
-    private RouteFavorite mapRowToRouteFavorite(Row row, RowMetadata metadata) {
-        return RouteFavorite.fromDatabase(
-                RouteFavoriteId.of(row.get("id", String.class)),
-                ClientId.of(row.get("client_id", String.class)),
-                BusRouteId.of(row.get("route_id", String.class)),
-                row.get("created_at", LocalDateTime.class),
-                row.get("updated_at", LocalDateTime.class),
-                row.get("version", Long.class)
-        );
     }
 }

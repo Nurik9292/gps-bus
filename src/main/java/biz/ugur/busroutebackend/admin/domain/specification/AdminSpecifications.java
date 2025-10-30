@@ -9,27 +9,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Specification implementations for Admin aggregate.
- * Provides composable query conditions following the Specification pattern.
- *
- * <p>Examples:
- * <pre>
- * // Find active super admins
- * Specification<Admin> spec = isActive().and(isSuperAdmin());
- *
- * // Find regular admins with recent login
- * Specification<Admin> spec = isRegularAdmin().and(lastLoginAfter(someDate));
- *
- * // Search by username or full name
- * Specification<Admin> spec = usernameContains("john").or(fullNameContains("john"));
- * </pre>
- */
 public class AdminSpecifications {
 
-    /**
-     * Matches active admins (is_active = true).
-     */
     public static Specification<Admin> isActive() {
         return new Specification<Admin>() {
             @Override
@@ -44,9 +25,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches inactive admins (is_active = false).
-     */
     public static Specification<Admin> isInactive() {
         return new Specification<Admin>() {
             @Override
@@ -61,9 +39,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches super admins (is_super_admin = true).
-     */
     public static Specification<Admin> isSuperAdmin() {
         return new Specification<Admin>() {
             @Override
@@ -78,9 +53,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches regular admins (is_super_admin = false).
-     */
     public static Specification<Admin> isRegularAdmin() {
         return new Specification<Admin>() {
             @Override
@@ -95,11 +67,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches admins whose username contains the given text (case-insensitive).
-     *
-     * @param searchText text to search for in username
-     */
     public static Specification<Admin> usernameContains(String searchText) {
         return new Specification<Admin>() {
             @Override
@@ -120,11 +87,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches admins whose full name contains the given text (case-insensitive).
-     *
-     * @param searchText text to search for in full name
-     */
     public static Specification<Admin> fullNameContains(String searchText) {
         return new Specification<Admin>() {
             @Override
@@ -145,11 +107,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches admins with a specific username (exact match).
-     *
-     * @param username exact username to match
-     */
     public static Specification<Admin> hasUsername(String username) {
         return new Specification<Admin>() {
             @Override
@@ -164,11 +121,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches admins with a specific ID.
-     *
-     * @param id admin ID to match
-     */
     public static Specification<Admin> hasId(String id) {
         return new Specification<Admin>() {
             @Override
@@ -183,11 +135,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches admins who logged in after the specified date.
-     *
-     * @param date the date to compare against
-     */
     public static Specification<Admin> lastLoginAfter(LocalDateTime date) {
         return new Specification<Admin>() {
             @Override
@@ -207,11 +154,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches admins who logged in before the specified date.
-     *
-     * @param date the date to compare against
-     */
     public static Specification<Admin> lastLoginBefore(LocalDateTime date) {
         return new Specification<Admin>() {
             @Override
@@ -231,9 +173,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches admins who never logged in.
-     */
     public static Specification<Admin> neverLoggedIn() {
         return new Specification<Admin>() {
             @Override
@@ -248,11 +187,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches admins created after the specified date.
-     *
-     * @param date the date to compare against
-     */
     public static Specification<Admin> createdAfter(LocalDateTime date) {
         return new Specification<Admin>() {
             @Override
@@ -267,11 +201,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches admins created before the specified date.
-     *
-     * @param date the date to compare against
-     */
     public static Specification<Admin> createdBefore(LocalDateTime date) {
         return new Specification<Admin>() {
             @Override
@@ -286,9 +215,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches admins who have an avatar set.
-     */
     public static Specification<Admin> hasAvatar() {
         return new Specification<Admin>() {
             @Override
@@ -307,9 +233,6 @@ public class AdminSpecifications {
         };
     }
 
-    /**
-     * Matches admins who don't have an avatar set.
-     */
     public static Specification<Admin> noAvatar() {
         return new Specification<Admin>() {
             @Override
@@ -328,51 +251,25 @@ public class AdminSpecifications {
         };
     }
 
-    // ============= Composite Specifications (combinations) =============
 
-    /**
-     * Matches admins who are active and regular (not super admin).
-     * Useful for listing regular active users.
-     */
     public static Specification<Admin> isActiveRegularAdmin() {
         return isActive().and(isRegularAdmin());
     }
 
-    /**
-     * Matches admins who are active super admins.
-     * Useful for security checks or admin management.
-     */
     public static Specification<Admin> isActiveSuperAdmin() {
         return isActive().and(isSuperAdmin());
     }
 
-    /**
-     * Matches admins who logged in recently (within specified days).
-     *
-     * @param daysAgo number of days to look back
-     */
     public static Specification<Admin> hasRecentLogin(int daysAgo) {
         LocalDateTime cutoffDate = LocalDateTime.now().minusDays(daysAgo);
         return lastLoginAfter(cutoffDate);
     }
 
-    /**
-     * Matches admins who haven't logged in for a specified number of days.
-     * Useful for identifying inactive accounts.
-     *
-     * @param daysAgo number of days to look back
-     */
     public static Specification<Admin> hasStaleLogin(int daysAgo) {
         LocalDateTime cutoffDate = LocalDateTime.now().minusDays(daysAgo);
         return lastLoginBefore(cutoffDate).or(neverLoggedIn());
     }
 
-    /**
-     * Searches admins by text in username OR full name.
-     * Useful for general search functionality.
-     *
-     * @param searchText text to search for
-     */
     public static Specification<Admin> searchByText(String searchText) {
         return usernameContains(searchText).or(fullNameContains(searchText));
     }

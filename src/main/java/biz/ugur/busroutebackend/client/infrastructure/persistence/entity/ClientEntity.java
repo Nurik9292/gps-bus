@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.admin.infrastructure.persistence.entity;
+package biz.ugur.busroutebackend.client.infrastructure.persistence.entity;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -12,13 +12,12 @@ import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
 
-
 @Builder
-@Table("cities")
+@Table("clients")
 @Getter
-@ToString
 @EqualsAndHashCode(callSuper = false)
-public class CityEntity {
+@ToString(callSuper = false)
+public class ClientEntity {
 
     @Id
     @Column("id")
@@ -27,14 +26,29 @@ public class CityEntity {
     @Column("name")
     private String name;
 
-    @Column("name_tm")
-    private String nameTm;
+    @Column("phone")
+    private String phone;
 
-    @Column("is_active")
-    private Boolean isActive;
+    @Column("otp")
+    private String otp;
 
-    @Column("display_order")
-    private Integer displayOrder;
+    @Column("otp_verify")
+    private Boolean otpVerify;
+
+    @Column("platform")
+    private String platform;
+
+    @Column("status")
+    private String status;
+
+    @Column("last_activity")
+    private LocalDateTime lastActivity;
+
+    @Column("access_token")
+    private String accessToken;
+
+    @Column("refresh_token")
+    private String refreshToken;
 
     @CreatedDate
     @Column("created_at")

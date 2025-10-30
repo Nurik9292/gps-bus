@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.admin.infrastructure.persistence.entity;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.ToString;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -15,6 +16,7 @@ import java.time.LocalDateTime;
 @Builder
 @Table("admins")
 @Getter
+@ToString
 @EqualsAndHashCode(callSuper = false)
 public class AdminEntity {
 

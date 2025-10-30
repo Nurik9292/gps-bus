@@ -1,50 +1,21 @@
-package biz.ugur.busroutebackend.client.infrastructure.repository;
+package biz.ugur.busroutebackend.client.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.client.domain.model.StopFavorite;
 import biz.ugur.busroutebackend.client.domain.repository.StopFavoriteRepository;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
-import biz.ugur.busroutebackend.client.domain.valueobject.StopFavoriteId;
-import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
-import io.r2dbc.spi.Row;
-import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.lang.reflect.Field;
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.BiFunction;
-
 @Repository
 @Slf4j
-public class R2dbcStopFavoriteRepository extends BaseR2dbcRepository<StopFavorite, StopFavoriteId> implements StopFavoriteRepository {
+public class R2dbcStopFavoriteRepository extends StopFavoriteBaseRepository implements StopFavoriteRepository {
 
     public R2dbcStopFavoriteRepository(DatabaseClient databaseClient) {
-        super(databaseClient, "stop_favorites", StopFavorite.class);
-    }
-
-    @Override
-    protected String convertIdToDatabase(StopFavoriteId stopFavoriteId) {
-        return stopFavoriteId.getValue();
-    }
-
-    @Override
-    protected BiFunction<Row, RowMetadata, StopFavorite> getRowMapper() {
-        return this::mapRowToStopFavorite;
-    }
-
-    @Override
-    protected Map<String, Object> mapEntityToColumns(StopFavorite entity) {
-        Map<String, Object> values = new HashMap<>();
-        values.put("id", entity.getId());
-        values.put("client_id", entity.getClientId());
-        values.put("stop_id", entity.getStopId());
-        return values;
+        super(databaseClient);
     }
 
     @Override
@@ -96,18 +67,4 @@ public class R2dbcStopFavoriteRepository extends BaseR2dbcRepository<StopFavorit
                 .doOnError(error -> log.error("Failed to delete stop favorite: clientId={}, stopId={}, error={}",
                         clientId.getValue(), stopId.getValue(), error.getMessage()));
     }
-
-
-    private StopFavorite mapRowToStopFavorite(Row row, RowMetadata metadata) {
-
-        return StopFavorite.fromDatabase(
-                StopFavoriteId.of(row.get("id", String.class)),
-                ClientId.of(row.get("client_id", String.class)),
-                BusStopId.of(row.get("stop_id", String.class)),
-                row.get("created_at", LocalDateTime.class),
-                row.get("updated_at", LocalDateTime.class),
-                row.get("version", Long.class)
-        );
-    }
-
 }

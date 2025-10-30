@@ -4,16 +4,10 @@ import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.admin.infrastructure.persistence.entity.AdminEntity;
 
-/**
- * Mapper between Admin domain model and AdminEntity persistence model.
- */
 public class AdminMapper {
 
     private AdminMapper() {}
 
-    /**
-     * Converts AdminEntity to Admin domain model.
-     */
     public static Admin toDomain(AdminEntity entity) {
         return Admin.fromDatabase(
                 AdminId.of(entity.getId()),
@@ -30,9 +24,6 @@ public class AdminMapper {
         );
     }
 
-    /**
-     * Converts Admin domain model to AdminEntity.
-     */
     public static AdminEntity toEntity(Admin admin) {
         return AdminEntity.builder()
                 .id(admin.getId().getValue())

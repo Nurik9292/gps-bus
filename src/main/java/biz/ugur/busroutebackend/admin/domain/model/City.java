@@ -61,7 +61,7 @@ public class City extends AggregateRoot<City, CityId> {
         }
 
         if (!changed) {
-            return this; // No changes
+            return this;
         }
 
         return this.toBuilder()

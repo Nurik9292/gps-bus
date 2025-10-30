@@ -6,34 +6,18 @@ import biz.ugur.busroutebackend.shared.domain.entity.Entity;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import lombok.Builder;
 import lombok.Getter;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
 
 @Builder
-@Table("route_favorites")
 @Getter
 public class RouteFavorite extends Entity<RouteFavoriteId> {
 
-    @Id
-    @Column("id")
     private RouteFavoriteId id;
-
-    @Column("client_id")
     private ClientId clientId;
-
-    @Column("route_id")
     private BusRouteId routeId;
-
-    @Column("created_at")
     private LocalDateTime createdAt;
-
-    @Column("updated_at")
     private LocalDateTime updatedAt;
-
-    @Column("version")
     private Long version;
 
 
@@ -52,7 +36,8 @@ public class RouteFavorite extends Entity<RouteFavoriteId> {
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
             Long version) {
-        RouteFavorite routeFavorite = builder()
+
+        return builder()
                 .id(id)
                 .clientId(clientId)
                 .routeId(routeId)
@@ -60,8 +45,6 @@ public class RouteFavorite extends Entity<RouteFavoriteId> {
                 .updatedAt(updatedAt)
                 .version(version)
                 .build();
-
-        return routeFavorite;
     }
 
     @Override

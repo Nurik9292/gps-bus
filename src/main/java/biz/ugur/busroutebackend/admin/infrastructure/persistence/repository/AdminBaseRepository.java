@@ -18,11 +18,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-/**
- * Base repository for Admin aggregate.
- * This abstract class provides common mapping and query functionality for all Admin repository implementations.
- * Follows the same pattern as BannerBaseRepository.
- */
+
 public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, AdminId> {
 
     protected AdminBaseRepository(DatabaseClient databaseClient) {
@@ -57,10 +53,6 @@ public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, Adm
         return columns;
     }
 
-    /**
-     * Maps database row to Admin domain model.
-     * Uses AdminMapper to convert entity to domain model.
-     */
     private Admin mapRowToAdmin(Row row, RowMetadata metadata) {
         return AdminMapper.toDomain(AdminEntity.builder()
                 .id(row.get("id", String.class))
@@ -77,15 +69,7 @@ public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, Adm
                 .build());
     }
 
-    // ============= Specification Pattern Support =============
 
-    /**
-     * Finds admins matching the given specification.
-     * Converts specification to SQL criteria and executes query.
-     *
-     * @param specification the specification to match
-     * @return Flux of admins matching the specification
-     */
     public Flux<Admin> findBySpecification(Specification<Admin> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -96,7 +80,6 @@ public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, Adm
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }
@@ -106,14 +89,6 @@ public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, Adm
                 .all();
     }
 
-    /**
-     * Finds admins matching the given specification with pagination.
-     * Converts specification to SQL criteria, adds pagination, and executes query.
-     *
-     * @param specification the specification to match
-     * @param pageable pagination parameters
-     * @return Flux of admins matching the specification
-     */
     public Flux<Admin> findBySpecification(Specification<Admin> specification, Pageable pageable) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -127,7 +102,6 @@ public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, Adm
                 .bind("limit", pageable.getPageSize())
                 .bind("offset", pageable.getOffset());
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }
@@ -137,13 +111,6 @@ public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, Adm
                 .all();
     }
 
-    /**
-     * Counts admins matching the given specification.
-     * Converts specification to SQL criteria and executes count query.
-     *
-     * @param specification the specification to match
-     * @return Mono of Long (count of matching admins)
-     */
     public Mono<Long> countBySpecification(Specification<Admin> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -154,7 +121,6 @@ public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, Adm
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }

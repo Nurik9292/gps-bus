@@ -18,11 +18,6 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-/**
- * Base repository for City aggregate.
- * This abstract class provides common mapping and query functionality for all City repository implementations.
- * Follows the same pattern as BannerBaseRepository.
- */
 public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityId> {
 
     protected CityBaseRepository(DatabaseClient databaseClient) {
@@ -54,10 +49,6 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
         return columns;
     }
 
-    /**
-     * Maps database row to City domain model.
-     * Uses CityMapper to convert entity to domain model.
-     */
     private City mapRowToCity(Row row, RowMetadata metadata) {
         return CityMapper.toDomain(CityEntity.builder()
                 .id(row.get("id", String.class))
@@ -71,15 +62,7 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
                 .build());
     }
 
-    // ============= Specification Pattern Support =============
 
-    /**
-     * Finds cities matching the given specification.
-     * Converts specification to SQL criteria and executes query.
-     *
-     * @param specification the specification to match
-     * @return Flux of cities matching the specification
-     */
     public Flux<City> findBySpecification(Specification<City> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -90,7 +73,6 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }
@@ -100,14 +82,6 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
                 .all();
     }
 
-    /**
-     * Finds cities matching the given specification with pagination.
-     * Converts specification to SQL criteria, adds pagination, and executes query.
-     *
-     * @param specification the specification to match
-     * @param pageable pagination parameters
-     * @return Flux of cities matching the specification
-     */
     public Flux<City> findBySpecification(Specification<City> specification, Pageable pageable) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -121,7 +95,6 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
                 .bind("limit", pageable.getPageSize())
                 .bind("offset", pageable.getOffset());
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }
@@ -131,13 +104,6 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
                 .all();
     }
 
-    /**
-     * Counts cities matching the given specification.
-     * Converts specification to SQL criteria and executes count query.
-     *
-     * @param specification the specification to match
-     * @return Mono of Long (count of matching cities)
-     */
     public Mono<Long> countBySpecification(Specification<City> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -148,7 +114,6 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }

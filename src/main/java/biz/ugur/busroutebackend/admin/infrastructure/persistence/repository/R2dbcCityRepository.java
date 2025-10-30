@@ -9,11 +9,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-/**
- * R2DBC implementation of CityRepository.
- * Extends CityBaseRepository which provides common mapping and CRUD operations.
- * This class only contains city-specific domain queries.
- */
+
 @Repository
 @Slf4j
 public class R2dbcCityRepository extends CityBaseRepository implements CityRepository {
