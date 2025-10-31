@@ -11,22 +11,18 @@ import java.time.Duration;
 @Data
 public class RouteSearchConfig {
 
-    // Параметры поиска остановок
     private double nearbyStopsRadiusKm = 0.8;
     private int maxStopsPerLocation = 8;
 
-    // Лимиты результатов
     private int maxDirectRoutes = 5;
     private int maxOneTransferRoutes = 8;
     private int maxTwoTransferRoutes = 4;
 
-    // Таймауты поиска
     private Duration directSearchTimeout = Duration.ofSeconds(8);
     private Duration oneTransferSearchTimeout = Duration.ofSeconds(12);
     private Duration twoTransferSearchTimeout = Duration.ofSeconds(15);
     private Duration totalSearchTimeout = Duration.ofSeconds(20);
 
-    // Параметры валидации
     private int maxWalkingTimeMinutes = 15;
     private int maxTwoTransferWalkingTimeMinutes = 18;
     private int maxOneTransferTotalMinutes = 100;
@@ -34,11 +30,9 @@ public class RouteSearchConfig {
     private int maxTransferWaitMinutes = 30;
     private int maxTwoTransferWaitMinutes = 25;
 
-    // Расстояния пересадок
     private double oneTransferMaxDistanceKm = 0.5;
     private double twoTransferMaxDistanceKm = 0.3;
 
-    // Кэширование
     private Duration cacheTimeout = Duration.ofSeconds(2);
     private Duration cacheTtl = Duration.ofMinutes(30);
 }

@@ -1,6 +1,8 @@
 package biz.ugur.busroutebackend.routing.application.builders;
 
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
+import biz.ugur.busroutebackend.routing.application.factory.RouteSegmentFactory;
+import biz.ugur.busroutebackend.routing.application.factory.TripOptionFactory;
 import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
@@ -22,13 +24,19 @@ public class DirectRouteOptionBuilder {
     private final ETACalculationService etaCalculationService;
     private final RouteGeometryTrimmingService geometryTrimmingService;
     private final WalkingTimeCalculator walkingTimeCalculator;
+    private final RouteSegmentFactory routeSegmentFactory;
+    private final TripOptionFactory tripOptionFactory;
 
     public DirectRouteOptionBuilder(ETACalculationService etaCalculationService,
                                     RouteGeometryTrimmingService geometryTrimmingService,
-                                    WalkingTimeCalculator walkingTimeCalculator) {
+                                    WalkingTimeCalculator walkingTimeCalculator,
+                                    RouteSegmentFactory routeSegmentFactory,
+                                    TripOptionFactory tripOptionFactory) {
         this.etaCalculationService = etaCalculationService;
         this.geometryTrimmingService = geometryTrimmingService;
         this.walkingTimeCalculator = walkingTimeCalculator;
+        this.routeSegmentFactory = routeSegmentFactory;
+        this.tripOptionFactory = tripOptionFactory;
     }
 
     public Mono<TripOption> createOption(RouteCalculationService.DirectRouteResult directRoute,
@@ -73,7 +81,7 @@ public class DirectRouteOptionBuilder {
             );
 
             List<RouteSegment> segments = List.of(
-                    RouteSegment.walkingSegment(context.fromLocation(), fromStopLocation, walkingToStop),
+                    routeSegmentFactory.createWalkingSegment(context.fromLocation(), fromStopLocation, walkingToStop),
                     createBusSegmentWithGeometry(
                             fromStopLocation,
                             toStopLocation,
@@ -81,10 +89,10 @@ public class DirectRouteOptionBuilder {
                             directRoute.route().getRouteNumber(),
                             trimmedGeometry,
                             routeDistance),
-                    RouteSegment.walkingSegment(toStopLocation, context.toLocation(), walkingFromStop)
+                    routeSegmentFactory.createWalkingSegment(toStopLocation, context.toLocation(), walkingFromStop)
             );
 
-            return new TripOption(TripType.DIRECT, segments);
+            return tripOptionFactory.createDirectOption(segments);
 
         });
     }
@@ -146,9 +154,9 @@ public class DirectRouteOptionBuilder {
     private RouteSegment createBusSegmentWithGeometry(Coordinates from, Coordinates to, int durationMinutes,
                                                       String routeNumber, String geometry, Integer distance) {
         if (geometry != null) {
-            return RouteSegment.busRideSegmentWithGeometry(from, to, durationMinutes, routeNumber, geometry, distance);
+            return routeSegmentFactory.createBusRideSegmentWithGeometry(from, to, durationMinutes, routeNumber, geometry, distance);
         } else {
-            return RouteSegment.busRideSegment(from, to, durationMinutes, routeNumber);
+            return routeSegmentFactory.createBusRideSegment(from, to, durationMinutes, routeNumber);
         }
     }
 

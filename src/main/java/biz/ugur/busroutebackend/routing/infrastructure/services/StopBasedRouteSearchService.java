@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -30,7 +29,6 @@ public class StopBasedRouteSearchService {
     private static final int MAX_RESULTS = 6;
     private static final int MAX_STOP_LAYERS = 3;
 
-    // Transfer distance limits for each layer
     private static final double[] LAYER_TRANSFER_DISTANCES = {0.3, 0.4, 0.5}; // км
 
     public StopBasedRouteSearchService(RouteCalculationService routeCalculationService,
@@ -43,7 +41,6 @@ public class StopBasedRouteSearchService {
         this.directOptionBuilder = directOptionBuilder;
     }
 
-    // ✅ ЕДИНСТВЕННАЯ ОТВЕТСТВЕННОСТЬ: поиск маршрутов через ближайшие остановки
     public Mono<SearchResult> search(SearchContext context, StopsContext originalStopsContext) {
         return performStopBasedSearch(context)
                 .timeout(SEARCH_TIMEOUT)
@@ -58,7 +55,6 @@ public class StopBasedRouteSearchService {
                 .flatMap(multiStops -> performLayeredSearch(context, multiStops, 0));
     }
 
-    // ✅ Итеративный поиск по слоям остановок
     private Mono<List<TripOption>> performLayeredSearch(
             SearchContext context,
             NearbyStopsService.MultiLayerStopsContext multiStops,
@@ -92,7 +88,6 @@ public class StopBasedRouteSearchService {
                 });
     }
 
-    // ✅ Поиск в конкретном слое остановок
     private Mono<List<TripOption>> searchInLayer(SearchContext context, StopsContext stopsContext, int layerIndex) {
         // Попытка найти прямые маршруты
         return findDirectRoutesInLayer(context, stopsContext)
@@ -102,7 +97,6 @@ public class StopBasedRouteSearchService {
                                 context.searchId(), directRoutes.size(), layerIndex);
                         return Mono.just(directRoutes);
                     }
-                    // Если прямых нет, ищем с одной пересадкой
                     return findOneTransferRoutesInLayer(context, stopsContext, layerIndex);
                 })
                 .flatMap(oneTransferRoutes -> {
@@ -111,12 +105,10 @@ public class StopBasedRouteSearchService {
                                 context.searchId(), oneTransferRoutes.size(), layerIndex);
                         return Mono.just(oneTransferRoutes);
                     }
-                    // Если с одной пересадкой нет, ищем с двумя
                     return findTwoTransferRoutesInLayer(context, stopsContext, layerIndex);
                 });
     }
 
-    // ✅ Поиск прямых маршрутов в слое
     private Mono<List<TripOption>> findDirectRoutesInLayer(SearchContext context, StopsContext stopsContext) {
         return routeCalculationService.findDirectRoutes(stopsContext.fromStops(), stopsContext.toStops())
                 .filter(this::isDirectRouteViable)
@@ -131,7 +123,6 @@ public class StopBasedRouteSearchService {
                 });
     }
 
-    // ✅ Поиск маршрутов с одной пересадкой в слое
     private Mono<List<TripOption>> findOneTransferRoutesInLayer(
             SearchContext context, StopsContext stopsContext, int layerIndex) {
 
@@ -154,7 +145,6 @@ public class StopBasedRouteSearchService {
                 });
     }
 
-    // ✅ Поиск маршрутов с двумя пересадками в слое
     private Mono<List<TripOption>> findTwoTransferRoutesInLayer(
             SearchContext context, StopsContext stopsContext, int layerIndex) {
 
@@ -177,15 +167,13 @@ public class StopBasedRouteSearchService {
                 });
     }
 
-    // ✅ Валидация прямых маршрутов
     private boolean isDirectRouteViable(RouteCalculationService.DirectRouteResult route) {
         return route.estimatedTravelMinutes() >= 2 &&
                 route.estimatedTravelMinutes() <= 120 &&
-                route.walkingDistanceToStart() <= 800 && // 800м пешком до начальной остановки
-                route.walkingDistanceFromEnd() <= 800;   // 800м пешком от конечной остановки
+                route.walkingDistanceToStart() <= 800 &&
+                route.walkingDistanceFromEnd() <= 800;
     }
 
-    // ✅ Валидация маршрутов с одной пересадкой
     private boolean isOneTransferRouteViable(RouteCalculationService.TransferRouteResult route) {
         int totalTime = route.firstRouteTravelMinutes() +
                 route.transferWaitMinutes() +
@@ -199,7 +187,6 @@ public class StopBasedRouteSearchService {
                 route.walkingDistanceFromEnd() <= 800;
     }
 
-    // ✅ Валидация маршрутов с двумя пересадками
     private boolean isTwoTransferRouteViable(RouteCalculationService.TwoTransferRouteResult route) {
         int totalTime = route.firstRouteTravelMinutes() +
                 route.secondRouteTravelMinutes() +
@@ -217,19 +204,16 @@ public class StopBasedRouteSearchService {
                 route.walkingDistanceFromEnd() <= 800;
     }
 
-    // ✅ Получение радиуса для слоя (для логирования)
     private double getRadiusForLayer(int layerIndex) {
         double[] radiuses = {0.3, 0.6, 1.0};
         return layerIndex < radiuses.length ? radiuses[layerIndex] : 1.0;
     }
 
-    // ✅ Получение максимальной дистанции пересадки для слоя
     private double getTransferDistanceForLayer(int layerIndex) {
         return layerIndex < LAYER_TRANSFER_DISTANCES.length ?
                 LAYER_TRANSFER_DISTANCES[layerIndex] : 0.5;
     }
 
-    // ✅ Обработка ошибок
     private Mono<SearchResult> handleSearchError(Throwable error, SearchContext context) {
         log.warn("[{}] Stop-based search failed: {}", context.searchId(), error.getMessage());
         return Mono.just(SearchResult.failed("stop-based", error.getMessage()));

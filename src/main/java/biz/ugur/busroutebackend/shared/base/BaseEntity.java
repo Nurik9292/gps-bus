@@ -7,14 +7,11 @@ public interface BaseEntity<ID> {
     ID getId();
 
     LocalDateTime getCreatedAt();
-
-    LocalDateTime getUpdatedAt();
-
-    Long getVersion();
-
     void setCreatedAt(LocalDateTime createdAt);
 
+    LocalDateTime getUpdatedAt();
     void setUpdatedAt(LocalDateTime updatedAt);
 
+    Long getVersion();
     void setVersion(Long version);
 }

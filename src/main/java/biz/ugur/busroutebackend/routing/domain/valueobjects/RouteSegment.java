@@ -11,10 +11,7 @@ import lombok.extern.log4j.Log4j2;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Route segment value object.
- * Migrated from Location to Coordinates as part of geospatial module consolidation.
- */
+
 @Log4j2
 @Getter
 @EqualsAndHashCode(callSuper = false)

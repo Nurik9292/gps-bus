@@ -8,10 +8,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 
-/**
- * Route calculation service interface.
- * Migrated from Location to Coordinates as part of geospatial module consolidation.
- */
+
 public interface RouteCalculationService {
 
     Flux<BusStop> findNearbyStops(Coordinates location, double radiusKm);

@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.routing.infrastructure.services;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.dto.SearchResult;
 import biz.ugur.busroutebackend.routing.application.dto.StopsContext;
+import biz.ugur.busroutebackend.routing.application.factory.TripPlanFactory;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
@@ -23,6 +24,7 @@ public class ParallelRouteSearchService {
     private final TripPlanCombiner tripPlanCombiner;
     private final RouteDeduplicationService deduplicationService;
     private final DistanceCalculationService distanceService;
+    private final TripPlanFactory tripPlanFactory;
     private StopBasedRouteSearchService stopBasedSearch;
 
     public ParallelRouteSearchService(DirectRouteSearchService directRouteSearch,
@@ -31,7 +33,8 @@ public class ParallelRouteSearchService {
                                       NearbyStopsService nearbyStopsService,
                                       TripPlanCombiner tripPlanCombiner,
                                       RouteDeduplicationService deduplicationService,
-                                      DistanceCalculationService distanceService) {
+                                      DistanceCalculationService distanceService,
+                                      TripPlanFactory tripPlanFactory) {
         this.directRouteSearch = directRouteSearch;
         this.oneTransferSearch = oneTransferSearch;
         this.twoTransferSearch = twoTransferSearch;
@@ -39,6 +42,7 @@ public class ParallelRouteSearchService {
         this.tripPlanCombiner = tripPlanCombiner;
         this.deduplicationService = deduplicationService;
         this.distanceService = distanceService;
+        this.tripPlanFactory = tripPlanFactory;
     }
 
     public Mono<TripPlan> searchAllRoutes(SearchContext context) {
@@ -46,10 +50,10 @@ public class ParallelRouteSearchService {
                 .flatMap(stopsContext -> {
 
                     if (stopsContext.hasInsufficientStops()) {
-                        return Mono.just(TripPlan.empty(context.fromLocation(),
+                        return Mono.just(tripPlanFactory.createNew(
+                                context.fromLocation(),
                                 context.toLocation(),
-                                context.searchCriteria(),
-                                distanceService));
+                                context.searchCriteria()));
                     }
 
                     return executeSearchesInParallel(context, stopsContext);

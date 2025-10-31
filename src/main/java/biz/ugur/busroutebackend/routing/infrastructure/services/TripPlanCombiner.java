@@ -2,25 +2,30 @@ package biz.ugur.busroutebackend.routing.infrastructure.services;
 
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.dto.SearchResult;
+import biz.ugur.busroutebackend.routing.application.factory.TripPlanFactory;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
+import biz.ugur.busroutebackend.routing.domain.service.TripOptionComparator;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripPlanId;
-import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.util.function.Tuple3;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class TripPlanCombiner {
 
-    private final DistanceCalculationService distanceService;
+    private final TripPlanFactory tripPlanFactory;
+
+    public TripPlanCombiner(TripPlanFactory tripPlanFactory) {
+        this.tripPlanFactory = tripPlanFactory;
+    }
 
     public TripPlan combine(SearchContext context,
                             Tuple3<SearchResult, SearchResult, SearchResult> results) {
@@ -55,17 +60,16 @@ public class TripPlanCombiner {
     }
 
     private TripPlan createTripPlan(SearchContext context, List<TripOption> options) {
-
-        TripPlan tripPlan = new TripPlan(
+        TripPlan tripPlan = tripPlanFactory.createWithId(
                 TripPlanId.generate(),
                 context.fromLocation(),
                 context.toLocation(),
-                context.searchCriteria(),
-                distanceService
+                context.searchCriteria()
         );
 
+        TripOptionComparator comparator = new TripOptionComparator(context.searchCriteria());
 
-        options.forEach(tripPlan::addTripOption);
+        options.forEach(option -> tripPlan.addTripOption(option, comparator));
 
         return tripPlan;
     }

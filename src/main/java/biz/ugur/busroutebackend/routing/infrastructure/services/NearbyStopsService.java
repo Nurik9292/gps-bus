@@ -15,12 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
 
-/**
- * Service for finding nearby bus stops for routing.
- * Now uses centralized GeoConstants for all configuration values.
- *
- * @since 1.5.0 (Phase 3 - migrated to use GeoConstants)
- */
+
 @Service
 @Slf4j
 public class NearbyStopsService {
@@ -28,13 +23,11 @@ public class NearbyStopsService {
     private final RouteCalculationService routeCalculationService;
     private final DistanceCalculationService distanceService;
 
-    // Use centralized constants from GeoConstants
     private static final double SEARCH_RADIUS_KM =
         GeoConstants.MAX_SEARCH_RADIUS_METERS / GeoConstants.METERS_PER_KILOMETER; // 5km
 
     private static final int MAX_STOPS_PER_LOCATION = 50;
 
-    // Use centralized layered search configuration from GeoConstants
     private static final double[] LAYERED_SEARCH_RADIUSES = GeoConstants.LAYERED_SEARCH_RADIUSES_KM;
     private static final int[] MAX_STOPS_PER_LAYER = GeoConstants.MAX_STOPS_PER_LAYER;
 
@@ -112,7 +105,6 @@ public class NearbyStopsService {
     }
 
     private int compareStopsByEnhancedPriority(BusStop stop1, BusStop stop2, Coordinates location) {
-        // Главный приоритет - ТОЛЬКО расстояние
         double dist1 = distanceService.calculateDistance(
                 location.getLatitudeAsDouble(), location.getLongitudeAsDouble(),
                 stop1.getLatitude().doubleValue(),
@@ -124,7 +116,6 @@ public class NearbyStopsService {
                 stop2.getLongitude().doubleValue()
         ).getMeters();
 
-        // Всегда сортируем ТОЛЬКО по расстоянию
         return Double.compare(dist1, dist2);
     }
 

@@ -1,8 +1,10 @@
-package biz.ugur.busroutebackend.routing.infrastructure.repository;
+package biz.ugur.busroutebackend.routing.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.repository.TripPlanRepository;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripPlanId;
+import biz.ugur.busroutebackend.routing.infrastructure.persistence.entity.TripPlanEntity;
+import biz.ugur.busroutebackend.routing.infrastructure.persistence.mapper.TripPlanMapper;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
@@ -19,35 +21,35 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+
 @Repository
 @Slf4j
 public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripPlanId>
         implements TripPlanRepository {
 
-    public R2dbcTripPlanRepository(DatabaseClient databaseClient) {
+    private final TripPlanMapper mapper;
+
+    public R2dbcTripPlanRepository(DatabaseClient databaseClient, TripPlanMapper mapper) {
         super(databaseClient, "trip_plans", TripPlan.class);
+        this.mapper = mapper;
     }
 
     @Override
     public Mono<TripPlan> save(TripPlan tripPlan) {
-        // ✅ РЕШЕНИЕ: Сначала проверяем существует ли запись
         return findById(tripPlan.getId())
                 .flatMap(existing -> {
-                    // Запись уже существует - обновляем её
                     log.info("🔄 TripPlan {} already exists, updating...", tripPlan.getId().getValue());
                     return updateExisting(tripPlan);
                 })
-                .switchIfEmpty(
-                        // Записи не существует - создаем новую
-                        insertNew(tripPlan)
-                )
+                .switchIfEmpty(insertNew(tripPlan))
                 .doOnSuccess(plan -> log.info("✅ Successfully saved trip plan: {}", plan.getId().getValue()))
                 .doOnError(error -> log.error("❌ Failed to save trip plan {}: {}",
                         tripPlan.getId().getValue(), error.getMessage()));
     }
 
-
     private Mono<TripPlan> insertNew(TripPlan tripPlan) {
+        TripPlanEntity entity = mapper.toEntity(tripPlan);
+
         String sql = """
         INSERT INTO trip_plans (
             id,
@@ -70,16 +72,16 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
         log.info("➕ Inserting new TripPlan: {}", tripPlan.getId().getValue());
 
         return databaseClient.sql(sql)
-                .bind(0, tripPlan.getId().getValue())
-                .bind(1, tripPlan.getOriginLatitude() != null ? tripPlan.getOriginLatitude() : 0.0)
-                .bind(2, tripPlan.getOriginLongitude() != null ? tripPlan.getOriginLongitude() : 0.0)
-                .bind(3, tripPlan.getDestinationLatitude() != null ? tripPlan.getDestinationLatitude() : 0.0)
-                .bind(4, tripPlan.getDestinationLongitude() != null ? tripPlan.getDestinationLongitude() : 0.0)
-                .bind(5, tripPlan.getSearchTimeDb() != null ? tripPlan.getSearchTimeDb() : LocalDateTime.now())
-                .bind(6, tripPlan.getOptionsCount() != null ? tripPlan.getOptionsCount() : 0)
-                .bind(7, tripPlan.getMaxTransfers() != null ? tripPlan.getMaxTransfers() : 2)
-                .bind(8, tripPlan.getMaxWalkingDistanceMeters() != null ? tripPlan.getMaxWalkingDistanceMeters() : 800)
-                .bind(9, convertToOffsetDateTime(tripPlan.getCreatedAt()))
+                .bind(0, entity.getId())
+                .bind(1, entity.getOriginLatitude())
+                .bind(2, entity.getOriginLongitude())
+                .bind(3, entity.getDestinationLatitude())
+                .bind(4, entity.getDestinationLongitude())
+                .bind(5, entity.getSearchTime() != null ? entity.getSearchTime() : LocalDateTime.now())
+                .bind(6, entity.getOptionsCount() != null ? entity.getOptionsCount() : 0)
+                .bind(7, entity.getMaxTransfers() != null ? entity.getMaxTransfers() : 2)
+                .bind(8, entity.getMaxWalkingDistanceMeters() != null ? entity.getMaxWalkingDistanceMeters() : 800)
+                .bind(9, convertToOffsetDateTime(entity.getCreatedAt()))
                 .bind(10, OffsetDateTime.now())
                 .bind(11, 0L)
                 .map(getRowMapper())
@@ -95,7 +97,6 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
                 });
     }
 
-
     private Mono<TripPlan> updateExisting(TripPlan tripPlan) {
         String sql = """
         UPDATE trip_plans SET
@@ -109,14 +110,13 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
         log.info("🔄 Updating existing TripPlan: {}", tripPlan.getId().getValue());
 
         return databaseClient.sql(sql)
-                .bind(0, tripPlan.getOptionsCount() != null ? tripPlan.getOptionsCount() : 0)
+                .bind(0, tripPlan.getTripOptionsCount())
                 .bind(1, OffsetDateTime.now())
                 .bind(2, tripPlan.getId().getValue())
                 .map(getRowMapper())
                 .one()
                 .switchIfEmpty(Mono.error(new RuntimeException("Failed to update TripPlan: " + tripPlan.getId().getValue())));
     }
-
 
     @Override
     public Mono<TripPlan> findById(TripPlanId id) {
@@ -130,10 +130,6 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
                 .singleOrEmpty()
                 .doOnNext(plan -> log.debug("🔍 Found existing TripPlan: {}", id.getValue()));
     }
-
-
-
-
 
     @Override
     public Flux<TripPlan> findRecentPlans(int limit) {
@@ -163,12 +159,12 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
     @Override
     public Flux<TripPlanningStatistics> getTripPlanningStatistics(LocalDateTime from, LocalDateTime to) {
         String sql = """
-            SELECT 
+            SELECT
                 DATE(created_at) as search_date,
                 COUNT(*) as total_searches,
                 COUNT(*) FILTER (WHERE options_count > 0) as successful_searches,
                 AVG(options_count) as avg_options_found
-            FROM trip_plans 
+            FROM trip_plans
             WHERE created_at BETWEEN :from AND :to
             GROUP BY DATE(created_at)
             ORDER BY search_date DESC
@@ -182,8 +178,8 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
                         row.get("total_searches", Long.class),
                         row.get("successful_searches", Long.class),
                         row.get("avg_options_found", Double.class),
-                        0.0, // averageTravelTime - нужна дополнительная логика
-                        "Unknown" // mostPopularRoute - нужна дополнительная логика
+                        0.0, // averageTravelTime - requires additional logic
+                        "Unknown" // mostPopularRoute - requires additional logic
                 ))
                 .all();
     }
@@ -193,43 +189,46 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
         return id.getValue();
     }
 
+
     @Override
     protected BiFunction<Row, RowMetadata, TripPlan> getRowMapper() {
         return (row, metadata) -> {
-            TripPlan tripPlan = new TripPlan(
-                    TripPlanId.of(row.get("id", String.class)),
-                    row.get("origin_latitude", Double.class),
-                    row.get("origin_longitude", Double.class),
-                    row.get("destination_latitude", Double.class),
-                    row.get("destination_longitude", Double.class),
-                    row.get("search_time", LocalDateTime.class),
-                    row.get("options_count", Integer.class),
-                    row.get("max_transfers", Integer.class),
-                    row.get("max_walking_distance_meters", Integer.class));
+            TripPlanEntity entity = TripPlanEntity.builder()
+                    .id(row.get("id", String.class))
+                    .originLatitude(row.get("origin_latitude", Double.class))
+                    .originLongitude(row.get("origin_longitude", Double.class))
+                    .destinationLatitude(row.get("destination_latitude", Double.class))
+                    .destinationLongitude(row.get("destination_longitude", Double.class))
+                    .searchTime(row.get("search_time", LocalDateTime.class))
+                    .optionsCount(row.get("options_count", Integer.class))
+                    .maxTransfers(row.get("max_transfers", Integer.class))
+                    .maxWalkingDistanceMeters(row.get("max_walking_distance_meters", Integer.class))
+                    .createdAt(row.get("created_at", LocalDateTime.class))
+                    .updatedAt(row.get("updated_at", LocalDateTime.class))
+                    .version(row.get("version", Long.class))
+                    .build();
 
-            tripPlan.setCreatedAt(row.get("created_at", LocalDateTime.class));
-            tripPlan.setUpdatedAt(row.get("updated_at", LocalDateTime.class));
-            tripPlan.setVersion(row.get("version", Long.class));
-
-            return tripPlan;
+            // Convert to domain model using mapper
+            return mapper.toDomain(entity);
         };
     }
 
     @Override
     protected Map<String, Object> mapEntityToColumns(TripPlan entity) {
+        TripPlanEntity persistenceEntity = mapper.toEntity(entity);
         Map<String, Object> columns = new HashMap<>();
-        columns.put("id", entity.getId().getValue());
-        columns.put("origin_latitude", entity.getOriginLatitude());
-        columns.put("origin_longitude", entity.getOriginLongitude());
-        columns.put("destination_latitude", entity.getDestinationLatitude());
-        columns.put("destination_longitude", entity.getDestinationLongitude());
-        columns.put("search_time", entity.getSearchTimeDb());
-        columns.put("options_count", entity.getOptionsCount());
-        columns.put("max_transfers", entity.getMaxTransfers());
-        columns.put("max_walking_distance_meters", entity.getMaxWalkingDistanceMeters());
-        columns.put("created_at", entity.getCreatedAt());
-        columns.put("updated_at", entity.getUpdatedAt());
-        columns.put("version", entity.getVersion());
+        columns.put("id", persistenceEntity.getId());
+        columns.put("origin_latitude", persistenceEntity.getOriginLatitude());
+        columns.put("origin_longitude", persistenceEntity.getOriginLongitude());
+        columns.put("destination_latitude", persistenceEntity.getDestinationLatitude());
+        columns.put("destination_longitude", persistenceEntity.getDestinationLongitude());
+        columns.put("search_time", persistenceEntity.getSearchTime());
+        columns.put("options_count", persistenceEntity.getOptionsCount());
+        columns.put("max_transfers", persistenceEntity.getMaxTransfers());
+        columns.put("max_walking_distance_meters", persistenceEntity.getMaxWalkingDistanceMeters());
+        columns.put("created_at", persistenceEntity.getCreatedAt());
+        columns.put("updated_at", persistenceEntity.getUpdatedAt());
+        columns.put("version", persistenceEntity.getVersion());
         return columns;
     }
 

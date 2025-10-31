@@ -1,19 +1,18 @@
 package biz.ugur.busroutebackend.routing.domain.model;
 
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.events.TripOptionsCalculatedEvent;
 import biz.ugur.busroutebackend.routing.domain.events.TripPlanCreatedEvent;
+import biz.ugur.busroutebackend.routing.domain.service.TripOptionComparator;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripPlanId;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripSearchCriteria;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
-import biz.ugur.busroutebackend.geospatial.domain.constants.TurkmenistanBounds;
-import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
-import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -22,174 +21,163 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 
+@ToString
+@EqualsAndHashCode(callSuper = false)
 @Getter
-@Table("trip_plans")
 public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
 
-    @Id
-    private TripPlanId tripPlanId;
+    private static final int MAX_OPTIONS_PER_PLAN = 10;
 
+    private final TripPlanId id;
     private final Coordinates originLocation;
     private final Coordinates destinationLocation;
-    private final DistanceCalculationService distanceService;
-    private final List<TripOption> tripOptions;
-    private final LocalDateTime searchTime;
     private final TripSearchCriteria searchCriteria;
+    private final LocalDateTime searchTime;
+    private final List<TripOption> tripOptions;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long version;
 
-    @Column("origin_latitude")
-    private final Double originLatitude;
 
-    @Column("origin_longitude")
-    private final Double originLongitude;
+    @Builder
+    private TripPlan(
+            TripPlanId id,
+            Coordinates originLocation,
+            Coordinates destinationLocation,
+            TripSearchCriteria searchCriteria,
+            LocalDateTime searchTime,
+            List<TripOption> tripOptions,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt,
+            Long version) {
 
-    @Column("destination_latitude")
-    private final Double destinationLatitude;
+        this.id = id;
+        this.originLocation = originLocation;
+        this.destinationLocation = destinationLocation;
+        this.searchCriteria = searchCriteria;
+        this.searchTime = searchTime != null ? searchTime : LocalDateTime.now();
+        this.tripOptions = tripOptions != null ? new ArrayList<>(tripOptions) : new ArrayList<>();
+        this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
+        this.updatedAt = updatedAt != null ? updatedAt : LocalDateTime.now();
+        this.version = version != null ? version : 0L;
+    }
 
-    @Column("destination_longitude")
-    private final Double destinationLongitude;
+    public static TripPlan create(
+            Coordinates originLocation,
+            Coordinates destinationLocation,
+            TripSearchCriteria searchCriteria) {
 
-    @Column("search_time")
-    private final LocalDateTime searchTimeDb;
+        TripPlan plan = TripPlan.builder()
+                .id(TripPlanId.generate())
+                .originLocation(originLocation)
+                .destinationLocation(destinationLocation)
+                .searchCriteria(searchCriteria != null ? searchCriteria : TripSearchCriteria.defaultCriteria())
+                .searchTime(LocalDateTime.now())
+                .tripOptions(new ArrayList<>())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .version(0L)
+                .build();
 
-    @Column("options_count")
-    private final Integer optionsCount;
-
-    @Column("max_transfers")
-    private final Integer maxTransfers;
-
-    @Column("max_walking_distance_meters")
-    private final Integer maxWalkingDistanceMeters;
-
-
-    public TripPlan(TripPlanId tripPlanId,
-                    Coordinates originLocation,
-                    Coordinates destinationLocation,
-                    TripSearchCriteria searchCriteria,
-                    DistanceCalculationService distanceService) {
-        this.tripPlanId = tripPlanId != null ? tripPlanId : TripPlanId.generate();
-        this.originLocation = validateCoordinates(originLocation, "Origin");
-        this.destinationLocation = validateCoordinates(destinationLocation, "Destination");
-        this.distanceService = distanceService != null ? distanceService : new DistanceCalculationService();
-        this.tripOptions = new ArrayList<>();
-        this.searchTime = LocalDateTime.now();
-        this.searchCriteria = searchCriteria != null ? searchCriteria : TripSearchCriteria.defaultCriteria();
-
-        this.originLatitude = originLocation.getLatitudeAsDouble();
-        this.originLongitude = originLocation.getLongitudeAsDouble();
-        this.destinationLatitude = destinationLocation.getLatitudeAsDouble();
-        this.destinationLongitude = destinationLocation.getLongitudeAsDouble();
-        this.searchTimeDb = this.searchTime;
-        this.optionsCount = 0;
-        this.maxTransfers = this.searchCriteria.getMaxTransfers();
-        this.maxWalkingDistanceMeters = this.searchCriteria.getMaxWalkingDistanceMeters();
-
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-        this.version = 0L;
-
-        double distance = this.distanceService.calculateDistance(
-            originLocation.getLatitudeAsDouble(), originLocation.getLongitudeAsDouble(),
-            destinationLocation.getLatitudeAsDouble(), destinationLocation.getLongitudeAsDouble()
-        ).getMeters();
-
-        if (distance < 100) {
-            throw new IllegalArgumentException("Origin and destination are too close. Minimum distance: 100m");
-        }
-
-        registerEvent(new TripPlanCreatedEvent(
-                this.tripPlanId.getValue(),
+        plan.registerEvent(new TripPlanCreatedEvent(
+                plan.id.getValue(),
                 originLocation.getLatitudeAsDouble(),
                 originLocation.getLongitudeAsDouble(),
                 destinationLocation.getLatitudeAsDouble(),
                 destinationLocation.getLongitudeAsDouble()
         ));
+
+        return plan;
     }
 
-    public TripPlan(TripPlanId tripPlanId,
-                    Double originLatitude,
-                    Double originLongitude,
-                    Double destinationLatitude,
-                    Double destinationLongitude,
-                    LocalDateTime searchTime,
-                    Integer optionsCount,
-                    Integer maxTransfers,
-                    Integer maxWalkingDistanceMeters) {
-        this.tripPlanId = tripPlanId;
-        this.originLatitude = originLatitude;
-        this.originLongitude = originLongitude;
-        this.destinationLatitude = destinationLatitude;
-        this.destinationLongitude = destinationLongitude;
-        this.searchTimeDb = searchTime;
-        this.optionsCount = optionsCount;
-        this.maxTransfers = maxTransfers;
-        this.maxWalkingDistanceMeters = maxWalkingDistanceMeters;
 
-        this.originLocation = Coordinates.of(originLatitude, originLongitude);
-        this.destinationLocation = Coordinates.of(destinationLatitude, destinationLongitude);
-        this.distanceService = new DistanceCalculationService();
-        this.searchTime = searchTime;
-        this.searchCriteria = new TripSearchCriteria(
-                maxWalkingDistanceMeters != null ? maxWalkingDistanceMeters : 1200,
-                maxTransfers != null ? maxTransfers : 2,
-                true, true
-        );
-        this.tripOptions = new ArrayList<>();
+    public static TripPlan createWithId(
+            TripPlanId id,
+            Coordinates originLocation,
+            Coordinates destinationLocation,
+            TripSearchCriteria searchCriteria) {
+
+        TripPlan plan = TripPlan.builder()
+                .id(id)
+                .originLocation(originLocation)
+                .destinationLocation(destinationLocation)
+                .searchCriteria(searchCriteria != null ? searchCriteria : TripSearchCriteria.defaultCriteria())
+                .searchTime(LocalDateTime.now())
+                .tripOptions(new ArrayList<>())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .version(0L)
+                .build();
+
+        plan.registerEvent(new TripPlanCreatedEvent(
+                plan.id.getValue(),
+                originLocation.getLatitudeAsDouble(),
+                originLocation.getLongitudeAsDouble(),
+                destinationLocation.getLatitudeAsDouble(),
+                destinationLocation.getLongitudeAsDouble()
+        ));
+
+        return plan;
     }
 
-    public TripPlan(Coordinates originLocation, Coordinates destinationLocation, DistanceCalculationService distanceService) {
-        this(TripPlanId.generate(), originLocation, destinationLocation, TripSearchCriteria.defaultCriteria(), distanceService);
+    public static TripPlan restore(
+            TripPlanId id,
+            Coordinates originLocation,
+            Coordinates destinationLocation,
+            TripSearchCriteria searchCriteria,
+            LocalDateTime searchTime,
+            int optionsCount,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt,
+            Long version) {
+
+        return TripPlan.builder()
+                .id(id)
+                .originLocation(originLocation)
+                .destinationLocation(destinationLocation)
+                .searchCriteria(searchCriteria)
+                .searchTime(searchTime)
+                .tripOptions(new ArrayList<>())
+                .createdAt(createdAt)
+                .updatedAt(updatedAt)
+                .version(version)
+                .build();
     }
 
-    public void addTripOption(TripOption option) {
+
+    public void addTripOption(TripOption option, TripOptionComparator comparator) {
         if (option == null) {
             throw new IllegalArgumentException("Trip option cannot be null");
         }
 
-        if (!option.isValidForTrip(originLocation, destinationLocation)) {
-            System.err.println("Trip option validation failed for option " + option.getOptionId() +
-                    ": Option start/end too far from trip origin/destination");
-            return;
-        }
+        if (tripOptions.size() >= MAX_OPTIONS_PER_PLAN) {
+            TripOption worstOption = tripOptions.stream()
+                    .max(comparator)
+                    .orElse(null);
 
-        if (!isOptionAcceptable(option)) {
-            System.err.println("Trip option " + option.getOptionId() + " rejected by isOptionAcceptable: " +
-                    "transfers=" + option.getTransfersCount() + " (max " + searchCriteria.getMaxTransfers() + "), " +
-                    "walkingMinutes=" + option.getTotalWalkingMinutes() + " (max " + (searchCriteria.getMaxWalkingDistanceMeters() / 66.67) + "), " +
-                    "totalMinutes=" + option.getTotalTravelMinutes() + " (max 240)");
-            return;
-        }
-
-        if (tripOptions.size() >= 10) {
-            TripOption worstOption = findWorstOption();
-            if (worstOption != null && isOptionBetter(option, worstOption)) {
+            if (comparator.isOptionBetter(option, worstOption)) {
                 tripOptions.remove(worstOption);
                 tripOptions.add(option);
             }
         } else {
             tripOptions.add(option);
-            System.err.println("Trip option " + option.getOptionId() + " successfully added to TripPlan. Total options: " + tripOptions.size());
         }
 
         registerEvent(new TripOptionsCalculatedEvent(
-                this.tripPlanId.getValue(),
+                this.id.getValue(),
                 tripOptions.size(),
                 option.getTripType().name(),
                 option.getTotalTravelMinutes()
         ));
     }
 
-
-    public List<TripOption> getBestOptions(int maxCount) {
+    public List<TripOption> getBestOptions(int maxCount, TripOptionComparator comparator) {
         return tripOptions.stream()
-                .sorted(this::compareOptions)
+                .sorted(comparator)
                 .limit(maxCount)
                 .collect(Collectors.toList());
     }
-
 
     public TripOption getFastestOption() {
         return tripOptions.stream()
@@ -206,13 +194,10 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
 
     public TripOption getCheapestOption() {
         return tripOptions.stream()
-                .min(Comparator.comparing(option -> (option.getTransfersCount() + 1) * 1.0)) // 1 манат за поездку
+                .min(Comparator.comparing(option -> (option.getTransfersCount() + 1) * 1.0))
                 .orElse(null);
     }
 
-    public boolean hasViableOptions() {
-        return !tripOptions.isEmpty();
-    }
 
     public List<TripOption> getDirectOptions() {
         return tripOptions.stream()
@@ -227,33 +212,52 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
                 .collect(Collectors.toList());
     }
 
-
-    public boolean isWalkable() {
-        double distanceMeters = distanceService.calculateDistance(
-            originLocation.getLatitudeAsDouble(), originLocation.getLongitudeAsDouble(),
-            destinationLocation.getLatitudeAsDouble(), destinationLocation.getLongitudeAsDouble()
-        ).getMeters();
-        return distanceMeters <= searchCriteria.getMaxWalkingDistanceMeters();
+    public int getTripOptionsCount() {
+        return tripOptions.size();
     }
 
-    public int getWalkingTimeMinutes() {
-        if (!isWalkable()) return -1;
+    public List<TripOption> getTripOptions() {
+        return new ArrayList<>(tripOptions);
+    }
 
-        double distanceMeters = distanceService.calculateDistance(
-            originLocation.getLatitudeAsDouble(), originLocation.getLongitudeAsDouble(),
-            destinationLocation.getLatitudeAsDouble(), destinationLocation.getLongitudeAsDouble()
-        ).getMeters();
-        return (int) Math.ceil(distanceMeters / 83.33);
+    public TripPlanStatistics getStatistics() {
+        if (tripOptions.isEmpty()) {
+            return new TripPlanStatistics(0, 0, 0, 0, 0.0);
+        }
+
+        int directCount = (int) tripOptions.stream()
+                .filter(o -> o.getTripType() == TripType.DIRECT)
+                .count();
+
+        int transferCount = tripOptions.size() - directCount;
+
+        int fastestTime = tripOptions.stream()
+                .mapToInt(TripOption::getTotalTravelMinutes)
+                .min()
+                .orElse(0);
+
+        int averageTime = (int) tripOptions.stream()
+                .mapToInt(TripOption::getTotalTravelMinutes)
+                .average()
+                .orElse(0);
+
+        double averageCost = tripOptions.stream()
+                .mapToDouble(TripOption::getEstimatedCostManat)
+                .average()
+                .orElse(0.0);
+
+        return new TripPlanStatistics(
+                directCount,
+                transferCount,
+                fastestTime,
+                averageTime,
+                averageCost
+        );
     }
 
     @Override
     public TripPlanId getId() {
-        return tripPlanId;
-    }
-
-    @Override
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
+        return id;
     }
 
     @Override
@@ -262,103 +266,13 @@ public class TripPlan extends AggregateRoot<TripPlan, TripPlanId> {
     }
 
     @Override
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    @Override
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
 
     @Override
-    public Long getVersion() {
-        return version;
-    }
-
-    @Override
     public void setVersion(Long version) {
         this.version = version;
-    }
-
-    public List<TripOption> getTripOptions() {
-        return new ArrayList<>(tripOptions);
-    }
-
-    private Coordinates validateCoordinates(Coordinates coordinates, String type) {
-        if (coordinates == null) {
-            throw new IllegalArgumentException(type + " coordinates cannot be null");
-        }
-        if (!TurkmenistanBounds.isWithinStandardBounds(
-            coordinates.getLatitudeAsDouble(),
-            coordinates.getLongitudeAsDouble())) {
-            throw new IllegalArgumentException(
-                type + " coordinates are outside Turkmenistan bounds: " + coordinates
-            );
-        }
-        return coordinates;
-    }
-
-    private boolean isOptionAcceptable(TripOption option) {
-        if (option.getTransfersCount() > searchCriteria.getMaxTransfers()) {
-            return false;
-        }
-
-        double maxWalkingMinutes = searchCriteria.getMaxWalkingDistanceMeters() / 66.67;
-        if (option.getTotalWalkingMinutes() > maxWalkingMinutes) {
-            return false;
-        }
-
-        if (option.getTotalTravelMinutes() > 240) {
-            return false;
-        }
-
-        return true;
-    }
-
-    private TripOption findWorstOption() {
-        return tripOptions.stream()
-                .max(this::compareOptions)
-                .orElse(null);
-    }
-
-    private boolean isOptionBetter(TripOption option1, TripOption option2) {
-        return compareOptions(option1, option2) < 0;
-    }
-
-    private int compareOptions(TripOption a, TripOption b) {
-        boolean test = searchCriteria.isPrioritizeFewerTransfers();
-        if (searchCriteria.isPrioritizeFewerTransfers()) {
-            int transfersComparison = Integer.compare(a.getTransfersCount(), b.getTransfersCount());
-            if (transfersComparison != 0) return transfersComparison;
-        }
-
-        if (searchCriteria.isPrioritizeSpeed()) {
-            int timeComparison = Integer.compare(a.getTotalTravelMinutes(), b.getTotalTravelMinutes());
-            if (timeComparison != 0) return timeComparison;
-        }
-
-        if (!searchCriteria.isPrioritizeFewerTransfers()) {
-            int transfersComparison = Integer.compare(a.getTransfersCount(), b.getTransfersCount());
-            if (transfersComparison != 0) return transfersComparison;
-        }
-
-        if (!searchCriteria.isPrioritizeSpeed()) {
-            int timeComparison = Integer.compare(a.getTotalTravelMinutes(), b.getTotalTravelMinutes());
-            if (timeComparison != 0) return timeComparison;
-        }
-
-        return Integer.compare(a.getTotalWalkingMinutes(), b.getTotalWalkingMinutes());
-    }
-
-    public static TripPlan empty(Coordinates fromLocation, Coordinates toLocation, TripSearchCriteria searchCriteria, DistanceCalculationService distanceService) {
-        return new TripPlan(
-                TripPlanId.generate(),
-                fromLocation,
-                toLocation,
-                searchCriteria,
-                distanceService
-        );
     }
 
     public record TripPlanStatistics(

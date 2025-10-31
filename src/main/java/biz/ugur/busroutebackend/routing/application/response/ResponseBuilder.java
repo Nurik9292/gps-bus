@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.dto.TripOptionDTO;
 import biz.ugur.busroutebackend.routing.domain.exceptions.TripPlanningException;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
+import biz.ugur.busroutebackend.routing.domain.service.TripOptionComparator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -64,7 +65,8 @@ public class ResponseBuilder {
     }
 
     private List<TripOptionDTO> selectAndConvertBestOptions(TripPlan tripPlan) {
-        return tripPlan.getBestOptions(5)
+        TripOptionComparator comparator = new TripOptionComparator(tripPlan.getSearchCriteria());
+        return tripPlan.getBestOptions(5, comparator)
                 .stream()
                 .map(dtoConverter::convertToDTO)
                 .collect(Collectors.toList());
@@ -94,7 +96,7 @@ public class ResponseBuilder {
         log.warn("[{}] Empty result diagnostics:", context.searchId());
         log.warn("  - Origin: {}", tripPlan.getOriginLocation());
         log.warn("  - Destination: {}", tripPlan.getDestinationLocation());
-        log.warn("  - Walkable: {}", tripPlan.isWalkable());
         log.warn("  - Max transfers: {}", tripPlan.getSearchCriteria().getMaxTransfers());
+        log.warn("  - Max walking distance: {} meters", tripPlan.getSearchCriteria().getMaxWalkingDistanceMeters());
     }
 }

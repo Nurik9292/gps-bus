@@ -6,10 +6,7 @@ import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 
 import java.util.UUID;
 
-/**
- * Search context for trip planning.
- * Migrated from Location to Coordinates as part of geospatial module consolidation.
- */
+
 public record SearchContext(
         String searchId,
         Coordinates fromLocation,

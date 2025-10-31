@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.routing.infrastructure.repository;
+package biz.ugur.busroutebackend.routing.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.routing.domain.repository.StopConnectionRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -6,6 +6,7 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
 
 @Repository
 @Slf4j
@@ -20,7 +21,7 @@ public class R2dbcStopConnectionRepository implements StopConnectionRepository {
     @Override
     public Flux<StopConnection> findAllConnections() {
         String sql = """
-            SELECT 
+            SELECT
                 rs1.stop_id as from_stop_id,
                 rs2.stop_id as to_stop_id,
                 rs1.route_id,
@@ -49,7 +50,7 @@ public class R2dbcStopConnectionRepository implements StopConnectionRepository {
     @Override
     public Flux<StopConnection> findConnectionsFromStop(String stopId) {
         String sql = """
-            SELECT 
+            SELECT
                 rs1.stop_id as from_stop_id,
                 rs2.stop_id as to_stop_id,
                 rs1.route_id,
