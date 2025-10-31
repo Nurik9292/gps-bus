@@ -1,14 +1,19 @@
-package biz.ugur.busroutebackend.transport.infrastructure.repository;
+package biz.ugur.busroutebackend.transport.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.geospatial.infrastructure.postgis.PostGISQueryBuilder;
+import biz.ugur.busroutebackend.shared.domain.specification.Specification;
+import biz.ugur.busroutebackend.shared.domain.specification.SqlCriteria;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
+import biz.ugur.busroutebackend.transport.infrastructure.persistence.entity.VehicleEntity;
+import biz.ugur.busroutebackend.transport.infrastructure.mapper.VehicleEntityMapper;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,8 +32,11 @@ import java.util.function.BiFunction;
 @Transactional(readOnly = true)
 public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, VehicleId> implements VehicleRepository {
 
-    public R2dbcVehicleRepository(DatabaseClient databaseClient) {
+    private final VehicleEntityMapper entityMapper;
+
+    public R2dbcVehicleRepository(DatabaseClient databaseClient, VehicleEntityMapper entityMapper) {
         super(databaseClient, "vehicles", Vehicle.class);
+        this.entityMapper = entityMapper;
     }
 
     @Override
@@ -43,20 +51,20 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     protected Map<String, Object> mapEntityToColumns(Vehicle entity) {
+        VehicleEntity persistenceEntity = entityMapper.toEntity(entity);
         Map<String, Object> columns = new HashMap<>();
-        columns.put("id", entity.getId().getValue());
-        columns.put("device_id", entity.getDeviceId());
-        columns.put("license_plate", entity.getLicensePlate());
-        columns.put("current_latitude", entity.getCurrentLatitude());
-        columns.put("current_longitude", entity.getCurrentLongitude());
-        columns.put("speed_kmh", entity.getSpeedKmh());
-        columns.put("is_in_motion", entity.getIsInMotion());
-        columns.put("last_position_update", entity.getLastPositionUpdate());
-        columns.put("assigned_route_id", entity.getAssignedRouteId() != null ?
-                entity.getAssignedRouteId().getValue() : null);
-        columns.put("route_number", entity.getRouteNumber());
-        columns.put("is_active", entity.getIsActive());
-        columns.put("course", entity.getCourse());
+        columns.put("id", persistenceEntity.getId());
+        columns.put("device_id", persistenceEntity.getDeviceId());
+        columns.put("license_plate", persistenceEntity.getLicensePlate());
+        columns.put("current_latitude", persistenceEntity.getCurrentLatitude());
+        columns.put("current_longitude", persistenceEntity.getCurrentLongitude());
+        columns.put("speed_kmh", persistenceEntity.getSpeedKmh());
+        columns.put("is_in_motion", persistenceEntity.getIsInMotion());
+        columns.put("last_position_update", persistenceEntity.getLastPositionUpdate());
+        columns.put("assigned_route_id", persistenceEntity.getAssignedRouteId());
+        columns.put("route_number", persistenceEntity.getRouteNumber());
+        columns.put("is_active", persistenceEntity.getIsActive());
+        columns.put("course", persistenceEntity.getCourse());
         return columns;
     }
 
@@ -314,26 +322,25 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
     }
 
     private Vehicle mapRowToVehicle(Row row, RowMetadata metadata) {
-        Vehicle vehicle = new Vehicle(
-                VehicleId.of(row.get("id", String.class)),
-                row.get("device_id", String.class),
-                row.get("license_plate", String.class),
-                row.get("current_latitude", Double.class),
-                row.get("current_longitude", Double.class),
-                row.get("speed_kmh", Double.class),
-                row.get("is_in_motion", Boolean.class),
-                row.get("last_position_update", LocalDateTime.class),
-                Optional.ofNullable(row.get("assigned_route_id", String.class)).map(BusRouteId::of).orElse(null),
-                row.get("route_number", String.class),
-                row.get("is_active", Boolean.class),
-                row.get("course", Double.class)
-        );
+        VehicleEntity entity = VehicleEntity.builder()
+                .id(row.get("id", String.class))
+                .deviceId(row.get("device_id", String.class))
+                .licensePlate(row.get("license_plate", String.class))
+                .currentLatitude(row.get("current_latitude", Double.class))
+                .currentLongitude(row.get("current_longitude", Double.class))
+                .speedKmh(row.get("speed_kmh", Double.class))
+                .isInMotion(row.get("is_in_motion", Boolean.class))
+                .lastPositionUpdate(row.get("last_position_update", LocalDateTime.class))
+                .assignedRouteId(row.get("assigned_route_id", String.class))
+                .routeNumber(row.get("route_number", String.class))
+                .isActive(row.get("is_active", Boolean.class))
+                .course(row.get("course", Double.class))
+                .createdAt(safeGet(row, "created_at", LocalDateTime.class, null))
+                .updatedAt(safeGet(row, "updated_at", LocalDateTime.class, null))
+                .version(safeGet(row, "version", Long.class, 0L))
+                .build();
 
-        vehicle.setCreatedAt(safeGet(row, "created_at", LocalDateTime.class, null));
-        vehicle.setUpdatedAt(safeGet(row, "updated_at", LocalDateTime.class, null));
-        vehicle.setVersion(safeGet(row, "version", Long.class, 0L));
-
-        return vehicle;
+        return entityMapper.toDomain(entity);
     }
 
     private <T> T safeGet(Row row, String columnName, Class<T> type, T defaultValue) {
@@ -443,5 +450,68 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                     return spec.map(getRowMapper()).one();
                 })
                 .doOnComplete(() -> log.info("Batch inserted {} vehicles", vehicles.size()));
+    }
+
+    @Override
+    public Flux<Vehicle> findBySpecification(Specification<Vehicle> specification) {
+        SqlCriteria criteria = specification.toSqlCriteria();
+
+        String sql = String.format(
+            "SELECT * FROM vehicles WHERE %s ORDER BY last_position_update DESC, created_at DESC",
+            criteria.getWhereClause()
+        );
+
+        DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
+
+        for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
+            executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
+        }
+
+        return executeSpec
+                .map(getRowMapper())
+                .all();
+    }
+
+    @Override
+    public Flux<Vehicle> findBySpecification(Specification<Vehicle> specification, Pageable pageable) {
+        SqlCriteria criteria = specification.toSqlCriteria();
+
+        String sql = String.format(
+            "SELECT * FROM vehicles WHERE %s %s LIMIT :limit OFFSET :offset",
+            criteria.getWhereClause(),
+            getOrderByClause(pageable)
+        );
+
+        DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql)
+                .bind("limit", pageable.getPageSize())
+                .bind("offset", pageable.getOffset());
+
+        for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
+            executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
+        }
+
+        return executeSpec
+                .map(getRowMapper())
+                .all();
+    }
+
+    @Override
+    public Mono<Long> countBySpecification(Specification<Vehicle> specification) {
+        SqlCriteria criteria = specification.toSqlCriteria();
+
+        String sql = String.format(
+            "SELECT COUNT(*) FROM vehicles WHERE %s",
+            criteria.getWhereClause()
+        );
+
+        DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
+
+        for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
+            executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
+        }
+
+        return executeSpec
+                .map(row -> row.get(0, Long.class))
+                .one();
     }
 }

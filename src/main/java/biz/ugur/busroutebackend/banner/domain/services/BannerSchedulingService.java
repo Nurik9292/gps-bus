@@ -2,15 +2,19 @@ package biz.ugur.busroutebackend.banner.domain.services;
 
 import biz.ugur.busroutebackend.banner.domain.model.Banner;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerPeriod;
-import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
-
-@Service
+/**
+ * Domain service for banner scheduling logic.
+ * Determines banner activation status and scheduling information.
+ *
+ * Note: This is a pure domain service (POJO).
+ * Configuration as Spring bean is in infrastructure layer.
+ */
 public class BannerSchedulingService {
 
 

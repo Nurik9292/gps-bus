@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteVehicleStatistics;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -13,13 +14,16 @@ import java.util.List;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class RouteDtoMappingService {
+
+    private final RouteDataMapper routeDataMapper;
 
 
     public RouteData toRouteDto(BusRoute busRoute) {
         log.debug("Mapping BusRoute to DTO: {}", busRoute.getRouteNumber());
 
-        return RouteData.fromDomain(busRoute);
+        return routeDataMapper.toRouteDataSync(busRoute);
     }
 
 
@@ -39,7 +43,7 @@ public class RouteDtoMappingService {
                 .map(this::toRouteStopDto)
                 .toList();
 
-        return RouteData.fromDomainWithStops(
+        return routeDataMapper.toRouteDataWithStopsSync(
                 busRoute,
                 forwardStopDtos,
                 backwardStopDtos,

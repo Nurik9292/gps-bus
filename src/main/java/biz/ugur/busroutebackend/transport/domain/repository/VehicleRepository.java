@@ -1,9 +1,11 @@
 package biz.ugur.busroutebackend.transport.domain.repository;
 
 import biz.ugur.busroutebackend.shared.base.BaseRepository;
+import biz.ugur.busroutebackend.shared.domain.specification.Specification;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
+import org.springframework.data.domain.Pageable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -38,24 +40,16 @@ public interface VehicleRepository extends BaseRepository<Vehicle, VehicleId> {
 
     Mono<Long> countActiveVehiclesRouteNumber(String routeNumber);
 
-    /**
-     * Find vehicles by multiple device IDs in a single query
-     * @param deviceIds list of device IDs to search for
-     * @return Flux of found vehicles mapped by deviceId
-     */
+
     Mono<Map<String, Vehicle>> findByDeviceIds(List<String> deviceIds);
 
-    /**
-     * Batch update vehicles positions
-     * @param vehicles list of vehicles to update
-     * @return Mono with number of updated vehicles
-     */
     Mono<Integer> batchUpdate(List<Vehicle> vehicles);
 
-    /**
-     * Batch insert new vehicles
-     * @param vehicles list of vehicles to insert
-     * @return Flux of inserted vehicles
-     */
     Flux<Vehicle> batchInsert(List<Vehicle> vehicles);
+
+    Flux<Vehicle> findBySpecification(Specification<Vehicle> specification);
+
+    Flux<Vehicle> findBySpecification(Specification<Vehicle> specification, Pageable pageable);
+
+    Mono<Long> countBySpecification(Specification<Vehicle> specification);
 }

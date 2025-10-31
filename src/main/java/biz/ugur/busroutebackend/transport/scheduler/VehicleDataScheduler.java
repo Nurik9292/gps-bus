@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.transport.scheduler;
 
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
-import biz.ugur.busroutebackend.transport.application.service.ResilientExternalApiService;
+import biz.ugur.busroutebackend.transport.application.services.ExternalApiService;
 import biz.ugur.busroutebackend.transport.application.usecase.SyncBusRouteAssignmentsUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase;
 import biz.ugur.busroutebackend.transport.scheduler.dto.GpsUpdateStats;
@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class VehicleDataScheduler {
 
 
-    private final ResilientExternalApiService externalApiService;
+    private final ExternalApiService externalApiService;
     private final UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase;
     private final SyncBusRouteAssignmentsUseCase syncBusRouteAssignmentsUseCase;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
@@ -42,7 +42,7 @@ public class VehicleDataScheduler {
     private static final String GPS_HEALTH_KEY = "gps:health";
     private static final String BUS_INFO_HEALTH_KEY = "bus_info:health";
 
-    public VehicleDataScheduler(ResilientExternalApiService externalApiService,
+    public VehicleDataScheduler(ExternalApiService externalApiService,
                                 UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase,
                                 SyncBusRouteAssignmentsUseCase syncBusRouteAssignmentsUseCase,
                                 ReactiveRedisTemplate<String, Object> redisTemplate,

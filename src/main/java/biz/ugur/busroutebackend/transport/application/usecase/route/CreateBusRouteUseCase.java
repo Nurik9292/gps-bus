@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.route.CreateRoute;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
+import biz.ugur.busroutebackend.transport.application.mapper.RouteDataMapper;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
@@ -23,14 +24,17 @@ public class CreateBusRouteUseCase extends BaseUseCase<Mono<CreateRoute>, RouteD
 
     private final BusRouteRepository busRouteRepository;
     private final RouteStopsService routeStopsService;
+    private final RouteDataMapper routeDataMapper;
 
     public CreateBusRouteUseCase(BusRouteRepository busRouteRepository,
                                  RouteStopsService routeStopsService,
                                  EventBus eventBus,
-                                 CorrelationContextService correlationService) {
+                                 CorrelationContextService correlationService,
+                                 RouteDataMapper routeDataMapper) {
         super(correlationService, eventBus);
         this.busRouteRepository = busRouteRepository;
         this.routeStopsService = routeStopsService;
+        this.routeDataMapper = routeDataMapper;
     }
 
     @Override
@@ -64,7 +68,7 @@ public class CreateBusRouteUseCase extends BaseUseCase<Mono<CreateRoute>, RouteD
                         }
                     })
 
-                    .map(RouteData::fromDomain)
+                    .flatMap(routeDataMapper::toRouteData)
                     .doOnSuccess(response -> log.info("Bus route created successfully: {} with stops", response.routeNumber()))
                     .doOnError(error -> log.error("Failed to create bus route: {}", command.routeNumber(), error));
         });

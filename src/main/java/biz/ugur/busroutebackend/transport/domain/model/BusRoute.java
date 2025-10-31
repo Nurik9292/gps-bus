@@ -3,120 +3,250 @@ package biz.ugur.busroutebackend.transport.domain.model;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import biz.ugur.busroutebackend.transport.domain.enums.RouteDirection;
 import biz.ugur.busroutebackend.transport.domain.event.RouteGeometryUpdatedEvent;
+import biz.ugur.busroutebackend.transport.domain.exceptions.RouteValidationException;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import lombok.Setter;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.Transient;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
 
+
+@Builder(toBuilder = true)
 @Getter
-@Table("bus_routes")
-@Builder
+@EqualsAndHashCode(callSuper = false)
 public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
 
-    @Id
-    @Column("id")
-    private BusRouteId id;
+    private final BusRouteId id;
 
-    @Column("route_number")
-    private String routeNumber;
+    private final String routeNumber;
+    private final String routeName;
+    private final String nameTm;
+    private final String nameEn;
+    private final String routeColor;
 
-    @Column("route_name")
-    private String routeName;
+    private final Boolean isActive;
+    private final String cityId;
+    private final Integer estimatedDurationMinutes;
 
-    @Column("name_tm")
-    private String nameTm;
 
-    @Column("name_en")
-    private String nameEn;
+    private final String routeGeometryForward;
+    private final String routeGeometryBackward;
+    private final Integer totalDistanceForwardMeters;
+    private final Integer totalDistanceBackwardMeters;
 
-    @Column("route_color")
-    private String routeColor;
-
-    @Column("is_active")
-    private Boolean isActive;
-
-    @Column("city_id")
-    private String cityId;
-
-    @Column("estimated_duration_minutes")
-    private Integer estimatedDurationMinutes;
-
-    @Column("route_geometry_forward")
-    private String routeGeometryForward;
-
-    @Column("route_geometry_backward")
-    private String routeGeometryBackward;
-
-    @Setter
-    @Column("total_distance_forward_meters")
-    private Integer totalDistanceForwardMeters;
-
-    @Setter
-    @Column("total_distance_backward_meters")
-    private Integer totalDistanceBackwardMeters;
-
-    @Transient
-    private List<BusStop> busStops = new ArrayList<>();
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long version;
 
-    public void updateRouteGeometry(RouteGeometry forwardGeometry, RouteGeometry backwardGeometry) {
-        boolean hasChanges = false;
+
+
+    /**
+     * Create NEW bus route.
+     */
+    public static BusRoute create(
+            String routeNumber,
+            String routeName,
+            String nameTm,
+            String nameEn,
+            String routeColor,
+            String cityId,
+            Integer estimatedDurationMinutes) {
+
+        String validatedNumber = validateAndNormalizeRouteNumber(routeNumber);
+        String validatedName = validateRouteName(routeName);
+        String validatedColor = validateAndNormalizeRouteColor(routeColor);
+
+        return builder()
+                .id(BusRouteId.generate())
+                .routeNumber(validatedNumber)
+                .routeName(validatedName)
+                .nameTm(nameTm != null ? nameTm.trim() : "")
+                .nameEn(nameEn != null ? nameEn.trim() : "")
+                .routeColor(validatedColor)
+                .isActive(true)
+                .cityId(cityId)
+                .estimatedDurationMinutes(estimatedDurationMinutes)
+                .routeGeometryForward(null)
+                .routeGeometryBackward(null)
+                .totalDistanceForwardMeters(null)
+                .totalDistanceBackwardMeters(null)
+                .version(0L)
+                .build();
+    }
+
+    /**
+     * Restore from persistence.
+     */
+    public static BusRoute restore(
+            BusRouteId id,
+            String routeNumber,
+            String routeName,
+            String nameTm,
+            String nameEn,
+            String routeColor,
+            Boolean isActive,
+            String cityId,
+            Integer estimatedDurationMinutes,
+            String routeGeometryForward,
+            String routeGeometryBackward,
+            Integer totalDistanceForwardMeters,
+            Integer totalDistanceBackwardMeters,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt,
+            Long version) {
+
+        return builder()
+                .id(id)
+                .routeNumber(routeNumber)
+                .routeName(routeName)
+                .nameTm(nameTm)
+                .nameEn(nameEn)
+                .routeColor(routeColor)
+                .isActive(isActive != null ? isActive : true)
+                .cityId(cityId)
+                .estimatedDurationMinutes(estimatedDurationMinutes)
+                .routeGeometryForward(routeGeometryForward)
+                .routeGeometryBackward(routeGeometryBackward)
+                .totalDistanceForwardMeters(totalDistanceForwardMeters)
+                .totalDistanceBackwardMeters(totalDistanceBackwardMeters)
+                .createdAt(createdAt)
+                .updatedAt(updatedAt)
+                .version(version != null ? version : 0L)
+                .build();
+    }
+
+
+
+    public BusRoute updateRouteGeometry(RouteGeometry forwardGeometry, RouteGeometry backwardGeometry) {
+        String forwardWKT = null;
+        Integer forwardDistance = null;
+        String backwardWKT = null;
+        Integer backwardDistance = null;
 
         if (forwardGeometry != null) {
-            String forwardWKT = forwardGeometry.toWKT();
-            int forwardDistance = (int) Math.round(forwardGeometry.calculateDistanceMeters());
-
-            this.routeGeometryForward = forwardWKT;
-            this.totalDistanceForwardMeters = forwardDistance;
-            hasChanges = true;
-
+            forwardWKT = forwardGeometry.toWKT();
+            forwardDistance = (int) Math.round(forwardGeometry.calculateDistanceMeters());
         }
 
         if (backwardGeometry != null) {
-            String backwardWKT = backwardGeometry.toWKT();
-            int backwardDistance = (int) Math.round(backwardGeometry.calculateDistanceMeters());
-
-            this.routeGeometryBackward = backwardWKT;
-            this.totalDistanceBackwardMeters = backwardDistance;
-            hasChanges = true;
-
-
+            backwardWKT = backwardGeometry.toWKT();
+            backwardDistance = (int) Math.round(backwardGeometry.calculateDistanceMeters());
         }
 
-        if (hasChanges) {
-            registerEvent(new RouteGeometryUpdatedEvent(
+        BusRoute updatedRoute = this.toBuilder()
+                .routeGeometryForward(forwardWKT)
+                .routeGeometryBackward(backwardWKT)
+                .totalDistanceForwardMeters(forwardDistance)
+                .totalDistanceBackwardMeters(backwardDistance)
+                .build();
+
+        if (forwardGeometry != null || backwardGeometry != null) {
+            updatedRoute.registerEvent(new RouteGeometryUpdatedEvent(
                     this.id.getValue(),
                     this.routeNumber,
                     this.routeName,
-                    Objects.requireNonNull(forwardGeometry).getPointCount(),
-                    Objects.requireNonNull(backwardGeometry).getPointCount(),
-                    this.totalDistanceForwardMeters,
-                    this.totalDistanceBackwardMeters
+                    forwardGeometry != null ? forwardGeometry.getPointCount() : 0,
+                    backwardGeometry != null ? backwardGeometry.getPointCount() : 0,
+                    forwardDistance,
+                    backwardDistance
             ));
-
         }
+
+        return updatedRoute;
     }
+
+    public BusRoute updateBasicInfo(
+            String routeNumber,
+            String routeName,
+            String nameTm,
+            String nameEn,
+            String routeColor,
+            Integer estimatedDurationMinutes,
+            String cityId) {
+
+        String validatedNumber = validateAndNormalizeRouteNumber(routeNumber);
+        String validatedName = validateRouteName(routeName);
+        String validatedColor = validateAndNormalizeRouteColor(routeColor);
+
+        return this.toBuilder()
+                .routeNumber(validatedNumber)
+                .routeName(validatedName)
+                .nameTm(nameTm != null ? nameTm.trim() : "")
+                .nameEn(nameEn != null ? nameEn.trim() : "")
+                .routeColor(validatedColor)
+                .estimatedDurationMinutes(estimatedDurationMinutes)
+                .cityId(cityId)
+                .build();
+    }
+
+    public BusRoute updateForwardGeometry(String geometryWKT, Integer distanceMeters) {
+        if (geometryWKT == null || geometryWKT.trim().isEmpty()) {
+            throw new IllegalArgumentException("Forward geometry WKT cannot be empty");
+        }
+
+        return this.toBuilder()
+                .routeGeometryForward(geometryWKT)
+                .totalDistanceForwardMeters(distanceMeters)
+                .build();
+    }
+
+    public BusRoute updateBackwardGeometry(String geometryWKT, Integer distanceMeters) {
+        if (geometryWKT == null || geometryWKT.trim().isEmpty()) {
+            throw new IllegalArgumentException("Backward geometry WKT cannot be empty");
+        }
+
+        return this.toBuilder()
+                .routeGeometryBackward(geometryWKT)
+                .totalDistanceBackwardMeters(distanceMeters)
+                .build();
+    }
+
+    public BusRoute activate() {
+        if (Boolean.TRUE.equals(this.isActive)) {
+            return this;
+        }
+        return this.toBuilder().isActive(true).build();
+    }
+
+    public BusRoute deactivate() {
+        if (Boolean.FALSE.equals(this.isActive)) {
+            return this;
+        }
+        return this.toBuilder().isActive(false).build();
+    }
+
+    public BusRoute clearGeometry() {
+        return this.toBuilder()
+                .routeGeometryForward(null)
+                .routeGeometryBackward(null)
+                .totalDistanceForwardMeters(null)
+                .totalDistanceBackwardMeters(null)
+                .build();
+    }
+
+    public BusRoute clearForwardGeometry() {
+        return this.toBuilder()
+                .routeGeometryForward(null)
+                .totalDistanceForwardMeters(null)
+                .build();
+    }
+
+    public BusRoute clearBackwardGeometry() {
+        return this.toBuilder()
+                .routeGeometryBackward(null)
+                .totalDistanceBackwardMeters(null)
+                .build();
+    }
+
 
 
     public RouteGeometry getForwardGeometry() {
         if (routeGeometryForward == null || routeGeometryForward.trim().isEmpty()) {
             return null;
         }
-
         try {
             return RouteGeometry.fromWKT(routeGeometryForward);
         } catch (Exception e) {
@@ -128,73 +258,12 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         if (routeGeometryBackward == null || routeGeometryBackward.trim().isEmpty()) {
             return null;
         }
-
         try {
             return RouteGeometry.fromWKT(routeGeometryBackward);
         } catch (Exception e) {
             return null;
         }
     }
-
-    public void updateBasicInfo(
-            String routeNumber,
-            String routeName,
-            String nameTm,
-            String nameEn,
-            String routeColor,
-            Integer estimatedDurationMinutes,
-            String cityId) {
-        this.routeName = routeName;
-        this.nameTm = nameTm;
-        this.nameEn = nameEn;
-        this.routeColor = routeColor;
-        this.estimatedDurationMinutes = estimatedDurationMinutes;
-        this.cityId = cityId;
-        this.updatedAt = LocalDateTime.now();
-
-    }
-
-    public void updateForwardGeometry(String geometryWKT, Integer distanceMeters) {
-        if (geometryWKT == null || geometryWKT.trim().isEmpty()) {
-            throw new IllegalArgumentException("Forward geometry WKT cannot be empty");
-        }
-
-        this.routeGeometryForward = geometryWKT;
-        this.totalDistanceForwardMeters = distanceMeters;
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    public void updateBackwardGeometry(String geometryWKT, Integer distanceMeters) {
-        if (geometryWKT == null || geometryWKT.trim().isEmpty()) {
-            throw new IllegalArgumentException("Backward geometry WKT cannot be empty");
-        }
-
-        this.routeGeometryBackward = geometryWKT;
-        this.totalDistanceBackwardMeters = distanceMeters;
-        this.updatedAt = LocalDateTime.now();
-
-    }
-
-    public boolean hasGeometry() {
-        return hasForwardGeometry() || hasBackwardGeometry();
-    }
-
-
-    public boolean hasForwardGeometry() {
-        return routeGeometryForward != null && !routeGeometryForward.trim().isEmpty();
-    }
-
-
-    public boolean hasBackwardGeometry() {
-        return routeGeometryBackward != null && !routeGeometryBackward.trim().isEmpty();
-    }
-
-
-    public boolean hasCompleteGeometry() {
-        return hasForwardGeometry() && hasBackwardGeometry();
-    }
-
-
 
     public RouteGeometry getGeometryByDirection(RouteDirection direction) {
         return switch (direction) {
@@ -203,30 +272,60 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         };
     }
 
+    public boolean hasGeometry() {
+        return hasForwardGeometry() || hasBackwardGeometry();
+    }
+
+    public boolean hasForwardGeometry() {
+        return routeGeometryForward != null && !routeGeometryForward.trim().isEmpty();
+    }
+
+    public boolean hasBackwardGeometry() {
+        return routeGeometryBackward != null && !routeGeometryBackward.trim().isEmpty();
+    }
+
+    public boolean hasCompleteGeometry() {
+        return hasForwardGeometry() && hasBackwardGeometry();
+    }
 
     public int getTotalGeometryPoints() {
         int points = 0;
-
         RouteGeometry forward = getForwardGeometry();
-        if (forward != null) {
-            points += forward.getPointCount();
-        }
-
+        if (forward != null) points += forward.getPointCount();
         RouteGeometry backward = getBackwardGeometry();
-        if (backward != null) {
-            points += backward.getPointCount();
-        }
-
+        if (backward != null) points += backward.getPointCount();
         return points;
     }
 
-    public void deactivate() {
-        this.isActive = false;
+
+
+    private static String validateAndNormalizeRouteNumber(String routeNumber) {
+        if (routeNumber == null || routeNumber.trim().isEmpty()) {
+            throw new RouteValidationException("routeNumber", "Route number cannot be null or empty");
+        }
+        String normalized = routeNumber.trim().toUpperCase();
+        if (!normalized.matches("\\d{1,3}[A-Z]?")) {
+            throw new RouteValidationException("routeNumber",
+                    "Invalid route number format. Expected: '29' or '7A', got: " + routeNumber);
+        }
+        return normalized;
     }
 
-    public void activate() {
-        this.isActive = true;
+    private static String validateRouteName(String routeName) {
+        if (routeName == null || routeName.trim().isEmpty()) {
+            throw new RouteValidationException("routeName", "Route name cannot be null or empty");
+        }
+        return routeName.trim();
     }
+
+    private static String validateAndNormalizeRouteColor(String routeColor) {
+        if (routeColor == null || !routeColor.matches("^#[0-9A-Fa-f]{6}$")) {
+            return "#1976D2";
+        }
+        return routeColor.toUpperCase();
+    }
+
+
 
     @Override
     public BusRouteId getId() {
@@ -263,172 +362,14 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
         this.version = version;
     }
 
-    private String validateRouteNumber(String routeNumber) {
-        if (routeNumber == null || routeNumber.trim().isEmpty()) {
-            throw new IllegalArgumentException("Route number cannot be null or empty");
-        }
-
-        String number = routeNumber.trim().toUpperCase();
-        // Формат: "29", "7A", "12B" - цифры + опциональная буква
-        if (!number.matches("\\d{1,3}[A-Z]?")) {
-            throw new IllegalArgumentException("Invalid route number format. Expected: '29' or '7A'");
-        }
-        return number;
-    }
-
-    private String validateRouteName(String routeName) {
-        if (routeName == null || routeName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Route name cannot be null or empty");
-        }
-        return routeName.trim();
-    }
-
-    private String validateRouteColor(String routeColor) {
-        if (routeColor == null || !routeColor.matches("^#[0-9A-Fa-f]{6}$")) {
-            return "#1976D2";
-        }
-        return routeColor.toUpperCase();
-    }
-
-    public boolean connectsStops(String fromStopId, String toStopId) {
-        if (busStops.isEmpty()) {
-            // Если остановки не загружены, возвращаем true для совместимости
-            // В реальности нужно загружать через репозиторий
-            return true;
-        }
-
-        boolean hasFromStop = busStops.stream()
-                .anyMatch(stop -> stop.getId().getValue().equals(fromStopId));
-        boolean hasToStop = busStops.stream()
-                .anyMatch(stop -> stop.getId().getValue().equals(toStopId));
-
-        return hasFromStop && hasToStop;
-    }
-
-    public boolean hasStop(String stopId) {
-        if (busStops.isEmpty()) {
-            return true; // Заглушка для совместимости
-        }
-
-        return busStops.stream()
-                .anyMatch(stop -> stop.getId().getValue().equals(stopId));
-    }
-
-    public int getStopsBetween(String fromStopId, String toStopId) {
-        if (busStops.isEmpty()) {
-            return 3; // Заглушка - среднее количество остановок
-        }
-
-        int fromIndex = -1;
-        int toIndex = -1;
-
-        for (int i = 0; i < busStops.size(); i++) {
-            String stopId = busStops.get(i).getId().getValue();
-            if (stopId.equals(fromStopId)) {
-                fromIndex = i;
-            }
-            if (stopId.equals(toStopId)) {
-                toIndex = i;
-            }
-        }
-
-        if (fromIndex == -1 || toIndex == -1) {
-            return 3; // Заглушка
-        }
-
-        return Math.abs(toIndex - fromIndex);
-    }
-
-    public void clearGeometry() {
-        this.routeGeometryForward = null;
-        this.routeGeometryBackward = null;
-        this.totalDistanceForwardMeters = null;
-        this.totalDistanceBackwardMeters = null;
-        this.updatedAt = LocalDateTime.now();
-
-    }
-
-
-    public void clearForwardGeometry() {
-        this.routeGeometryForward = null;
-        this.totalDistanceForwardMeters = null;
-        this.updatedAt = LocalDateTime.now();
-
-    }
-
-
-    public void clearBackwardGeometry() {
-        this.routeGeometryBackward = null;
-        this.totalDistanceBackwardMeters = null;
-        this.updatedAt = LocalDateTime.now();
-
-    }
-
-    public List<BusStop> getBusStops() {
-        return new ArrayList<>(busStops);
-    }
-
-    public void setBusStops(List<BusStop> stops) {
-        this.busStops = stops != null ? new ArrayList<>(stops) : new ArrayList<>();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-        BusRoute busRoute = (BusRoute) o;
-        return Objects.equals(id, busRoute.id) &&
-                Objects.equals(routeNumber, busRoute.routeNumber) &&
-                Objects.equals(routeName, busRoute.routeName) &&
-                Objects.equals(nameTm, busRoute.nameTm) &&
-                Objects.equals(nameEn, busRoute.nameEn) &&
-                Objects.equals(routeColor, busRoute.routeColor) &&
-                Objects.equals(isActive, busRoute.isActive) &&
-                Objects.equals(cityId, busRoute.cityId) &&
-                Objects.equals(estimatedDurationMinutes, busRoute.estimatedDurationMinutes) &&
-                Objects.equals(routeGeometryForward, busRoute.routeGeometryForward) &&
-                Objects.equals(routeGeometryBackward, busRoute.routeGeometryBackward) &&
-                Objects.equals(totalDistanceForwardMeters, busRoute.totalDistanceForwardMeters) &&
-                Objects.equals(totalDistanceBackwardMeters, busRoute.totalDistanceBackwardMeters);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(super.hashCode(),
-                id,
-                routeNumber,
-                routeName,
-                nameTm,
-                nameEn,
-                routeColor,
-                isActive,
-                cityId,
-                estimatedDurationMinutes,
-                routeGeometryForward,
-                routeGeometryBackward,
-                totalDistanceForwardMeters,
-                totalDistanceBackwardMeters);
-    }
-
     @Override
     public String toString() {
         return "BusRoute{" +
                 "id=" + id +
                 ", routeNumber='" + routeNumber + '\'' +
                 ", routeName='" + routeName + '\'' +
-                ", nameTm='" + nameTm + '\'' +
-                ", nameEn='" + nameEn + '\'' +
-                ", routeColor='" + routeColor + '\'' +
                 ", isActive=" + isActive +
-                ", cityId='" + cityId + '\'' +
-                ", estimatedDurationMinutes=" + estimatedDurationMinutes +
-                ", routeGeometryForward='" + routeGeometryForward + '\'' +
-                ", routeGeometryBackward='" + routeGeometryBackward + '\'' +
-                ", totalDistanceForwardMeters=" + totalDistanceForwardMeters +
-                ", totalDistanceBackwardMeters=" + totalDistanceBackwardMeters +
-                ", busStops=" + busStops +
-                ", createdAt=" + createdAt +
-                ", updatedAt=" + updatedAt +
+                ", hasGeometry=" + hasGeometry() +
                 '}';
     }
 }

@@ -2,7 +2,7 @@ package biz.ugur.busroutebackend.transport.application.usecase.route;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.UseCase;
-import biz.ugur.busroutebackend.transport.infrastructure.repository.R2dbcRouteStopRepository;
+import biz.ugur.busroutebackend.transport.infrastructure.persistence.repository.R2dbcRouteStopRepository;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;

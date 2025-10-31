@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.transport.infrastructure.repository;
+package biz.ugur.busroutebackend.transport.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.transport.domain.repository.RouteStopRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.*;

@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteList;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
+import biz.ugur.busroutebackend.transport.application.mapper.RouteDataMapper;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
@@ -24,16 +25,19 @@ public class GetAllBusRoutesUseCase extends BaseUseCase<Mono<Void>, RouteList> {
     private final BusRouteRepository busRouteRepository;
     private final RouteStopsService routeStopsService;
     private final VehicleRepository vehicleRepository;
+    private final RouteDataMapper routeDataMapper;
 
     public GetAllBusRoutesUseCase(BusRouteRepository busRouteRepository,
                                   CorrelationContextService correlationService,
                                   EventBus eventBus,
                                   RouteStopsService routeStopsService,
-                                  VehicleRepository vehicleRepository) {
+                                  VehicleRepository vehicleRepository,
+                                  RouteDataMapper routeDataMapper) {
         super(correlationService, eventBus);
         this.busRouteRepository = busRouteRepository;
         this.routeStopsService = routeStopsService;
         this.vehicleRepository = vehicleRepository;
+        this.routeDataMapper = routeDataMapper;
     }
 
 
@@ -76,7 +80,7 @@ public class GetAllBusRoutesUseCase extends BaseUseCase<Mono<Void>, RouteList> {
         Mono<Long> activeVehiclesCount = getActiveVehiclesCount(route.getRouteNumber());
 
         return Mono.zip(forwardStops, backwardStops, activeVehiclesCount)
-                .map(tuple -> RouteData.fromDomainWithStops(
+                .flatMap(tuple -> routeDataMapper.toRouteDataWithStops(
                         route,
                         tuple.getT1(),
                         tuple.getT2(),

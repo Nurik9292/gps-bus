@@ -57,7 +57,7 @@ public class CreateBusStopUseCase extends BaseUseCase<Mono<CreateStop>, StopData
         try {
             validateCoordinates(command.latitude(), command.longitude());
 
-            BusStop busStop = new BusStop(
+            BusStop busStop = BusStop.create(
                     command.stopName(),
                     command.nameEn(),
                     command.nameTm(),

@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.application.dto.route.UpdateRoute;
+import biz.ugur.busroutebackend.transport.application.mapper.RouteDataMapper;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
@@ -24,14 +25,17 @@ public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteD
 
     private final BusRouteRepository busRouteRepository;
     private final RouteStopsService routeStopsService;
+    private final RouteDataMapper routeDataMapper;
 
     public UpdateBusRouteUseCase(BusRouteRepository busRouteRepository,
                                  EventBus eventBus,
                                  CorrelationContextService correlationService,
-                                 RouteStopsService routeStopsService) {
+                                 RouteStopsService routeStopsService,
+                                 RouteDataMapper routeDataMapper) {
         super(correlationService, eventBus);
         this.busRouteRepository = busRouteRepository;
         this.routeStopsService = routeStopsService;
+        this.routeDataMapper = routeDataMapper;
     }
 
 
@@ -61,7 +65,7 @@ public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteD
                                 command.backwardStopIds()
                         ).thenReturn(updatedRoute);
                     })
-                    .map(RouteData::fromDomain)
+                    .flatMap(routeDataMapper::toRouteData)
                     .doOnSuccess(response -> log.info("Bus route updated successfully: {}", response.routeNumber()))
                     .doOnError(error -> log.error("Failed to update bus route: {}", command.routeNumber(), error));
 

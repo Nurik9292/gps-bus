@@ -1268,14 +1268,30 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                     .build();;
 
 
-            BusStop fromStop = new BusStop(dto.fromStop.stopName, dto.fromStop.id,
-                    BigDecimal.valueOf(dto.fromStop.latitude), BigDecimal.valueOf(dto.fromStop.longitude));
-            BusStop firstTransferStop = new BusStop(dto.firstTransferStop.stopName, dto.firstTransferStop.id,
-                    BigDecimal.valueOf(dto.firstTransferStop.latitude), BigDecimal.valueOf(dto.firstTransferStop.longitude));
-            BusStop secondTransferStop = new BusStop(dto.secondTransferStop.stopName, dto.secondTransferStop.id,
-                    BigDecimal.valueOf(dto.secondTransferStop.latitude), BigDecimal.valueOf(dto.secondTransferStop.longitude));
-            BusStop toStop = new BusStop(dto.toStop.stopName, dto.toStop.id,
-                    BigDecimal.valueOf(dto.toStop.latitude), BigDecimal.valueOf(dto.toStop.longitude));
+            BusStop fromStop = BusStop.builder()
+                    .id(new biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId(dto.fromStop.id))
+                    .stopName(dto.fromStop.stopName)
+                    .latitude(BigDecimal.valueOf(dto.fromStop.latitude))
+                    .longitude(BigDecimal.valueOf(dto.fromStop.longitude))
+                    .build();
+            BusStop firstTransferStop = BusStop.builder()
+                    .id(new biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId(dto.firstTransferStop.id))
+                    .stopName(dto.firstTransferStop.stopName)
+                    .latitude(BigDecimal.valueOf(dto.firstTransferStop.latitude))
+                    .longitude(BigDecimal.valueOf(dto.firstTransferStop.longitude))
+                    .build();
+            BusStop secondTransferStop = BusStop.builder()
+                    .id(new biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId(dto.secondTransferStop.id))
+                    .stopName(dto.secondTransferStop.stopName)
+                    .latitude(BigDecimal.valueOf(dto.secondTransferStop.latitude))
+                    .longitude(BigDecimal.valueOf(dto.secondTransferStop.longitude))
+                    .build();
+            BusStop toStop = BusStop.builder()
+                    .id(new biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId(dto.toStop.id))
+                    .stopName(dto.toStop.stopName)
+                    .latitude(BigDecimal.valueOf(dto.toStop.latitude))
+                    .longitude(BigDecimal.valueOf(dto.toStop.longitude))
+                    .build();
 
             return new TwoTransferRouteResult(
                     firstRoute, fromStop, firstTransferStop,
@@ -1311,19 +1327,19 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                     .totalDistanceBackwardMeters( direction == 1 ? totalDistance : null)
                     .build();
 
-            BusStop fromStop = new BusStop(
-                    row.get("from_stop_name", String.class),
-                    row.get("from_stop_id", String.class),
-                    row.get("from_lat", BigDecimal.class),
-                    row.get("from_lon", BigDecimal.class)
-            );
+            BusStop fromStop = BusStop.builder()
+                    .id(new BusStopId(row.get("from_stop_id", String.class)))
+                    .stopName(row.get("from_stop_name", String.class))
+                    .latitude(row.get("from_lat", BigDecimal.class))
+                    .longitude(row.get("from_lon", BigDecimal.class))
+                    .build();
 
-            BusStop toStop = new BusStop(
-                    row.get("to_stop_name", String.class),
-                    row.get("to_stop_id", String.class),
-                    row.get("to_lat", BigDecimal.class),
-                    row.get("to_lon", BigDecimal.class)
-            );
+            BusStop toStop = BusStop.builder()
+                    .id(new BusStopId(row.get("to_stop_id", String.class)))
+                    .stopName(row.get("to_stop_name", String.class))
+                    .latitude(row.get("to_lat", BigDecimal.class))
+                    .longitude(row.get("to_lon", BigDecimal.class))
+                    .build();
 
             Integer estimatedMinutes = row.get("estimated_travel_minutes", Integer.class);
             Long activeVehicles = row.get("active_vehicles_count", Long.class);
@@ -1386,37 +1402,28 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                     .totalDistanceBackwardMeters(secondDirection == 1 ? secondRouteDistance : null)
                     .build();
 
-            BusStop fromStop = new BusStop(
-                    row.get("from_stop_name", String.class),
-                    row.get("from_stop_id", String.class),
-                    row.get("from_lat", BigDecimal.class),
-                    row.get("from_lon", BigDecimal.class)
-            );
+            BusStop fromStop = BusStop.builder()
+                    .id(new BusStopId(row.get("from_stop_id", String.class)))
+                    .stopName(row.get("from_stop_name", String.class))
+                    .latitude(row.get("from_lat", BigDecimal.class))
+                    .longitude(row.get("from_lon", BigDecimal.class))
+                    .build();
 
-            BusStop transferStop = new BusStop(
-                    row.get("transfer_stop_name", String.class),
-                    row.get("transfer_stop_id", String.class),
-                    row.get("transfer_lat", BigDecimal.class),
-                    row.get("transfer_lon", BigDecimal.class)
-            );
+            BusStop transferStop = BusStop.builder()
+                    .id(new BusStopId(row.get("transfer_stop_id", String.class)))
+                    .stopName(row.get("transfer_stop_name", String.class))
+                    .latitude(row.get("transfer_lat", BigDecimal.class))
+                    .longitude(row.get("transfer_lon", BigDecimal.class))
+                    .isActive(true)
+                    .isMajorStop(row.get("transfer_is_major", Boolean.class))
+                    .build();
 
-
-            transferStop = new BusStop(
-                    transferStop.getId(),
-                    transferStop.getStopName(),
-                    transferStop.getStopCode(),
-                    transferStop.getLatitude(),
-                    transferStop.getLongitude(),
-                    true,
-                    row.get("transfer_is_major", Boolean.class)
-            );
-
-            BusStop toStop = new BusStop(
-                    row.get("to_stop_name", String.class),
-                    row.get("to_stop_id", String.class),
-                    row.get("to_lat", BigDecimal.class),
-                    row.get("to_lon", BigDecimal.class)
-            );
+            BusStop toStop = BusStop.builder()
+                    .id(new BusStopId(row.get("to_stop_id", String.class)))
+                    .stopName(row.get("to_stop_name", String.class))
+                    .latitude(row.get("to_lat", BigDecimal.class))
+                    .longitude(row.get("to_lon", BigDecimal.class))
+                    .build();
 
             Integer firstRouteMinutes = row.get("first_route_minutes", Integer.class);
             Integer secondRouteMinutes = row.get("second_route_minutes", Integer.class);
@@ -1493,53 +1500,37 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                     .build();
 
 
-            BusStop fromStop = new BusStop(
-                    row.get("from_stop_name", String.class),
-                    row.get("from_stop_id", String.class),
-                    row.get("from_lat", BigDecimal.class),
-                    row.get("from_lon", BigDecimal.class)
-            );
+            BusStop fromStop = BusStop.builder()
+                    .id(new BusStopId(row.get("from_stop_id", String.class)))
+                    .stopName(row.get("from_stop_name", String.class))
+                    .latitude(row.get("from_lat", BigDecimal.class))
+                    .longitude(row.get("from_lon", BigDecimal.class))
+                    .build();
 
-            BusStop firstTransferStop = new BusStop(
-                    row.get("first_transfer_name", String.class),
-                    row.get("first_transfer_stop_id", String.class),
-                    row.get("first_transfer_lat", BigDecimal.class),
-                    row.get("first_transfer_lon", BigDecimal.class)
-            );
+            BusStop firstTransferStop = BusStop.builder()
+                    .id(new BusStopId(row.get("first_transfer_stop_id", String.class)))
+                    .stopName(row.get("first_transfer_name", String.class))
+                    .latitude(row.get("first_transfer_lat", BigDecimal.class))
+                    .longitude(row.get("first_transfer_lon", BigDecimal.class))
+                    .isActive(true)
+                    .isMajorStop(row.get("first_transfer_is_major", Boolean.class))
+                    .build();
 
-            firstTransferStop = new BusStop(
-                    firstTransferStop.getId(),
-                    firstTransferStop.getStopName(),
-                    firstTransferStop.getStopCode(),
-                    firstTransferStop.getLatitude(),
-                    firstTransferStop.getLongitude(),
-                    true,
-                    row.get("first_transfer_is_major", Boolean.class)
-            );
+            BusStop secondTransferStop = BusStop.builder()
+                    .id(new BusStopId(row.get("second_transfer_stop_id", String.class)))
+                    .stopName(row.get("second_transfer_name", String.class))
+                    .latitude(row.get("second_transfer_lat", BigDecimal.class))
+                    .longitude(row.get("second_transfer_lon", BigDecimal.class))
+                    .isActive(true)
+                    .isMajorStop(row.get("second_transfer_is_major", Boolean.class))
+                    .build();
 
-            BusStop secondTransferStop = new BusStop(
-                    row.get("second_transfer_name", String.class),
-                    row.get("second_transfer_stop_id", String.class),
-                    row.get("second_transfer_lat", BigDecimal.class),
-                    row.get("second_transfer_lon", BigDecimal.class)
-            );
-
-            secondTransferStop = new BusStop(
-                    secondTransferStop.getId(),
-                    secondTransferStop.getStopName(),
-                    secondTransferStop.getStopCode(),
-                    secondTransferStop.getLatitude(),
-                    secondTransferStop.getLongitude(),
-                    true,
-                    row.get("second_transfer_is_major", Boolean.class)
-            );
-
-            BusStop toStop = new BusStop(
-                    row.get("to_stop_name", String.class),
-                    row.get("to_stop_id", String.class),
-                    row.get("to_lat", BigDecimal.class),
-                    row.get("to_lon", BigDecimal.class)
-            );
+            BusStop toStop = BusStop.builder()
+                    .id(new BusStopId(row.get("to_stop_id", String.class)))
+                    .stopName(row.get("to_stop_name", String.class))
+                    .latitude(row.get("to_lat", BigDecimal.class))
+                    .longitude(row.get("to_lon", BigDecimal.class))
+                    .build();
 
             Integer firstRouteMinutes = row.get("first_route_minutes", Integer.class);
             Integer secondRouteMinutes = row.get("second_route_minutes", Integer.class);

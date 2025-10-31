@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
+import biz.ugur.busroutebackend.transport.application.mapper.RouteDataMapper;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
@@ -25,6 +26,7 @@ public class GetRouteByIdUseCase implements UseCase<Mono<GetRouteByIdUseCase.Que
     private final CorrelationContextService correlationService;
     private final RouteStopsService routeStopsService;
     private final VehicleRepository vehicleRepository;
+    private final RouteDataMapper routeDataMapper;
 
     @Override
     public Mono<RouteData> execute(Mono<Query> routeIdMono) {
@@ -56,7 +58,7 @@ public class GetRouteByIdUseCase implements UseCase<Mono<GetRouteByIdUseCase.Que
         Mono<Long> activeVehiclesCount = getActiveVehiclesCount(route.getRouteNumber());
 
         return Mono.zip(forwardStops, backwardStops, activeVehiclesCount)
-                .map(tuple -> RouteData.fromDomainWithStops(
+                .flatMap(tuple -> routeDataMapper.toRouteDataWithStops(
                         route,
                         tuple.getT1(),
                         tuple.getT2(),

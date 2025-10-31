@@ -3,18 +3,20 @@ package biz.ugur.busroutebackend.transport.application.usecase;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
-import biz.ugur.busroutebackend.geospatial.domain.constants.TurkmenistanBounds;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
+import biz.ugur.busroutebackend.transport.application.factory.VehicleFactory;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
+import biz.ugur.busroutebackend.transport.domain.service.LicensePlateExtractor;
+import biz.ugur.busroutebackend.transport.domain.service.PositionChangeDetector;
+import biz.ugur.busroutebackend.transport.domain.service.VehicleValidationService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,13 +27,24 @@ import java.util.Map;
 public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionDTO>, VehiclePositionUpdateResult> {
 
     private final VehicleRepository vehicleRepository;
-
+    private final VehicleFactory vehicleFactory;
+    private final VehicleValidationService validationService;
+    private final PositionChangeDetector positionChangeDetector;
+    private final LicensePlateExtractor licensePlateExtractor;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
+                                         VehicleFactory vehicleFactory,
+                                         VehicleValidationService validationService,
+                                         PositionChangeDetector positionChangeDetector,
+                                         LicensePlateExtractor licensePlateExtractor,
                                          EventBus eventBus,
                                          CorrelationContextService correlationContextService) {
         super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
+        this.vehicleFactory = vehicleFactory;
+        this.validationService = validationService;
+        this.positionChangeDetector = positionChangeDetector;
+        this.licensePlateExtractor = licensePlateExtractor;
     }
 
     @Override
@@ -49,7 +62,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             log.info("Processing {} GPS positions (batch mode) - CorrelationId: {}", gpsPositions.size(), correlationId);
 
             List<GpsPositionDTO> validPositions = gpsPositions.stream()
-                    .filter(this::isValidGpsPosition)
+                    .filter(validationService::isValidGpsPosition)
                     .toList();
 
             if (validPositions.isEmpty()) {
@@ -85,7 +98,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     Double oldLongitude = vehicle.getCurrentLongitude();
                     Double oldSpeed = vehicle.getSpeedKmh();
 
-                    vehicle.updatePosition(
+                    Vehicle updatedVehicle = vehicle.updatePosition(
                             gpsPosition.getLatitude(),
                             gpsPosition.getLongitude(),
                             gpsPosition.getSpeed(),
@@ -93,61 +106,62 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             gpsPosition.getCourse()
                     );
 
-                    vehiclesToUpdate.add(vehicle);
+                    vehiclesToUpdate.add(updatedVehicle);
 
-                    boolean shouldPublish = shouldPublishPositionEvent(
+                    boolean shouldPublish = positionChangeDetector.hasSignificantChange(
                             oldLatitude, oldLongitude, oldSpeed,
-                            vehicle.getCurrentLatitude(),
-                            vehicle.getCurrentLongitude(),
-                            vehicle.getSpeedKmh()
+                            updatedVehicle.getCurrentLatitude(),
+                            updatedVehicle.getCurrentLongitude(),
+                            updatedVehicle.getSpeedKmh()
                     );
 
                     if (shouldPublish) {
                         VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
-                                vehicle.getId().getValue(),
-                                vehicle.getDeviceId(),
-                                vehicle.getLicensePlate(),
-                                vehicle.getRouteNumber(),
-                                vehicle.getCurrentLatitude(),
-                                vehicle.getCurrentLongitude(),
-                                vehicle.getSpeedKmh(),
-                                vehicle.getIsInMotion(),
-                                vehicle.getLastPositionUpdate(),
-                                vehicle.getCourse()
+                                updatedVehicle.getId().getValue(),
+                                updatedVehicle.getDeviceId(),
+                                updatedVehicle.getLicensePlate(),
+                                updatedVehicle.getRouteNumber(),
+                                updatedVehicle.getCurrentLatitude(),
+                                updatedVehicle.getCurrentLongitude(),
+                                updatedVehicle.getSpeedKmh(),
+                                updatedVehicle.getIsInMotion(),
+                                updatedVehicle.getLastPositionUpdate(),
+                                updatedVehicle.getCourse()
                         );
                         eventBus.publish(event);
                     }
 
                     statuses.add(VehicleUpdateStatus.updated(
-                            vehicle.getId().getValue(),
-                            vehicle.getDeviceId(),
-                            vehicle.getLicensePlate()
+                            updatedVehicle.getId().getValue(),
+                            updatedVehicle.getDeviceId(),
+                            updatedVehicle.getLicensePlate()
                     ));
 
                 } else {
                     // Create new vehicle
-                    String licensePlate = extractLicensePlateFromGps(gpsPosition);
-                    if (licensePlate != null) {
-                        Vehicle newVehicle = new Vehicle(gpsPosition.getDeviceId(), licensePlate);
-                        newVehicle.updatePosition(
-                                gpsPosition.getLatitude(),
-                                gpsPosition.getLongitude(),
-                                gpsPosition.getSpeed(),
-                                gpsPosition.getFixTime(),
-                                gpsPosition.getCourse()
-                        );
-                        vehiclesToCreate.add(newVehicle);
-                        statuses.add(VehicleUpdateStatus.created(
-                                newVehicle.getId().getValue(),
-                                newVehicle.getDeviceId(),
-                                newVehicle.getLicensePlate()
-                        ));
-                    } else {
-                        statuses.add(VehicleUpdateStatus.invalid(
-                                gpsPosition.getDeviceId(),
-                                "Cannot extract license plate"
-                        ));
-                    }
+                    licensePlateExtractor.extractFromGpsData(gpsPosition)
+                            .ifPresentOrElse(
+                                    licensePlate -> {
+                                        Vehicle newVehicle = Vehicle.create(gpsPosition.getDeviceId(), licensePlate);
+                                        Vehicle positionedVehicle = newVehicle.updatePosition(
+                                                gpsPosition.getLatitude(),
+                                                gpsPosition.getLongitude(),
+                                                gpsPosition.getSpeed(),
+                                                gpsPosition.getFixTime(),
+                                                gpsPosition.getCourse()
+                                        );
+                                        vehiclesToCreate.add(positionedVehicle);
+                                        statuses.add(VehicleUpdateStatus.created(
+                                                positionedVehicle.getId().getValue(),
+                                                positionedVehicle.getDeviceId(),
+                                                positionedVehicle.getLicensePlate()
+                                        ));
+                                    },
+                                    () -> statuses.add(VehicleUpdateStatus.invalid(
+                                            gpsPosition.getDeviceId(),
+                                            "Cannot extract license plate"
+                                    ))
+                            );
                 }
             } catch (IllegalArgumentException e) {
                 log.warn("Invalid GPS data for device {}: {}", gpsPosition.getDeviceId(), e.getMessage());
@@ -186,7 +200,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             Double oldLongitude = vehicle.getCurrentLongitude();
             Double oldSpeed = vehicle.getSpeedKmh();
 
-            vehicle.updatePosition(
+            Vehicle updatedVehicle = vehicle.updatePosition(
                     gpsPosition.getLatitude(),
                     gpsPosition.getLongitude(),
                     gpsPosition.getSpeed(),
@@ -194,9 +208,9 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     gpsPosition.getCourse()
             );
 
-            return vehicleRepository.save(vehicle)
+            return vehicleRepository.save(updatedVehicle)
                     .doOnSuccess(savedVehicle -> {
-                        boolean shouldPublishEvent = shouldPublishPositionEvent(
+                        boolean shouldPublishEvent = positionChangeDetector.hasSignificantChange(
                                 oldLatitude, oldLongitude, oldSpeed,
                                 savedVehicle.getCurrentLatitude(),
                                 savedVehicle.getCurrentLongitude(),
@@ -233,111 +247,30 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         }
     }
 
-    private boolean shouldPublishPositionEvent(Double oldLat, Double oldLon, Double oldSpeed,
-                                               Double newLat, Double newLon, Double newSpeed) {
-        if (oldLat == null || oldLon == null) {
-            return true;
-        }
-
-        double deltaLat = Math.abs(newLat - oldLat);
-        double deltaLon = Math.abs(newLon - oldLon);
-        boolean positionChanged = deltaLat > 0.00005 || deltaLon > 0.00005;
-
-        boolean speedChanged = false;
-        if (oldSpeed != null && newSpeed != null) {
-            double speedDelta = Math.abs(newSpeed - oldSpeed);
-            speedChanged = speedDelta > 2.0;
-        }
-
-        log.trace("Position change check for vehicle: posChanged={}, speedChanged={}, deltaLat={}, deltaLon={}",
-                positionChanged, speedChanged, deltaLat, deltaLon);
-
-        return positionChanged || speedChanged;
-    }
 
 
 
     private Mono<VehicleUpdateStatus> createNewVehicle(GpsPositionDTO gpsPosition) {
-        String licensePlate = extractLicensePlateFromGps(gpsPosition);
+        return vehicleFactory.createOrFindFromGpsData(gpsPosition)
+                .flatMap(vehicle -> {
+                    // Update position if needed
+                    Vehicle positionedVehicle = vehicleFactory.updateVehiclePosition(vehicle, gpsPosition);
 
-        if (licensePlate == null) {
-            log.warn("Cannot extract license plate from GPS data for device: {}", gpsPosition.getDeviceId());
-            return Mono.just(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), "Cannot extract license plate"));
-        }
-
-        return vehicleRepository.findByLicensePlate(licensePlate)
-                .flatMap(existingVehicle -> {
-                    log.info("Found existing vehicle by license plate: {}, updating device_id", licensePlate);
-                    existingVehicle.setDeviceId(gpsPosition.getDeviceId());
-                    return updateExistingVehicle(existingVehicle, gpsPosition);
+                    return vehicleRepository.save(positionedVehicle)
+                            .as(this::persistAndPublish)
+                            .map(savedVehicle -> VehicleUpdateStatus.created(
+                                    savedVehicle.getId().getValue(),
+                                    savedVehicle.getDeviceId(),
+                                    savedVehicle.getLicensePlate()
+                            ))
+                            .doOnSuccess(status -> log.info("Created new vehicle: {}", status));
                 })
-                .switchIfEmpty(
-                        Mono.defer(() -> {
-                            try {
-                                Vehicle newVehicle = new Vehicle(gpsPosition.getDeviceId(), licensePlate);
-                                newVehicle.updatePosition(
-                                        gpsPosition.getLatitude(),
-                                        gpsPosition.getLongitude(),
-                                        gpsPosition.getSpeed(),
-                                        gpsPosition.getFixTime(),
-                                        gpsPosition.getCourse()
-                                );
-
-                                return vehicleRepository.save(newVehicle)
-                                        .as(this::persistAndPublish)
-                                        .map(savedVehicle -> VehicleUpdateStatus.created(
-                                                savedVehicle.getId().getValue(),
-                                                savedVehicle.getDeviceId(),
-                                                savedVehicle.getLicensePlate()
-                                        ))
-                                        .doOnSuccess(status -> log.info("Created new vehicle: {}", status));
-
-                            } catch (IllegalArgumentException e) {
-                                log.warn("Invalid data for new vehicle {}: {}", licensePlate, e.getMessage());
-                                return Mono.just(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), e.getMessage()));
-                            }
-                        })
-                );
+                .onErrorResume(IllegalArgumentException.class, e -> {
+                    log.warn("Cannot create vehicle for device {}: {}", gpsPosition.getDeviceId(), e.getMessage());
+                    return Mono.just(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), e.getMessage()));
+                });
     }
 
-    /**
-     * Validate GPS position data.
-     * Now uses centralized TurkmenistanBounds for validation.
-     *
-     * @since 1.5.0 (Phase 3 - migrated to use TurkmenistanBounds)
-     */
-    private boolean isValidGpsPosition(GpsPositionDTO gpsPosition) {
-        if (gpsPosition == null) return false;
-        if (gpsPosition.getDeviceId() == null || gpsPosition.getDeviceId().trim().isEmpty()) return false;
-        if (gpsPosition.getLatitude() == null || gpsPosition.getLongitude() == null) return false;
-
-        double lat = gpsPosition.getLatitude();
-        double lon = gpsPosition.getLongitude();
-
-        // Use centralized TurkmenistanBounds for validation
-        if (!TurkmenistanBounds.isWithinStandardBounds(lat, lon)) {
-            log.warn("Coordinates ({}, {}) outside Turkmenistan bounds for device {}",
-                lat, lon, gpsPosition.getDeviceId());
-            return false;
-        }
-
-        return true;
-    }
-
-    private String extractLicensePlateFromGps(GpsPositionDTO gpsPosition) {
-        String name = gpsPosition.getVehicleName();
-        if (name == null || name.trim().isEmpty()) {
-            return null;
-        }
-
-        String normalized = name.trim().toUpperCase().replace("-", "");
-
-        if (normalized.matches("\\d{4}\\s[A-Z]{3}")) {
-            return normalized;
-        }
-
-        return null;
-    }
 
     private VehiclePositionUpdateResult createResult(List<VehicleUpdateStatus> statuses) {
         long updated = statuses.stream().mapToLong(s -> s.getType() == UpdateType.UPDATED ? 1 : 0).sum();

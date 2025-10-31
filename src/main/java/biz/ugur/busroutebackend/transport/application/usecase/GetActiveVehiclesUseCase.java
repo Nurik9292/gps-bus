@@ -4,19 +4,18 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseFluxUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
+import biz.ugur.busroutebackend.transport.application.mapper.VehicleResponseMapper;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
+import biz.ugur.busroutebackend.transport.infrastructure.cache.ActiveVehicleCacheRepository;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
-import java.util.List;
 
 @Service
 @Slf4j
@@ -24,17 +23,20 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
 
     private final VehicleRepository vehicleRepository;
     private final BusRouteRepository busRouteRepository;
-    private final ReactiveRedisTemplate<String, Object> redisTemplate;
+    private final ActiveVehicleCacheRepository cacheRepository;
+    private final VehicleResponseMapper responseMapper;
 
     public GetActiveVehiclesUseCase(VehicleRepository vehicleRepository,
                                     BusRouteRepository busRouteRepository,
-                                    ReactiveRedisTemplate<String, Object> redisTemplate,
+                                    ActiveVehicleCacheRepository cacheRepository,
+                                    VehicleResponseMapper responseMapper,
                                     CorrelationContextService  correlationContextService,
                                     EventBus eventBus) {
         super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
         this.busRouteRepository = busRouteRepository;
-        this.redisTemplate = redisTemplate;
+        this.cacheRepository = cacheRepository;
+        this.responseMapper = responseMapper;
     }
 
     @Override
@@ -87,13 +89,13 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
     private Flux<VehiclePositionDTO> getAllActiveVehicles() {
         String cacheKey = "active_vehicles:all";
 
-        return checkCachedVehicles(cacheKey)
+        return cacheRepository.getCached(cacheKey)
                 .switchIfEmpty(
                         vehicleRepository.findActiveVehicles()
                                 .flatMap(this::enrichVehicleWithRouteInfo)
                                 .collectList()
                                 .flatMapMany(vehicles ->
-                                        cacheVehicles(cacheKey, vehicles, Duration.ofMinutes(2))
+                                        cacheRepository.cache(cacheKey, Flux.fromIterable(vehicles), Duration.ofMinutes(2))
                                                 .thenMany(Flux.fromIterable(vehicles))
                                 )
                 )
@@ -107,7 +109,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
 
         String cacheKey = "active_vehicles:route:" + routeNumber;
 
-        return checkCachedVehicles(cacheKey)
+        return cacheRepository.getCached(cacheKey)
                 .switchIfEmpty(
                         busRouteRepository.findByRouteNumber(routeNumber)
                                 .flatMapMany(route ->
@@ -117,7 +119,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
                                 )
                                 .collectList()
                                 .flatMapMany(vehicles ->
-                                        cacheVehicles(cacheKey, vehicles, Duration.ofMinutes(1))
+                                        cacheRepository.cache(cacheKey, Flux.fromIterable(vehicles), Duration.ofMinutes(1))
                                                 .thenMany(Flux.fromIterable(vehicles))
                                 )
                 )
@@ -150,67 +152,19 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
 
     private Mono<VehiclePositionDTO> enrichVehicleWithRouteInfo(Vehicle vehicle) {
         if (vehicle.getAssignedRouteId() == null) {
-            return Mono.just(convertToDTO(vehicle, null, null));
+            return responseMapper.toPositionDTO(vehicle);
         }
 
         return busRouteRepository.findById(vehicle.getAssignedRouteId())
-                .map(route -> convertToDTO(vehicle, route.getRouteNumber(), route.getRouteName()))
-                .switchIfEmpty(Mono.just(convertToDTO(vehicle, null, null)));
+                .flatMap(route -> responseMapper.toPositionDTO(vehicle, route))
+                .switchIfEmpty(responseMapper.toPositionDTO(vehicle));
     }
 
     private Mono<VehiclePositionDTO> enrichVehicleWithRouteInfo(Vehicle vehicle,
                                                                 biz.ugur.busroutebackend.transport.domain.model.BusRoute route) {
-        return Mono.just(convertToDTO(vehicle, route.getRouteNumber(), route.getRouteName()));
+        return responseMapper.toPositionDTO(vehicle, route);
     }
 
-    private VehiclePositionDTO convertToDTO(Vehicle vehicle, String routeNumber, String routeName) {
-        VehiclePositionDTO dto = new VehiclePositionDTO();
-
-        dto.setVehicleId(vehicle.getId().getValue());
-        dto.setDeviceId(vehicle.getDeviceId());
-        dto.setLicensePlate(vehicle.getLicensePlate());
-        dto.setRouteNumber(routeNumber);
-        dto.setRouteName(routeName);
-        dto.setCurrentLatitude(vehicle.getCurrentLatitude());
-        dto.setCurrentLongitude(vehicle.getCurrentLongitude());
-        dto.setSpeedKmh(vehicle.getSpeedKmh());
-        dto.setCourse(vehicle.getCourse());
-        dto.setIsInMotion(vehicle.getIsInMotion());
-        dto.setIsActive(vehicle.getIsActive());
-
-        if (vehicle.getLastPositionUpdate() != null) {
-            dto.setLastPositionUpdate(vehicle.getLastPositionUpdate());
-        }
-
-        dto.setCreatedAt(LocalDateTime.now()); // Placeholder
-
-        return dto;
-    }
-
-    private Flux<VehiclePositionDTO> checkCachedVehicles(String cacheKey) {
-        return redisTemplate.opsForValue()
-                .get(cacheKey)
-                .cast(List.class)
-                .flatMapMany(cachedVehicles -> {
-                    log.debug("Found {} cached vehicles for key: {}", cachedVehicles.size(), cacheKey);
-                    return Flux.fromIterable((List<VehiclePositionDTO>) cachedVehicles);
-                })
-                .onErrorResume(error -> {
-                    log.debug("Cache miss or error for key {}: {}", cacheKey, error.getMessage());
-                    return Flux.empty();
-                });
-    }
-
-    private Mono<Boolean> cacheVehicles(String cacheKey, List<VehiclePositionDTO> vehicles, Duration ttl) {
-        return redisTemplate.opsForValue()
-                .set(cacheKey, vehicles, ttl)
-                .doOnSuccess(success -> {
-                    if (Boolean.TRUE.equals(success)) {
-                        log.debug("Cached {} vehicles with key: {} for {}", vehicles.size(), cacheKey, ttl);
-                    }
-                })
-                .onErrorReturn(false);
-    }
 
 
     private boolean isVehicleInArea(Vehicle vehicle, Double minLat, Double minLon,

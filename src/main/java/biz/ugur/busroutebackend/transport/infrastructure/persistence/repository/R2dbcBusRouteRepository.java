@@ -1,5 +1,7 @@
-package biz.ugur.busroutebackend.transport.infrastructure.repository;
+package biz.ugur.busroutebackend.transport.infrastructure.persistence.repository;
 
+import biz.ugur.busroutebackend.shared.domain.specification.Specification;
+import biz.ugur.busroutebackend.shared.domain.specification.SqlCriteria;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
@@ -7,11 +9,12 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteInAreaInfo;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteVehicleStatistics;
+import biz.ugur.busroutebackend.transport.infrastructure.persistence.entity.BusRouteEntity;
+import biz.ugur.busroutebackend.transport.infrastructure.mapper.BusRouteEntityMapper;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
@@ -28,8 +31,11 @@ import java.util.function.BiFunction;
 public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRouteId>
         implements BusRouteRepository {
 
-    public R2dbcBusRouteRepository(DatabaseClient databaseClient) {
+    private final BusRouteEntityMapper entityMapper;
+
+    public R2dbcBusRouteRepository(DatabaseClient databaseClient, BusRouteEntityMapper entityMapper) {
         super(databaseClient, "bus_routes", BusRoute.class);
+        this.entityMapper = entityMapper;
     }
 
     @Override
@@ -44,20 +50,21 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
 
     @Override
     protected Map<String, Object> mapEntityToColumns(BusRoute entity) {
+        BusRouteEntity persistenceEntity = entityMapper.toEntity(entity);
         Map<String, Object> columns = new HashMap<>();
-        columns.put("id", entity.getId().getValue());
-        columns.put("route_number", entity.getRouteNumber());
-        columns.put("route_name", entity.getRouteName());
-        columns.put("name_tm", entity.getNameTm());
-        columns.put("name_en", entity.getNameEn());
-        columns.put("route_color", entity.getRouteColor());
-        columns.put("is_active", entity.getIsActive());
-        columns.put("city_id", entity.getCityId());
-        columns.put("estimated_duration_minutes", entity.getEstimatedDurationMinutes());
-        columns.put("route_geometry_forward", entity.getRouteGeometryForward());
-        columns.put("route_geometry_backward", entity.getRouteGeometryBackward());
-        columns.put("total_distance_forward_meters", entity.getTotalDistanceForwardMeters());
-        columns.put("total_distance_backward_meters", entity.getTotalDistanceBackwardMeters());
+        columns.put("id", persistenceEntity.getId());
+        columns.put("route_number", persistenceEntity.getRouteNumber());
+        columns.put("route_name", persistenceEntity.getRouteName());
+        columns.put("name_tm", persistenceEntity.getNameTm());
+        columns.put("name_en", persistenceEntity.getNameEn());
+        columns.put("route_color", persistenceEntity.getRouteColor());
+        columns.put("is_active", persistenceEntity.getIsActive());
+        columns.put("city_id", persistenceEntity.getCityId());
+        columns.put("estimated_duration_minutes", persistenceEntity.getEstimatedDurationMinutes());
+        columns.put("route_geometry_forward", persistenceEntity.getRouteGeometryForward());
+        columns.put("route_geometry_backward", persistenceEntity.getRouteGeometryBackward());
+        columns.put("total_distance_forward_meters", persistenceEntity.getTotalDistanceForwardMeters());
+        columns.put("total_distance_backward_meters", persistenceEntity.getTotalDistanceBackwardMeters());
         return columns;
     }
 
@@ -361,8 +368,8 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
     }
 
     private BusRoute mapRowToBusRoute(Row row, RowMetadata metadata) {
-        BusRoute busRoute = BusRoute.builder()
-                .id(BusRouteId.of(row.get("id", String.class)))
+        BusRouteEntity entity = BusRouteEntity.builder()
+                .id(row.get("id", String.class))
                 .routeNumber(row.get("route_number", String.class))
                 .routeName(row.get("route_name", String.class))
                 .nameTm(row.get("name_tm", String.class))
@@ -375,13 +382,12 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 .routeGeometryBackward(row.get("route_geometry_backward", String.class))
                 .totalDistanceForwardMeters(row.get("total_distance_forward_meters", Integer.class))
                 .totalDistanceBackwardMeters(row.get("total_distance_backward_meters", Integer.class))
+                .createdAt(row.get("created_at", LocalDateTime.class))
+                .updatedAt(row.get("updated_at", LocalDateTime.class))
+                .version(row.get("version", Long.class))
                 .build();
 
-        busRoute.setCreatedAt(row.get("created_at", LocalDateTime.class));
-        busRoute.setUpdatedAt(row.get("updated_at", LocalDateTime.class));
-        busRoute.setVersion(row.get("version", Long.class));
-
-        return busRoute;
+        return entityMapper.toDomain(entity);
     }
 
     private RouteStopInfo mapToRouteStopInfo(Row row, RowMetadata metadata) {
@@ -430,5 +436,68 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
             case "updatedat", "updated" -> "updated_at";
             default -> "route_name";
         };
+    }
+
+    @Override
+    public Flux<BusRoute> findBySpecification(Specification<BusRoute> specification) {
+        SqlCriteria criteria = specification.toSqlCriteria();
+
+        String sql = String.format(
+            "SELECT * FROM bus_routes WHERE %s ORDER BY route_number ASC, created_at DESC",
+            criteria.getWhereClause()
+        );
+
+        DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
+
+        for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
+            executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
+        }
+
+        return executeSpec
+                .map(getRowMapper())
+                .all();
+    }
+
+    @Override
+    public Flux<BusRoute> findBySpecification(Specification<BusRoute> specification, Pageable pageable) {
+        SqlCriteria criteria = specification.toSqlCriteria();
+
+        String sql = String.format(
+            "SELECT * FROM bus_routes WHERE %s %s LIMIT :limit OFFSET :offset",
+            criteria.getWhereClause(),
+            getOrderByClause(pageable)
+        );
+
+        DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql)
+                .bind("limit", pageable.getPageSize())
+                .bind("offset", pageable.getOffset());
+
+        for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
+            executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
+        }
+
+        return executeSpec
+                .map(getRowMapper())
+                .all();
+    }
+
+    @Override
+    public Mono<Long> countBySpecification(Specification<BusRoute> specification) {
+        SqlCriteria criteria = specification.toSqlCriteria();
+
+        String sql = String.format(
+            "SELECT COUNT(*) FROM bus_routes WHERE %s",
+            criteria.getWhereClause()
+        );
+
+        DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
+
+        for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
+            executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
+        }
+
+        return executeSpec
+                .map(row -> row.get(0, Long.class))
+                .one();
     }
 }

@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteList;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
+import biz.ugur.busroutebackend.transport.application.mapper.RouteDataMapper;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
@@ -28,16 +29,19 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
     private final BusRouteRepository busRouteRepository;
     private final RouteStopsService routeStopsService;
     private final VehicleRepository vehicleRepository;
+    private final RouteDataMapper routeDataMapper;
 
     public GetAllBusRoutesWithPaginationUseCase(BusRouteRepository busRouteRepository,
                                                 CorrelationContextService correlationService,
                                                 RouteStopsService routeStopsService,
                                                 EventBus eventBus,
-                                                VehicleRepository vehicleRepository) {
+                                                VehicleRepository vehicleRepository,
+                                                RouteDataMapper routeDataMapper) {
         super(correlationService, eventBus);
         this.busRouteRepository = busRouteRepository;
         this.routeStopsService = routeStopsService;
         this.vehicleRepository = vehicleRepository;
+        this.routeDataMapper = routeDataMapper;
     }
 
 
@@ -84,7 +88,7 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
         Mono<Long> activeVehiclesCount = getActiveVehiclesCount(route.getRouteNumber());
 
         return Mono.zip(forwardStops, backwardStops, activeVehiclesCount)
-                .map(tuple -> RouteData.fromDomainWithStops(
+                .flatMap(tuple -> routeDataMapper.toRouteDataWithStops(
                         route,
                         tuple.getT1(),
                         tuple.getT2(),
