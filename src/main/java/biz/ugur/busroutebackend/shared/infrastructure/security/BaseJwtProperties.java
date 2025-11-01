@@ -5,10 +5,7 @@ import lombok.Setter;
 
 import java.time.Duration;
 
-/**
- * Base class for JWT configuration properties.
- * Provides common validation logic for JWT settings.
- */
+
 @Getter
 @Setter
 public abstract class BaseJwtProperties {

@@ -3,10 +3,8 @@ package biz.ugur.busroutebackend.client.infrastructure.security;
 import biz.ugur.busroutebackend.shared.infrastructure.security.BaseJwtAuthenticationFilter;
 import biz.ugur.busroutebackend.shared.infrastructure.security.TokenBlacklistService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 
-@Component
 @Slf4j
 public class ClientAuthenticationFilter extends BaseJwtAuthenticationFilter<ClientPrincipal> {
 
@@ -17,6 +15,10 @@ public class ClientAuthenticationFilter extends BaseJwtAuthenticationFilter<Clie
 
     @Override
     protected boolean isPublicPath(String path) {
+        if (!path.startsWith("/api/v1/client/") && !path.startsWith("/api/v1/mobile/")) {
+            return true;
+        }
+
         boolean isPublic = path.startsWith("/api/v1/client/auth/") ||
                            path.startsWith("/api/v1/mobile/");
 

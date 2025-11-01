@@ -29,6 +29,9 @@ public abstract class BaseController {
     }
 
     protected String camelToSnake(String str) {
+        if (str == null || str.isEmpty()) {
+            return null;
+        }
         return str.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
     }
 

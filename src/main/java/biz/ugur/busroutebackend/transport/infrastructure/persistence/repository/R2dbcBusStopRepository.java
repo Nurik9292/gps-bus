@@ -232,6 +232,16 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         }
     }
 
+    @Override
+    protected String getOrderByClause(Pageable pageable) {
+        if (pageable.getSort().isEmpty()) {
+            return "ORDER BY stop_name ASC";
+        }
+        return "ORDER BY " + pageable.getSort().stream()
+                .map(order -> mapSortField(order.getProperty()) + " " + order.getDirection().name())
+                .collect(java.util.stream.Collectors.joining(", "));
+    }
+
     private String mapSortField(String sortField) {
         return switch (sortField != null ? sortField.toLowerCase() : "stop_name") {
             case "stopname", "name" -> "stop_name";

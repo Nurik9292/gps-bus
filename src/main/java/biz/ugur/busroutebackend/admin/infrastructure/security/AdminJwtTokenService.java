@@ -104,31 +104,40 @@ public class AdminJwtTokenService extends BaseJwtTokenService<AdminPrincipal> {
     public Mono<AdminPrincipal> extractPrincipal(String token) {
         return validateAndExtractClaims(token)
                 .flatMap(claims -> validateTokenType(claims, "access"))
-                .handle((claims, sink) -> {
+                .flatMap(claims -> {
                     try {
                         String adminIdStr = claims.getSubject();
                         String username = claims.get("username", String.class);
                         String rolesJson = claims.get("roles", String.class);
                         Boolean isSuperAdmin = claims.get("isSuperAdmin", Boolean.class);
 
+                        if (adminIdStr == null || username == null || rolesJson == null) {
+                            log.error("Missing required claims - adminId: {}, username: {}, rolesJson: {}",
+                                    adminIdStr, username, rolesJson);
+                            return Mono.error(JwtTokenException.claimsParsingError("Missing required claims in token", null));
+                        }
+
                         @SuppressWarnings("unchecked")
                         Set<String> roles = objectMapper.readValue(rolesJson, Set.class);
 
-                        sink.next(new AdminPrincipal(
+                        AdminPrincipal principal = new AdminPrincipal(
                                 AdminId.of(adminIdStr),
                                 username,
                                 roles,
                                 Boolean.TRUE.equals(isSuperAdmin)
-                        ));
+                        );
+
+                        return Mono.just(principal);
 
                     } catch (JsonProcessingException e) {
-                        log.warn("Failed to parse roles from token claims: {}", e.getMessage());
-                        sink.error(JwtTokenException.claimsParsingError("Failed to parse roles from token", e));
+                        log.warn("Failed to parse roles from token claims: {}", e.getMessage(), e);
+                        return Mono.error(JwtTokenException.claimsParsingError("Failed to parse roles from token", e));
                     } catch (Exception e) {
-                        log.warn("Failed to extract admin principal from token: {}", e.getMessage());
-                        sink.error(JwtTokenException.claimsParsingError("Failed to extract admin principal", e));
+                        log.warn("Failed to extract admin principal from token: {}", e.getMessage(), e);
+                        return Mono.error(JwtTokenException.claimsParsingError("Failed to extract admin principal", e));
                     }
-                });
+                })
+                .doOnError(error -> log.error("Principal extraction failed with error: {}", error.getMessage(), error));
     }
 
     public Mono<String> extractUsername(String token) {

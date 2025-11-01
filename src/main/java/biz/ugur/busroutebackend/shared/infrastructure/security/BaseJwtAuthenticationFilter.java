@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.shared.infrastructure.security;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -10,6 +11,8 @@ import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
+
+import java.util.Objects;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -23,25 +26,26 @@ public abstract class BaseJwtAuthenticationFilter<P extends UserDetails> impleme
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
-
         if (isPublicPath(path)) {
-            log.debug("Skipping JWT validation for public path: {}", path);
             return chain.filter(exchange);
         }
 
         return extractToken(exchange)
                 .flatMap(this::validateTokenNotBlacklisted)
                 .flatMap(tokenService::extractPrincipal)
+                .filter(Objects::nonNull)
                 .map(this::createAuthentication)
                 .flatMap(auth -> {
-                    log.debug("JWT authentication successful for path: {} - User: {}",
-                            path, auth.getName());
+                    log.debug("{} - Authentication successful for path: {} - User: {}",
+                            this.getClass().getSimpleName(), path, auth.getName());
                     return chain.filter(exchange)
                             .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth));
                 })
-                .onErrorResume(throwable -> {
-                    log.warn("JWT authentication failed for path {}: {}", path, throwable.getMessage());
-                    return chain.filter(exchange);
+                .onErrorResume(error -> {
+                    log.warn("{} - Authentication failed for path: {} - Error: {}",
+                            this.getClass().getSimpleName(), path, error.getMessage());
+                    return Mono.error(new InsufficientAuthenticationException(
+                            "Full authentication is required to access this resource"));
                 });
     }
 

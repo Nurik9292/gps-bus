@@ -10,6 +10,9 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.security.web.server.util.matcher.NegatedServerWebExchangeMatcher;
+import org.springframework.security.web.server.util.matcher.OrServerWebExchangeMatcher;
+import org.springframework.security.web.server.util.matcher.PathPatternParserServerWebExchangeMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
@@ -26,9 +29,16 @@ public class PublicSecurityConfig {
 
     @Bean
     public SecurityWebFilterChain publicSecurityFilterChain(ServerHttpSecurity http) {
-        log.info("Configuring Public Security Filter Chain for remaining paths");
 
         return http
+                .securityMatcher(new NegatedServerWebExchangeMatcher(
+                        new OrServerWebExchangeMatcher(
+                                new PathPatternParserServerWebExchangeMatcher("/api/v1/admin/**"),
+                                new PathPatternParserServerWebExchangeMatcher("/api/v1/client/**"),
+                                new PathPatternParserServerWebExchangeMatcher("/api/v1/mobile/**")
+                        )
+                ))
+
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
@@ -97,7 +107,6 @@ public class PublicSecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
 
-        log.debug("CORS configuration applied to all endpoints");
         return source;
     }
 }

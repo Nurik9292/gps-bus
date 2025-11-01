@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.admin.domain.exceptions.AdminTokenException;
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
+import biz.ugur.busroutebackend.admin.infrastructure.security.AdminPrincipal;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
@@ -15,8 +16,6 @@ import biz.ugur.busroutebackend.shared.infrastructure.security.TokenBlacklistSer
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-
-import java.util.Set;
 
 @Slf4j
 @Service
@@ -114,10 +113,10 @@ public class RefreshTokenUseCase extends BaseUseCase<Mono<RefreshTokenUseCase.Re
     }
 
     private Mono<Response> generateNewTokens(Admin admin, CorrelationId correlationId) {
-        Set<String> roles = admin.getIsSuperAdmin() ? Set.of("ADMIN", "SUPER_ADMIN") : Set.of("ADMIN");
+        AdminPrincipal principal = AdminPrincipal.fromAdmin(admin);
 
         return Mono.zip(
-                        adminJwtTokenService.generateAccessToken(admin.getId(), admin.getUsername(), roles, admin.getIsSuperAdmin()),
+                        adminJwtTokenService.generateAccessToken(admin.getId(), admin.getUsername(), principal.getRoles(), admin.getIsSuperAdmin()),
                         adminJwtTokenService.generateRefreshToken(admin.getId())
                 )
                 .map(tokens -> new Response(

@@ -12,6 +12,7 @@ import biz.ugur.busroutebackend.transport.application.usecase.stop.DeleteBusStop
 import biz.ugur.busroutebackend.transport.application.usecase.stop.GetAllBusStopsUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.UpdateBusStopUseCase;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +20,7 @@ import reactor.core.publisher.Mono;
 
 import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN_STOPS;
 
+@Slf4j
 @RestController
 @RequestMapping(V1_ADMIN_STOPS)
 @CrossOrigin(origins = "*")
@@ -55,9 +57,14 @@ public class AdminStopController extends BaseController {
             @RequestParam(required = false) String order,
             @RequestParam(required = false) Boolean active) {
 
+        log.debug("AdminStopController.getAllStops called with page={}, size={}, sort={}, order={}, active={}",
+                page, size, sort, order, active);
+
         return ok(Mono.just(GetAllStopPaginationQuery.fromParams(page, size, camelToSnake(sort), order, active))
                 .as(getAllBusStopsUseCase::execute)
-                .map(BusStopListResponse::fromResult));
+                .map(BusStopListResponse::fromResult)
+                .doOnSuccess(result -> log.debug("Successfully retrieved {} stops", result.getStops().size()))
+                .doOnError(error -> log.error("Error retrieving stops", error)));
     }
 
     @PostMapping

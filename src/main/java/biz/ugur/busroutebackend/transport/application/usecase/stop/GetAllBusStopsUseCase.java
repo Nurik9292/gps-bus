@@ -44,7 +44,7 @@ public class GetAllBusStopsUseCase extends BaseUseCase<Mono<GetAllStopPagination
     private Mono<StopList> processInternal(GetAllStopPaginationQuery query) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.debug("Getting stops with pagination Correlation - {}: page={}, size={}, sort={}, order={}, active={}",
-                    correlationId, query.page(), query.size(), query.size(), query.sortField(), query.page());
+                    correlationId, query.page(), query.size(), query.sortField(), query.sortOrder(), query.isActivate());
 
             Pageable pageable = createPageable(query);
 

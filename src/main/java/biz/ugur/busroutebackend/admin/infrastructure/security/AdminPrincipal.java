@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.admin.infrastructure.security;
 
+import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
@@ -55,7 +56,6 @@ public class AdminPrincipal implements UserDetails {
         this.credentialsNonExpired = credentialsNonExpired;
         this.enabled = enabled;
 
-        log.debug("Created AdminPrincipal for user: {} with roles: {}", username, roles);
     }
 
     @Override
@@ -95,16 +95,13 @@ public class AdminPrincipal implements UserDetails {
         return enabled;
     }
 
-    // Domain-specific methods
 
     public boolean hasRole(String role) {
         if (role == null || role.trim().isEmpty()) {
             return false;
         }
 
-        boolean hasRole = roles.contains(role.trim().toUpperCase());
-        log.trace("Admin {} role check for '{}': {}", username, role, hasRole);
-        return hasRole;
+        return roles.contains(role.trim().toUpperCase());
     }
 
     public boolean hasAnyRole(String... rolesToCheck) {
@@ -206,9 +203,8 @@ public class AdminPrincipal implements UserDetails {
                 '}';
     }
 
-    // Factory methods
 
-    public static AdminPrincipal fromAdmin(biz.ugur.busroutebackend.admin.domain.model.Admin admin) {
+    public static AdminPrincipal fromAdmin(Admin admin) {
         Objects.requireNonNull(admin, "Admin cannot be null");
 
         Set<String> roles = admin.getIsSuperAdmin()
@@ -220,10 +216,10 @@ public class AdminPrincipal implements UserDetails {
                 admin.getUsername(),
                 roles,
                 admin.getIsSuperAdmin(),
-                true,  // accountNonExpired
-                true,  // accountNonLocked
-                true,  // credentialsNonExpired
-                admin.getIsActive()  // enabled
+                true,
+                true,
+                true,
+                admin.getIsActive()
         );
     }
 

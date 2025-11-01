@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.client.infrastructure.security;
 
 import biz.ugur.busroutebackend.shared.infrastructure.security.SecurityExceptionHandlers;
-import lombok.RequiredArgsConstructor;
+import biz.ugur.busroutebackend.shared.infrastructure.security.TokenBlacklistService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,15 +20,18 @@ import org.springframework.security.web.server.util.matcher.PathPatternParserSer
 @Configuration
 @EnableWebFluxSecurity
 @EnableReactiveMethodSecurity
-@RequiredArgsConstructor
 @Order(2)
 public class ClientSecurityConfig {
 
-    private final ClientAuthenticationFilter clientAuthenticationFilter;
-
     @Bean
-    public SecurityWebFilterChain clientSecurityFilterChain(ServerHttpSecurity http) {
+    public SecurityWebFilterChain clientSecurityFilterChain(
+            ServerHttpSecurity http,
+            ClientJwtTokenService clientJwtTokenService,
+            TokenBlacklistService tokenBlacklistService) {
         log.info("Configuring Client Security Filter Chain for /api/v1/client/** and /api/v1/mobile/**");
+
+        ClientAuthenticationFilter clientAuthenticationFilter =
+                new ClientAuthenticationFilter(clientJwtTokenService, tokenBlacklistService);
 
         return http
                 .securityMatcher(new OrServerWebExchangeMatcher(
