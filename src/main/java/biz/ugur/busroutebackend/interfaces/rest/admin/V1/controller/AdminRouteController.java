@@ -5,7 +5,7 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.route.BusRouteU
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.route.BusRouteListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.route.BusRouteResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.route.CheckRouteNumberResponse;
-import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
+import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.application.usecase.route.*;
@@ -20,7 +20,7 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 @RestController
 @RequestMapping(V1_ADMIN_ROUTES)
 @CrossOrigin(origins = "*")
-public class AdminRouteController extends BaseController {
+public class AdminRouteController extends BasePaginatedController {
 
     private final CreateBusRouteUseCase createBusRouteUseCase;
     private final GetAllBusRoutesWithPaginationUseCase getAllBusRoutesUseCase;
@@ -53,11 +53,13 @@ public class AdminRouteController extends BaseController {
 
     @GetMapping
     public Mono<ResponseEntity<ApiResponse<BusRouteListResponse>>> getAllRoutes(
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size,
-            @RequestParam(required = false) String sort,
-            @RequestParam(required = false) String order,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "routeNumber") String sort,
+            @RequestParam(defaultValue = "asc") String order,
             @RequestParam(required = false) Boolean active) {
+
+        validatePagination(page, size);
 
         return ok(Mono.just(GetAllRoutePaginationQuery.fromParams(page, size, camelToSnake(sort), order, active))
                 .as(getAllBusRoutesUseCase::execute)

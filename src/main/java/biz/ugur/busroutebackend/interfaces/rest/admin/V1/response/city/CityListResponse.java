@@ -1,36 +1,60 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.city;
 
 import biz.ugur.busroutebackend.admin.application.dto.city.CityList;
+import biz.ugur.busroutebackend.shared.application.dto.PaginationInfo;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
 
 import java.util.List;
 
-@Data
+/**
+ * REST response DTO for city list with pagination.
+ * Part of the Interfaces layer (REST API).
+ *
+ * Following Clean Architecture:
+ * - Interfaces layer DTO (converts from application layer DTOs)
+ * - Contains JSON annotations for API contract
+ * - Immutable response object
+ */
+@Getter
+@ToString
+@EqualsAndHashCode
 public class CityListResponse {
 
     @JsonProperty("cities")
-    private List<CityResponse> cities;
-
-    @JsonProperty("total_count")
-    private Integer totalCount;
+    private final List<CityResponse> cities;
 
     @JsonProperty("active_count")
-    private Long activeCount;
+    private final Long activeCount;
 
-    public CityListResponse(List<CityResponse> cities, Long activeCount) {
+    @JsonProperty("pagination")
+    private final PaginationInfo pagination;
+
+    /**
+     * Constructor with pagination support.
+     */
+    public CityListResponse(List<CityResponse> cities, Long activeCount, PaginationInfo pagination) {
         this.cities = cities;
-        this.totalCount = cities.size();
         this.activeCount = activeCount;
+        this.pagination = pagination;
     }
 
+    /**
+     * Factory method to create response from application layer DTO.
+     *
+     * @param cityList The CityList DTO from application layer
+     * @return CityListResponse for REST API
+     */
     public static CityListResponse fromResult(CityList cityList) {
         return new CityListResponse(
                 cityList.getCities()
                         .stream()
                         .map(CityResponse::fromResult)
                         .toList(),
-                cityList.getActiveCount()
+                cityList.getActiveCount(),
+                cityList.getPagination()
         );
     }
 }

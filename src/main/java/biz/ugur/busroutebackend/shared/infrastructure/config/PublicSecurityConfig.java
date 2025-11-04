@@ -63,6 +63,7 @@ public class PublicSecurityConfig {
                         .pathMatchers("/avatars/**").permitAll()
                         .pathMatchers("/banners/**").permitAll()
                         .pathMatchers("/api/v1/avatars/**").permitAll()
+                        .pathMatchers("/api/v1/admin/avatars/**").permitAll()
                         .pathMatchers("/api/v1/banners/**").permitAll()
 
                         .pathMatchers("/swagger-ui.html").permitAll()

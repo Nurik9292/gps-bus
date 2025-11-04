@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.admin.application.dto.admin;
+package biz.ugur.busroutebackend.banner.application.dto;
 
 import biz.ugur.busroutebackend.shared.application.dto.PagedList;
 import biz.ugur.busroutebackend.shared.application.dto.PaginationInfo;
@@ -12,32 +12,32 @@ import java.util.List;
 @ToString
 @Getter
 @EqualsAndHashCode
-public final class AdminList implements PagedList<AdminResult> {
+public final class BannerList implements PagedList<BannerResponse> {
 
-    private final List<AdminResult> admins;
+    private final List<BannerResponse> banners;
     private final Long activeCount;
     private final PaginationInfo pagination;
 
-    public AdminList(List<AdminResult> admins, Long activeCount, int currentPage, int pageSize, long totalItems) {
-        this.admins = Collections.unmodifiableList(admins);
+    public BannerList(List<BannerResponse> banners, Long activeCount, int currentPage, int pageSize, long totalItems) {
+        this.banners = Collections.unmodifiableList(banners);
         this.activeCount = activeCount;
         this.pagination = PaginationInfo.of(currentPage, pageSize, totalItems);
     }
 
-    public static AdminList of(
-        List<AdminResult> admins,
+    public static BannerList of(
+        List<BannerResponse> banners,
         Long activeCount,
         int currentPage,
         int pageSize,
         long totalItems
     ) {
-        return new AdminList(admins, activeCount, currentPage, pageSize, totalItems);
+        return new BannerList(banners, activeCount, currentPage, pageSize, totalItems);
     }
 
 
     @Override
-    public List<AdminResult> items() {
-        return admins;
+    public List<BannerResponse> items() {
+        return banners;
     }
 
     @Override

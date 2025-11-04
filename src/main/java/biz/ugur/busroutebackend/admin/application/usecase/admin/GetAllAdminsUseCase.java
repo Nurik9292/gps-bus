@@ -40,10 +40,29 @@ public class GetAllAdminsUseCase extends BaseUseCase<Mono<Void>, AdminList> {
             return adminRepository.findAll()
                     .map(AdminResult::fromDomain)
                     .collectList()
-                    .flatMap(admins -> adminRepository.countActiveAdmins()
-                            .map(activeCount -> new AdminList(admins, activeCount)))
-                    .doOnSuccess(response -> log.debug("Retrieved {} admins ({} active)",
-                            response.getAdmins().size(), response.getActiveCount()));
+                    .zipWith(adminRepository.countActiveAdmins())
+                    .zipWith(adminRepository.count())
+                    .map(tuple -> {
+                        var admins = tuple.getT1().getT1();
+                        Long activeCount = tuple.getT1().getT2();
+                        Long totalCount = tuple.getT2();
+
+                        // Since this endpoint doesn't use pagination params, return all items on page 1
+                        return new AdminList(
+                                admins,
+                                activeCount,
+                                1,  // current page
+                                admins.size(),  // page size (all items)
+                                totalCount  // total items in database
+                        );
+                    })
+                    .doOnSuccess(response -> log.debug(
+                            "Retrieved {} admins on page {} ({} active, {} total)",
+                            response.getAdmins().size(),
+                            response.getPagination().getCurrentPage(),
+                            response.getActiveCount(),
+                            response.getPagination().getTotalItems()
+                    ));
         });
     }
 }

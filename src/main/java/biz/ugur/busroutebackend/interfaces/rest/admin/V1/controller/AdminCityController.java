@@ -8,28 +8,32 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.city.CityCreate
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.city.CityUpdateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.city.CityListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.city.CityResponse;
-import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
+import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN_CITIES;
 
 @RestController
 @RequestMapping( V1_ADMIN_CITIES)
 @CrossOrigin("*")
-public class AdminCityController extends BaseController {
+public class AdminCityController extends BasePaginatedController {
 
     private final CreateCityUseCase createCityUseCase;
     private final GetAllCitiesUseCase getAllCitiesUseCase;
+    private final GetCitiesListUseCase getCitiesListUseCase;
     private final UpdateCityUseCase updateCityUseCase;
     private final DeleteCityUseCase deleteCityUseCase;
     private final GetCityByIdUseCase getCityByIdUseCase;
 
     public AdminCityController(CreateCityUseCase createCityUseCase,
                                GetAllCitiesUseCase getAllCitiesUseCase,
+                               GetCitiesListUseCase getCitiesListUseCase,
                                UpdateCityUseCase updateCityUseCase,
                                DeleteCityUseCase deleteCityUseCase,
                                GetCityByIdUseCase getCityByIdUseCase,
@@ -37,6 +41,7 @@ public class AdminCityController extends BaseController {
         super(messageSource);
         this.createCityUseCase = createCityUseCase;
         this.getAllCitiesUseCase = getAllCitiesUseCase;
+        this.getCitiesListUseCase = getCitiesListUseCase;
         this.updateCityUseCase = updateCityUseCase;
         this.deleteCityUseCase = deleteCityUseCase;
         this.getCityByIdUseCase = getCityByIdUseCase;
@@ -49,15 +54,17 @@ public class AdminCityController extends BaseController {
 
     @GetMapping
     public Mono<ResponseEntity<ApiResponse<CityListResponse>>> getAllCities(
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size,
-            @RequestParam(required = false) String sort,
-            @RequestParam(required = false) String order,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "name") String sort,
+            @RequestParam(defaultValue = "asc") String order,
             @RequestParam(required = false) Boolean active) {
 
-      return ok(Mono.just(GetAllCitiesInput.fromParams(page, size, camelToSnake(sort), order, active))
-              .as(getAllCitiesUseCase::execute)
-              .map(CityListResponse::fromResult));
+        validatePagination(page, size);
+
+        return ok(Mono.just(GetAllCitiesInput.fromParams(page, size, camelToSnake(sort), order, active))
+                .as(getAllCitiesUseCase::execute)
+                .map(CityListResponse::fromResult));
     }
 
 
@@ -96,6 +103,15 @@ public class AdminCityController extends BaseController {
                 .as(deleteCityUseCase::execute)
                 .then(noContent());
 
+    }
+
+
+    @GetMapping("/list")
+    public Mono<ResponseEntity<ApiResponse<List<CityResult>>>> getCitiesList(
+            @RequestParam(required = false, defaultValue = "true") Boolean active) {
+
+        return ok(Mono.just(active)
+                .as(getCitiesListUseCase::execute));
     }
 
 

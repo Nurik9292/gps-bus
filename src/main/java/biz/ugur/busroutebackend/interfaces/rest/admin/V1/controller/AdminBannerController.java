@@ -1,12 +1,12 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
-import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.dto.BannerPaginationQuery;
 import biz.ugur.busroutebackend.banner.application.dto.BannerResponse;
 import biz.ugur.busroutebackend.banner.application.usecase.admin.*;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.banner.BannerCreateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.banner.BannerUpdateRequest;
-import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
+import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
@@ -18,17 +18,15 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 @RestController
 @RequestMapping(V1_ADMIN_BANNERS)
 @CrossOrigin(origins = "*")
-public class AdminBannerController extends BaseController {
+public class AdminBannerController extends BasePaginatedController {
 
     private final CreateBannerUseCase createBannerUseCase;
-    private final GetAllBannersUseCase getAllBannersUseCase;
     private final GetBannersWithPaginationUseCase getBannersWithPaginationUseCase;
     private final UpdateBannerUseCase updateBannerUseCase;
     private final DeleteBannerUseCase deleteBannerUseCase;
     private final ToggleStatusBannerUseCase toggleStatusBannerUseCase;
 
     public AdminBannerController(CreateBannerUseCase createBannerUseCase,
-                                 GetAllBannersUseCase getAllBannersUseCase,
                                  GetBannersWithPaginationUseCase getBannersWithPaginationUseCase,
                                  UpdateBannerUseCase updateBannerUseCase,
                                  DeleteBannerUseCase deleteBannerUseCase,
@@ -36,7 +34,6 @@ public class AdminBannerController extends BaseController {
                                  MessageSource messageSource) {
         super(messageSource);
         this.createBannerUseCase = createBannerUseCase;
-        this.getAllBannersUseCase = getAllBannersUseCase;
         this.getBannersWithPaginationUseCase = getBannersWithPaginationUseCase;
         this.updateBannerUseCase = updateBannerUseCase;
         this.deleteBannerUseCase = deleteBannerUseCase;
@@ -49,21 +46,24 @@ public class AdminBannerController extends BaseController {
     }
 
     @GetMapping
-    public Mono<ResponseEntity<ApiResponse<BannerListResponse>>> getAllBanners(
+    public Mono<ResponseEntity<ApiResponse<BannerList>>> getAllBanners(
             @RequestParam(required = false) Boolean active,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "display_order") String sort,
             @RequestParam(defaultValue = "asc") String order) {
 
-        if (page == 1 && size == 25 && "display_order".equals(sort) && "asc".equals(order)) {
-            return ok(Mono.just(active)
-                    .as(getAllBannersUseCase::execute));
-        }
+        validatePagination(page, size);
 
-        BannerPaginationQuery query = BannerPaginationQuery.create(page, size, camelToSnake(sort), order, active);
+        BannerPaginationQuery query = BannerPaginationQuery.create(
+            page,
+            size,
+            camelToSnake(sort),
+            order,
+            active
+        );
 
-        return ok(Mono.just(query)
+        return okPaginated(Mono.just(query)
                 .as(getBannersWithPaginationUseCase::execute));
     }
 

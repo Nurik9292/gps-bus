@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.banner.application.usecase.admin;
 
-import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.dto.BannerPaginationQuery;
 import biz.ugur.busroutebackend.banner.application.dto.BannerResponse;
 import biz.ugur.busroutebackend.banner.application.mapper.BannerResponseMapper;
@@ -19,7 +19,7 @@ import java.util.List;
 
 @Service
 @Slf4j
-public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPaginationQuery>, BannerListResponse> {
+public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPaginationQuery>, BannerList> {
 
     private final AdminBannerRepository bannerRepository;
     private final BannerResponseMapper bannerResponseMapper;
@@ -35,7 +35,7 @@ public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPagi
 
 
     @Override
-    protected Mono<BannerListResponse> process(Mono<BannerPaginationQuery> query) {
+    protected Mono<BannerList> process(Mono<BannerPaginationQuery> query) {
         return query.flatMap(this::processInternal);
     }
 
@@ -44,25 +44,35 @@ public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPagi
         return "admin";
     }
 
-    private Mono<BannerListResponse> processInternal(BannerPaginationQuery query) {
+    private Mono<BannerList> processInternal(BannerPaginationQuery query) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.debug("Fetching banners with pagination CorrelationId: {} - admin: page={}, size={}, sort={}, order={}, active={}",
                     correlationId, query.getPage(), query.getSize(), query.getSortField(), query.getSortOrder(), query.getActiveOnly());
 
             Pageable pageable = createPageable(query);
 
-            return  bannerRepository.findAll(pageable)
+            return bannerRepository.findAll(pageable)
                     .flatMap(bannerResponseMapper::toResponse)
                     .collectList()
+                    .zipWhen(banners -> bannerRepository.count())  // Get total count for pagination
                     .zipWith(bannerRepository.countActiveBanners())
                     .map(tuple -> {
-                        List<BannerResponse> banners = tuple.getT1();
+                        List<BannerResponse> banners = tuple.getT1().getT1();
+                        Long totalCount = tuple.getT1().getT2();
                         Long activeCount = tuple.getT2();
 
-                        return new BannerListResponse(banners, activeCount,banners.size() == query.getSize());
+                        return BannerList.of(
+                            banners,
+                            activeCount,
+                            query.getPage(),
+                            query.getSize(),
+                            totalCount
+                        );
                     })
-                    .doOnSuccess(response -> log.debug("Retrieved {} banners ({} active, {} total)",
-                            response.getBanners().size(), response.getActiveCount(), response.getTotalCount()));
+                    .doOnSuccess(response -> log.debug("Retrieved {} banners out of {} total ({} active)",
+                            response.getBanners().size(),
+                            response.getPagination().getTotalItems(),
+                            response.getActiveCount()));
         });
     }
 

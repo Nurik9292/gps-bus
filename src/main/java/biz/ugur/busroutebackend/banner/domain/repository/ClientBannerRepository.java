@@ -13,12 +13,13 @@ public interface ClientBannerRepository  extends BaseRepository<Banner, BannerId
 
     Flux<Banner> findActiveBannersByTypeWithPagination(BannerType type, Pageable pageable);
 
+    Mono<Long> countByType(BannerType type);
+
+    Mono<Long> countActiveBanners();
 
     Flux<Banner> findBySpecification(Specification<Banner> specification);
 
-
     Flux<Banner> findBySpecification(Specification<Banner> specification, Pageable pageable);
-
 
     Mono<Long> countBySpecification(Specification<Banner> specification);
 

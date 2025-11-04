@@ -44,14 +44,6 @@ public abstract class BaseController {
                 .doOnError(error -> logError("OK", error));
     }
 
-    protected <T> Mono<ResponseEntity<ApiResponse<T>>> okWithVersion(Mono<T> data, String version) {
-        return data.map(d -> ResponseEntity.ok()
-                        .header("X-API-Version", version)
-                        .body(ApiResponse.success(d)))
-                .defaultIfEmpty(ResponseEntity.ok()
-                        .header("X-API-Version", version)
-                        .body(ApiResponse.success(null)));
-    }
 
 
     protected <T> Mono<ResponseEntity<ApiResponse<T>>> created(Mono<T> data) {
@@ -69,13 +61,6 @@ public abstract class BaseController {
     }
 
 
-    protected <T> Mono<ResponseEntity<ApiResponse<T>>> accepted(Mono<T> data) {
-        Objects.requireNonNull(data, "Data mono cannot be null");
-
-        return data.map(d -> new ResponseEntity<>(ApiResponse.success(d), HttpStatus.ACCEPTED))
-                .doOnSuccess(response -> logResponse("ACCEPTED", response))
-                .doOnError(error -> logError("ACCEPTED", error));
-    }
 
 
 
@@ -88,24 +73,6 @@ public abstract class BaseController {
                 .doOnSuccess(response -> logResponse("OK_LIST", response))
                 .doOnError(error -> logError("OK_LIST", error));
     }
-
-
-    protected <T> Mono<ResponseEntity<ApiResponse<PagedResponse<T>>>> okPaged(
-            Flux<T> data, long total, int page, int size) {
-        Objects.requireNonNull(data, "Data flux cannot be null");
-        if (total < 0) throw new IllegalArgumentException("Total cannot be negative");
-        if (page < 0) throw new IllegalArgumentException("Page cannot be negative");
-        if (size <= 0) throw new IllegalArgumentException("Size must be positive");
-
-        return data.collectList()
-                .map(list -> {
-                    PagedResponse<T> paged = new PagedResponse<>(list, total, page, size);
-                    return ResponseEntity.ok(ApiResponse.success(paged));
-                })
-                .doOnSuccess(response -> logResponse("OK_PAGED", response))
-                .doOnError(error -> logError("OK_PAGED", error));
-    }
-
 
     protected <T> Mono<ResponseEntity<ApiResponse<List<T>>>> okListBuffered(Flux<T> data, int bufferSize) {
         Objects.requireNonNull(data, "Data flux cannot be null");
@@ -153,6 +120,7 @@ public abstract class BaseController {
     }
 
 
+
     @Getter
     public static class ApiResponse<T> {
         private final boolean success;
@@ -176,25 +144,5 @@ public abstract class BaseController {
         public static <T> ApiResponse<T> error(String errorCode, String errorMessage) {
             return new ApiResponse<>(false, null, errorCode, errorMessage);
         }
-
-    }
-
-
-    @Getter
-    public static class PagedResponse<T> {
-        private final List<T> content;
-        private final long totalElements;
-        private final int page;
-        private final int size;
-        private final int totalPages;
-
-        public PagedResponse(List<T> content, long totalElements, int page, int size) {
-            this.content = content;
-            this.totalElements = totalElements;
-            this.page = page;
-            this.size = size;
-            this.totalPages = (int) Math.ceil((double) totalElements / size);
-        }
-
     }
 }

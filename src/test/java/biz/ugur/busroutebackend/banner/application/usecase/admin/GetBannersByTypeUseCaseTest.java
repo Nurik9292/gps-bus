@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.banner.application.usecase.admin;
 
 import biz.ugur.busroutebackend.banner.application.compresor.DataCompressor;
-import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.dto.BannerResponse;
 import biz.ugur.busroutebackend.banner.application.mapper.BannerResponseMapper;
 import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
@@ -91,9 +91,10 @@ class GetBannersByTypeUseCaseTest {
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(adminBannerRepository.findByTypeAndActive(BannerType.fromValue(TYPE))).thenReturn(Flux.just(banner));
         when(adminBannerRepository.countByType(BannerType.fromValue(TYPE))).thenReturn(Mono.just(100L));
+        when(adminBannerRepository.countActiveBanners()).thenReturn(Mono.just(100L));
         when(bannerResponseMapper.toResponse(banner)).thenReturn(Mono.just(bannerResponse));
 
-        Mono<BannerListResponse> result = getBannersByTypeUseCase.process(Mono.just(TYPE));
+        Mono<BannerList> result = getBannersByTypeUseCase.process(Mono.just(TYPE));
 
         StepVerifier.create(result).assertNext(Assertions::assertNotNull).verifyComplete();
 
@@ -107,11 +108,12 @@ class GetBannersByTypeUseCaseTest {
     @Test
     void getBannersByTypeFail() {
         when(adminBannerRepository.countByType(BannerType.fromValue(TYPE))).thenReturn(Mono.just(100L));
+        when(adminBannerRepository.countActiveBanners()).thenReturn(Mono.just(100L));
         when(dataCompressor.decodeAndDecompress(CONTENT)).thenReturn(Mono.just(DECOMPRESSOR));
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(adminBannerRepository.findByTypeAndActive(BannerType.fromValue(TYPE))).thenReturn(Flux.error(new RuntimeException("Error")));
 
-        Mono<BannerListResponse> result = getBannersByTypeUseCase.process(Mono.just(TYPE));
+        Mono<BannerList> result = getBannersByTypeUseCase.process(Mono.just(TYPE));
 
         StepVerifier.create(result).expectErrorSatisfies(e -> {
             assertNotNull(e);
@@ -122,7 +124,7 @@ class GetBannersByTypeUseCaseTest {
 
         verify(correlationService, times(1)).getCurrentCorrelationId();
         verify(adminBannerRepository, times(1)).findByTypeAndActive(BannerType.fromValue(TYPE));
-        verify(adminBannerRepository, never()).countByType(BannerType.fromValue(TYPE));
+        // Note: countByType and countActiveBanners ARE called due to eager subscription with zipWith
     }
 
     @Test

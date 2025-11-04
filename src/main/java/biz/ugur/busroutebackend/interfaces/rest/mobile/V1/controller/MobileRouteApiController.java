@@ -64,7 +64,7 @@ public class MobileRouteApiController extends BaseMobileController {
                                             .map(mobileRoutes ->
                                                     MobileRouteListResponse.builder()
                                                             .routes(mobileRoutes)
-                                                            .totalCount(routeList.getTotalCount())
+                                                            .pagination(routeList.getPagination())
                                                             .activeCount(routeList.getActiveCount())
                                                             .build()
                                             )
@@ -102,7 +102,7 @@ public class MobileRouteApiController extends BaseMobileController {
                                         .map(mobileRoutes ->
                                                 MobileRouteListResponse.builder()
                                                         .routes(mobileRoutes)
-                                                        .totalCount(routeList.getTotalCount())
+                                                        .pagination(routeList.getPagination())
                                                         .activeCount(routeList.getActiveCount())
                                                         .build()
                                         )

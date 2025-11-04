@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.banner.application.usecase.admin;
 
-import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.dto.BannerResponse;
 import biz.ugur.busroutebackend.banner.application.dto.SearchBannersQuery;
 import biz.ugur.busroutebackend.banner.application.mapper.BannerResponseMapper;
@@ -102,6 +102,8 @@ class SearchBannersUseCaseTest {
             .thenReturn(Flux.just(testBanner));
         when(bannerRepository.countBySpecification(any(Specification.class)))
             .thenReturn(Mono.just(1L));
+        when(bannerRepository.countActiveBanners())
+            .thenReturn(Mono.just(1L));
         when(bannerResponseMapper.toResponse(testBanner))
             .thenReturn(Mono.just(testBannerResponse));
 
@@ -129,6 +131,8 @@ class SearchBannersUseCaseTest {
         when(bannerRepository.findBySpecification(any(Specification.class), any(Pageable.class)))
             .thenReturn(Flux.just(testBanner));
         when(bannerRepository.countBySpecification(any(Specification.class)))
+            .thenReturn(Mono.just(1L));
+        when(bannerRepository.countActiveBanners())
             .thenReturn(Mono.just(1L));
         when(bannerResponseMapper.toResponse(testBanner))
             .thenReturn(Mono.just(testBannerResponse));
@@ -160,6 +164,8 @@ class SearchBannersUseCaseTest {
             .thenReturn(Flux.just(testBanner));
         when(bannerRepository.countBySpecification(any(Specification.class)))
             .thenReturn(Mono.just(1L));
+        when(bannerRepository.countActiveBanners())
+            .thenReturn(Mono.just(1L));
         when(bannerResponseMapper.toResponse(testBanner))
             .thenReturn(Mono.just(testBannerResponse));
 
@@ -186,6 +192,8 @@ class SearchBannersUseCaseTest {
             .thenReturn(Flux.empty());
         when(bannerRepository.countBySpecification(any(Specification.class)))
             .thenReturn(Mono.just(0L));
+        when(bannerRepository.countActiveBanners())
+            .thenReturn(Mono.just(0L));
 
         StepVerifier.create(useCase.execute(Mono.just(query)))
             .assertNext(response -> {
@@ -210,6 +218,8 @@ class SearchBannersUseCaseTest {
         when(bannerRepository.findBySpecification(any(Specification.class), any(Pageable.class)))
             .thenReturn(Flux.just(testBanner));
         when(bannerRepository.countBySpecification(any(Specification.class)))
+            .thenReturn(Mono.just(1L));
+        when(bannerRepository.countActiveBanners())
             .thenReturn(Mono.just(1L));
         when(bannerResponseMapper.toResponse(testBanner))
             .thenReturn(Mono.just(testBannerResponse));
@@ -236,6 +246,8 @@ class SearchBannersUseCaseTest {
         when(bannerRepository.findBySpecification(any(Specification.class), any(Pageable.class)))
             .thenReturn(Flux.just(testBanner));
         when(bannerRepository.countBySpecification(any(Specification.class)))
+            .thenReturn(Mono.just(1L));
+        when(bannerRepository.countActiveBanners())
             .thenReturn(Mono.just(1L));
         when(bannerResponseMapper.toResponse(testBanner))
             .thenReturn(Mono.just(testBannerResponse));
@@ -264,6 +276,8 @@ class SearchBannersUseCaseTest {
             .thenReturn(Flux.just(testBanner));
         when(bannerRepository.countBySpecification(any(Specification.class)))
             .thenReturn(Mono.just(1L));
+        when(bannerRepository.countActiveBanners())
+            .thenReturn(Mono.just(1L));
         when(bannerResponseMapper.toResponse(testBanner))
             .thenReturn(Mono.just(testBannerResponse));
 
@@ -289,6 +303,8 @@ class SearchBannersUseCaseTest {
         when(bannerRepository.findBySpecification(any(Specification.class), any(Pageable.class)))
             .thenReturn(Flux.just(testBanner));
         when(bannerRepository.countBySpecification(any(Specification.class)))
+            .thenReturn(Mono.just(1L));
+        when(bannerRepository.countActiveBanners())
             .thenReturn(Mono.just(1L));
         when(bannerResponseMapper.toResponse(testBanner))
             .thenReturn(Mono.just(testBannerResponse));
@@ -320,6 +336,8 @@ class SearchBannersUseCaseTest {
         when(bannerRepository.findBySpecification(any(Specification.class), any(Pageable.class)))
             .thenReturn(Flux.just(testBanner));
         when(bannerRepository.countBySpecification(any(Specification.class)))
+            .thenReturn(Mono.just(1L));
+        when(bannerRepository.countActiveBanners())
             .thenReturn(Mono.just(1L));
         when(bannerResponseMapper.toResponse(testBanner))
             .thenReturn(Mono.just(testBannerResponse));
@@ -353,6 +371,8 @@ class SearchBannersUseCaseTest {
             .thenReturn(Flux.just(testBanner));
         when(bannerRepository.countBySpecification(any(Specification.class)))
             .thenReturn(Mono.just(1L));
+        when(bannerRepository.countActiveBanners())
+            .thenReturn(Mono.just(1L));
         when(bannerResponseMapper.toResponse(testBanner))
             .thenReturn(Mono.just(testBannerResponse));
 
@@ -382,6 +402,8 @@ class SearchBannersUseCaseTest {
         when(bannerRepository.findBySpecification(any(Specification.class), any(Pageable.class)))
             .thenReturn(Flux.just(testBanner));
         when(bannerRepository.countBySpecification(any(Specification.class)))
+            .thenReturn(Mono.just(1L));
+        when(bannerRepository.countActiveBanners())
             .thenReturn(Mono.just(1L));
         when(bannerResponseMapper.toResponse(testBanner))
             .thenReturn(Mono.just(testBannerResponse));
@@ -422,6 +444,8 @@ class SearchBannersUseCaseTest {
         when(bannerRepository.findBySpecification(any(Specification.class), any(Pageable.class)))
             .thenReturn(Flux.empty());
         when(bannerRepository.countBySpecification(any(Specification.class)))
+            .thenReturn(Mono.just(0L));
+        when(bannerRepository.countActiveBanners())
             .thenReturn(Mono.just(0L));
 
         StepVerifier.create(useCase.execute(Mono.just(query)))

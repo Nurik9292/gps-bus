@@ -89,7 +89,7 @@ public class MobileStopApiController extends BaseMobileController {
                                             .map(mobileStops -> {
                                                 return MobileStopListResponse.builder()
                                                         .stops(mobileStops)
-                                                        .totalCount(stopList.getTotalCount())
+                                                        .pagination(stopList.getPagination())
                                                         .activeCount(stopList.getActiveCount())
                                                         .build();
                                             })
@@ -109,7 +109,8 @@ public class MobileStopApiController extends BaseMobileController {
                 size,
                 sortField,
                 sortOrder,
-                true
+                true,
+                null
         );
 
         return ok(getAllStopsUseCase.execute(Mono.just(query)));
@@ -160,7 +161,8 @@ public class MobileStopApiController extends BaseMobileController {
                 1500,
                 "stop_name",
                 "asc",
-                true
+                true,
+                null
         );
     }
 }

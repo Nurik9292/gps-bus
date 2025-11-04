@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.banner.application.usecase.admin;
 
-import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.mapper.BannerResponseMapper;
 import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
@@ -12,7 +12,7 @@ import reactor.core.publisher.Mono;
 
 @Service
 @Slf4j
-public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerListResponse> {
+public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerList> {
 
     private final AdminBannerRepository bannerRepository;
     private final BannerResponseMapper bannerResponseMapper;
@@ -28,7 +28,7 @@ public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerListR
 
 
     @Override
-    protected Mono<BannerListResponse> process(Mono<Boolean> request) {
+    protected Mono<BannerList> process(Mono<Boolean> request) {
         return request.flatMap(this::processInternal);
     }
 
@@ -37,9 +37,9 @@ public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerListR
         return "admin";
     }
 
-    private Mono<BannerListResponse> processInternal(Boolean activeOnly) {
+    private Mono<BannerList> processInternal(Boolean activeOnly) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-            log.debug("Fetching banners (activeOnly: {}) - CorrelationId: {}", activeOnly, correlationId);
+            log.debug("Fetching all banners (activeOnly: {}) - CorrelationId: {}", activeOnly, correlationId);
 
             var bannerFlux = activeOnly ?
                     bannerRepository.findActiveBanners() :
@@ -48,8 +48,20 @@ public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerListR
             return bannerFlux
                     .flatMap(bannerResponseMapper::toResponse)
                     .collectList()
-                    .flatMap(banners -> bannerRepository.countActiveBanners()
-                            .map(activeCount -> new BannerListResponse(banners, activeCount)))
+                    .zipWith(bannerRepository.countActiveBanners())
+                    .map(tuple -> {
+                        var banners = tuple.getT1();
+                        Long activeCount = tuple.getT2();
+
+                        // Create fake pagination for "all" endpoint
+                        return BannerList.of(
+                            banners,
+                            activeCount,
+                            1,  // Single page
+                            banners.size(),  // Page size = total items
+                            banners.size()  // Total items
+                        );
+                    })
                     .doOnSuccess(response -> log.debug("Retrieved {} banners ({} active)",
                             response.getBanners().size(), response.getActiveCount()));
         });

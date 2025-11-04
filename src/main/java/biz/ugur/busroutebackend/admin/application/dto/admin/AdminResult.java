@@ -1,6 +1,8 @@
 package biz.ugur.busroutebackend.admin.application.dto.admin;
 
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 

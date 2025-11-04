@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.banner.application.usecase.admin;
 
-import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.dto.SearchBannersQuery;
 import biz.ugur.busroutebackend.banner.application.mapper.BannerResponseMapper;
 import biz.ugur.busroutebackend.banner.domain.model.Banner;
@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
 
 @Service
 @Slf4j
-public class SearchBannersUseCase extends BaseUseCase<Mono<SearchBannersQuery>, BannerListResponse> {
+public class SearchBannersUseCase extends BaseUseCase<Mono<SearchBannersQuery>, BannerList> {
 
     private final AdminBannerRepository bannerRepository;
     private final BannerResponseMapper bannerResponseMapper;
@@ -37,7 +37,7 @@ public class SearchBannersUseCase extends BaseUseCase<Mono<SearchBannersQuery>, 
     }
 
     @Override
-    protected Mono<BannerListResponse> process(Mono<SearchBannersQuery> request) {
+    protected Mono<BannerList> process(Mono<SearchBannersQuery> request) {
         return request.flatMap(this::processInternal);
     }
 
@@ -46,7 +46,7 @@ public class SearchBannersUseCase extends BaseUseCase<Mono<SearchBannersQuery>, 
         return "admin";
     }
 
-    private Mono<BannerListResponse> processInternal(SearchBannersQuery query) {
+    private Mono<BannerList> processInternal(SearchBannersQuery query) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.debug("Searching banners with criteria: {} - CorrelationId: {}", query, correlationId);
 
@@ -59,15 +59,30 @@ public class SearchBannersUseCase extends BaseUseCase<Mono<SearchBannersQuery>, 
             var bannersFlux = bannerRepository.findBySpecification(specification, pageable)
                     .flatMap(bannerResponseMapper::toResponse);
 
-            var totalCountMono = bannerRepository.countBySpecification(specification);
+            var totalMatchingMono = bannerRepository.countBySpecification(specification);
 
             return bannersFlux
                     .collectList()
-                    .zipWith(totalCountMono)
-                    .map(tuple -> new BannerListResponse(tuple.getT1(), tuple.getT2()))
+                    .zipWith(totalMatchingMono)
+                    .zipWith(bannerRepository.countActiveBanners())  // Get actual active count
+                    .map(tuple -> {
+                        var banners = tuple.getT1().getT1();
+                        Long totalMatching = tuple.getT1().getT2();
+                        Long activeCount = tuple.getT2();
+
+                        return BannerList.of(
+                            banners,
+                            activeCount,  // Total active banners (not search results count)
+                            query.getPage(),
+                            query.getSize(),
+                            totalMatching  // Total search results go to pagination
+                        );
+                    })
                     .doOnSuccess(response -> log.debug(
-                        "Found {} banners matching criteria (total: {})",
+                        "Found {} banners matching criteria (page {}/{}, {} total active)",
                         response.getBanners().size(),
+                        response.getPagination().getCurrentPage(),
+                        response.getPagination().getTotalPages(),
                         response.getActiveCount()
                     ));
         });

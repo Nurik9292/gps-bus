@@ -59,17 +59,31 @@ public class GetAllBusRoutesUseCase extends BaseUseCase<Mono<Void>, RouteList> {
                 .then(
                         Mono.zip(
                                 busRouteRepository.findActiveRoutes().collectList(),
-                                busRouteRepository.countActiveRoutes()
+                                busRouteRepository.countActiveRoutes(),
+                                busRouteRepository.count()
                         )
                 )
                 .flatMap(tuple -> {
                     List<BusRoute> busRoutes = tuple.getT1();
-                    Long totalCount = tuple.getT2();
+                    Long activeCount = tuple.getT2();
+                    Long totalCount = tuple.getT3();
 
                     return Flux.fromIterable(busRoutes)
                             .flatMap(this::enrichRouteWithStops)
                             .collectList()
-                            .map(routeResults -> new RouteList(routeResults, totalCount));
+                            .map(routeResults -> new RouteList(
+                                    routeResults,
+                                    activeCount,
+                                    1,  // current page (no pagination for this endpoint)
+                                    routeResults.size(),  // page size (all items)
+                                    totalCount  // total items in database
+                            ))
+                            .doOnSuccess(result -> log.debug(
+                                    "Retrieved {} routes ({} active, {} total)",
+                                    result.getRoutes().size(),
+                                    result.getActiveCount(),
+                                    result.getPagination().getTotalItems()
+                            ));
                 });
     }
 

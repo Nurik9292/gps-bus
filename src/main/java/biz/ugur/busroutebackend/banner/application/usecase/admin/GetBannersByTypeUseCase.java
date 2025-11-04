@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.banner.application.usecase.admin;
 
-import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.mapper.BannerResponseMapper;
 import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
 import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
@@ -13,7 +13,7 @@ import reactor.core.publisher.Mono;
 
 @Service
 @Slf4j
-public class GetBannersByTypeUseCase extends BaseUseCase<Mono<String>, BannerListResponse> {
+public class GetBannersByTypeUseCase extends BaseUseCase<Mono<String>, BannerList> {
 
     private final AdminBannerRepository bannerRepository;
     private final BannerResponseMapper bannerResponseMapper;
@@ -28,7 +28,7 @@ public class GetBannersByTypeUseCase extends BaseUseCase<Mono<String>, BannerLis
     }
 
     @Override
-    protected Mono<BannerListResponse> process(Mono<String> request) {
+    protected Mono<BannerList> process(Mono<String> request) {
         return request.flatMap(this::executeWithType);
     }
 
@@ -37,7 +37,7 @@ public class GetBannersByTypeUseCase extends BaseUseCase<Mono<String>, BannerLis
         return "admin";
     }
 
-    private Mono<BannerListResponse> executeWithType(String type) {
+    private Mono<BannerList> executeWithType(String type) {
         BannerType bannerType = BannerType.fromValue(type);
 
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
@@ -45,9 +45,23 @@ public class GetBannersByTypeUseCase extends BaseUseCase<Mono<String>, BannerLis
             return bannerRepository.findByTypeAndActive(bannerType)
                     .flatMap(bannerResponseMapper::toResponse)
                     .collectList()
-                    .flatMap(banners -> bannerRepository.countByType(bannerType)
-                            .map(totalCount -> new BannerListResponse(banners, totalCount)))
-                    .doOnSuccess(response -> log.debug("Retrieved {} banners of type {} ({} total)",
+                    .zipWith(bannerRepository.countByType(bannerType))
+                    .zipWith(bannerRepository.countActiveBanners())
+                    .map(tuple -> {
+                        var banners = tuple.getT1().getT1();
+                        Long totalOfType = tuple.getT1().getT2();
+                        Long totalActive = tuple.getT2();
+
+                        // Create fake pagination for "all by type" endpoint
+                        return BannerList.of(
+                            banners,
+                            totalActive,  // Total active banners across all types
+                            1,  // Single page
+                            banners.size(),  // Page size = total items
+                            totalOfType  // Total items of this type
+                        );
+                    })
+                    .doOnSuccess(response -> log.debug("Retrieved {} banners of type {} ({} total active)",
                             response.getBanners().size(), type, response.getActiveCount()))
                     .onErrorMap(error -> {
                         log.error("Failed to get banners by type {}: {}", type, error.getMessage());

@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.banner.application.usecase.admin;
 
 import biz.ugur.busroutebackend.banner.application.compresor.DataCompressor;
-import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.dto.BannerPaginationQuery;
 import biz.ugur.busroutebackend.banner.application.dto.BannerResponse;
 import biz.ugur.busroutebackend.banner.application.mapper.BannerResponseMapper;
@@ -95,16 +95,17 @@ class GetBannersWithPaginationUseCaseTest {
 
         when(correlationContextService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(bannerRepository.findAll(any(Pageable.class))).thenReturn(Flux.just(banner));
+        when(bannerRepository.count()).thenReturn(Mono.just(1L));
         when(bannerRepository.countActiveBanners()).thenReturn(Mono.just(100L));
         when(bannerResponseMapper.toResponse(banner)).thenReturn(Mono.just(bannerResponse));
 
-        Mono<BannerListResponse> result = getBannersWithPaginationUseCase.process(Mono.just(query));
+        Mono<BannerList> result = getBannersWithPaginationUseCase.process(Mono.just(query));
 
         StepVerifier.create(result).assertNext(res -> {
             assertNotNull(res);
             assertEquals(1, res.getBanners().size());
             assertEquals(100L, res.getActiveCount());
-            assertFalse(res.getHasMore());
+            assertFalse(res.pagination().hasNext());
         }).verifyComplete();
 
         verify(correlationContextService, times(1)).getCurrentCorrelationId();
@@ -147,10 +148,11 @@ class GetBannersWithPaginationUseCaseTest {
 
         when(correlationContextService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(bannerRepository.findAll(any(Pageable.class))).thenReturn(Flux.just(banner));
+        when(bannerRepository.count()).thenReturn(Mono.just(1L));
         when(bannerRepository.countActiveBanners()).thenReturn(Mono.just(100L));
         when(bannerResponseMapper.toResponse(banner)).thenReturn(Mono.just(bannerResponse));
 
-        Mono<BannerListResponse> result = getBannersWithPaginationUseCase.process(Mono.just(query));
+        Mono<BannerList> result = getBannersWithPaginationUseCase.process(Mono.just(query));
 
         StepVerifier.create(result).assertNext(Assertions::assertNotNull).verifyComplete();
 
@@ -188,16 +190,17 @@ class GetBannersWithPaginationUseCaseTest {
 
         when(correlationContextService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(bannerRepository.findAll(any(Pageable.class))).thenReturn(Flux.just(banner));
+        when(bannerRepository.count()).thenReturn(Mono.just(100L));
         when(bannerRepository.countActiveBanners()).thenReturn(Mono.just(100L));
         when(bannerResponseMapper.toResponse(banner)).thenReturn(Mono.just(bannerResponse));
 
-        Mono<BannerListResponse> result = getBannersWithPaginationUseCase.process(Mono.just(query));
+        Mono<BannerList> result = getBannersWithPaginationUseCase.process(Mono.just(query));
 
         StepVerifier.create(result).assertNext(res -> {
             assertNotNull(res);
             assertEquals(1, res.getBanners().size());
             assertEquals(100L, res.getActiveCount());
-            assertTrue(res.getHasMore());
+            assertTrue(res.pagination().hasNext());
         }).verifyComplete();
 
         verify(correlationContextService, times(1)).getCurrentCorrelationId();

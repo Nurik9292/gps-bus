@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.banner.application.usecase.admin;
 
 import biz.ugur.busroutebackend.banner.application.compresor.DataCompressor;
-import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.dto.BannerResponse;
 import biz.ugur.busroutebackend.banner.application.mapper.BannerResponseMapper;
 import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
@@ -81,7 +81,7 @@ class GetAllBannersUseCaseTest {
         when(adminBannerRepository.countActiveBanners()).thenReturn(Mono.just(100L));
         when(bannerResponseMapper.toResponse(banner)).thenReturn(Mono.just(bannerResponse));
 
-        Mono<BannerListResponse> result = getAllBannersUseCase.process(Mono.just(true));
+        Mono<BannerList> result = getAllBannersUseCase.process(Mono.just(true));
 
         StepVerifier.create(result).assertNext(Assertions::assertNotNull).verifyComplete();
 
@@ -113,7 +113,7 @@ class GetAllBannersUseCaseTest {
         when(adminBannerRepository.countActiveBanners()).thenReturn(Mono.just(100L));
         when(bannerResponseMapper.toResponse(banner)).thenReturn(Mono.just(bannerResponse));
 
-        Mono<BannerListResponse> result = getAllBannersUseCase.process(Mono.just(false));
+        Mono<BannerList> result = getAllBannersUseCase.process(Mono.just(false));
 
         StepVerifier.create(result).assertNext(Assertions::assertNotNull).verifyComplete();
 

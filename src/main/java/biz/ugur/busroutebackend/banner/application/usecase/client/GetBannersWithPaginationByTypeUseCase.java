@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.banner.application.usecase.client;
 
-import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.dto.BannerPaginationQuery;
 import biz.ugur.busroutebackend.banner.application.mapper.BannerResponseMapper;
 import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
@@ -18,7 +18,7 @@ import reactor.core.publisher.Mono;
 
 @Service
 @Slf4j
-public class GetBannersWithPaginationByTypeUseCase extends BaseUseCase<Mono<BannerPaginationQuery>, BannerListResponse> {
+public class GetBannersWithPaginationByTypeUseCase extends BaseUseCase<Mono<BannerPaginationQuery>, BannerList> {
 
     private final ClientBannerRepository bannerRepository;
     private final BannerResponseMapper bannerResponseMapper;
@@ -38,23 +38,40 @@ public class GetBannersWithPaginationByTypeUseCase extends BaseUseCase<Mono<Bann
     }
 
     @Override
-    protected Mono<BannerListResponse> process(Mono<BannerPaginationQuery> query) {
+    protected Mono<BannerList> process(Mono<BannerPaginationQuery> query) {
         return query.flatMap(this::processInternal);
     }
 
-    private Mono<BannerListResponse> processInternal(BannerPaginationQuery query){
-        log.debug("Fetching banners with pagination client: page={}, size={}, sort={}, order={}, active={}",
-                query.getPage(), query.getSize(), query.getSortField(), query.getSortOrder(), query.getActiveOnly());
+    private Mono<BannerList> processInternal(BannerPaginationQuery query){
+        log.debug("Fetching banners with pagination client: page={}, size={}, sort={}, order={}, type={}",
+                query.getPage(), query.getSize(), query.getSortField(), query.getSortOrder(), query.getType());
 
         Pageable pageable = createPageable(query);
+        BannerType bannerType = BannerType.fromValue(query.getType());
 
-        return bannerRepository.findActiveBannersByTypeWithPagination(BannerType.fromValue(query.getType()), pageable)
+        return bannerRepository.findActiveBannersByTypeWithPagination(bannerType, pageable)
                 .flatMap(bannerResponseMapper::toResponse)
                 .collectList()
-                .map(banners -> {
-                    return new BannerListResponse(banners, (long) banners.size(),banners.size() == query.getSize());
-                })  .doOnSuccess(response -> log.debug("Retrieved {} banners ({} active, {} total)",
-                        response.getBanners().size(), response.getActiveCount(), response.getTotalCount()));
+                .zipWhen(banners -> bannerRepository.countByType(bannerType))  // Total of this type
+                .zipWith(bannerRepository.countActiveBanners())  // Total active banners
+                .map(tuple -> {
+                    var banners = tuple.getT1().getT1();
+                    Long totalOfType = tuple.getT1().getT2();
+                    Long totalActive = tuple.getT2();
+
+                    return BannerList.of(
+                        banners,
+                        totalActive,  // Total active banners across all types
+                        query.getPage(),
+                        query.getSize(),
+                        totalOfType  // Total banners of this type for pagination
+                    );
+                })
+                .doOnSuccess(response -> log.debug("Retrieved {} banners (page {}/{}, {} total active)",
+                        response.getBanners().size(),
+                        response.getPagination().getCurrentPage(),
+                        response.getPagination().getTotalPages(),
+                        response.getActiveCount()));
     }
 
     private Pageable createPageable(BannerPaginationQuery query) {

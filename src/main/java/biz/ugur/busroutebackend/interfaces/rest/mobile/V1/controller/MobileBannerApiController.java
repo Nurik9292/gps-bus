@@ -1,11 +1,12 @@
 package biz.ugur.busroutebackend.interfaces.rest.mobile.V1.controller;
 
-import biz.ugur.busroutebackend.banner.application.dto.BannerListResponse;
+import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.dto.BannerPaginationQuery;
 import biz.ugur.busroutebackend.banner.application.usecase.admin.GetAllBannersUseCase;
 import biz.ugur.busroutebackend.banner.application.usecase.admin.GetBannersByTypeUseCase;
 import biz.ugur.busroutebackend.banner.application.usecase.client.GetBannersWithPaginationByTypeUseCase;
 import biz.ugur.busroutebackend.client.application.usecase.RouteIsFavoriteUseCase;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -41,35 +42,40 @@ public class MobileBannerApiController extends BaseMobileController {
 
 
     @GetMapping
-    public Mono<ResponseEntity<ApiResponse<BannerListResponse>>> getAllBanners() {
+    public Mono<ResponseEntity<ApiResponse<BannerList>>> getAllBanners() {
         return ok(Mono.just(true).as(getAllBannersUseCase::execute));
-
     }
 
     @GetMapping("/paginated")
-    public Mono<ResponseEntity<ApiResponse<BannerListResponse>>> getBannersPaginated(
-            @RequestParam(defaultValue = "0") int page,
+    @Operation(
+        summary = "Get paginated banners by type",
+        description = "BREAKING CHANGE: page parameter is now 1-indexed (previously was 0-indexed). " +
+                     "Use page=1 for first page."
+    )
+    public Mono<ResponseEntity<ApiResponse<BannerList>>> getBannersPaginated(
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "displayOrder") String sortField,
             @RequestParam(defaultValue = "asc") String sortOrder,
             @RequestParam(defaultValue = "main") String type
     ) {
 
+        validatePagination(page, size);
 
-        BannerPaginationQuery query =  BannerPaginationQuery.createWithType(
+        BannerPaginationQuery query = BannerPaginationQuery.createWithType(
                 page,
                 size,
-                sortField,
+                camelToSnake(sortField),
                 sortOrder,
                 true,
                 type
         );
 
-        return ok(Mono.just(query).as(getBannersWithPaginationUseCase::execute));
+        return okPaginated(Mono.just(query).as(getBannersWithPaginationUseCase::execute));
     }
 
     @GetMapping("/type/{type}")
-    public Mono<ResponseEntity<ApiResponse<BannerListResponse>>> getBannersByType(@PathVariable String type) {
+    public Mono<ResponseEntity<ApiResponse<BannerList>>> getBannersByType(@PathVariable String type) {
         return ok(getBannersByTypeUseCase.execute(Mono.just(type)));
     }
 }

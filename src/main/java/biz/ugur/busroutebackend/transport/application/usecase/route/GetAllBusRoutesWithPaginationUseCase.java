@@ -66,17 +66,33 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
                 .then(
                         Mono.zip(
                                 busRouteRepository.findAll(pageable).collectList(),
-                                busRouteRepository.countActiveRoutes()
+                                busRouteRepository.countActiveRoutes(),
+                                busRouteRepository.count()
                         )
                 )
                 .flatMap(tuple -> {
                     List<BusRoute> busRoutes = tuple.getT1();
-                    Long totalCount = tuple.getT2();
+                    Long activeCount = tuple.getT2();
+                    Long totalCount = tuple.getT3();
 
                     return Flux.fromIterable(busRoutes)
                             .flatMap(this::enrichRouteWithStops)
                             .collectList()
-                            .map(routeResults -> new RouteList(routeResults, totalCount));
+                            .map(routeResults -> new RouteList(
+                                    routeResults,
+                                    activeCount,
+                                    query.page(),
+                                    query.size(),
+                                    totalCount
+                            ))
+                            .doOnSuccess(result -> log.debug(
+                                    "Retrieved {} routes on page {} of {} ({} active, {} total)",
+                                    result.getRoutes().size(),
+                                    result.getPagination().getCurrentPage(),
+                                    result.getPagination().getTotalPages(),
+                                    result.getActiveCount(),
+                                    result.getPagination().getTotalItems()
+                            ));
                 });
     }
 

@@ -4,15 +4,15 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.stop.BusStopCre
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.stop.BusStopUpdateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.stop.BusStopListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.stop.BusStopResponse;
-import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
+import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import biz.ugur.busroutebackend.transport.application.dto.stop.GetAllStopPaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopData;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.CreateBusStopUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.DeleteBusStopUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.GetAllBusStopsUseCase;
+import biz.ugur.busroutebackend.transport.application.usecase.stop.GetBusStopByIdUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.stop.UpdateBusStopUseCase;
 import jakarta.validation.Valid;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,19 +20,20 @@ import reactor.core.publisher.Mono;
 
 import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN_STOPS;
 
-@Slf4j
 @RestController
 @RequestMapping(V1_ADMIN_STOPS)
 @CrossOrigin(origins = "*")
-public class AdminStopController extends BaseController {
+public class AdminStopController extends BasePaginatedController {
 
     private final CreateBusStopUseCase createBusStopUseCase;
     private final GetAllBusStopsUseCase getAllBusStopsUseCase;
+    private final GetBusStopByIdUseCase getBusStopByIdUseCase;
     private final UpdateBusStopUseCase updateBusStopUseCase;
     private final DeleteBusStopUseCase deleteBusStopUseCase;
 
     public AdminStopController(CreateBusStopUseCase createBusStopUseCase,
                                GetAllBusStopsUseCase getAllBusStopsUseCase,
+                               GetBusStopByIdUseCase getBusStopByIdUseCase,
                                UpdateBusStopUseCase updateBusStopUseCase,
                                DeleteBusStopUseCase deleteBusStopUseCase,
                                MessageSource messageSource) {
@@ -40,6 +41,7 @@ public class AdminStopController extends BaseController {
 
         this.createBusStopUseCase = createBusStopUseCase;
         this.getAllBusStopsUseCase = getAllBusStopsUseCase;
+        this.getBusStopByIdUseCase = getBusStopByIdUseCase;
         this.updateBusStopUseCase = updateBusStopUseCase;
         this.deleteBusStopUseCase = deleteBusStopUseCase;
     }
@@ -51,20 +53,18 @@ public class AdminStopController extends BaseController {
 
     @GetMapping
     public Mono<ResponseEntity<ApiResponse<BusStopListResponse>>> getAllStops(
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size,
-            @RequestParam(required = false) String sort,
-            @RequestParam(required = false) String order,
-            @RequestParam(required = false) Boolean active) {
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "createdAt") String sort,
+            @RequestParam(defaultValue = "desc") String order,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String search) {
 
-        log.debug("AdminStopController.getAllStops called with page={}, size={}, sort={}, order={}, active={}",
-                page, size, sort, order, active);
+        validatePagination(page, size);
 
-        return ok(Mono.just(GetAllStopPaginationQuery.fromParams(page, size, camelToSnake(sort), order, active))
+        return ok(Mono.just(GetAllStopPaginationQuery.fromParams(page, size, sort, order, active, search))
                 .as(getAllBusStopsUseCase::execute)
-                .map(BusStopListResponse::fromResult)
-                .doOnSuccess(result -> log.debug("Successfully retrieved {} stops", result.getStops().size()))
-                .doOnError(error -> log.error("Error retrieving stops", error)));
+                .map(BusStopListResponse::fromResult));
     }
 
     @PostMapping
@@ -75,7 +75,12 @@ public class AdminStopController extends BaseController {
                 .map(this::toBasic));
     }
 
+    @GetMapping("/{stopId}")
+    public Mono<ResponseEntity<ApiResponse<BusStopResponse>>> getStopById(@PathVariable String stopId) {
 
+        return ok(getBusStopByIdUseCase.execute(Mono.just(new GetBusStopByIdUseCase.Query(stopId)))
+                .map(this::toBasic));
+    }
 
     @PutMapping("/{stopId}")
     public Mono<ResponseEntity<ApiResponse<BusStopResponse>>> updateStop(@PathVariable String stopId,

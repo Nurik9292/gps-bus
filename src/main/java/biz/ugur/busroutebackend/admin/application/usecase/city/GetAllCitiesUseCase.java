@@ -50,19 +50,29 @@ public class GetAllCitiesUseCase extends BaseUseCase<Mono<GetAllCitiesInput>, Ci
 
             return cityRepository.findAll(pageRequest)
                     .collectList()
+                    .zipWhen(cities -> cityRepository.count())  // Get total count for pagination
                     .zipWith(cityRepository.countActiveCities())
                     .map(tuple -> {
-                        List<City> cities = tuple.getT1();
+                        List<City> cities = tuple.getT1().getT1();
+                        Long totalCount = tuple.getT1().getT2();
                         Long activeCount = tuple.getT2();
 
                         List<CityResult> cityResults = cities.stream()
                                 .map(CityResult::fromDomain)
                                 .toList();
 
-                        return new CityList(cityResults, activeCount);
+                        return new CityList(
+                            cityResults,
+                            activeCount,
+                            input.getPage(),
+                            input.getSize(),
+                            totalCount
+                        );
                     })
-                    .doOnSuccess(response -> log.debug("Retrieved {} cities ({} active)",
-                            response.getCities().size(), response.getActiveCount()));
+                    .doOnSuccess(response -> log.debug("Retrieved {} cities out of {} total ({} active)",
+                            response.getCities().size(),
+                            response.getPagination().getTotalItems(),
+                            response.getActiveCount()));
         });
     }
 
