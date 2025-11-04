@@ -63,7 +63,9 @@ public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopData
             if (coordinatesChanged(existingStop, command)) {
                 validateCoordinates(command.latitude(), command.longitude());
             }
-            existingStop.updateInfo(
+
+            // updateInfo returns a NEW immutable object - we must capture it!
+            BusStop updatedStop = existingStop.updateInfo(
                     command.stopName(),
                     command.nameEn(),
                     command.nameTm(),
@@ -71,10 +73,10 @@ public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopData
                     command.longitude(),
                     command.isActive(),
                     command.isMajorStop(),
-                    "2"
+                    command.cityId()
             );
 
-            return busStopRepository.save(existingStop);
+            return busStopRepository.save(updatedStop);
         } catch (Exception e) {
             return Mono.error(e);
         }

@@ -73,12 +73,10 @@ public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteD
     }
 
     private Mono<BusRoute> updateBusRoute(BusRoute exsistBusRoute, UpdateRoute command) {
+        // BusRoute is immutable - all update methods return NEW instances
 
-        if (command.isActive())
-            exsistBusRoute.activate();
-        else exsistBusRoute.deactivate();
-
-        exsistBusRoute.updateBasicInfo(
+        // Update basic info first (returns new object)
+        BusRoute updatedRoute = exsistBusRoute.updateBasicInfo(
                 command.routeNumber(),
                 command.routeName(),
                 command.nameTm(),
@@ -87,12 +85,18 @@ public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteD
                 command.estimatedDurationMinutes(),
                 command.cityId());
 
+        // Update active status (returns new object)
+        if (command.isActive())
+            updatedRoute = updatedRoute.activate();
+        else
+            updatedRoute = updatedRoute.deactivate();
 
+        // Update geometry if provided (returns new object)
         if (hasValidGeometry(command)) {
-            processRouteGeometry(exsistBusRoute, command);
+            updatedRoute = updateRouteGeometry(updatedRoute, command);
         }
 
-        return busRouteRepository.save(exsistBusRoute);
+        return busRouteRepository.save(updatedRoute);
     }
 
 
@@ -101,10 +105,10 @@ public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteD
                 (command.backwardGeometry() != null && !command.backwardGeometry().isEmpty());
     }
 
-    private void processRouteGeometry(BusRoute busRoute, UpdateRoute command) {
+    private BusRoute updateRouteGeometry(BusRoute busRoute, UpdateRoute command) {
         RouteGeometry forwardGeometry = createRouteGeometry(command.forwardGeometry(), "forward");
         RouteGeometry backwardGeometry = createRouteGeometry(command.backwardGeometry(), "backward");
-        busRoute.updateRouteGeometry(forwardGeometry, backwardGeometry);
+        return busRoute.updateRouteGeometry(forwardGeometry, backwardGeometry);
     }
 
     private RouteGeometry createRouteGeometry(List<List<Double>> coordinates, String direction) {
