@@ -55,7 +55,7 @@ public class AdminStopController extends BasePaginatedController {
     public Mono<ResponseEntity<ApiResponse<BusStopListResponse>>> getAllStops(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sort,
+            @RequestParam(defaultValue = "do") String sort,
             @RequestParam(defaultValue = "desc") String order,
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) String search) {
