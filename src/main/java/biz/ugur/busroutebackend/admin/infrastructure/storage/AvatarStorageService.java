@@ -94,7 +94,7 @@ public class AvatarStorageService extends BaseImageStorageService implements Ava
 
     @Override
     protected String dir() {
-        return "/avatars/";
+        return "/avatars/";  // Static resources should NOT be versioned
     }
 
 

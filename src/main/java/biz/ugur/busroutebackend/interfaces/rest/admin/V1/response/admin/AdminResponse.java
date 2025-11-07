@@ -3,9 +3,13 @@ package biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.admin;
 import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 
+@EqualsAndHashCode
+@ToString
 @Data
 public class AdminResponse {
 
@@ -52,15 +56,6 @@ public class AdminResponse {
         this.createdAt = createdAt;
     }
 
-    public AdminResponse(
-            String id,
-            String username,
-            String fullName,
-            Boolean isActive,
-            Boolean isSuperAdmin,
-            LocalDateTime lastLoginAt) {
-        this(id, username, fullName, null, isActive, isSuperAdmin, lastLoginAt, LocalDateTime.now());
-    }
 
     public static AdminResponse fromResult(AdminResult result) {
         return new AdminResponse(

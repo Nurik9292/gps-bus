@@ -43,28 +43,39 @@ public abstract class BaseImageStorageService {
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
-    public Mono<Void> deleteFile(String path) {
-        if (path == null || path.isBlank() || path.startsWith("data:")) {
+    public Mono<Void> deleteFile(String urlPath) {
+        if (urlPath == null || urlPath.isBlank() || urlPath.startsWith("data:")) {
             return Mono.empty();
         }
 
         return Mono.fromRunnable(() -> {
             try {
-                Path originalPath = Paths.get(path, path.replace("banners/", ""));
-                String thumbnailPath = path.replace("original", "thumb");
-                Path thumbPath = Paths.get(path, thumbnailPath);
+                // Convert URL path to filesystem path
+                // Example: /avatars/2025/11/original_xxx.jpg -> /app/data/avatars/2025/11/original_xxx.jpg
+                String relativePath = urlPath.replace(dir(), "");  // Remove /avatars/ or /banners/ prefix
+                Path originalPath = Paths.get(basePath(), relativePath);
 
+                // Delete original file
                 if (Files.exists(originalPath)) {
                     Files.delete(originalPath);
-                    log.info("🗑️ Deleted original banner: {}", path);
+                    log.info("🗑️ Deleted original file: {}", originalPath);
+                } else {
+                    log.warn("⚠️ Original file not found: {}", originalPath);
                 }
 
-                if (Files.exists(thumbPath)) {
-                    Files.delete(thumbPath);
-                    log.info("🗑️ Deleted thumbnail banner: {}", thumbnailPath);
+                // Delete thumbnail if it exists
+                if (createThumbnails()) {
+                    String thumbnailRelativePath = relativePath.replace("original_", "thumb_");
+                    Path thumbPath = Paths.get(basePath(), thumbnailRelativePath);
+
+                    if (Files.exists(thumbPath)) {
+                        Files.delete(thumbPath);
+                        log.info("🗑️ Deleted thumbnail file: {}", thumbPath);
+                    }
                 }
             } catch (IOException e) {
-                log.warn("⚠️ Failed to delete banner {}: {}", path, e.getMessage());
+                log.error("❌ Failed to delete file {}: {}", urlPath, e.getMessage(), e);
+                throw new RuntimeException("Failed to delete file: " + urlPath, e);
             }
         }).subscribeOn(Schedulers.boundedElastic()).then();
     }

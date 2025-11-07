@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
+import biz.ugur.busroutebackend.admin.application.dto.admin.AdminPaginationQuery;
 import biz.ugur.busroutebackend.admin.application.dto.admin.AdminResult;
 import biz.ugur.busroutebackend.admin.application.usecase.admin.*;
 import biz.ugur.busroutebackend.admin.infrastructure.security.AdminPrincipal;
@@ -10,7 +11,7 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.admin.AvatarUpd
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.admin.AdminListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.admin.AdminProfileResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.admin.AdminResponse;
-import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
+import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
@@ -24,10 +25,11 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 @RestController
 @RequestMapping(V1_ADMIN_USERS)
 @CrossOrigin(origins = "*")
-public class AdminUserController extends BaseController {
+public class AdminUserController extends BasePaginatedController {
 
     private final CreateAdminUseCase createAdminUseCase;
     private final GetAllAdminsUseCase getAllAdminsUseCase;
+    private final GetAdminByIdUseCase getAdminByIdUseCase;
     private final UpdateAdminUseCase updateAdminUseCase;
     private final DeleteAdminUseCase deleteAdminUseCase;
     private final UpdateAdminStatusUseCase updateAdminStatusUseCase;
@@ -38,6 +40,7 @@ public class AdminUserController extends BaseController {
 
     public AdminUserController(CreateAdminUseCase createAdminUseCase,
                                GetAllAdminsUseCase getAllAdminsUseCase,
+                               GetAdminByIdUseCase getAdminByIdUseCase,
                                UpdateAdminUseCase updateAdminUseCase,
                                DeleteAdminUseCase deleteAdminUseCase,
                                UpdateAdminStatusUseCase updateAdminStatusUseCase,
@@ -49,6 +52,7 @@ public class AdminUserController extends BaseController {
         super(messageSource);
         this.createAdminUseCase = createAdminUseCase;
         this.getAllAdminsUseCase = getAllAdminsUseCase;
+        this.getAdminByIdUseCase = getAdminByIdUseCase;
         this.updateAdminUseCase = updateAdminUseCase;
         this.deleteAdminUseCase = deleteAdminUseCase;
         this.updateAdminStatusUseCase = updateAdminStatusUseCase;
@@ -63,9 +67,19 @@ public class AdminUserController extends BaseController {
     }
 
     @GetMapping
-    public Mono<ResponseEntity<ApiResponse<AdminListResponse>>> getAllAdmins() {
+    public Mono<ResponseEntity<ApiResponse<AdminListResponse>>> getAllAdmins(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "do") String sort,
+            @RequestParam(defaultValue = "desc") String order,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String role
+    ) {
+        validatePagination(page, size);
 
-        return ok(getAllAdminsUseCase.execute(Mono.empty())
+        return ok(Mono.just(AdminPaginationQuery.fromParams(page, size, sort, order, active, search, role))
+                .as(getAllAdminsUseCase::execute)
                 .map(AdminListResponse::fromResult));
     }
 
@@ -74,6 +88,15 @@ public class AdminUserController extends BaseController {
 
         return created(Mono.just(request.toCommand())
                 .as(createAdminUseCase::execute)
+                .map(this::toBasic));
+
+    }
+
+    @GetMapping("/{adminId}")
+    public Mono<ResponseEntity<ApiResponse<AdminResponse>>> getAdminById(@PathVariable String adminId) {
+
+        return ok(Mono.just(new GetAdminByIdUseCase.Request(adminId))
+                .as(getAdminByIdUseCase::execute)
                 .map(this::toBasic));
 
     }

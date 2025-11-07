@@ -23,11 +23,14 @@ public record AdminUpdateRequest(
     Boolean isSuperAdmin,
 
     @JsonProperty("is_active")
-    Boolean isActive
+    Boolean isActive,
+
+    @JsonProperty("avatar")
+    String avatar
 ){
 
    public UpdateCommand toCommand() {
-       return new UpdateCommand(username, fullName, newPassword, isSuperAdmin, isActive);
+       return new UpdateCommand(username, fullName, newPassword, isSuperAdmin, isActive, avatar);
    }
 
 }

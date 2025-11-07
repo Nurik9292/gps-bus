@@ -81,7 +81,7 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void save_ShouldPersistAdminSuccessfully() {
         // Given
-        Admin admin = Admin.create("testadmin", "password123", "Test Admin", false, true);
+        Admin admin = Admin.create("testadmin", "password123", "Test Admin", null, false, true);
 
         // When & Then
         StepVerifier.create(repository.save(admin))
@@ -98,7 +98,7 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void findById_ShouldRetrieveExistingAdmin() {
         // Given
-        Admin admin = Admin.create("admin1", "password", "Admin One", false, true);
+        Admin admin = Admin.create("admin1", "password", "Admin One", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
 
@@ -124,7 +124,7 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void findByUsername_ShouldRetrieveAdmin() {
         // Given
-        Admin admin = Admin.create("uniqueuser", "password", "Unique User", false, true);
+        Admin admin = Admin.create("uniqueuser", "password", "Unique User", null, false, true);
         repository.save(admin).block();
 
         // When & Then
@@ -146,7 +146,7 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void existsByUsername_ShouldReturnTrue_WhenExists() {
         // Given
-        Admin admin = Admin.create("existinguser", "password", "Existing User", false, true);
+        Admin admin = Admin.create("existinguser", "password", "Existing User", null, false, true);
         repository.save(admin).block();
 
         // When & Then
@@ -166,7 +166,7 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void update_ShouldUpdateAdminSuccessfully() {
         // Given
-        Admin admin = Admin.create("updatetest", "password", "Original Name", false, true);
+        Admin admin = Admin.create("updatetest", "password", "Original Name", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
 
@@ -184,7 +184,7 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void deleteById_ShouldRemoveAdmin() {
         // Given
-        Admin admin = Admin.create("deleteme", "password", "Delete Me", false, true);
+        Admin admin = Admin.create("deleteme", "password", "Delete Me", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
 
@@ -200,7 +200,7 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void immutabilitySupport_ChangePassword() {
         // Given
-        Admin admin = Admin.create("passtest", "oldpassword", "Password Test", false, true);
+        Admin admin = Admin.create("passtest", "oldpassword", "Password Test", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
 
@@ -221,7 +221,7 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void immutabilitySupport_ActivateDeactivate() {
         // Given
-        Admin admin = Admin.create("activetest", "password", "Active Test", false, true);
+        Admin admin = Admin.create("activetest", "password", "Active Test", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
         assertTrue(savedAdmin.getIsActive());
@@ -251,7 +251,7 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void immutabilitySupport_UpdateAvatar() {
         // Given
-        Admin admin = Admin.create("avatartest", "password", "Avatar Test", false, true);
+        Admin admin = Admin.create("avatartest", "password", "Avatar Test", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
         assertNull(savedAdmin.getAvatar());
@@ -281,8 +281,8 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void findAll_ShouldReturnAllAdmins() {
         // Given
-        Admin admin1 = Admin.create("admin1", "pass1", "Admin One", false, true);
-        Admin admin2 = Admin.create("admin2", "pass2", "Admin Two", true, true);
+        Admin admin1 = Admin.create("admin1", "pass1", "Admin One", null, false, true);
+        Admin admin2 = Admin.create("admin2", "pass2", "Admin Two", null, true, true);
         repository.save(admin1).block();
         repository.save(admin2).block();
 
@@ -295,7 +295,7 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void saveAndRetrieve_ShouldPreserveAllProperties() {
         // Given
-        Admin admin = Admin.create("complete", "password", "Complete Admin", true, true);
+        Admin admin = Admin.create("complete", "password", "Complete Admin", null, true, true);
         Admin adminWithAvatar = admin.updateAvatar("test-avatar.jpg");
 
         // When

@@ -21,6 +21,9 @@ public record AdminCreateRequest(
         @JsonProperty("full_name")
         String fullName,
 
+        @JsonProperty("avatar")
+        String avatar,
+
         @JsonProperty("is_super_admin")
         Boolean isSuperAdmin,
 
@@ -33,6 +36,7 @@ public record AdminCreateRequest(
                 username,
                 fullName,
                 password,
+                avatar,
                 isSuperAdmin,
                 isActive
         );

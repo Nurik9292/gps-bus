@@ -32,21 +32,14 @@ public class AdminListResponse {
     @JsonProperty("pagination")
     private final PaginationInfo pagination;
 
-    /**
-     * Constructor with pagination support.
-     */
+
     public AdminListResponse(List<AdminResponse> admins, Long activeCount, PaginationInfo pagination) {
         this.admins = admins;
         this.activeCount = activeCount;
         this.pagination = pagination;
     }
 
-    /**
-     * Factory method to create response from application layer DTO.
-     *
-     * @param result The AdminList DTO from application layer
-     * @return AdminListResponse for REST API
-     */
+
     public static AdminListResponse fromResult(AdminList result) {
         return new AdminListResponse(
                 result.getAdmins()

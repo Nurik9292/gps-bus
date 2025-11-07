@@ -79,6 +79,6 @@ public class BannerStorageService extends BaseImageStorageService implements Ban
 
     @Override
     protected String dir() {
-        return "/banners/";
+        return "/banners/";  // Static resources should NOT be versioned
     }
 }

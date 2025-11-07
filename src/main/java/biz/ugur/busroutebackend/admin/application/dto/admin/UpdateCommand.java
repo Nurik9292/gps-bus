@@ -7,10 +7,11 @@ public record UpdateCommand(
         String fullName,
         String newPassword,
         Boolean isSuperAdmin,
-        Boolean isActive
+        Boolean isActive,
+        String avatar
 
 ) {
     public Admin toDomain() {
-       return Admin.create(username, fullName, newPassword, isSuperAdmin, isActive);
+       return Admin.create(username, newPassword, fullName, avatar, isSuperAdmin, isActive);
     }
 }

@@ -7,9 +7,11 @@ import biz.ugur.busroutebackend.admin.domain.exceptions.AdminNotFoundException;
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.repository.AdminRepository;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
+import biz.ugur.busroutebackend.admin.infrastructure.storage.AvatarStorageService;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.shared.infrastructure.storage.BaseImageStorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -19,10 +21,15 @@ import reactor.core.publisher.Mono;
 public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Request>, AdminResult> {
 
     private final AdminRepository adminRepository;
+    private final AvatarStorageService avatarStorageService;
 
-    public UpdateAdminUseCase(AdminRepository adminRepository, EventBus eventBus, CorrelationContextService correlationService) {
+    public UpdateAdminUseCase(AdminRepository adminRepository,
+                              AvatarStorageService avatarStorageService,
+                              EventBus eventBus,
+                              CorrelationContextService correlationService) {
         super(correlationService, eventBus);
         this.adminRepository = adminRepository;
+        this.avatarStorageService = avatarStorageService;
     }
 
 
@@ -56,12 +63,12 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
                                 return Mono.error(new AdminAlreadyExistsException(request.command.username(), correlationId));
                             }
 
-                            return applyUpdates(existingAdmin, request.command())
+                            return applyUpdates(existingAdmin, request.command(), request.adminId())
                                 .flatMap(adminRepository::save)
                                 .map(AdminResult::fromDomain)
                                 .doOnSuccess(result ->
-                                    log.info("Admin updated successfully - CorrelationId: {} - Username: {}",
-                                        correlationId.value(), result.username()));
+                                    log.info("Admin updated successfully - CorrelationId: {} - Username: {} - Avatar: {}",
+                                        correlationId.value(), result.username(), result.avatar()));
                                 })
                     )
                     .doOnError(error -> log.error("Failed to update admin - CorrelationId: {} - AdminId: {}",
@@ -69,8 +76,8 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
         });
     }
 
-    private Mono<Admin> applyUpdates(Admin admin, UpdateCommand command) {
-        // Admin is immutable - each method returns a new instance
+    private Mono<Admin> applyUpdates(Admin admin, UpdateCommand command, String adminId) {
+        // Apply basic updates
         Admin updatedAdmin = admin.updateProfile(command.username(), command.fullName());
 
         if (command.newPassword() != null && !command.newPassword().trim().isEmpty()) {
@@ -84,7 +91,64 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
                 updatedAdmin = updatedAdmin.deactivate();
         }
 
+        // Process avatar if provided
+        if (command.avatar() != null) {
+            String oldAvatarPath = admin.getAvatar();
+            Admin finalAdmin = updatedAdmin;
+
+            log.info("Processing avatar update for admin: {} - Old avatar: {} - New avatar provided: {}",
+                adminId, oldAvatarPath, command.avatar().substring(0, Math.min(50, command.avatar().length())));
+
+            return processAvatar(command.avatar(), adminId)
+                .flatMap(newAvatarPath -> {
+                    log.info("New avatar saved: {} - Deleting old avatar: {}", newAvatarPath, oldAvatarPath);
+
+                    // Delete old avatar if exists and is different from new one
+                    return deleteOldAvatar(oldAvatarPath, newAvatarPath)
+                        .then(Mono.just(finalAdmin.updateAvatar(newAvatarPath)))
+                        .doOnSuccess(a -> log.info("Avatar updated successfully for admin: {}", adminId));
+                });
+        }
+
         return Mono.just(updatedAdmin);
+    }
+
+    private Mono<String> processAvatar(String avatar, String adminId) {
+        if (avatar == null || avatar.trim().isEmpty()) {
+            return Mono.empty();
+        }
+
+        // If it's a base64 image, save it to storage
+        if (avatar.startsWith("data:image/")) {
+            return avatarStorageService.save(adminId, avatar)
+                .map(BaseImageStorageService.Result::originalPath)
+                .doOnSuccess(path -> log.info("Avatar saved for admin {}: {}", adminId, path))
+                .onErrorResume(error -> {
+                    log.error("Failed to save avatar for admin {}: {}", adminId, error.getMessage());
+                    return Mono.empty();
+                });
+        }
+
+        // If it's already a URL, just return it
+        return Mono.just(avatar);
+    }
+
+    private Mono<Void> deleteOldAvatar(String oldAvatarPath, String newAvatarPath) {
+        // Don't delete if old avatar doesn't exist or is same as new one
+        if (oldAvatarPath == null || oldAvatarPath.isBlank() ||
+            oldAvatarPath.equals(newAvatarPath) || oldAvatarPath.startsWith("data:")) {
+            return Mono.empty();
+        }
+
+        log.info("Deleting old avatar: {}", oldAvatarPath);
+
+        return avatarStorageService.delete(oldAvatarPath)
+            .doOnSuccess(v -> log.info("Old avatar deleted successfully: {}", oldAvatarPath))
+            .onErrorResume(error -> {
+                // Don't fail the update if avatar deletion fails
+                log.warn("Failed to delete old avatar {}: {}", oldAvatarPath, error.getMessage());
+                return Mono.empty();
+            });
     }
 
 

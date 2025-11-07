@@ -18,7 +18,7 @@ class AdminTest {
 
     @BeforeEach
     void setUp() {
-        admin = Admin.create(USERNAME, PASSWORD, FULL_NAME, false, true);
+        admin = Admin.create(USERNAME, PASSWORD, FULL_NAME, null, false, true);
     }
 
     @Test
@@ -245,7 +245,7 @@ class AdminTest {
 
     @Test
     void immutabilityTest_OriginalShouldRemainUnchanged() {
-        Admin original = Admin.create("original", "password", "Original Name", false, true);
+        Admin original = Admin.create("original", "password", "Original Name", null, false, true);
         var originalUsername = original.getUsername();
         var originalFullName = original.getFullName();
         var originalIsActive = original.getIsActive();

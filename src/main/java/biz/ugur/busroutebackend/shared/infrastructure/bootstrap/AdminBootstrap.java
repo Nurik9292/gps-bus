@@ -44,6 +44,7 @@ public class AdminBootstrap {
                 defaultUsername,
                 defaultPassword,
                 "Super Administrator",
+                null,  // avatar
                 true,
                 true);
 

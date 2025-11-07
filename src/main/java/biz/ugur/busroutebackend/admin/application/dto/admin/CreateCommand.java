@@ -6,12 +6,13 @@ public record CreateCommand(
         String username,
         String fullName,
         String password,
+        String avatar,
         boolean isSuperAdmin,
         boolean isActive
 
 ) {
 
     public Admin toDomain() {
-        return Admin.create(username, fullName, password, isSuperAdmin, isActive);
+        return Admin.create(username, password, fullName, avatar, isSuperAdmin, isActive);
     }
 }

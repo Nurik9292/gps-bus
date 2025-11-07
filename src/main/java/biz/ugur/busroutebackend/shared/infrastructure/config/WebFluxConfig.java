@@ -42,10 +42,11 @@ public class WebFluxConfig implements WebFluxConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler(V1_AVATARS + "/**")
+        // Static resources should NOT be versioned - they outlive API versions
+        registry.addResourceHandler("/avatars/**")
                 .addResourceLocations("file:" + avatarsBasePath + "/");
 
-        registry.addResourceHandler(V1_BANNERS + "/**")
+        registry.addResourceHandler("/banners/**")
                 .addResourceLocations("file:" + bannersBasePath + "/");
     }
 }

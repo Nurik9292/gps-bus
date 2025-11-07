@@ -42,6 +42,7 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     public static Admin create(String username,
                                String password,
                                String fullName,
+                               String avatar,
                                Boolean isSuperAdmin,
                                Boolean isActive) {
         Admin admin = builder()
@@ -52,7 +53,7 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 .isSuperAdmin(isSuperAdmin)
                 .isActive(isActive)
                 .lastLoginAt(LocalDateTime.now())
-                .avatar(null)
+                .avatar(avatar)
                 .build();
 
         admin.registerEvent(new AdminCreatedEvent(
