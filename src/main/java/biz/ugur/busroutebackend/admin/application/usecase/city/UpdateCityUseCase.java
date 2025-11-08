@@ -57,13 +57,16 @@ public class UpdateCityUseCase extends BaseUseCase<Mono<CityUpdate>, CityResult>
                         return Mono.just(city);
                     })
                     .map(city -> {
-                        // City is immutable - updateCity(), activate(), deactivate() return new instances
                         City updatedCity = city.updateCity(update.name(), update.nameTm(), update.displayOrder());
 
-                        if (update.isActive())
-                            return updatedCity.activate();
-                        else
-                            return updatedCity.deactivate();
+                        if (update.isActive() != null) {
+                            if (update.isActive()) {
+                                return updatedCity.activate();
+                            } else {
+                                return updatedCity.deactivate();
+                            }
+                        }
+                        return updatedCity;
                     })
                     .flatMap(cityRepository::save)
                     .map(CityResult::fromDomain)

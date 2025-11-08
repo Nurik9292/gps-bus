@@ -58,11 +58,12 @@ public class AdminCityController extends BasePaginatedController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "name") String sort,
             @RequestParam(defaultValue = "asc") String order,
-            @RequestParam(required = false) Boolean active) {
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String search) {
 
         validatePagination(page, size);
 
-        return ok(Mono.just(GetAllCitiesInput.fromParams(page, size, camelToSnake(sort), order, active))
+        return ok(Mono.just(GetAllCitiesInput.fromParams(page, size, camelToSnake(sort), order, active, search))
                 .as(getAllCitiesUseCase::execute)
                 .map(CityListResponse::fromResult));
     }

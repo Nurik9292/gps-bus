@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.city;
 
 import biz.ugur.busroutebackend.admin.application.dto.city.CityUpdate;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -12,6 +13,7 @@ public record CityUpdateRequest(
         String name,
 
         @Size(max = 100, message = "Turkmen name must not exceed 100 characters")
+        @JsonProperty("name_tm")
         String nameTm,
 
         Boolean isActive,

@@ -33,9 +33,8 @@ public abstract class BaseJwtAuthenticationFilter<P extends UserDetails> impleme
         return extractToken(exchange)
                 .flatMap(this::validateTokenNotBlacklisted)
                 .flatMap(tokenService::extractPrincipal)
-                .filter(Objects::nonNull)
-                .map(this::createAuthentication)
-                .flatMap(auth -> {
+                .flatMap(principal -> {
+                    var auth = createAuthentication(principal);
                     log.debug("{} - Authentication successful for path: {} - User: {}",
                             this.getClass().getSimpleName(), path, auth.getName());
                     return chain.filter(exchange)
@@ -44,8 +43,7 @@ public abstract class BaseJwtAuthenticationFilter<P extends UserDetails> impleme
                 .onErrorResume(error -> {
                     log.warn("{} - Authentication failed for path: {} - Error: {}",
                             this.getClass().getSimpleName(), path, error.getMessage());
-                    return Mono.error(new InsufficientAuthenticationException(
-                            "Full authentication is required to access this resource"));
+                    return chain.filter(exchange);
                 });
     }
 

@@ -5,9 +5,11 @@ import biz.ugur.busroutebackend.admin.application.dto.city.CityResult;
 import biz.ugur.busroutebackend.admin.application.dto.city.GetAllCitiesInput;
 import biz.ugur.busroutebackend.admin.domain.model.City;
 import biz.ugur.busroutebackend.admin.domain.repository.CityRepository;
+import biz.ugur.busroutebackend.admin.domain.specification.CitySpecifications;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.shared.domain.specification.Specification;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -47,11 +49,19 @@ public class GetAllCitiesUseCase extends BaseUseCase<Mono<GetAllCitiesInput>, Ci
                     correlationId, input.getPage(), input.getSize(), input.getSort(), input.getOrder(), input.getActive());
 
             Pageable pageRequest = createPageable(input);
+            Specification<City> specification = buildSpecification(input);
 
-            return cityRepository.findAll(pageRequest)
-                    .collectList()
-                    .zipWhen(cities -> cityRepository.count())  // Get total count for pagination
+            Mono<List<City>> citiesMono = (specification != null)
+                    ? cityRepository.findBySpecification(specification, pageRequest).collectList()
+                    : cityRepository.findAll(pageRequest).collectList();
+
+            Mono<Long> totalCountMono = (specification != null)
+                    ? cityRepository.countBySpecification(specification)
+                    : cityRepository.count();
+
+            return citiesMono
                     .zipWith(cityRepository.countActiveCities())
+                    .zipWith(totalCountMono)
                     .map(tuple -> {
                         List<City> cities = tuple.getT1().getT1();
                         Long totalCount = tuple.getT1().getT2();
@@ -74,6 +84,26 @@ public class GetAllCitiesUseCase extends BaseUseCase<Mono<GetAllCitiesInput>, Ci
                             response.getPagination().getTotalItems(),
                             response.getActiveCount()));
         });
+    }
+
+
+
+    private Specification<City> buildSpecification(GetAllCitiesInput query) {
+        Specification<City> spec = null;
+
+        if (query.getSearch() != null && !query.getSearch().isBlank()) {
+            spec = CitySpecifications.nameContains(query.getSearch());
+        }
+
+        if (query.getActive() != null) {
+            Specification<City> activeSpec = query.getActive()
+                    ? CitySpecifications.isActive()
+                    : CitySpecifications.isInactive();
+
+            spec = (spec == null) ? activeSpec : spec.and(activeSpec);
+        }
+
+        return spec;
     }
 
     private Pageable createPageable(GetAllCitiesInput input) {

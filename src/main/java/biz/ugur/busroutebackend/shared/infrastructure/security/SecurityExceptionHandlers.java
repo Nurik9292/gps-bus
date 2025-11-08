@@ -25,6 +25,12 @@ public final class SecurityExceptionHandlers {
             log.warn("Authentication required for path: {} - {}", path, ex.getMessage());
 
             ServerHttpResponse response = exchange.getResponse();
+
+            if (response.isCommitted()) {
+                log.warn("Response already committed for path: {}, cannot send authentication error", path);
+                return reactor.core.publisher.Mono.empty();
+            }
+
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
             response.getHeaders().add("Content-Type", "application/json");
 
@@ -52,6 +58,12 @@ public final class SecurityExceptionHandlers {
             log.warn("Access denied for path: {} - {}", path, denied.getMessage());
 
             ServerHttpResponse response = exchange.getResponse();
+
+            if (response.isCommitted()) {
+                log.warn("Response already committed for path: {}, cannot send access denied error", path);
+                return reactor.core.publisher.Mono.empty();
+            }
+
             response.setStatusCode(HttpStatus.FORBIDDEN);
             response.getHeaders().add("Content-Type", "application/json");
 
