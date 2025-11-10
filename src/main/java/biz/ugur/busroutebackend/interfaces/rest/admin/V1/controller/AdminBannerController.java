@@ -22,12 +22,14 @@ public class AdminBannerController extends BasePaginatedController {
 
     private final CreateBannerUseCase createBannerUseCase;
     private final GetBannersWithPaginationUseCase getBannersWithPaginationUseCase;
+    private final GetBannerByIdUseCase getBannerByIdUseCase;
     private final UpdateBannerUseCase updateBannerUseCase;
     private final DeleteBannerUseCase deleteBannerUseCase;
     private final ToggleStatusBannerUseCase toggleStatusBannerUseCase;
 
     public AdminBannerController(CreateBannerUseCase createBannerUseCase,
                                  GetBannersWithPaginationUseCase getBannersWithPaginationUseCase,
+                                 GetBannerByIdUseCase getBannerByIdUseCase,
                                  UpdateBannerUseCase updateBannerUseCase,
                                  DeleteBannerUseCase deleteBannerUseCase,
                                  ToggleStatusBannerUseCase toggleStatusBannerUseCase,
@@ -35,6 +37,7 @@ public class AdminBannerController extends BasePaginatedController {
         super(messageSource);
         this.createBannerUseCase = createBannerUseCase;
         this.getBannersWithPaginationUseCase = getBannersWithPaginationUseCase;
+        this.getBannerByIdUseCase = getBannerByIdUseCase;
         this.updateBannerUseCase = updateBannerUseCase;
         this.deleteBannerUseCase = deleteBannerUseCase;
         this.toggleStatusBannerUseCase = toggleStatusBannerUseCase;
@@ -47,24 +50,32 @@ public class AdminBannerController extends BasePaginatedController {
 
     @GetMapping
     public Mono<ResponseEntity<ApiResponse<BannerList>>> getAllBanners(
-            @RequestParam(required = false) Boolean active,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "display_order") String sort,
-            @RequestParam(defaultValue = "asc") String order) {
+            @RequestParam(required = false, defaultValue = "false") Boolean active,
+            @RequestParam(required = false, defaultValue = "1") int page,
+            @RequestParam(required = false, defaultValue = "20") int size,
+            @RequestParam(required = false, defaultValue = "display_order") String sort,
+            @RequestParam(required = false, defaultValue = "asc") String order,
+            @RequestParam(required = false) String query) {
 
         validatePagination(page, size);
 
-        BannerPaginationQuery query = BannerPaginationQuery.create(
+        BannerPaginationQuery paginationQuery = BannerPaginationQuery.create(
             page,
             size,
             camelToSnake(sort),
             order,
-            active
+            active,
+            query
         );
 
-        return okPaginated(Mono.just(query)
+        return okPaginated(Mono.just(paginationQuery)
                 .as(getBannersWithPaginationUseCase::execute));
+    }
+
+    @GetMapping("/{bannerId}")
+    public Mono<ResponseEntity<ApiResponse<BannerResponse>>> getBannerById(@PathVariable String bannerId) {
+        return ok(Mono.just(bannerId)
+                .as(getBannerByIdUseCase::execute));
     }
 
     @PostMapping

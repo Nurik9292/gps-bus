@@ -20,6 +20,7 @@ public class BannerResponseMapper {
         BannerPeriod period = banner.getPeriod();
 
         return dataCompressor.decodeAndDecompress(banner.getContent())
+                .defaultIfEmpty("")
                 .map(decompressedContent -> new BannerResponse(
                         banner.getId().getValue(),
                         banner.getTitle().getValue(),
@@ -30,7 +31,9 @@ public class BannerResponseMapper {
                         banner.getDisplayOrder(),
                         period.getStartTime(),
                         period.getEndTime(),
-                        decompressedContent
+                        decompressedContent,
+                        banner.getCreatedAt(),
+                        banner.getUpdatedAt()
                 ));
     }
 }

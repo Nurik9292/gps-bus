@@ -1,13 +1,12 @@
 package biz.ugur.busroutebackend.banner.application.dto;
 
+import biz.ugur.busroutebackend.banner.domain.model.Banner;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
 
-/**
- * Banner response DTO.
- * Uses Java record for immutability and concise syntax.
- */
+
 public record BannerResponse(
         @JsonProperty("id")
         String id,
@@ -31,12 +30,24 @@ public record BannerResponse(
         Integer displayOrder,
 
         @JsonProperty("start_date")
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
         LocalDateTime startDate,
 
         @JsonProperty("end_date")
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
         LocalDateTime endDate,
 
         @JsonProperty("content")
-        String content
+        String content,
+
+        @JsonProperty("created_at")
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+        LocalDateTime createdAt,
+
+        @JsonProperty("updated_at")
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+        LocalDateTime updatedAt
 ) {
+
+
 }

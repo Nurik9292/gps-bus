@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.admin.application.exceptions.AdminConcurrencyExc
 import biz.ugur.busroutebackend.admin.application.exceptions.AdminOperationException;
 import biz.ugur.busroutebackend.admin.domain.exceptions.*;
 import biz.ugur.busroutebackend.admin.infrastructure.exception.AdminRepositoryException;
+import biz.ugur.busroutebackend.banner.domain.exceptions.BannerNotFoundException;
 import biz.ugur.busroutebackend.client.domain.exceptions.*;
 import biz.ugur.busroutebackend.routing.domain.exceptions.*;
 import biz.ugur.busroutebackend.transport.domain.exceptions.*;
@@ -646,6 +647,30 @@ public class GlobalExceptionHandler {
         metadata.put("locationValue", ex.getLocationValue());
 
         ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
+        return Mono.just(ResponseEntity.status(status).body(errorResponse));
+    }
+
+    // ========================================
+    // Banner Context Exceptions
+    // ========================================
+
+    @ExceptionHandler(BannerNotFoundException.class)
+    public Mono<ResponseEntity<ErrorResponse>> handleBannerNotFoundException(
+            BannerNotFoundException ex,
+            ServerWebExchange exchange
+    ) {
+        log.warn("Banner not found - BannerId: {} - Path: {}",
+                ex.getBannerId(), exchange.getRequest().getPath().value());
+
+        HttpStatus status = HttpStatus.NOT_FOUND;
+
+        ErrorResponse errorResponse = errorResponseFactory.fromGenericError(
+                status,
+                "BANNER_NOT_FOUND",
+                ex.getMessage(),
+                exchange
+        );
+
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 

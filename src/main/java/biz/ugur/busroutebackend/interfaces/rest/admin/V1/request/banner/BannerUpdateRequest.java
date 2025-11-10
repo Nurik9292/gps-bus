@@ -1,7 +1,10 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.banner;
 
 import biz.ugur.busroutebackend.banner.application.dto.UpdateBannerCommand;
+import biz.ugur.busroutebackend.shared.infrastructure.jackson.FlexibleLocalDateTimeDeserializer;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -19,22 +22,20 @@ public class BannerUpdateRequest {
     @Size(max = 100, message = "Type cannot exceed 100 characters")
     private String type;
 
-    @JsonProperty("image_url")
     private String imageUrl;
 
-    @JsonProperty("target_url")
     private String targetUrl;
 
-    @JsonProperty("is_active")
     private Boolean isActive;
 
-    @JsonProperty("display_order")
     private Integer displayOrder;
 
-    @JsonProperty("end_date")
+    @JsonDeserialize(using = FlexibleLocalDateTimeDeserializer.class)
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", shape = JsonFormat.Shape.STRING)
     private LocalDateTime endDate;
 
-    @JsonProperty("start_date")
+    @JsonDeserialize(using = FlexibleLocalDateTimeDeserializer.class)
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", shape = JsonFormat.Shape.STRING)
     private LocalDateTime startDate;
 
     @JsonProperty("content")

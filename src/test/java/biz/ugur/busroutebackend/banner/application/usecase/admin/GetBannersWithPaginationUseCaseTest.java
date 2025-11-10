@@ -13,6 +13,7 @@ import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerImage;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerPeriod;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerTitle;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.shared.domain.specification.Specification;
 import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,8 @@ class GetBannersWithPaginationUseCaseTest {
     private final static int DISPLAY_ORDER = 1;
     private final static LocalDateTime START_TIME = LocalDateTime.of(2025, 10, 11, 0, 0);
     private final static LocalDateTime END_TIME = LocalDateTime.of(2025, 10, 13, 0, 0);
+    private final static LocalDateTime CREATED_AT = LocalDateTime.of(2025, 10, 10, 0, 0);
+    private final static LocalDateTime UPDATED_AT = LocalDateTime.of(2025, 10, 12, 0, 0);
 
     private final static String SORT_FIELD = "sortField";
     private final static String SORT_ORDER_DESC = "desc";
@@ -90,12 +93,14 @@ class GetBannersWithPaginationUseCaseTest {
                 DISPLAY_ORDER,
                 START_TIME,
                 END_TIME,
-                DECOMPRESSOR
+                DECOMPRESSOR,
+                CREATED_AT,
+                UPDATED_AT
         );
 
         when(correlationContextService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
-        when(bannerRepository.findAll(any(Pageable.class))).thenReturn(Flux.just(banner));
-        when(bannerRepository.count()).thenReturn(Mono.just(1L));
+        when(bannerRepository.findBySpecification(any(Specification.class), any(Pageable.class))).thenReturn(Flux.just(banner));
+        when(bannerRepository.countBySpecification(any(Specification.class))).thenReturn(Mono.just(1L));
         when(bannerRepository.countActiveBanners()).thenReturn(Mono.just(100L));
         when(bannerResponseMapper.toResponse(banner)).thenReturn(Mono.just(bannerResponse));
 
@@ -109,7 +114,8 @@ class GetBannersWithPaginationUseCaseTest {
         }).verifyComplete();
 
         verify(correlationContextService, times(1)).getCurrentCorrelationId();
-        verify(bannerRepository, times(1)).findAll(any(Pageable.class));
+        verify(bannerRepository, times(1)).findBySpecification(any(Specification.class), any(Pageable.class));
+        verify(bannerRepository, times(1)).countBySpecification(any(Specification.class));
         verify(bannerRepository, times(1)).countActiveBanners();
         verify(bannerResponseMapper, times(1)).toResponse(banner);
     }
@@ -143,12 +149,14 @@ class GetBannersWithPaginationUseCaseTest {
                 DISPLAY_ORDER,
                 START_TIME,
                 END_TIME,
-                DECOMPRESSOR
+                DECOMPRESSOR,
+                CREATED_AT,
+                UPDATED_AT
         );
 
         when(correlationContextService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
-        when(bannerRepository.findAll(any(Pageable.class))).thenReturn(Flux.just(banner));
-        when(bannerRepository.count()).thenReturn(Mono.just(1L));
+        when(bannerRepository.findBySpecification(any(Specification.class), any(Pageable.class))).thenReturn(Flux.just(banner));
+        when(bannerRepository.countBySpecification(any(Specification.class))).thenReturn(Mono.just(1L));
         when(bannerRepository.countActiveBanners()).thenReturn(Mono.just(100L));
         when(bannerResponseMapper.toResponse(banner)).thenReturn(Mono.just(bannerResponse));
 
@@ -157,7 +165,8 @@ class GetBannersWithPaginationUseCaseTest {
         StepVerifier.create(result).assertNext(Assertions::assertNotNull).verifyComplete();
 
         verify(correlationContextService, times(1)).getCurrentCorrelationId();
-        verify(bannerRepository, times(1)).findAll(any(Pageable.class));
+        verify(bannerRepository, times(1)).findBySpecification(any(Specification.class), any(Pageable.class));
+        verify(bannerRepository, times(1)).countBySpecification(any(Specification.class));
         verify(bannerRepository, times(1)).countActiveBanners();
         verify(bannerResponseMapper, times(1)).toResponse(banner);
     }
@@ -185,12 +194,14 @@ class GetBannersWithPaginationUseCaseTest {
                 DISPLAY_ORDER,
                 START_TIME,
                 END_TIME,
-                DECOMPRESSOR
+                DECOMPRESSOR,
+                CREATED_AT,
+                UPDATED_AT
         );
 
         when(correlationContextService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
-        when(bannerRepository.findAll(any(Pageable.class))).thenReturn(Flux.just(banner));
-        when(bannerRepository.count()).thenReturn(Mono.just(100L));
+        when(bannerRepository.findBySpecification(any(Specification.class), any(Pageable.class))).thenReturn(Flux.just(banner));
+        when(bannerRepository.countBySpecification(any(Specification.class))).thenReturn(Mono.just(100L));
         when(bannerRepository.countActiveBanners()).thenReturn(Mono.just(100L));
         when(bannerResponseMapper.toResponse(banner)).thenReturn(Mono.just(bannerResponse));
 
@@ -204,7 +215,8 @@ class GetBannersWithPaginationUseCaseTest {
         }).verifyComplete();
 
         verify(correlationContextService, times(1)).getCurrentCorrelationId();
-        verify(bannerRepository, times(1)).findAll(any(Pageable.class));
+        verify(bannerRepository, times(1)).findBySpecification(any(Specification.class), any(Pageable.class));
+        verify(bannerRepository, times(1)).countBySpecification(any(Specification.class));
         verify(bannerRepository, times(1)).countActiveBanners();
         verify(bannerResponseMapper, times(1)).toResponse(banner);
     }

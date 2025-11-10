@@ -27,7 +27,7 @@ public class BannerFactory {
                 : Mono.empty();
 
         return compressedContent
-                .defaultIfEmpty(null)
+                .defaultIfEmpty("")
                 .map(content ->
                 Banner.create(
                         BannerTitle.of(command.title()),
@@ -47,7 +47,7 @@ public class BannerFactory {
                 : Mono.justOrEmpty(banner.getContent());
 
         return compressedContent
-                .defaultIfEmpty(banner.getContent())
+                .defaultIfEmpty(banner.getContent() != null ? banner.getContent() : "")
                 .map(content -> {
             Banner updatedBanner = banner.updateBanner(
                     BannerTitle.of(command.title()),

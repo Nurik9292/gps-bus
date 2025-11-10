@@ -2,17 +2,20 @@ package biz.ugur.busroutebackend.banner.application.usecase.admin;
 
 import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.dto.BannerPaginationQuery;
-import biz.ugur.busroutebackend.banner.application.dto.BannerResponse;
 import biz.ugur.busroutebackend.banner.application.mapper.BannerResponseMapper;
+import biz.ugur.busroutebackend.banner.domain.model.Banner;
 import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
+import biz.ugur.busroutebackend.banner.domain.specification.BannerSpecifications;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.shared.domain.specification.Specification;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -50,29 +53,42 @@ public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPagi
                     correlationId, query.getPage(), query.getSize(), query.getSortField(), query.getSortOrder(), query.getActiveOnly());
 
             Pageable pageable = createPageable(query);
+            Specification<Banner> specification = buildSpecification(query);
 
-            return bannerRepository.findAll(pageable)
-                    .flatMap(bannerResponseMapper::toResponse)
-                    .collectList()
-                    .zipWhen(banners -> bannerRepository.count())  // Get total count for pagination
-                    .zipWith(bannerRepository.countActiveBanners())
-                    .map(tuple -> {
-                        List<BannerResponse> banners = tuple.getT1().getT1();
-                        Long totalCount = tuple.getT1().getT2();
+            Mono<List<Banner>> bannersMono = (specification != null)
+                    ? bannerRepository.findBySpecification(specification, pageable).collectList()
+                    : bannerRepository.findAll(pageable).collectList();
+
+            Mono<Long> totalCountMono = (specification != null)
+                    ? bannerRepository.countBySpecification(specification)
+                    : bannerRepository.count();
+
+            Mono<Long> activeCountMono = bannerRepository.countActiveBanners();
+
+            return Mono.zip(bannersMono, activeCountMono, totalCountMono)
+                    .flatMap(tuple -> {
+                        List<Banner> banners = tuple.getT1();
                         Long activeCount = tuple.getT2();
+                        Long totalCount = tuple.getT3();
 
-                        return BannerList.of(
-                            banners,
-                            activeCount,
-                            query.getPage(),
-                            query.getSize(),
-                            totalCount
-                        );
+                        return Flux.fromIterable(banners)
+                                .flatMap(bannerResponseMapper::toResponse)
+                                .collectList()
+                                .map(bannerResponses -> BannerList.of(
+                                        bannerResponses,
+                                        activeCount,
+                                        query.getPage(),
+                                        query.getSize(),
+                                        totalCount
+                                ));
                     })
-                    .doOnSuccess(response -> log.debug("Retrieved {} banners out of {} total ({} active)",
+                    .doOnSuccess(response -> log.debug(
+                            "CorrelationId: {} - Retrieved {} banners out of {} total ({} active)",
+                            correlationId,
                             response.getBanners().size(),
                             response.getPagination().getTotalItems(),
-                            response.getActiveCount()));
+                            response.getActiveCount()
+                    ));
         });
     }
 
@@ -84,6 +100,22 @@ public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPagi
         );
 
         return PageRequest.of(query.getPage() - 1, query.getSize(), sort);
+    }
+
+
+    private Specification<Banner> buildSpecification(BannerPaginationQuery query) {
+        Specification<Banner> spec = null;
+
+        if (query.getQuery() != null && !query.getQuery().isBlank()) {
+            spec = BannerSpecifications.titleContains(query.getQuery());
+        }
+
+        if (Boolean.TRUE.equals(query.getActiveOnly())) {
+            Specification<Banner> activeSpec = BannerSpecifications.isReadyForDisplay();
+            spec = (spec == null) ? activeSpec : spec.and(activeSpec);
+        }
+
+        return spec;
     }
 
 }

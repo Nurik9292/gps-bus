@@ -21,18 +21,12 @@ public record StopData(
         LocalDateTime updatedAt,
         String cityId,
 
-        /**
-         * GeoJSON coordinates [longitude, latitude]
-         * Useful for mapping libraries like Leaflet, Mapbox, etc.
-         * @see <a href="https://geojson.org/">GeoJSON Specification</a>
-         */
+
         @JsonInclude(JsonInclude.Include.NON_NULL)
         double[] coordinates
 
 ) {
-    /**
-     * Create StopData from domain model with GeoJSON coordinates
-     */
+
     public static StopData fromDomain(BusStop stop) {
         return new StopData(
                 stop.getId().getValue(),
@@ -48,13 +42,11 @@ public record StopData(
                 stop.getCreatedAt(),
                 stop.getUpdatedAt(),
                 stop.getCityId(),
-                stop.toCoordinates().toGeoJson() // [longitude, latitude]
+                stop.toCoordinates().toGeoJson()
         );
     }
 
-    /**
-     * Create StopData without GeoJSON coordinates (backward compatibility)
-     */
+
     public static StopData fromDomainWithoutGeoJson(BusStop stop) {
         return new StopData(
                 stop.getId().getValue(),
@@ -70,7 +62,7 @@ public record StopData(
                 stop.getCreatedAt(),
                 stop.getUpdatedAt(),
                 stop.getCityId(),
-                null // No GeoJSON coordinates
+                null
         );
     }
 }

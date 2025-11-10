@@ -93,7 +93,9 @@ class CreateBannerUseCaseTest {
                banner.getDisplayOrder(),
                banner.getPeriod().getStartTime(),
                banner.getPeriod().getEndTime(),
-               banner.getContent()
+               banner.getContent(),
+               banner.getCreatedAt(),
+               banner.getUpdatedAt()
        );
 
        when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));

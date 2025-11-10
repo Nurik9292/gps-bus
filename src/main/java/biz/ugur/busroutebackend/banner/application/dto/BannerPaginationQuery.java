@@ -12,13 +12,15 @@ public class BannerPaginationQuery {
     private String sortOrder;
     private Boolean activeOnly;
     private String type;
+    private String query;
 
 
     public static BannerPaginationQuery create(int page,
                                                int size,
                                                String sortField,
                                                String sortOrder,
-                                               Boolean activeOnly) {
+                                               Boolean activeOnly,
+                                               String query) {
         validatePagination(page, size);
         validateSortOrder(sortOrder);
 
@@ -28,6 +30,7 @@ public class BannerPaginationQuery {
                 .sortField(sortField)
                 .sortOrder(sortOrder)
                 .activeOnly(activeOnly)
+                .query(query)
                 .build();
     }
 

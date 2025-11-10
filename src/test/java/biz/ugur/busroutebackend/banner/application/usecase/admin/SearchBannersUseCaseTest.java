@@ -81,7 +81,9 @@ class SearchBannersUseCaseTest {
             testBanner.getDisplayOrder(),
             testBanner.getPeriod().getStartTime(),
             testBanner.getPeriod().getEndTime(),
-            null
+            null,
+            testBanner.getCreatedAt(),
+            testBanner.getUpdatedAt()
         );
 
         when(correlationContextService.getCurrentCorrelationId())

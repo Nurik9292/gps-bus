@@ -97,7 +97,9 @@ class UpdateBannerUseCaseTest {
                 DISPLAY_ORDER,
                 START_DATE,
                 END_DATE,
-                CONTENT
+                CONTENT,
+                LocalDateTime.now(),
+                LocalDateTime.now()
         );
         when(bannerResponseMapper.toResponse(savedBanner)).thenReturn(Mono.just(bannerResponse));
 

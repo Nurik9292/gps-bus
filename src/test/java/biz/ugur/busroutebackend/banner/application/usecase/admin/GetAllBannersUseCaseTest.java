@@ -42,6 +42,8 @@ class GetAllBannersUseCaseTest {
     private final static int DISPLAY_ORDER = 1;
     private final static LocalDateTime START_TIME = LocalDateTime.of(2025, 10, 11, 0, 0);
     private final static LocalDateTime END_TIME = LocalDateTime.of(2025, 10, 13, 0, 0);
+    private final static LocalDateTime CREATED_AT = LocalDateTime.of(2025, 10, 10, 0, 0);
+    private final static LocalDateTime UPDATED_AT = LocalDateTime.of(2025, 10, 12, 0, 0);
 
     @InjectMocks
     private GetAllBannersUseCase getAllBannersUseCase;
@@ -73,7 +75,9 @@ class GetAllBannersUseCaseTest {
                 DISPLAY_ORDER,
                 START_TIME,
                 END_TIME,
-                DECOMPRESSOR
+                DECOMPRESSOR,
+                CREATED_AT,
+                UPDATED_AT
         );
 
         when(correlationContextService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
@@ -105,7 +109,9 @@ class GetAllBannersUseCaseTest {
                 DISPLAY_ORDER,
                 START_TIME,
                 END_TIME,
-                DECOMPRESSOR
+                DECOMPRESSOR,
+                CREATED_AT,
+                UPDATED_AT
         );
 
         when(correlationContextService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));

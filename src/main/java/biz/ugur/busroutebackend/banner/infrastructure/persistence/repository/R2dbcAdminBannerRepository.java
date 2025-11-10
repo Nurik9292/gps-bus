@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.banner.infrastructure.persistence.repository;
 
+import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
 import biz.ugur.busroutebackend.banner.domain.model.Banner;
 import biz.ugur.busroutebackend.banner.domain.repository.AdminBannerRepository;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -46,7 +47,7 @@ public class R2dbcAdminBannerRepository extends BannerBaseRepository implements 
     }
 
     @Override
-    public Flux<Banner> findByTypeAndActive(biz.ugur.busroutebackend.banner.domain.enums.BannerType type) {
+    public Flux<Banner> findByTypeAndActive(BannerType type) {
         String sql = """
             SELECT * FROM banners
             WHERE is_active = true
