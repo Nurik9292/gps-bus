@@ -86,7 +86,8 @@ public class MobileRouteApiController extends BaseMobileController {
                 size,
                 sortField,
                 sortOrder,
-                true
+                true,
+                null
         );
 
         return ok(getCurrentPrincipal().flatMap(principal ->

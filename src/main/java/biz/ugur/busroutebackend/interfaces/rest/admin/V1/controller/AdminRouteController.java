@@ -28,6 +28,7 @@ public class AdminRouteController extends BasePaginatedController {
     private final DeleteBusRouteUseCase deleteBusRouteUseCase;
     private final CheckRouteNumberUseCase checkRouteNumberUseCase;
     private final GetAllBusRoutesUseCase getAllRoutesUseCase;
+    private final GetRouteByIdUseCase getRouteByIdUseCase;
 
 
     public AdminRouteController(CreateBusRouteUseCase createBusRouteUseCase,
@@ -36,6 +37,7 @@ public class AdminRouteController extends BasePaginatedController {
                                 DeleteBusRouteUseCase deleteBusRouteUseCase,
                                 CheckRouteNumberUseCase checkRouteNumberUseCase,
                                 GetAllBusRoutesUseCase getAllRoutesUseCase,
+                                GetRouteByIdUseCase getRouteByIdUseCase,
                                 MessageSource messageSource) {
         super(messageSource);
         this.createBusRouteUseCase = createBusRouteUseCase;
@@ -44,6 +46,7 @@ public class AdminRouteController extends BasePaginatedController {
         this.deleteBusRouteUseCase = deleteBusRouteUseCase;
         this.checkRouteNumberUseCase = checkRouteNumberUseCase;
         this.getAllRoutesUseCase = getAllRoutesUseCase;
+        this.getRouteByIdUseCase = getRouteByIdUseCase;
     }
 
     @Override
@@ -55,13 +58,14 @@ public class AdminRouteController extends BasePaginatedController {
     public Mono<ResponseEntity<ApiResponse<BusRouteListResponse>>> getAllRoutes(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "routeNumber") String sort,
-            @RequestParam(defaultValue = "asc") String order,
-            @RequestParam(required = false) Boolean active) {
+            @RequestParam(defaultValue = "createdAt") String sort,
+            @RequestParam(defaultValue = "desc") String order,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String query) {
 
         validatePagination(page, size);
 
-        return ok(Mono.just(GetAllRoutePaginationQuery.fromParams(page, size, camelToSnake(sort), order, active))
+        return ok(Mono.just(GetAllRoutePaginationQuery.fromParams(page, size, camelToSnake(sort), order, active, query))
                 .as(getAllBusRoutesUseCase::execute)
                 .map(BusRouteListResponse::fromResult));
     }
@@ -71,6 +75,14 @@ public class AdminRouteController extends BasePaginatedController {
 
       return ok(getAllRoutesUseCase.execute(Mono.empty())
               .map(BusRouteListResponse::fromResult));
+    }
+
+    @GetMapping("/{id}")
+    public Mono<ResponseEntity<ApiResponse<BusRouteResponse>>> getRouteById(@PathVariable String id) {
+
+        return ok(Mono.just(new GetRouteByIdUseCase.Query(id))
+                .as(getRouteByIdUseCase::execute)
+                .map(this::toBasic));
     }
 
     @PostMapping

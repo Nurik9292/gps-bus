@@ -157,6 +157,26 @@ public class BusRouteSpecifications {
     }
 
 
+    public static Specification<BusRoute> routeNumberContains(String searchText) {
+        return new Specification<BusRoute>() {
+            @Override
+            public boolean isSatisfiedBy(BusRoute route) {
+                return route.getRouteNumber() != null
+                    && route.getRouteNumber().toLowerCase().contains(searchText.toLowerCase());
+            }
+
+            @Override
+            public SqlCriteria toSqlCriteria() {
+                return SqlCriteria.of(
+                    "LOWER(route_number) LIKE :searchNumber",
+                    "searchNumber",
+                    "%" + searchText.toLowerCase() + "%"
+                );
+            }
+        };
+    }
+
+
     public static Specification<BusRoute> hasEnglishTranslation() {
         return new Specification<BusRoute>() {
             @Override
@@ -280,7 +300,7 @@ public class BusRouteSpecifications {
 
     public static Specification<BusRoute> isLongDistance() {
         return isActive()
-            .and(distanceAbove(10000)); // 10 km
+            .and(distanceAbove(10000));
     }
 
 

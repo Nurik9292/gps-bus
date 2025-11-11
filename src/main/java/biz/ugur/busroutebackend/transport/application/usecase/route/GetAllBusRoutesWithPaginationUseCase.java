@@ -3,15 +3,17 @@ package biz.ugur.busroutebackend.transport.application.usecase.route;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.shared.domain.specification.Specification;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
-import biz.ugur.busroutebackend.transport.application.dto.route.RouteList;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
+import biz.ugur.busroutebackend.transport.application.dto.route.RouteList;
 import biz.ugur.busroutebackend.transport.application.mapper.RouteDataMapper;
 import biz.ugur.busroutebackend.transport.application.services.RouteStopsService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
+import biz.ugur.busroutebackend.transport.domain.specification.BusRouteSpecifications;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -57,17 +59,18 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
 
     private Mono<RouteList> processInternal(GetAllRoutePaginationQuery query) {
         Pageable pageable = createPageable(query);
+        Specification<BusRoute> specification = buildSpecification(query);
 
         return correlationService.getCurrentCorrelationId()
                 .doOnNext(correlationId -> log.debug(
-                        "Fetching bus routes | correlationId={}, page={}, size={}, sortField={}, sortOrder={}, active={}",
-                        correlationId, query.page(), query.size(), query.sortField(), query.sortOrder(), query.isActivate()
+                        "Fetching bus routes | correlationId={}, page={}, size={}, sortField={}, sortOrder={}, active={}, query={}",
+                        correlationId, query.page(), query.size(), query.sortField(), query.sortOrder(), query.isActivate(), query.query()
                 ))
                 .then(
                         Mono.zip(
-                                busRouteRepository.findAll(pageable).collectList(),
+                                fetchRoutes(specification, pageable),
                                 busRouteRepository.countActiveRoutes(),
-                                busRouteRepository.count()
+                                countRoutes(specification)
                         )
                 )
                 .flatMap(tuple -> {
@@ -96,6 +99,20 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
                 });
     }
 
+    private Mono<List<BusRoute>> fetchRoutes(Specification<BusRoute> specification, Pageable pageable) {
+        if (specification == null) {
+            return busRouteRepository.findAll(pageable).collectList();
+        }
+        return busRouteRepository.findBySpecification(specification, pageable).collectList();
+    }
+
+    private Mono<Long> countRoutes(Specification<BusRoute> specification) {
+        if (specification == null) {
+            return busRouteRepository.count();
+        }
+        return busRouteRepository.countBySpecification(specification);
+    }
+
     private Mono<RouteData> enrichRouteWithStops(BusRoute route) {
         String routeId = route.getId().getValue();
 
@@ -120,6 +137,26 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
                     log.warn("Error counting active vehicles for route {}: {}", routeNumber, error.getMessage());
                     return Mono.just(0L);
                 });
+    }
+
+
+    private Specification<BusRoute> buildSpecification(GetAllRoutePaginationQuery query) {
+        Specification<BusRoute> spec = null;
+
+        if (query.query() != null && !query.query().isBlank()) {
+            spec = BusRouteSpecifications.routeNumberContains(query.query())
+                    .or(BusRouteSpecifications.nameContains(query.query()));
+        }
+
+        if (query.isActivate() != null) {
+            Specification<BusRoute> activeSpec = query.isActivate()
+                    ? BusRouteSpecifications.isActive()
+                    : BusRouteSpecifications.isInactive();
+
+            spec = (spec == null) ? activeSpec : spec.and(activeSpec);
+        }
+
+        return spec;
     }
 
     private Pageable createPageable(GetAllRoutePaginationQuery query) {

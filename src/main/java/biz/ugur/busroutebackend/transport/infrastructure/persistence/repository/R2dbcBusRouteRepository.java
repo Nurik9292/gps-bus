@@ -128,6 +128,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
 
         String sql = """
             UPDATE bus_routes SET
+                route_number = :route_number,
                 route_name = :route_name,
                 name_tm = :name_tm,
                 name_en = :name_en,
@@ -137,13 +138,13 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 estimated_duration_minutes = :estimated_duration_minutes,
                 route_geometry_forward = :route_geometry_forward,
                 route_geometry_backward = :route_geometry_backward,
-                geometry_forward = CASE 
-                    WHEN :route_geometry_forward IS NOT NULL 
+                geometry_forward = CASE
+                    WHEN :route_geometry_forward IS NOT NULL
                     THEN ST_GeomFromText(:route_geometry_forward, 4326)::geometry
                     ELSE geometry_forward
                 END,
-                geometry_backward = CASE 
-                    WHEN :route_geometry_backward IS NOT NULL 
+                geometry_backward = CASE
+                    WHEN :route_geometry_backward IS NOT NULL
                     THEN ST_GeomFromText(:route_geometry_backward, 4326)::geometry
                     ELSE geometry_backward
                 END,
@@ -151,7 +152,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 total_distance_backward_meters = :total_distance_backward_meters,
                 updated_at = :updated_at,
                 version = :version
-            WHERE id = :id AND version = :old_version 
+            WHERE id = :id AND version = :old_version
             RETURNING *
             """;
 

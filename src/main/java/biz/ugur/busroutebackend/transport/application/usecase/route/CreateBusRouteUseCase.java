@@ -75,19 +75,18 @@ public class CreateBusRouteUseCase extends BaseUseCase<Mono<CreateRoute>, RouteD
     }
 
     private Mono<BusRoute> createBusRoute(CreateRoute command) {
-        BusRoute busRoute = BusRoute.builder()
-                .routeNumber(command.routeNumber())
-                .routeName(command.routeName())
-                .nameTm(command.nameTm())
-                .nameEn(command.nameEn())
-                .routeColor(command.routeColor())
-                .cityId(command.cityId())
-                .estimatedDurationMinutes(command.estimatedDurationMinutes())
-                .build();
-
+        BusRoute busRoute = BusRoute.create(
+                command.routeNumber(),
+                command.routeName(),
+                command.nameTm(),
+                command.nameEn(),
+                command.routeColor(),
+                command.cityId(),
+                command.estimatedDurationMinutes()
+        );
 
         if (hasValidGeometry(command)) {
-            processRouteGeometry(busRoute, command);
+            busRoute = processRouteGeometry(busRoute, command);
         }
 
         return busRouteRepository.save(busRoute);
@@ -98,10 +97,10 @@ public class CreateBusRouteUseCase extends BaseUseCase<Mono<CreateRoute>, RouteD
                 (command.backwardGeometry() != null && !command.backwardGeometry().isEmpty());
     }
 
-    private void processRouteGeometry(BusRoute busRoute, CreateRoute command) {
+    private BusRoute processRouteGeometry(BusRoute busRoute, CreateRoute command) {
         RouteGeometry forwardGeometry = createRouteGeometry(command.forwardGeometry(), "forward");
         RouteGeometry backwardGeometry = createRouteGeometry(command.backwardGeometry(), "backward");
-        busRoute.updateRouteGeometry(forwardGeometry, backwardGeometry);
+        return busRoute.updateRouteGeometry(forwardGeometry, backwardGeometry);
     }
 
     private RouteGeometry createRouteGeometry(List<List<Double>> coordinates, String direction) {
