@@ -22,9 +22,9 @@ import java.time.Duration;
 
 @Configuration
 @EnableR2dbcRepositories(basePackages = {
-        "biz.ugur.busroutebackend.transport.infrastructure.repository",
-        "biz.ugur.busroutebackend.routing.infrastructure.repository",
-        "biz.ugur.busroutebackend.admin.infrastructure.repository"
+        "biz.ugur.busroutebackend.transport.infrastructure.persistence.repository",
+        "biz.ugur.busroutebackend.routing.infrastructure.persistence.repository",
+        "biz.ugur.busroutebackend.admin.infrastructure.persistence.repository"
 })
 @EnableR2dbcAuditing
 @EnableTransactionManagement

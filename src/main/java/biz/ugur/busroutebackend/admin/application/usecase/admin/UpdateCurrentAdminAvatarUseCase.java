@@ -50,14 +50,12 @@ public class UpdateCurrentAdminAvatarUseCase extends BaseUseCase<Mono<UpdateCurr
                     .flatMap(admin -> {
                         String oldAvatarPath = admin.getAvatar();
                         if (request.avatar() == null) {
-                            // Admin is immutable - removeAvatar() returns a new instance
                             Admin updatedAdmin = admin.removeAvatar();
                             return avatarStorageService.delete(oldAvatarPath)
                                     .then(updateAvatarInDatabase(updatedAdmin, null));
                         } else if (request.avatar().startsWith("data:image/")) {
                             return avatarStorageService.save(admin.getId().getValue(), request.avatar())
                                     .flatMap(result -> {
-                                        // Admin is immutable - updateAvatar() returns a new instance
                                         Admin updatedAdmin = admin.updateAvatar(result.originalPath());
                                         return avatarStorageService.delete(oldAvatarPath)
                                                 .then(updateAvatarInDatabase(updatedAdmin, result.originalPath()));
