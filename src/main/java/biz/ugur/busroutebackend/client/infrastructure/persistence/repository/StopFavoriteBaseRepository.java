@@ -18,10 +18,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-/**
- * Base repository for StopFavorite aggregate.
- * This abstract class provides common mapping and query functionality for all StopFavorite repository implementations.
- */
+
 public abstract class StopFavoriteBaseRepository extends BaseR2dbcRepository<StopFavorite, StopFavoriteId> {
 
     protected StopFavoriteBaseRepository(DatabaseClient databaseClient) {
@@ -51,9 +48,7 @@ public abstract class StopFavoriteBaseRepository extends BaseR2dbcRepository<Sto
         return columns;
     }
 
-    /**
-     * Maps database row to StopFavorite domain model using StopFavoriteMapper.
-     */
+
     private StopFavorite mapRowToStopFavorite(Row row, RowMetadata metadata) {
         return StopFavoriteMapper.toDomain(StopFavoriteEntity.builder()
                 .id(row.get("id", String.class))
@@ -65,15 +60,8 @@ public abstract class StopFavoriteBaseRepository extends BaseR2dbcRepository<Sto
                 .build());
     }
 
-    // ============= Specification Pattern Support =============
 
-    /**
-     * Finds stop favorites matching the given specification.
-     * Converts specification to SQL criteria and executes query.
-     *
-     * @param specification the specification to match
-     * @return Flux of stop favorites matching the specification
-     */
+
     public Flux<StopFavorite> findBySpecification(Specification<StopFavorite> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -84,7 +72,6 @@ public abstract class StopFavoriteBaseRepository extends BaseR2dbcRepository<Sto
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }
@@ -94,14 +81,7 @@ public abstract class StopFavoriteBaseRepository extends BaseR2dbcRepository<Sto
                 .all();
     }
 
-    /**
-     * Finds stop favorites matching the given specification with pagination.
-     * Converts specification to SQL criteria, adds pagination, and executes query.
-     *
-     * @param specification the specification to match
-     * @param pageable pagination parameters
-     * @return Flux of stop favorites matching the specification
-     */
+
     public Flux<StopFavorite> findBySpecification(Specification<StopFavorite> specification, Pageable pageable) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -115,7 +95,6 @@ public abstract class StopFavoriteBaseRepository extends BaseR2dbcRepository<Sto
                 .bind("limit", pageable.getPageSize())
                 .bind("offset", pageable.getOffset());
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }
@@ -125,13 +104,7 @@ public abstract class StopFavoriteBaseRepository extends BaseR2dbcRepository<Sto
                 .all();
     }
 
-    /**
-     * Counts stop favorites matching the given specification.
-     * Converts specification to SQL criteria and executes count query.
-     *
-     * @param specification the specification to match
-     * @return Mono of Long (count of matching stop favorites)
-     */
+
     public Mono<Long> countBySpecification(Specification<StopFavorite> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -142,7 +115,6 @@ public abstract class StopFavoriteBaseRepository extends BaseR2dbcRepository<Sto
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }

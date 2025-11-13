@@ -14,18 +14,6 @@ import reactor.core.publisher.Mono;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * Use case for retrieving a complete list of cities without pagination.
- * Intended for use in SelectBox components on the frontend.
- *
- * <p>Benefits over paginated endpoint:
- * <ul>
- *   <li>No 100-item limit - returns all cities</li>
- *   <li>Simpler response - no pagination metadata</li>
- *   <li>Better performance - no pagination calculations</li>
- *   <li>Can be cached effectively</li>
- * </ul>
- */
 @Service
 @Slf4j
 public class GetCitiesListUseCase extends BaseUseCase<Mono<Boolean>, List<CityResult>> {
@@ -46,12 +34,10 @@ public class GetCitiesListUseCase extends BaseUseCase<Mono<Boolean>, List<CityRe
         return activeOnlyRequest.flatMap(activeOnly -> {
             log.debug("Getting cities list with activeOnly={}", activeOnly);
 
-            // Select appropriate repository method
             Flux<City> citiesFlux = activeOnly
                 ? cityRepository.findActiveCities()
                 : cityRepository.findAll();
 
-            // Map to DTOs and collect to list, sorted by displayOrder then name
             return citiesFlux
                 .map(CityResult::fromDomain)
                 .collectList()

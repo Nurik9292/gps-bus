@@ -18,11 +18,6 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-/**
- * Base repository for Client aggregate.
- * This abstract class provides common mapping and query functionality for all Client repository implementations.
- * Follows the same pattern as BannerBaseRepository and AdminBaseRepository.
- */
 public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, ClientId> {
 
     protected ClientBaseRepository(DatabaseClient databaseClient) {
@@ -59,9 +54,6 @@ public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, C
         return columns;
     }
 
-    /**
-     * Maps database row to Client domain model using ClientMapper.
-     */
     private Client mapRowToClient(Row row, RowMetadata metadata) {
         return ClientMapper.toDomain(ClientEntity.builder()
                 .id(row.get("id", String.class))
@@ -80,15 +72,7 @@ public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, C
                 .build());
     }
 
-    // ============= Specification Pattern Support =============
 
-    /**
-     * Finds clients matching the given specification.
-     * Converts specification to SQL criteria and executes query.
-     *
-     * @param specification the specification to match
-     * @return Flux of clients matching the specification
-     */
     public Flux<Client> findBySpecification(Specification<Client> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -99,7 +83,6 @@ public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, C
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }
@@ -109,14 +92,6 @@ public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, C
                 .all();
     }
 
-    /**
-     * Finds clients matching the given specification with pagination.
-     * Converts specification to SQL criteria, adds pagination, and executes query.
-     *
-     * @param specification the specification to match
-     * @param pageable pagination parameters
-     * @return Flux of clients matching the specification
-     */
     public Flux<Client> findBySpecification(Specification<Client> specification, Pageable pageable) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -140,13 +115,6 @@ public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, C
                 .all();
     }
 
-    /**
-     * Counts clients matching the given specification.
-     * Converts specification to SQL criteria and executes count query.
-     *
-     * @param specification the specification to match
-     * @return Mono of Long (count of matching clients)
-     */
     public Mono<Long> countBySpecification(Specification<Client> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -157,7 +125,6 @@ public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, C
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }

@@ -18,10 +18,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-/**
- * Base repository for RouteFavorite aggregate.
- * This abstract class provides common mapping and query functionality for all RouteFavorite repository implementations.
- */
+
 public abstract class RouteFavoriteBaseRepository extends BaseR2dbcRepository<RouteFavorite, RouteFavoriteId> {
 
     protected RouteFavoriteBaseRepository(DatabaseClient databaseClient) {
@@ -51,9 +48,7 @@ public abstract class RouteFavoriteBaseRepository extends BaseR2dbcRepository<Ro
         return columns;
     }
 
-    /**
-     * Maps database row to RouteFavorite domain model using RouteFavoriteMapper.
-     */
+
     private RouteFavorite mapRowToRouteFavorite(Row row, RowMetadata metadata) {
         return RouteFavoriteMapper.toDomain(RouteFavoriteEntity.builder()
                 .id(row.get("id", String.class))
@@ -65,15 +60,7 @@ public abstract class RouteFavoriteBaseRepository extends BaseR2dbcRepository<Ro
                 .build());
     }
 
-    // ============= Specification Pattern Support =============
 
-    /**
-     * Finds route favorites matching the given specification.
-     * Converts specification to SQL criteria and executes query.
-     *
-     * @param specification the specification to match
-     * @return Flux of route favorites matching the specification
-     */
     public Flux<RouteFavorite> findBySpecification(Specification<RouteFavorite> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -84,7 +71,6 @@ public abstract class RouteFavoriteBaseRepository extends BaseR2dbcRepository<Ro
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }
@@ -94,14 +80,7 @@ public abstract class RouteFavoriteBaseRepository extends BaseR2dbcRepository<Ro
                 .all();
     }
 
-    /**
-     * Finds route favorites matching the given specification with pagination.
-     * Converts specification to SQL criteria, adds pagination, and executes query.
-     *
-     * @param specification the specification to match
-     * @param pageable pagination parameters
-     * @return Flux of route favorites matching the specification
-     */
+
     public Flux<RouteFavorite> findBySpecification(Specification<RouteFavorite> specification, Pageable pageable) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -115,7 +94,6 @@ public abstract class RouteFavoriteBaseRepository extends BaseR2dbcRepository<Ro
                 .bind("limit", pageable.getPageSize())
                 .bind("offset", pageable.getOffset());
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }
@@ -125,13 +103,7 @@ public abstract class RouteFavoriteBaseRepository extends BaseR2dbcRepository<Ro
                 .all();
     }
 
-    /**
-     * Counts route favorites matching the given specification.
-     * Converts specification to SQL criteria and executes count query.
-     *
-     * @param specification the specification to match
-     * @return Mono of Long (count of matching route favorites)
-     */
+
     public Mono<Long> countBySpecification(Specification<RouteFavorite> specification) {
         SqlCriteria criteria = specification.toSqlCriteria();
 
@@ -142,7 +114,6 @@ public abstract class RouteFavoriteBaseRepository extends BaseR2dbcRepository<Ro
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sql);
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }

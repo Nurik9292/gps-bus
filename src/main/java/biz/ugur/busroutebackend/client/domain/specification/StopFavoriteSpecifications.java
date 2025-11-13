@@ -8,24 +8,12 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 
 import java.time.LocalDateTime;
 
-/**
- * Specification pattern implementations for StopFavorite aggregate.
- * Provides reusable, composable query conditions following SOLID principles (Open/Closed Principle).
- *
- * Each specification can be used standalone or combined using and(), or(), not() methods.
- * Dual implementation: in-memory (isSatisfiedBy) + SQL (toSqlCriteria) for flexibility.
- */
 public final class StopFavoriteSpecifications {
 
     private StopFavoriteSpecifications() {
-        // Utility class - prevent instantiation
     }
 
-    // ============= Client Specifications =============
 
-    /**
-     * Stop favorites for specific client.
-     */
     public static Specification<StopFavorite> belongsToClient(ClientId clientId) {
         return new Specification<StopFavorite>() {
             @Override
@@ -40,11 +28,7 @@ public final class StopFavoriteSpecifications {
         };
     }
 
-    // ============= Stop Specifications =============
 
-    /**
-     * Stop favorites for specific stop.
-     */
     public static Specification<StopFavorite> isForStop(BusStopId stopId) {
         return new Specification<StopFavorite>() {
             @Override
@@ -59,9 +43,6 @@ public final class StopFavoriteSpecifications {
         };
     }
 
-    /**
-     * Stop favorites for specific client and stop combination.
-     */
     public static Specification<StopFavorite> belongsToClientAndStop(ClientId clientId, BusStopId stopId) {
         return new Specification<StopFavorite>() {
             @Override
@@ -80,11 +61,7 @@ public final class StopFavoriteSpecifications {
         };
     }
 
-    // ============= Date Range Specifications =============
 
-    /**
-     * Stop favorites created after specified date.
-     */
     public static Specification<StopFavorite> createdAfter(LocalDateTime since) {
         return new Specification<StopFavorite>() {
             @Override
@@ -100,9 +77,6 @@ public final class StopFavoriteSpecifications {
         };
     }
 
-    /**
-     * Stop favorites created before specified date.
-     */
     public static Specification<StopFavorite> createdBefore(LocalDateTime until) {
         return new Specification<StopFavorite>() {
             @Override
@@ -118,19 +92,12 @@ public final class StopFavoriteSpecifications {
         };
     }
 
-    /**
-     * Stop favorites created within specified days.
-     */
     public static Specification<StopFavorite> createdWithinDays(int days) {
         LocalDateTime since = LocalDateTime.now().minusDays(days);
         return createdAfter(since);
     }
 
-    // ============= Composite Specifications =============
 
-    /**
-     * Recent stop favorites for specific client.
-     */
     public static Specification<StopFavorite> recentFavoritesForClient(ClientId clientId, int days) {
         return belongsToClient(clientId).and(createdWithinDays(days));
     }
