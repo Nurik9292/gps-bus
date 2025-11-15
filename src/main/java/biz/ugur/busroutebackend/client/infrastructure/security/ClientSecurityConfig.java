@@ -53,6 +53,7 @@ public class ClientSecurityConfig {
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/register").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/center-auth").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/refresh").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/verify").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/resend-verification").permitAll()

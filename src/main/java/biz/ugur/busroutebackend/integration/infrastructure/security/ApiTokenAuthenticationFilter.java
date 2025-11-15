@@ -18,11 +18,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.Set;
 
-/**
- * Authentication filter for external services using API tokens.
- * This filter handles authentication for /api/v1/mobile/* endpoints when
- * accessed by external services (not by the mobile app directly).
- */
+
 @Slf4j
 @RequiredArgsConstructor
 public class ApiTokenAuthenticationFilter implements WebFilter {
@@ -33,8 +29,6 @@ public class ApiTokenAuthenticationFilter implements WebFilter {
     private final ExternalServiceRepository externalServiceRepository;
     private final ApiTokenRateLimiter rateLimiter;
 
-    // Paths that DON'T require external service authentication
-    // (still accessible by mobile app or regular client JWT)
     private static final Set<String> EXCLUDED_PATHS = Set.of(
             "/api/v1/client/auth/",
             "/api/v1/admin/",
@@ -47,20 +41,16 @@ public class ApiTokenAuthenticationFilter implements WebFilter {
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
 
-        // Skip filter if path is excluded or not a mobile API path
         if (isExcludedPath(path) || !isMobileApiPath(path)) {
             return chain.filter(exchange);
         }
 
-        // Try to extract API token
         return extractApiToken(exchange)
                 .flatMap(this::authenticateExternalService)
                 .flatMap(principal -> {
-                    // Validate endpoint access
                     ExternalService service = getServiceFromPrincipal(principal);
                     service.validateEndpointAccess(path);
 
-                    // Check rate limit
                     return checkRateLimit(principal)
                             .then(Mono.defer(() -> {
                                 var auth = new UsernamePasswordAuthenticationToken(
@@ -92,12 +82,10 @@ public class ApiTokenAuthenticationFilter implements WebFilter {
         return externalServiceRepository.findByApiToken(token)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Invalid API token")))
                 .flatMap(service -> {
-                    // Check if service is active
                     if (!service.getIsActive()) {
                         return Mono.error(new ExternalServiceBlockedException(service.getName()));
                     }
 
-                    // Create principal
                     ApiTokenPrincipal principal = new ApiTokenPrincipal(
                             service.getId().getValue(),
                             service.getName(),
@@ -112,7 +100,7 @@ public class ApiTokenAuthenticationFilter implements WebFilter {
 
     private Mono<Void> checkRateLimit(ApiTokenPrincipal principal) {
         if (principal.getRateLimitPerMinute() == null) {
-            return Mono.empty(); // No rate limit
+            return Mono.empty();
         }
 
         return rateLimiter.checkRateLimit(
@@ -140,12 +128,9 @@ public class ApiTokenAuthenticationFilter implements WebFilter {
             error instanceof RateLimitExceededException) {
             log.warn("External service authentication failed for path: {} - Error: {}",
                     path, error.getMessage());
-            // These are security errors, don't proceed
             return Mono.error(error);
         }
 
-        // For other errors (like "Invalid API token"), continue to next filter
-        // This allows client JWT authentication to work
         log.debug("API token authentication failed, continuing to next filter: {}", error.getMessage());
         return chain.filter(exchange);
     }
@@ -159,8 +144,6 @@ public class ApiTokenAuthenticationFilter implements WebFilter {
     }
 
     private ExternalService getServiceFromPrincipal(ApiTokenPrincipal principal) {
-        // Helper to create service object for validation
-        // In real scenario, we might cache this
         return ExternalService.builder()
                 .name(principal.getServiceName())
                 .allowedEndpoints(principal.getAllowedEndpoints())

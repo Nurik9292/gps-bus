@@ -13,11 +13,7 @@ import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.util.matcher.PathPatternParserServerWebExchangeMatcher;
 
-/**
- * Security configuration for external API token authentication
- * This filter chain runs BEFORE client JWT authentication (Order=1 vs Order=2)
- * to intercept requests with API tokens
- */
+
 @Slf4j
 @Configuration
 @EnableWebFluxSecurity
@@ -50,9 +46,6 @@ public class IntegrationSecurityConfig {
 
                 .addFilterAt(apiTokenFilter, SecurityWebFiltersOrder.AUTHENTICATION)
 
-                // Mobile endpoints can be accessed either by:
-                // 1. External services with API tokens (authenticated by this filter chain)
-                // 2. Mobile app with client JWT (authenticated by ClientSecurityConfig)
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.GET, "/api/v1/mobile/**").permitAll()
                         .anyExchange().authenticated()

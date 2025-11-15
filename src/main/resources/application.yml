@@ -94,12 +94,12 @@ app:
   security:
     jwt:
       admin:
-        secret: ${JWT_ADMIN_SECRET:${JWT_SECRET:at-least-32-characters-long-secret-key-here}}
+        secret: ${JWT_ADMIN_SECRET:${JWT_SECRET:9b3f7d1a6e2c48f5b0a7d3e9c1f6b2a8d4e7c0f5a9b3d6e1c8f2a4b7d9e0c1f3}}
         access-token-expiration: "PT1H"    # 1 hour
-        refresh-token-expiration: "P7D"    # 7 days
+        refresh-token-expiration: "P7D"    # 7 daysdjn
         issuer: "bus-route-system"
       client:
-        secret: ${JWT_CLIENT_SECRET:${JWT_SECRET:at-least-32-characters-long-secret-key-here}}
+        secret: ${JWT_CLIENT_SECRET:${JWT_SECRET:f7c1d8e9a24b43e0c5f9127aa9d3e6bf72c14a8d59f0be3c6d8f1e2a7c9b4d01}}
         access-token-expiration: "P31D"   # 744 hours (31 days)
         refresh-token-expiration: "P90D"  # 912 days
         issuer: "bus-route-system"
