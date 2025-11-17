@@ -171,6 +171,18 @@ public class Client extends AggregateRoot<Client, ClientId> {
         updateActivity();
     }
 
+    public void logout() {
+        this.accessToken = null;
+        this.refreshToken = null;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public boolean isRefreshTokenValid(String providedRefreshToken) {
+        return this.refreshToken != null
+            && this.refreshToken.equals(providedRefreshToken)
+            && this.status.canLogin();
+    }
+
     public void suspend() {
         this.status = ClientStatus.SUSPENDED;
         this.accessToken = null;

@@ -16,13 +16,6 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
-/**
- * Base abstract class for JWT token services.
- * Provides common functionality for token validation and claim extraction.
- * Concrete implementations should handle token generation and principal extraction.
- *
- * @param <P> The type of UserDetails this service works with
- */
 @Slf4j
 @RequiredArgsConstructor
 public abstract class BaseJwtTokenService<P extends UserDetails> {
@@ -31,17 +24,10 @@ public abstract class BaseJwtTokenService<P extends UserDetails> {
     protected final String secret;
     protected final String issuer;
 
-    /**
-     * Creates signing key from secret.
-     * Uses UTF-8 charset for consistent encoding.
-     */
     protected SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    /**
-     * Validates token and extracts claims.
-     */
     public Mono<Claims> validateAndExtractClaims(String token) {
         return Mono.fromCallable(() -> {
             try {
@@ -71,18 +57,12 @@ public abstract class BaseJwtTokenService<P extends UserDetails> {
         });
     }
 
-    /**
-     * Checks if token is expired.
-     */
     public Mono<Boolean> isTokenExpired(String token) {
         return validateAndExtractClaims(token)
                 .map(claims -> claims.getExpiration().before(new Date()))
                 .onErrorReturn(true);
     }
 
-    /**
-     * Validates token type matches expected type.
-     */
     protected Mono<Claims> validateTokenType(Claims claims, String expectedType) {
         String tokenType = claims.get("type", String.class);
         if (!expectedType.equals(tokenType)) {
@@ -91,36 +71,18 @@ public abstract class BaseJwtTokenService<P extends UserDetails> {
         return Mono.just(claims);
     }
 
-    /**
-     * Generates an access token for the given subject and additional claims.
-     * Must be implemented by concrete classes.
-     */
     public abstract Mono<String> generateAccessToken(String subjectId, Object... additionalParams);
 
-    /**
-     * Generates a refresh token for the given subject.
-     * Must be implemented by concrete classes.
-     */
     public abstract Mono<String> generateRefreshToken(String subjectId);
 
-    /**
-     * Extracts principal from token.
-     * Must be implemented by concrete classes.
-     */
     public abstract Mono<P> extractPrincipal(String token);
 
-    /**
-     * Checks if token is a refresh token.
-     */
     public Mono<Boolean> isRefreshToken(String token) {
         return validateAndExtractClaims(token)
                 .map(claims -> "refresh".equals(claims.get("type", String.class)))
                 .onErrorReturn(false);
     }
 
-    /**
-     * Extracts subject ID from token.
-     */
     public Mono<String> extractSubjectId(String token) {
         return validateAndExtractClaims(token)
                 .map(Claims::getSubject)

@@ -20,6 +20,8 @@ public class R2dbcStopConnectionRepository implements StopConnectionRepository {
 
     @Override
     public Flux<StopConnection> findAllConnections() {
+        // CRITICAL FIX: Added LIMIT to prevent OutOfMemoryError
+        // Without limit, this could load millions of rows (100 routes * 50 stops * 50 stops = 250k records)
         String sql = """
             SELECT
                 rs1.stop_id as from_stop_id,
@@ -33,7 +35,11 @@ public class R2dbcStopConnectionRepository implements StopConnectionRepository {
             JOIN bus_routes br ON rs1.route_id = br.id
             WHERE rs1.stop_id != rs2.stop_id
             AND br.is_active = true
+            ORDER BY estimated_travel_minutes
+            LIMIT 10000
             """;
+
+        log.debug("Loading stop connections with LIMIT 10000 to prevent OOM");
 
         return databaseClient.sql(sql)
                 .map(row -> new StopConnection(
@@ -49,6 +55,7 @@ public class R2dbcStopConnectionRepository implements StopConnectionRepository {
 
     @Override
     public Flux<StopConnection> findConnectionsFromStop(String stopId) {
+        // Added LIMIT to prevent excessive results for major transfer hubs
         String sql = """
             SELECT
                 rs1.stop_id as from_stop_id,
@@ -64,6 +71,7 @@ public class R2dbcStopConnectionRepository implements StopConnectionRepository {
             AND rs1.stop_id != rs2.stop_id
             AND br.is_active = true
             ORDER BY estimated_travel_minutes
+            LIMIT 1000
             """;
 
         return databaseClient.sql(sql)

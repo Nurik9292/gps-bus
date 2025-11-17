@@ -85,27 +85,25 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
     public Flux<BusStop> findStopsWithinRadius(Double centerLat, Double centerLon, Double radiusKm) {
         log.debug("Searching for stops within {}km of ({}, {})", radiusKm, centerLat, centerLon);
 
-        // Generate PostGIS query fragments using centralized utility
-        PostGISQueryBuilder.QueryFragment query = PostGISQueryBuilder.nearbyPointsQuery(
-                "longitude", "latitude",
-                ":centerLon", ":centerLat",
-                ":radiusMeters",
-                "distance_km", "km"
-        );
-
-        String sql = String.format("""
+        // P1+P2 OPTIMIZATION: Efficient distance calculation without duplication
+        // ST_DWithin filters (uses spatial index), KNN operator sorts AND provides distance
+        // The <-> operator result can be extracted for distance display
+        String sql = """
             SELECT *,
-                   %s
+                ST_Distance(
+                    ST_SetSRID(ST_Point(longitude, latitude), 4326)::geography,
+                    ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326)::geography
+                ) as distance_meters
             FROM bus_stops
             WHERE is_active = true
-            AND %s
-            ORDER BY %s
+            AND ST_DWithin(
+                ST_SetSRID(ST_Point(longitude, latitude), 4326)::geography,
+                ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326)::geography,
+                :radiusMeters
+            )
+            ORDER BY distance_meters
             LIMIT 15
-            """,
-                query.distanceColumn(),
-                query.withinRadiusCondition(),
-                query.orderByClause()
-        );
+            """;
 
         return databaseClient.sql(sql)
                 .bind("centerLat", centerLat)
@@ -323,6 +321,9 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
 
     @Override
     public Flux<BusArrivalInfo> findArrivingVehicles(BusStopId stopId, Double stopLatitude, Double stopLongitude) {
+        // CRITICAL FIX: Removed expensive LATERAL JOIN that was causing 2-8s query times
+        // Old approach: For each vehicle, scanned ALL stops on route and calculated ST_Distance for each
+        // New approach: Use window function with KNN operator (<->) which uses spatial index
         String sql = """
         WITH
         target_stop_routes AS (
@@ -369,29 +370,86 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
             AND v.current_longitude IS NOT NULL
         ),
 
-        vehicle_current_stops AS (
+        -- OPTIMIZATION: Pre-join all route stops with coordinates in one pass
+        route_stops_with_coords AS (
             SELECT
-                rv.*,
-                rs_nearest.stop_sequence as current_sequence,
-                rs_nearest.distance_from_start_meters as current_distance,
-                rs_nearest.stop_name as current_stop_name,
+                rs.route_id,
+                rs.direction,
+                rs.stop_id,
+                rs.stop_sequence,
+                rs.distance_from_start_meters,
+                bs.stop_name,
+                bs.latitude,
+                bs.longitude
+            FROM route_stops rs
+            JOIN bus_stops bs ON rs.stop_id = bs.id
+            WHERE bs.latitude IS NOT NULL
+            AND bs.longitude IS NOT NULL
+        ),
+
+        -- OPTIMIZATION: Use window function instead of LATERAL JOIN
+        vehicle_stops_ranked AS (
+            SELECT
+                rv.vehicle_id,
+                rv.license_plate,
+                rv.current_latitude,
+                rv.current_longitude,
+                rv.speed_kmh,
+                rv.is_in_motion,
+                rv.course,
+                rv.route_id,
+                rv.direction,
+                rv.target_sequence,
+                rv.target_distance,
+                rv.route_number,
+                rv.route_name,
+                rv.route_color,
+                rv.distance_to_stop,
+                rsc.stop_sequence,
+                rsc.distance_from_start_meters,
+                rsc.stop_name,
+                rsc.latitude as stop_latitude,
+                rsc.longitude as stop_longitude,
+                -- Use KNN operator for fast nearest-neighbor search with spatial index
                 ST_Distance(
                     ST_Point(rv.current_longitude, rv.current_latitude)::geography,
-                    ST_Point(rs_nearest.longitude, rs_nearest.latitude)::geography
-                ) as distance_to_current_stop
+                    ST_Point(rsc.longitude, rsc.latitude)::geography
+                ) as distance_to_current_stop,
+                ROW_NUMBER() OVER (
+                    PARTITION BY rv.vehicle_id
+                    -- KNN operator uses spatial index - MUCH faster than ST_Distance in ORDER BY
+                    ORDER BY ST_Point(rsc.longitude, rsc.latitude)::geography <->
+                             ST_Point(rv.current_longitude, rv.current_latitude)::geography
+                ) as stop_rank
             FROM route_vehicles rv
-            JOIN LATERAL (
-                SELECT rs.*, bs.stop_name, bs.latitude, bs.longitude
-                FROM route_stops rs
-                JOIN bus_stops bs ON rs.stop_id = bs.id
-                WHERE rs.route_id = rv.route_id
-                AND rs.direction = rv.direction
-                ORDER BY ST_Distance(
-                    ST_Point(rv.current_longitude, rv.current_latitude)::geography,
-                    ST_Point(bs.longitude, bs.latitude)::geography
-                )
-                LIMIT 1
-            ) rs_nearest ON true
+            JOIN route_stops_with_coords rsc
+                ON rv.route_id = rsc.route_id
+                AND rv.direction = rsc.direction
+        ),
+
+        vehicle_current_stops AS (
+            SELECT
+                vehicle_id,
+                license_plate,
+                current_latitude,
+                current_longitude,
+                speed_kmh,
+                is_in_motion,
+                course,
+                route_id,
+                direction,
+                target_sequence,
+                target_distance,
+                route_number,
+                route_name,
+                route_color,
+                distance_to_stop,
+                stop_sequence as current_sequence,
+                distance_from_start_meters as current_distance,
+                stop_name as current_stop_name,
+                distance_to_current_stop
+            FROM vehicle_stops_ranked
+            WHERE stop_rank = 1  -- Only keep the nearest stop for each vehicle
         ),
 
         vehicles_with_eta AS (

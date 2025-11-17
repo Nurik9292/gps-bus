@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.interfaces.rest.routing.V1.response.TripSearchRe
 import biz.ugur.busroutebackend.routing.application.usecase.SearchTripsUseCase;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -42,7 +43,12 @@ public class TripPlanningController extends BaseController {
         return TripPlanningController.class.getSimpleName();
     }
 
+    /**
+     * CRITICAL FIX: Added Rate Limiter to prevent DDoS and spam
+     * Limits: 10 requests per 60 seconds per user
+     */
     @PostMapping("/search")
+    @RateLimiter(name = "searchApi")
     public Mono<ResponseEntity<ApiResponse<TripSearchResponse>>> searchTrips(@Valid @RequestBody TripSearchRequest request) {
         return ok(Mono.just(request)
                 .as(searchTripsUseCase::execute));

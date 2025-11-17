@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Slf4j
-@Service
+@Service("adminRefreshTokenUseCase")
 public class RefreshTokenUseCase extends BaseUseCase<Mono<RefreshTokenUseCase.Request>, RefreshTokenUseCase.Response> {
 
     private final AdminRepository adminRepository;

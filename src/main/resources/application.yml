@@ -213,14 +213,30 @@ resilience4j:
         sliding-window-size: 15
         failure-rate-threshold: 50
         wait-duration-in-open-state: 3m
+      # CRITICAL FIX: Circuit Breaker for PostgreSQL to prevent cascade failures
+      postgresRouting:
+        base-config: default
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        record-exceptions:
+          - io.r2dbc.spi.R2dbcException
+          - io.r2dbc.spi.R2dbcTimeoutException
+          - org.springframework.r2dbc.BadSqlGrammarException
+          - java.util.concurrent.TimeoutException
 
   ratelimiter:
     configs:
       default:
         limit-for-period: 10
         limit-refresh-period: 1s
-        timeout-duration: 0s
     instances:
+      # CRITICAL FIX: Rate limiting for search API to prevent DDoS
+      searchApi:
+        limit-for-period: 10
+        limit-refresh-period: 60s
+        timeout-duration: 0s
       gpsApi:
         limit-for-period: 30
         limit-refresh-period: 1s

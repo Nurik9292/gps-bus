@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Slf4j
-@Service
+@Service("adminLogoutUseCase")
 public class LogoutUseCase extends BaseUseCase<Mono<LogoutUseCase.Request>, Void> {
 
     private final TokenBlacklistService tokenBlacklistService;

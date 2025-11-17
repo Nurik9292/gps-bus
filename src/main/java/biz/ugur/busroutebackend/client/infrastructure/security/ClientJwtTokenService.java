@@ -102,4 +102,15 @@ public class ClientJwtTokenService extends BaseJwtTokenService<ClientPrincipal> 
                 .doOnError(e -> log.error("Error extracting token ID: {}", e.getMessage()))
                 .onErrorReturn(null);
     }
+
+    public Mono<String> validateRefreshToken(String token) {
+        return validateAndExtractClaims(token)
+                .flatMap(claims -> validateTokenType(claims, "refresh"))
+                .map(Claims::getSubject)
+                .doOnNext(clientId -> log.debug("Validated refresh token for clientId: {}", clientId))
+                .onErrorResume(e -> {
+                    log.error("Failed to validate refresh token: {}", e.getMessage());
+                    return Mono.error(new IllegalArgumentException("Invalid refresh token"));
+                });
+    }
 }

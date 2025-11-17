@@ -2,8 +2,11 @@ package biz.ugur.busroutebackend.interfaces.rest.client.V1.controller;
 
 import biz.ugur.busroutebackend.client.application.usecase.AuthenticateClientUseCase;
 import biz.ugur.busroutebackend.client.application.usecase.CenterRegisterClientUseCase;
+import biz.ugur.busroutebackend.client.application.usecase.LogoutUseCase;
+import biz.ugur.busroutebackend.client.application.usecase.RefreshTokenUseCase;
 import biz.ugur.busroutebackend.client.application.usecase.RegisterClientUseCase;
 import biz.ugur.busroutebackend.client.application.usecase.VerifyOtpUseCase;
+import biz.ugur.busroutebackend.client.infrastructure.security.ClientJwtTokenService;
 import biz.ugur.busroutebackend.client.domain.enums.Platform;
 import biz.ugur.busroutebackend.interfaces.rest.client.V1.request.*;
 import biz.ugur.busroutebackend.interfaces.rest.client.V1.response.*;
@@ -25,17 +28,26 @@ public class ClientAuthController extends BaseController {
     private final VerifyOtpUseCase verifyOtpUseCase;
     private final AuthenticateClientUseCase authenticateClientUseCase;
     private final CenterRegisterClientUseCase centerRegisterClientUseCase;
+    private final RefreshTokenUseCase refreshTokenUseCase;
+    private final LogoutUseCase logoutUseCase;
+    private final ClientJwtTokenService jwtTokenService;
 
     public ClientAuthController(RegisterClientUseCase registerClientUseCase,
                                VerifyOtpUseCase verifyOtpUseCase,
                                AuthenticateClientUseCase authenticateClientUseCase,
                                CenterRegisterClientUseCase centerRegisterClientUseCase,
+                               RefreshTokenUseCase refreshTokenUseCase,
+                               LogoutUseCase logoutUseCase,
+                               ClientJwtTokenService jwtTokenService,
                                MessageSource messageSource) {
         super(messageSource);
         this.registerClientUseCase = registerClientUseCase;
         this.verifyOtpUseCase = verifyOtpUseCase;
         this.authenticateClientUseCase = authenticateClientUseCase;
         this.centerRegisterClientUseCase = centerRegisterClientUseCase;
+        this.refreshTokenUseCase = refreshTokenUseCase;
+        this.logoutUseCase = logoutUseCase;
+        this.jwtTokenService = jwtTokenService;
     }
 
     @Override
@@ -109,22 +121,41 @@ public class ClientAuthController extends BaseController {
                )));
     }
 
+
     @PostMapping("/refresh")
     public Mono<ResponseEntity<ApiResponse<RefreshTokenResponse>>> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
-        // TODO: Создать RefreshTokenUseCase
-        return ok(Mono.just(new RefreshTokenResponse(
-            "new-access-token",
-            "new-refresh-token",
-            "Token refreshed successfully"
-        )));
+        RefreshTokenUseCase.Command command = new RefreshTokenUseCase.Command(request.refreshToken());
+
+        return ok(Mono.just(command)
+                .as(refreshTokenUseCase::execute)
+                .map(result -> new RefreshTokenResponse(
+                    result.accessToken(),
+                    result.refreshToken(),
+                    "Token refreshed successfully"
+                )));
     }
 
 
 
+    /**
+     * Phase 1: Logout Endpoint
+     * Invalidates client's access and refresh tokens
+     */
     @PostMapping("/logout")
     public Mono<ResponseEntity<ApiResponse<LogoutResponse>>> logout(@RequestHeader("Authorization") String authHeader) {
-        // TODO: Создать LogoutUseCase
-        return ok(Mono.just(new LogoutResponse("Logout successful")));
+        // Extract token from "Bearer <token>" format
+        String token = authHeader.replace("Bearer ", "").trim();
+
+        return jwtTokenService.getClientIdFromToken(token)
+                .flatMap(clientId -> {
+                    LogoutUseCase.Command command = new LogoutUseCase.Command(clientId);
+                    return ok(Mono.just(command)
+                            .as(logoutUseCase::execute)
+                            .map(result -> new LogoutResponse(result.message())));
+                })
+                .onErrorResume(error ->
+                    ok(Mono.just(new LogoutResponse("Logout failed: " + error.getMessage())))
+                );
     }
 
 
