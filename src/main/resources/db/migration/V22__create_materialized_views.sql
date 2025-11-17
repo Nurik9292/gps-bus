@@ -68,7 +68,6 @@ LEFT JOIN bus_stops bs ON rs.stop_id = bs.id
 LEFT JOIN vehicles v ON br.id = v.assigned_route_id
 GROUP BY br.id, br.route_number, br.route_name, br.is_active;
 
--- UNIQUE index required for REFRESH MATERIALIZED VIEW CONCURRENTLY
 CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_route_stats_unique_key
     ON mv_route_statistics(route_id);
 
