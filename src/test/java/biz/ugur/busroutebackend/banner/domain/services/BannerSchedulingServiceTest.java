@@ -34,7 +34,8 @@ class BannerSchedulingServiceTest {
                 "http://test.com",
                 1,
                 "Test content",
-                null
+                null,
+                true
         );
     }
 

@@ -69,7 +69,8 @@ class SearchBannersUseCaseTest {
             "target.com",
             10,
             null,
-            null
+            null,
+            true
         );
 
         testBannerResponse = new BannerResponse(

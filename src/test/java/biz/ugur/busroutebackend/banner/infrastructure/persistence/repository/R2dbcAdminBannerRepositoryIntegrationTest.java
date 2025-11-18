@@ -97,7 +97,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://test.com",
                 1,
                 "Test content",
-                null
+                null,
+                true
         );
 
         // When & Then
@@ -123,7 +124,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://test.com",
                 1,
                 "Test content",
-                null
+                null,
+                true
         );
 
         Banner savedBanner = repository.save(banner).block();
@@ -159,7 +161,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://original.com",
                 1,
                 "Original content",
-                null
+                null,
+                true
         );
 
         Banner savedBanner = repository.save(banner).block();
@@ -199,7 +202,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://delete.com",
                 1,
                 "Delete me",
-                null
+                null,
+                true
         );
 
         Banner savedBanner = repository.save(banner).block();
@@ -225,7 +229,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://active.com",
                 1,
                 "Active",
-                null
+                null,
+                true
         );
         repository.save(activeBanner).block();
 
@@ -238,7 +243,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://inactive.com",
                 2,
                 "Inactive",
-                null
+                null,
+                true
         );
         Banner deactivated = inactiveBanner.deactivate();
         repository.save(deactivated).block();
@@ -252,7 +258,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://future.com",
                 3,
                 "Future",
-                null
+                null,
+                true
         );
         repository.save(futureBanner).block();
 
@@ -276,7 +283,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://active1.com",
                 1,
                 "Active 1",
-                null
+                null,
+                true
         );
         repository.save(banner1).block();
 
@@ -288,7 +296,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://active2.com",
                 1,
                 "Active 2",
-                null
+                null,
+                true
         );
         repository.save(banner2).block();
 
@@ -301,7 +310,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://inactive.com",
                 2,
                 "Inactive",
-                null
+                null,
+                true
         ).deactivate();
         repository.save(inactive).block();
 
@@ -322,7 +332,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://main.com",
                 1,
                 "Main",
-                null
+                null,
+                true
         );
         repository.save(mainBanner).block();
 
@@ -334,7 +345,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://routes.com",
                 1,
                 "Routes",
-                null
+                null,
+                true
         );
         repository.save(routesBanner).block();
 
@@ -366,7 +378,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://main1.com",
                 1,
                 "Main 1",
-                null
+                null,
+                true
         );
         repository.save(main1).block();
 
@@ -378,7 +391,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://main2.com",
                 2,
                 "Main 2",
-                null
+                null,
+                true
         );
         repository.save(main2).block();
 
@@ -390,7 +404,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://routes1.com",
                 1,
                 "Routes 1",
-                null
+                null,
+                true
         );
         repository.save(routes1).block();
 
@@ -415,7 +430,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://banner1.com",
                 1,
                 "Content 1",
-                null
+                null,
+                true
         );
         repository.save(banner1).block();
 
@@ -427,7 +443,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://banner2.com",
                 2,
                 "Content 2",
-                null
+                null,
+                true
         );
         repository.save(banner2).block();
 
@@ -451,7 +468,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 "http://complete.com",
                 5,
                 "Complete content",
-                null
+                null,
+                true
         );
 
         // When

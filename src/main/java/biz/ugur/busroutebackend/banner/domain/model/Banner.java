@@ -44,7 +44,8 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                                 String targetUrl,
                                 Integer displayOrder,
                                 String content,
-                                Integer replyTime) {
+                                Integer replyTime,
+                                Boolean isActive) {
 
         validateReplyTime(type, replyTime);
 
@@ -55,7 +56,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .period(period)
                 .imageUrl(imageUrl)
                 .targetUrl(targetUrl)
-                .isActive(true)
+                .isActive(isActive != null ? isActive : true)
                 .displayOrder( displayOrder != null ? displayOrder : 0)
                 .content(content)
                 .replyTime(replyTime)

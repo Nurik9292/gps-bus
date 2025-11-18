@@ -35,7 +35,8 @@ class BannerSpecificationsTest {
             "target1.com",
             10,
             null,
-            null
+            null,
+            true
         );
 
         inactiveBanner = Banner.create(
@@ -46,7 +47,8 @@ class BannerSpecificationsTest {
             "target2.com",
             20,
             null,
-            30
+            30,
+            true
         ).deactivate();
 
         expiredBanner = Banner.create(
@@ -57,7 +59,8 @@ class BannerSpecificationsTest {
             "target3.com",
             30,
             null,
-            null
+            null,
+            true
         );
 
         futureBanner = Banner.create(
@@ -68,7 +71,8 @@ class BannerSpecificationsTest {
             "target4.com",
             5,
             null,
-            null
+            null,
+            true
         );
     }
 
@@ -142,7 +146,8 @@ class BannerSpecificationsTest {
             "target5.com",
             15,
             null,
-            null
+            null,
+            true
         );
 
         Specification<Banner> spec = BannerSpecifications.periodExpiresWithinDays(7);
@@ -275,7 +280,8 @@ class BannerSpecificationsTest {
             "target6.com",
             25,
             null,
-            null
+            null,
+            true
         );
 
         Specification<Banner> spec = BannerSpecifications.requiresAdminAttention();

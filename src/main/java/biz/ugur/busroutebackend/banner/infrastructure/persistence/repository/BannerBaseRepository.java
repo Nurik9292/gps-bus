@@ -51,6 +51,7 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
         columns.put("start_date", entity.getStartDate());
         columns.put("end_date", entity.getEndDate());
         columns.put("content", entity.getContent());
+        columns.put("reply_time", entity.getReplyTime());
         columns.put("version", entity.getVersion());
         columns.put("created_at", entity.getCreatedAt());
         columns.put("updated_at", entity.getUpdatedAt());
@@ -69,6 +70,7 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
                 .startDate(row.get("start_date", LocalDateTime.class))
                 .endDate(row.get("end_date", LocalDateTime.class))
                 .content(row.get("content", String.class))
+                .replyTime(row.get("reply_time", Integer.class))
                 .createdAt(row.get("created_at", LocalDateTime.class))
                 .updatedAt(row.get("updated_at", LocalDateTime.class))
                 .version(row.get("version", Long.class))

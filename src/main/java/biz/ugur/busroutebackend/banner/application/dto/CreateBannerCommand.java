@@ -13,6 +13,7 @@ public record CreateBannerCommand (String title,
                                    LocalDateTime endDate,
                                    LocalDateTime startDate,
                                    String content,
-                                   Integer replyTime) {
+                                   Integer replyTime,
+                                   Boolean isActive) {
 
 }

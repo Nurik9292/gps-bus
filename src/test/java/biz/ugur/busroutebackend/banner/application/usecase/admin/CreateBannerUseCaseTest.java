@@ -80,7 +80,8 @@ class CreateBannerUseCaseTest {
                 TARGET_URL,
                 DISPLAY_ORDER,
                 CONTENT,
-                30
+                30,
+                true
                 );
 
 

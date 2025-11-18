@@ -44,6 +44,9 @@ public class BannerCreateRequest {
     @JsonProperty("replyTime")
     private Integer replyTime;
 
+    @JsonProperty("isActive")
+    private Boolean isActive = true;
+
     public CreateBannerCommand toCommand() {
         return CreateBannerCommand.builder()
                 .title(this.title)
@@ -55,6 +58,7 @@ public class BannerCreateRequest {
                 .startDate(this.startDate)
                 .content(this.content)
                 .replyTime(this.replyTime)
+                .isActive(this.isActive != null ? this.isActive : true)
                 .build();
     }
 }

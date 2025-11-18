@@ -35,7 +35,8 @@ class BannerConflictDetectorTest {
                 "http://test.com",
                 displayOrder,
                 "Test content",
-                type == BannerType.POPUP ? 30 : null
+                type == BannerType.POPUP ? 30 : null,
+                true
         );
     }
 

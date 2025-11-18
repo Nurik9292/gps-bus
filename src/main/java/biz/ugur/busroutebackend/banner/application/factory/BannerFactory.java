@@ -37,7 +37,8 @@ public class BannerFactory {
                         command.targetUrl(),
                         command.displayOrder(),
                         content,
-                        command.replyTime()
+                        command.replyTime(),
+                        command.isActive()
                 )
         );
     }
