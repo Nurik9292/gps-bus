@@ -41,6 +41,9 @@ public class BannerCreateRequest {
     @JsonProperty("content")
     String content;
 
+    @JsonProperty("replyTime")
+    private Integer replyTime;
+
     public CreateBannerCommand toCommand() {
         return CreateBannerCommand.builder()
                 .title(this.title)
@@ -51,6 +54,7 @@ public class BannerCreateRequest {
                 .endDate(this.endDate)
                 .startDate(this.startDate)
                 .content(this.content)
+                .replyTime(this.replyTime)
                 .build();
     }
 }

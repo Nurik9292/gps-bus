@@ -37,6 +37,9 @@ public class BannerUpdateRequest {
     @JsonProperty("content")
     private String content;
 
+    @JsonProperty("replyTime")
+    private Integer replyTime;
+
     public UpdateBannerCommand  toCommand(String id) {
         return UpdateBannerCommand.builder()
                 .id(id)
@@ -49,6 +52,7 @@ public class BannerUpdateRequest {
                 .endDate(this.endDate)
                 .startDate(this.startDate)
                 .content(this.content)
+                .replyTime(this.replyTime)
                 .build();
     }
 }

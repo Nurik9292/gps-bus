@@ -79,7 +79,8 @@ class CreateBannerUseCaseTest {
                 BannerImage.of(IMAGE_URL),
                 TARGET_URL,
                 DISPLAY_ORDER,
-                CONTENT
+                CONTENT,
+                30
                 );
 
 
@@ -94,6 +95,7 @@ class CreateBannerUseCaseTest {
                banner.getPeriod().getStartTime(),
                banner.getPeriod().getEndTime(),
                banner.getContent(),
+               banner.getReplyTime(),
                banner.getCreatedAt(),
                banner.getUpdatedAt()
        );

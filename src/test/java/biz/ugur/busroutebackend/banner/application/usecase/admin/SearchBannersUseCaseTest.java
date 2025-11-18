@@ -68,6 +68,7 @@ class SearchBannersUseCaseTest {
             BannerImage.of("test.jpg"),
             "target.com",
             10,
+            null,
             null
         );
 
@@ -81,6 +82,7 @@ class SearchBannersUseCaseTest {
             testBanner.getDisplayOrder(),
             testBanner.getPeriod().getStartTime(),
             testBanner.getPeriod().getEndTime(),
+            null,
             null,
             testBanner.getCreatedAt(),
             testBanner.getUpdatedAt()

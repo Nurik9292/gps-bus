@@ -33,7 +33,8 @@ class BannerSchedulingServiceTest {
                 BannerImage.of("test.jpg"),
                 "http://test.com",
                 1,
-                "Test content"
+                "Test content",
+                null
         );
     }
 

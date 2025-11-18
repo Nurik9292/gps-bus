@@ -52,6 +52,9 @@ public class BannerEntity {
     @Column("content")
     private String content;
 
+    @Column("reply_time")
+    private Integer replyTime;
+
     @CreatedDate
     @Column("created_at")
     private LocalDateTime createdAt;

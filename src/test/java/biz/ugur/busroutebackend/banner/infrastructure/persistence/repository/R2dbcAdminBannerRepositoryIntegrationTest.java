@@ -96,7 +96,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("test.jpg"),
                 "http://test.com",
                 1,
-                "Test content"
+                "Test content",
+                null
         );
 
         // When & Then
@@ -121,7 +122,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("test.jpg"),
                 "http://test.com",
                 1,
-                "Test content"
+                "Test content",
+                null
         );
 
         Banner savedBanner = repository.save(banner).block();
@@ -156,7 +158,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("original.jpg"),
                 "http://original.com",
                 1,
-                "Original content"
+                "Original content",
+                null
         );
 
         Banner savedBanner = repository.save(banner).block();
@@ -170,7 +173,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("updated.jpg"),
                 "http://updated.com",
                 2,
-                "Updated content"
+                "Updated content",
+                null
         );
 
         // Then
@@ -194,7 +198,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("delete.jpg"),
                 "http://delete.com",
                 1,
-                "Delete me"
+                "Delete me",
+                null
         );
 
         Banner savedBanner = repository.save(banner).block();
@@ -219,7 +224,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("active.jpg"),
                 "http://active.com",
                 1,
-                "Active"
+                "Active",
+                null
         );
         repository.save(activeBanner).block();
 
@@ -231,7 +237,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("inactive.jpg"),
                 "http://inactive.com",
                 2,
-                "Inactive"
+                "Inactive",
+                null
         );
         Banner deactivated = inactiveBanner.deactivate();
         repository.save(deactivated).block();
@@ -244,7 +251,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("future.jpg"),
                 "http://future.com",
                 3,
-                "Future"
+                "Future",
+                null
         );
         repository.save(futureBanner).block();
 
@@ -267,7 +275,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("active1.jpg"),
                 "http://active1.com",
                 1,
-                "Active 1"
+                "Active 1",
+                null
         );
         repository.save(banner1).block();
 
@@ -278,7 +287,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("active2.jpg"),
                 "http://active2.com",
                 1,
-                "Active 2"
+                "Active 2",
+                null
         );
         repository.save(banner2).block();
 
@@ -290,7 +300,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("inactive.jpg"),
                 "http://inactive.com",
                 2,
-                "Inactive"
+                "Inactive",
+                null
         ).deactivate();
         repository.save(inactive).block();
 
@@ -310,7 +321,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("main.jpg"),
                 "http://main.com",
                 1,
-                "Main"
+                "Main",
+                null
         );
         repository.save(mainBanner).block();
 
@@ -321,7 +333,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("routes.jpg"),
                 "http://routes.com",
                 1,
-                "Routes"
+                "Routes",
+                null
         );
         repository.save(routesBanner).block();
 
@@ -352,7 +365,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("main1.jpg"),
                 "http://main1.com",
                 1,
-                "Main 1"
+                "Main 1",
+                null
         );
         repository.save(main1).block();
 
@@ -363,7 +377,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("main2.jpg"),
                 "http://main2.com",
                 2,
-                "Main 2"
+                "Main 2",
+                null
         );
         repository.save(main2).block();
 
@@ -374,7 +389,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("routes1.jpg"),
                 "http://routes1.com",
                 1,
-                "Routes 1"
+                "Routes 1",
+                null
         );
         repository.save(routes1).block();
 
@@ -398,7 +414,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("banner1.jpg"),
                 "http://banner1.com",
                 1,
-                "Content 1"
+                "Content 1",
+                null
         );
         repository.save(banner1).block();
 
@@ -409,7 +426,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("banner2.jpg"),
                 "http://banner2.com",
                 2,
-                "Content 2"
+                "Content 2",
+                null
         );
         repository.save(banner2).block();
 
@@ -432,7 +450,8 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 BannerImage.of("complete.jpg"),
                 "http://complete.com",
                 5,
-                "Complete content"
+                "Complete content",
+                null
         );
 
         // When

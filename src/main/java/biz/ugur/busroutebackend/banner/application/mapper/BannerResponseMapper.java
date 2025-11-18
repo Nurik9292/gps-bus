@@ -32,6 +32,7 @@ public class BannerResponseMapper {
                         period.getStartTime(),
                         period.getEndTime(),
                         decompressedContent,
+                        banner.getReplyTime(),
                         banner.getCreatedAt(),
                         banner.getUpdatedAt()
                 ));

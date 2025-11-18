@@ -98,6 +98,7 @@ class UpdateBannerUseCaseTest {
                 START_DATE,
                 END_DATE,
                 CONTENT,
+                null,
                 LocalDateTime.now(),
                 LocalDateTime.now()
         );

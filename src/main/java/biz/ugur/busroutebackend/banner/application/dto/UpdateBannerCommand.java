@@ -14,6 +14,7 @@ public record UpdateBannerCommand(String id,
                                   LocalDateTime endDate,
                                   LocalDateTime startDate,
                                   boolean isActive,
-                                  String content
+                                  String content,
+                                  Integer replyTime
 ) {
 }

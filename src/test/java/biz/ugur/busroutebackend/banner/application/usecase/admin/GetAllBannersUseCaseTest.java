@@ -76,6 +76,7 @@ class GetAllBannersUseCaseTest {
                 START_TIME,
                 END_TIME,
                 DECOMPRESSOR,
+                null,
                 CREATED_AT,
                 UPDATED_AT
         );
@@ -110,6 +111,7 @@ class GetAllBannersUseCaseTest {
                 START_TIME,
                 END_TIME,
                 DECOMPRESSOR,
+                null,
                 CREATED_AT,
                 UPDATED_AT
         );

@@ -40,6 +40,9 @@ public record BannerResponse(
         @JsonProperty("content")
         String content,
 
+        @JsonProperty("reply_time")
+        Integer replyTime,
+
         @JsonProperty("created_at")
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
         LocalDateTime createdAt,

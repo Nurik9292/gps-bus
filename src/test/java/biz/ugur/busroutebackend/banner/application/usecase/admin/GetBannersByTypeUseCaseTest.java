@@ -88,6 +88,7 @@ class GetBannersByTypeUseCaseTest {
                 START_TIME,
                 END_TIME,
                 DECOMPRESSOR,
+                null,
                 CREATED_AT,
                 UPDATED_AT
         );

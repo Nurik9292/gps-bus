@@ -34,7 +34,8 @@ class BannerConflictDetectorTest {
                 BannerImage.of("test.jpg"),
                 "http://test.com",
                 displayOrder,
-                "Test content"
+                "Test content",
+                type == BannerType.POPUP ? 30 : null
         );
     }
 

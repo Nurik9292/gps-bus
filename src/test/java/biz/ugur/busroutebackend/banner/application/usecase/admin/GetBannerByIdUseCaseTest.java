@@ -84,6 +84,7 @@ class GetBannerByIdUseCaseTest {
                 START_TIME,
                 END_TIME,
                 CONTENT,
+                null,
                 CREATED_AT,
                 UPDATED_AT
         );

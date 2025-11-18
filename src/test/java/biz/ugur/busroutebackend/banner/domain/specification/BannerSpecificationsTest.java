@@ -34,6 +34,7 @@ class BannerSpecificationsTest {
             BannerImage.of("image1.jpg"),
             "target1.com",
             10,
+            null,
             null
         );
 
@@ -44,7 +45,8 @@ class BannerSpecificationsTest {
             BannerImage.of("image2.jpg"),
             "target2.com",
             20,
-            null
+            null,
+            30
         ).deactivate();
 
         expiredBanner = Banner.create(
@@ -54,6 +56,7 @@ class BannerSpecificationsTest {
             BannerImage.of("image3.jpg"),
             "target3.com",
             30,
+            null,
             null
         );
 
@@ -64,6 +67,7 @@ class BannerSpecificationsTest {
             BannerImage.of("image4.jpg"),
             "target4.com",
             5,
+            null,
             null
         );
     }
@@ -137,6 +141,7 @@ class BannerSpecificationsTest {
             BannerImage.of("image5.jpg"),
             "target5.com",
             15,
+            null,
             null
         );
 
@@ -269,6 +274,7 @@ class BannerSpecificationsTest {
             BannerImage.of("image6.jpg"),
             "target6.com",
             25,
+            null,
             null
         );
 

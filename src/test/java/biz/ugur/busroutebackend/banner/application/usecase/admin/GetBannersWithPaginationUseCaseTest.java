@@ -94,6 +94,7 @@ class GetBannersWithPaginationUseCaseTest {
                 START_TIME,
                 END_TIME,
                 DECOMPRESSOR,
+                null,
                 CREATED_AT,
                 UPDATED_AT
         );
@@ -150,6 +151,7 @@ class GetBannersWithPaginationUseCaseTest {
                 START_TIME,
                 END_TIME,
                 DECOMPRESSOR,
+                null,
                 CREATED_AT,
                 UPDATED_AT
         );
@@ -195,6 +197,7 @@ class GetBannersWithPaginationUseCaseTest {
                 START_TIME,
                 END_TIME,
                 DECOMPRESSOR,
+                null,
                 CREATED_AT,
                 UPDATED_AT
         );

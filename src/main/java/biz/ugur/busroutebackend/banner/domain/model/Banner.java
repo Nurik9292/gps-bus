@@ -31,6 +31,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
     private final String targetUrl;
     private final Boolean isActive;
     private final Integer displayOrder;
+    private final Integer replyTime;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -42,7 +43,10 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                                 BannerImage imageUrl,
                                 String targetUrl,
                                 Integer displayOrder,
-                                String content) {
+                                String content,
+                                Integer replyTime) {
+
+        validateReplyTime(type, replyTime);
 
         Banner banner = builder()
                 .id(BannerId.generate())
@@ -54,6 +58,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .isActive(true)
                 .displayOrder( displayOrder != null ? displayOrder : 0)
                 .content(content)
+                .replyTime(replyTime)
                 .version(0L)
                 .build();
 
@@ -66,7 +71,8 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 banner.period.getStartTime(),
                 banner.period.getEndTime(),
                 banner.displayOrder,
-                banner.content
+                banner.content,
+                banner.replyTime
         ));
 
         return banner;
@@ -81,6 +87,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                                  Boolean isActive,
                                  Integer displayOrder,
                                  String content,
+                                 Integer replyTime,
                                  LocalDateTime createdAt,
                                  LocalDateTime updatedAt,
                                  Long version) {
@@ -95,6 +102,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .displayOrder(displayOrder)
                 .period(period)
                 .content(content)
+                .replyTime(replyTime)
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
                 .version(version != null ? version : 0L)
@@ -109,7 +117,8 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
             BannerImage imageUrl,
             String targetUrl,
             Integer displayOrder,
-            String content) {
+            String content,
+            Integer replyTime) {
 
         if (title == null) {
             throw new BannerValidationException("Title cannot be null");
@@ -123,6 +132,8 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
         if (imageUrl == null) {
             throw new BannerValidationException("Image URL cannot be null");
         }
+
+        validateReplyTime(type, replyTime);
 
         Map<String, Object> changes = new HashMap<>();
 
@@ -155,6 +166,10 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
             changes.put("content", normalizedContent);
         }
 
+        if (!java.util.Objects.equals(this.replyTime, replyTime)) {
+            changes.put("replyTime", replyTime);
+        }
+
         // Create new instance with updated values
         Banner updatedBanner = this.toBuilder()
                 .title(title)
@@ -164,6 +179,7 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
                 .targetUrl(normalizedTargetUrl)
                 .displayOrder(finalDisplayOrder)
                 .content(normalizedContent)
+                .replyTime(replyTime)
                 .build();
 
         if (!changes.isEmpty()) {
@@ -233,6 +249,21 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
     @Override
     public void setVersion(Long version) {
         this.version = version;
+    }
+
+    private static void validateReplyTime(BannerType type, Integer replyTime) {
+        if (type == BannerType.POPUP) {
+            if (replyTime == null) {
+                throw new BannerValidationException("Reply time is required for POPUP banners");
+            }
+            if (replyTime <= 0) {
+                throw new BannerValidationException("Reply time must be a positive number (in seconds)");
+            }
+        } else {
+            if (replyTime != null) {
+                throw new BannerValidationException("Reply time is only applicable for POPUP banners");
+            }
+        }
     }
 
 }

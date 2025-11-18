@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 @Getter
 public class BannerCreatedEvent extends BannerDomainEvent {
 
-    public static final int CURRENT_VERSION = 1;
+    public static final int CURRENT_VERSION = 2;
 
     private final String title;
     private final String type;
@@ -19,6 +19,7 @@ public class BannerCreatedEvent extends BannerDomainEvent {
     private final LocalDateTime endDate;
     private final Integer displayOrder;
     private final String content;
+    private final Integer replyTime;
 
 
     public BannerCreatedEvent(
@@ -30,7 +31,8 @@ public class BannerCreatedEvent extends BannerDomainEvent {
             LocalDateTime startDate,
             LocalDateTime endDate,
             Integer displayOrder,
-            String content) {
+            String content,
+            Integer replyTime) {
         super(bannerId);
         this.title = title;
         this.type = type;
@@ -40,6 +42,7 @@ public class BannerCreatedEvent extends BannerDomainEvent {
         this.endDate = endDate;
         this.displayOrder = displayOrder;
         this.content = content;
+        this.replyTime = replyTime;
     }
 
 
@@ -55,7 +58,8 @@ public class BannerCreatedEvent extends BannerDomainEvent {
             LocalDateTime startDate,
             LocalDateTime endDate,
             Integer displayOrder,
-            String content) {
+            String content,
+            Integer replyTime) {
         super(eventId, bannerId, occurredAt, eventVersion);
         this.title = title;
         this.type = type;
@@ -65,6 +69,7 @@ public class BannerCreatedEvent extends BannerDomainEvent {
         this.endDate = endDate;
         this.displayOrder = displayOrder;
         this.content = content;
+        this.replyTime = replyTime;
     }
 
     @Override

@@ -12,6 +12,7 @@ public record CreateBannerCommand (String title,
                                    Integer displayOrder,
                                    LocalDateTime endDate,
                                    LocalDateTime startDate,
-                                   String content) {
+                                   String content,
+                                   Integer replyTime) {
 
 }

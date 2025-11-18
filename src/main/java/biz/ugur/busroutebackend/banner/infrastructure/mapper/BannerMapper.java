@@ -23,6 +23,7 @@ public class BannerMapper {
                 entity.getIsActive(),
                 entity.getDisplayOrder(),
                 entity.getContent(),
+                entity.getReplyTime(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 entity.getVersion()
@@ -41,6 +42,7 @@ public class BannerMapper {
                 .startDate(banner.getPeriod().getStartTime())
                 .endDate(banner.getPeriod().getEndTime())
                 .content(banner.getContent())
+                .replyTime(banner.getReplyTime())
                 .createdAt(banner.getCreatedAt())
                 .updatedAt(banner.getUpdatedAt())
                 .version(banner.getVersion())

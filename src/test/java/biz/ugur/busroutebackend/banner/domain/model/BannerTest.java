@@ -60,7 +60,7 @@ class BannerTest {
         BannerPeriod period = createPeriod();
         BannerImage image = createImage();
 
-        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
+        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT, null);
 
         assertNotNull(banner);
         assertNotNull(banner.getId());
@@ -88,7 +88,7 @@ class BannerTest {
         BannerImage image = createImage();
 
         Exception exception = assertThrows(BannerValidationException.class, () ->
-                Banner.create(BannerTitle.of(""), type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT));
+                Banner.create(BannerTitle.of(""), type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT, null));
 
         assertEquals("Banner title cannot be null or empty", exception.getMessage());
     }
@@ -102,7 +102,7 @@ class BannerTest {
 
         Exception exception = assertThrows(BannerPeriodValidationException.class, () ->
                 Banner.create(title, type, BannerPeriod.between(LocalDateTime.now().plusDays(1), LocalDateTime.now()),
-                image, TARGET_URL, DISPLAY_ORDER, CONTENT
+                image, TARGET_URL, DISPLAY_ORDER, CONTENT, null
         ));
 
         assertEquals("Banner Period endTime cannot be before startTime", exception.getMessage());
@@ -121,7 +121,8 @@ class BannerTest {
                 BannerImage.of(""),
                 TARGET_URL,
                 DISPLAY_ORDER,
-                CONTENT
+                CONTENT,
+                null
         ));
 
         assertEquals("Banner image URL cannot be null or empty", exception.getMessage());
@@ -136,7 +137,7 @@ class BannerTest {
         BannerPeriod period = createPeriod();
         BannerImage image = createImage();
         Banner banner = Banner.restore(id, title, type, period, image,
-                TARGET_URL, IS_ACTIVE, DISPLAY_ORDER, CONTENT, CREATED_AT, UPDATED_AT, VERSION);
+                TARGET_URL, IS_ACTIVE, DISPLAY_ORDER, CONTENT, null, CREATED_AT, UPDATED_AT, VERSION);
 
         assertNotNull(banner);
         assertNotNull(banner.getId());
@@ -162,7 +163,7 @@ class BannerTest {
         BannerPeriod period = createPeriod();
         BannerImage image = createImage();
 
-        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
+        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT, null);
 
         BannerTitle newTitle = BannerTitle.of(UPDATE_TITLE);
         BannerType newType = BannerType.ROUTES;
@@ -170,7 +171,7 @@ class BannerTest {
         BannerImage newImage = BannerImage.of(UPDATE_IMAGE_PATH);
 
         Banner updatedBanner = banner.updateBanner(newTitle, newType, newPeriod, newImage,
-                UPDATE_TARGET_URL, UPDATE_DISPLAY_ORDER, UPDATE_CONTENT);
+                UPDATE_TARGET_URL, UPDATE_DISPLAY_ORDER, UPDATE_CONTENT, null);
 
         assertNotNull(updatedBanner.getId());
         assertEquals(UPDATE_TITLE, updatedBanner.getTitle().getValue());
@@ -190,14 +191,14 @@ class BannerTest {
         BannerPeriod period = createPeriod();
         BannerImage image = createImage();
 
-        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
+        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT, null);
 
         BannerTitle newTitle = BannerTitle.of(UPDATE_TITLE);
         BannerType newType = BannerType.ROUTES;
         BannerPeriod newPeriod = BannerPeriod.between(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(2));
         BannerImage newImage = BannerImage.of(UPDATE_IMAGE_PATH);
 
-        Banner updatedBanner = banner.updateBanner(newTitle, newType, newPeriod, newImage,null, null, null);
+        Banner updatedBanner = banner.updateBanner(newTitle, newType, newPeriod, newImage,null, null, null, null);
 
         updatedBanner.setVersion(UPDATE_VERSION);
         updatedBanner.setUpdatedAt(UPDATE_UPDATED_AT);
@@ -223,7 +224,7 @@ class BannerTest {
         BannerTitle title = createTitle();
         BannerPeriod period = createPeriod();
 
-        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
+        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT, null);
 
         Exception exception = assertThrows(BannerValidationException.class, () ->   banner.updateBanner(
                 BannerTitle.of(" "),
@@ -232,7 +233,8 @@ class BannerTest {
                 BannerImage.of(UPDATE_IMAGE_PATH),
                 UPDATE_TARGET_URL,
                 UPDATE_DISPLAY_ORDER,
-                UPDATE_CONTENT
+                UPDATE_CONTENT,
+                30
         ));
 
         assertEquals("Banner title cannot be null or empty", exception.getMessage());
@@ -246,7 +248,7 @@ class BannerTest {
         BannerTitle title = createTitle();
         BannerPeriod period = createPeriod();
 
-        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
+        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT, null);
 
         Exception exception = assertThrows(BannerPeriodValidationException.class, () ->   banner.updateBanner(
                 BannerTitle.of(UPDATE_TITLE),
@@ -255,7 +257,8 @@ class BannerTest {
                 BannerImage.of(UPDATE_IMAGE_PATH),
                 UPDATE_TARGET_URL,
                 UPDATE_DISPLAY_ORDER,
-                UPDATE_CONTENT
+                UPDATE_CONTENT,
+                30
                 ));
 
         assertEquals("Banner Period endTime cannot be before startTime", exception.getMessage());
@@ -268,7 +271,7 @@ class BannerTest {
         BannerTitle title = createTitle();
         BannerPeriod period = createPeriod();
 
-        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
+        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT, null);
 
         Exception exception = assertThrows(BannerValidationException.class, () ->   banner.updateBanner(
                 BannerTitle.of(UPDATE_TITLE),
@@ -277,7 +280,8 @@ class BannerTest {
                 BannerImage.of(" "),
                 UPDATE_TARGET_URL,
                 UPDATE_DISPLAY_ORDER,
-                UPDATE_CONTENT
+                UPDATE_CONTENT,
+                30
         ));
 
         assertEquals("Banner image URL cannot be null or empty", exception.getMessage());
@@ -290,7 +294,7 @@ class BannerTest {
         BannerTitle title = createTitle();
         BannerPeriod period = createPeriod();
 
-        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
+        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT, null);
 
         Banner deactivatedBanner = banner.deactivate();
 
@@ -304,7 +308,7 @@ class BannerTest {
         BannerTitle title = createTitle();
         BannerPeriod period = createPeriod();
 
-        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT);
+        Banner banner = Banner.create(title, type, period, image, TARGET_URL, DISPLAY_ORDER, CONTENT, null);
 
         Banner deactivatedBanner = banner.deactivate();
         Banner activatedBanner = deactivatedBanner.activate();
@@ -316,12 +320,12 @@ class BannerTest {
     void updateBannerTrimsStrings() {
         Banner banner = Banner.create(
                 createTitle(), BannerType.MAIN, createPeriod(), createImage(),
-                " originalUrl ", 1, " originalContent "
+                " originalUrl ", 1, " originalContent ", null
         );
 
         Banner updatedBanner = banner.updateBanner(
                 BannerTitle.of("New Title"), BannerType.ROUTES, createPeriod(), createImage(),
-                " updatedUrl ", 2, " updatedContent "
+                " updatedUrl ", 2, " updatedContent ", null
         );
 
         assertEquals("updatedUrl", updatedBanner.getTargetUrl());
@@ -330,7 +334,7 @@ class BannerTest {
 
     @Test
     void createBannerWithNullDisplayOrderUsesDefault() {
-        Banner banner = Banner.create(createTitle(), BannerType.MAIN, createPeriod(), createImage(), TARGET_URL, null, CONTENT);
+        Banner banner = Banner.create(createTitle(), BannerType.MAIN, createPeriod(), createImage(), TARGET_URL, null, CONTENT, null);
         assertEquals(0, banner.getDisplayOrder());
     }
 
@@ -342,7 +346,7 @@ class BannerTest {
         BannerPeriod period = createPeriod();
         BannerImage image = createImage();
         Banner banner = Banner.restore(id, title, type, period, image,
-                TARGET_URL, IS_ACTIVE, DISPLAY_ORDER, CONTENT, CREATED_AT, UPDATED_AT, null);
+                TARGET_URL, IS_ACTIVE, DISPLAY_ORDER, CONTENT, null, CREATED_AT, UPDATED_AT, null);
 
         assertNotNull(banner);
         assertNotNull(banner.getId());

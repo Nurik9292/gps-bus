@@ -36,7 +36,8 @@ public class BannerFactory {
                         BannerImage.of(processedImageUrl),
                         command.targetUrl(),
                         command.displayOrder(),
-                        content
+                        content,
+                        command.replyTime()
                 )
         );
     }
@@ -56,7 +57,8 @@ public class BannerFactory {
                     BannerImage.of(processedImageUrl),
                     command.targetUrl(),
                     command.displayOrder(),
-                    content
+                    content,
+                    command.replyTime()
             );
 
             return command.isActive()
