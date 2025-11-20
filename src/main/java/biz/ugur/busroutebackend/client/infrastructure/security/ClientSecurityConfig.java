@@ -67,10 +67,10 @@ public class ClientSecurityConfig {
 
                         .pathMatchers("/api/v1/client/favorites/**").authenticated()
 
-                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/routes/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/stops/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/vehicles/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/banners/**").permitAll()
+//                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/routes/**").permitAll()
+//                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/stops/**").permitAll()
+//                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/vehicles/**").permitAll()
+//                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/banners/**").permitAll()
 
                         .anyExchange().authenticated()
                 )

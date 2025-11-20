@@ -19,8 +19,7 @@ public class ClientAuthenticationFilter extends BaseJwtAuthenticationFilter<Clie
             return true;
         }
 
-        boolean isPublic = path.startsWith("/api/v1/client/auth/") ||
-                           path.startsWith("/api/v1/mobile/");
+        boolean isPublic = path.startsWith("/api/v1/client/auth/");
 
         if (isPublic) {
             log.debug("Client/Mobile path is public: {}", path);

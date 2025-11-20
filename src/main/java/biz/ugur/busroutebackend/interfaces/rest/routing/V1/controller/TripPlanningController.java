@@ -43,10 +43,7 @@ public class TripPlanningController extends BaseController {
         return TripPlanningController.class.getSimpleName();
     }
 
-    /**
-     * CRITICAL FIX: Added Rate Limiter to prevent DDoS and spam
-     * Limits: 10 requests per 60 seconds per user
-     */
+
     @PostMapping("/search")
     @RateLimiter(name = "searchApi")
     public Mono<ResponseEntity<ApiResponse<TripSearchResponse>>> searchTrips(@Valid @RequestBody TripSearchRequest request) {
