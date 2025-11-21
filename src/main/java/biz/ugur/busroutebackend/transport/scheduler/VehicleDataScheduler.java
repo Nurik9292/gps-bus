@@ -1,9 +1,11 @@
 package biz.ugur.busroutebackend.transport.scheduler;
 
+import biz.ugur.busroutebackend.shared.infrastructure.external.GpsApiClient;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
 import biz.ugur.busroutebackend.transport.application.services.ExternalApiService;
 import biz.ugur.busroutebackend.transport.application.usecase.SyncBusRouteAssignmentsUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase;
+import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.scheduler.dto.GpsUpdateStats;
 import biz.ugur.busroutebackend.transport.scheduler.dto.HealthStatus;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +34,8 @@ public class VehicleDataScheduler {
     private final ExternalApiService externalApiService;
     private final UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase;
     private final SyncBusRouteAssignmentsUseCase syncBusRouteAssignmentsUseCase;
+    private final VehicleRepository vehicleRepository;
+    private final GpsApiClient gpsApiClient;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final SchedulerProperties schedulerProperties;
 
@@ -45,11 +49,15 @@ public class VehicleDataScheduler {
     public VehicleDataScheduler(ExternalApiService externalApiService,
                                 UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase,
                                 SyncBusRouteAssignmentsUseCase syncBusRouteAssignmentsUseCase,
+                                VehicleRepository vehicleRepository,
+                                GpsApiClient gpsApiClient,
                                 ReactiveRedisTemplate<String, Object> redisTemplate,
                                 SchedulerProperties schedulerProperties) {
         this.externalApiService = externalApiService;
         this.updateVehiclePositionsUseCase = updateVehiclePositionsUseCase;
         this.syncBusRouteAssignmentsUseCase = syncBusRouteAssignmentsUseCase;
+        this.vehicleRepository = vehicleRepository;
+        this.gpsApiClient = gpsApiClient;
         this.redisTemplate = redisTemplate;
         this.schedulerProperties = schedulerProperties;
     }
@@ -70,7 +78,16 @@ public class VehicleDataScheduler {
             Duration batchTimeout = schedulerProperties.getGps().getBatchTimeout();
             Duration totalTimeout = schedulerProperties.getGps().getTotalTimeout();
 
-            externalApiService.fetchAllVehiclePositions()
+            vehicleRepository.findAllDeviceIds()
+                    .collectList()
+                    .flatMap(deviceIds -> {
+                        if (deviceIds.isEmpty()) {
+                            log.warn("No device IDs found in database, skipping GPS update");
+                            return Mono.just(List.<biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO>of());
+                        }
+                        log.debug("Found {} device IDs, fetching GPS positions", deviceIds.size());
+                        return gpsApiClient.fetchVehiclePositionsByIds(deviceIds);
+                    })
                     .timeout(totalTimeout)
                     .doOnNext(positions -> log.debug("Fetched {} GPS positions, processing in batches of {}",
                             positions.size(), batchSize))

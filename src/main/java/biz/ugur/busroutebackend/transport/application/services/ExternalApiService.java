@@ -8,7 +8,7 @@ import java.util.List;
 
 public interface ExternalApiService {
 
-    Mono<List<GpsPositionDTO>> fetchAllVehiclePositions();
+    Mono<List<GpsPositionDTO>> fetchVehiclePositionsByIds(List<String> deviceIds);
 
     Mono<List<BusInfoDTO>> fetchAllBusInfo();
 

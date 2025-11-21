@@ -55,6 +55,7 @@ public class PublicSecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/api/v1/routes/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/api/v1/stops/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/api/v1/vehicles/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/api/vehicles/**").permitAll()
 
                         .pathMatchers(HttpMethod.GET, "/api/v1/trip-planning/**").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/v1/trip-planning/**").permitAll()

@@ -6,6 +6,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+
 @Data
 public class GpsPositionDTO {
 
@@ -30,12 +31,23 @@ public class GpsPositionDTO {
     @JsonProperty("attributes")
     private GpsAttributesDTO attributes;
 
+    @JsonProperty("reportTime")
+    private String reportTime;
+
+    @JsonProperty("utcTime")
+    private String utcTime;
+
     public String getVehicleName() {
         return attributes != null ? attributes.getName() : null;
     }
 
+
     public Boolean getMotion() {
-        return attributes != null ? attributes.getMotion() : null;
+        if (attributes != null && attributes.getMotion() != null) {
+            return attributes.getMotion();
+        }
+        // Fallback: считаем что движется если скорость > 0
+        return speed != null && speed > 0;
     }
 
     @Data
@@ -43,6 +55,9 @@ public class GpsPositionDTO {
 
         @JsonProperty("name")
         private String name;
+
+        @JsonProperty("uniqueId")
+        private String uniqueId;
 
         @JsonProperty("motion")
         private Boolean motion;

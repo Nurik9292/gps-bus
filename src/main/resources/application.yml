@@ -68,7 +68,7 @@ spring:
 
 app:
   scheduling:
-    enabled: false
+    enabled: true
 
   scheduler:
     gps:
@@ -126,21 +126,24 @@ app:
 external:
   api:
     gps:
-      base-url: ${GPS_API_BASE_URL:https://gps.tugdk.gov.tm}
-      token: ${GPS_API_TOKEN:RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0}
-      timeout: 10s
+      base-url: ${GPS_API_BASE_URL:http://95.85.97.118/app-overseas-newenergy-core}
+      token: ${GPS_API_TOKEN:YT2AE19C2B1A4FDD8F10B934DA1E6905}
+      timeout: ${GPS_API_TIMEOUT:30s}
+      batch-size: ${GPS_API_BATCH_SIZE:50}
+      max-concurrent-batches: ${GPS_API_MAX_CONCURRENT_BATCHES:3}
+      time-window-minutes: ${GPS_API_TIME_WINDOW_MINUTES:60}
       retry:
         max-attempts: 3
         initial-interval: 1s
         multiplier: 2.0
         max-interval: 10s
       rate-limit:
-        requests-per-minute: 120
+        requests-per-minute: 60
 
     bus-info:
       base-url: ${BUS_INFO_API_BASE_URL:https://edu.ayauk.gov.tm}
-      username: ${BUS_INFO_API_USERNAME:turkmenportal}
-      password: ${BUS_INFO_API_PASSWORD:turkmenportal}
+      username: ${BUS_INFO_API_USERNAME:duralga}
+      password: ${BUS_INFO_API_PASSWORD:S[A$@gmm.)-5yTzh}
       timeout: 10s
       retry:
         max-attempts: 3
@@ -182,9 +185,6 @@ websocket:
   heartbeat-interval: 30
   message-buffer-size: 1024
   connection-timeout: 60
-#  batch-duration-ms: 500
-#  sink-buffer-size: 2000
-#  overflow-strategy:
 
 
 
@@ -213,7 +213,6 @@ resilience4j:
         sliding-window-size: 15
         failure-rate-threshold: 50
         wait-duration-in-open-state: 3m
-      # CRITICAL FIX: Circuit Breaker for PostgreSQL to prevent cascade failures
       postgresRouting:
         base-config: default
         sliding-window-size: 10
@@ -232,7 +231,6 @@ resilience4j:
         limit-for-period: 10
         limit-refresh-period: 1s
     instances:
-      # CRITICAL FIX: Rate limiting for search API to prevent DDoS
       searchApi:
         limit-for-period: 10
         limit-refresh-period: 60s

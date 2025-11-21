@@ -10,6 +10,7 @@ import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.PerformanceLogRepository;
 import biz.ugur.busroutebackend.transport.application.services.BusStopRealTimeService;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -28,16 +29,19 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
     private final PerformanceLogRepository performanceLogRepository;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final DistanceCalculationService distanceCalculationService;
+    private final ObjectMapper objectMapper;
 
     public BusStopRealTimeServiceImpl(
             BusStopRepository busStopRepository,
             PerformanceLogRepository performanceLogRepository,
             ReactiveRedisTemplate<String, Object> redisTemplate,
-            DistanceCalculationService distanceCalculationService) {
+            DistanceCalculationService distanceCalculationService,
+            ObjectMapper objectMapper) {
         this.busStopRepository = busStopRepository;
         this.performanceLogRepository = performanceLogRepository;
         this.redisTemplate = redisTemplate;
         this.distanceCalculationService = distanceCalculationService;
+        this.objectMapper = objectMapper;
     }
 
     public Mono<BusStopArrivalsResponse> getStopArrivals(String stopId) {
@@ -47,8 +51,17 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
 
         return redisTemplate.opsForValue()
                 .get(cacheKey)
-                .cast(BusStopArrivalsResponse.class)
-                .doOnNext(cached -> log.debug("Cache HIT for stop {}", stopId))
+                .flatMap(cached -> {
+                    try {
+                        // Properly convert Object (LinkedHashMap) to BusStopArrivalsResponse
+                        BusStopArrivalsResponse response = objectMapper.convertValue(cached, BusStopArrivalsResponse.class);
+                        log.debug("Cache HIT for stop {}", stopId);
+                        return Mono.just(response);
+                    } catch (IllegalArgumentException e) {
+                        log.warn("Failed to deserialize cached data for stop {}: {}", stopId, e.getMessage());
+                        return Mono.empty();
+                    }
+                })
                 .switchIfEmpty(
                         calculateStopArrivals(stopId)
                                 .flatMap(response -> {

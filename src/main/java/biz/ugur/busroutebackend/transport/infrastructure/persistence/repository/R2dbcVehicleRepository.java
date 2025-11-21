@@ -21,6 +21,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,7 +80,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             INSERT INTO vehicles (
                 id, device_id, license_plate, current_latitude, current_longitude,
                 speed_kmh, is_in_motion, last_position_update, assigned_route_id,
-                route_number, is_active, created_at, updated_at, course version
+                route_number, is_active, created_at, updated_at, course, version
             ) VALUES (
                 :id, :device_id, :license_plate, :current_latitude, :current_longitude,
                 :speed_kmh, :is_in_motion, :last_position_update, :assigned_route_id,
@@ -321,6 +322,16 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .doOnNext(count -> log.debug("Active vehicles count for route {}: {}", routeNumber, count));
     }
 
+    @Override
+    public Flux<String> findAllDeviceIds() {
+        String sql = "SELECT device_id FROM vehicles WHERE device_id IS NOT NULL AND is_active = true";
+
+        return databaseClient.sql(sql)
+                .map(row -> row.get("device_id", String.class))
+                .all()
+                .doOnComplete(() -> log.debug("Successfully fetched all device IDs"));
+    }
+
     private Vehicle mapRowToVehicle(Row row, RowMetadata metadata) {
         VehicleEntity entity = VehicleEntity.builder()
                 .id(row.get("id", String.class))
@@ -359,15 +370,18 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             return Mono.just(Map.of());
         }
 
-        String placeholders = String.join(",", deviceIds.stream()
-                .map(id -> "?")
-                .toList());
+        // Use named parameters instead of positional ones
+        List<String> namedParams = new ArrayList<>();
+        for (int i = 0; i < deviceIds.size(); i++) {
+            namedParams.add(":deviceId" + i);
+        }
+        String placeholders = String.join(",", namedParams);
 
         String sql = "SELECT * FROM vehicles WHERE device_id IN (" + placeholders + ")";
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
         for (int i = 0; i < deviceIds.size(); i++) {
-            spec = spec.bind(i, deviceIds.get(i));
+            spec = spec.bind("deviceId" + i, deviceIds.get(i));
         }
 
         return spec.map(getRowMapper())
@@ -398,17 +412,20 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
         return Flux.fromIterable(vehicles)
                 .flatMap(vehicle -> {
-                    return databaseClient.sql(sql)
-                            .bind("latitude", vehicle.getCurrentLatitude())
-                            .bind("longitude", vehicle.getCurrentLongitude())
-                            .bind("speed", vehicle.getSpeedKmh())
-                            .bind("inMotion", vehicle.getIsInMotion())
-                            .bind("lastUpdate", vehicle.getLastPositionUpdate())
-                            .bind("course", vehicle.getCourse())
-                            .bind("updatedAt", LocalDateTime.now())
-                            .bind("id", vehicle.getId().getValue())
-                            .bind("version", vehicle.getVersion())
-                            .fetch()
+                    DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
+
+                    // Use bindValue to properly handle null values
+                    spec = bindValue(spec, "latitude", vehicle.getCurrentLatitude());
+                    spec = bindValue(spec, "longitude", vehicle.getCurrentLongitude());
+                    spec = bindValue(spec, "speed", vehicle.getSpeedKmh());
+                    spec = bindValue(spec, "inMotion", vehicle.getIsInMotion());
+                    spec = bindValue(spec, "lastUpdate", vehicle.getLastPositionUpdate());
+                    spec = bindValue(spec, "course", vehicle.getCourse());
+                    spec = bindValue(spec, "updatedAt", LocalDateTime.now());
+                    spec = spec.bind("id", vehicle.getId().getValue());
+                    spec = spec.bind("version", vehicle.getVersion());
+
+                    return spec.fetch()
                             .rowsUpdated()
                             .map(Long::intValue);
                 })

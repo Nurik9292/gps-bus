@@ -57,16 +57,16 @@ logging:
 external:
   api:
     gps:
-      base-url: https://gps.tugdk.gov.tm
-      token: RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0  #mock-token
+      base-url: http://95.85.97.118/app-overseas-newenergy-core
+      token: YT2AE19C2B1A4FDD8F10B934DA1E6905
       timeout: 5s
       retry:
         max-attempts: 2
         initial-interval: 1s
     bus-info:
       base-url: https://edu.ayauk.gov.tm
-      username: turkmenportal #test
-      password: turkmenportal #test
+      username: duralga
+      password: S[A$@gmm.)-5yTzh
       timeout: 5s
       retry:
         max-attempts: 2
@@ -74,7 +74,7 @@ external:
 
 app:
   scheduling:
-    enabled: false
+    enabled: true
 
   storage:
     avatars:

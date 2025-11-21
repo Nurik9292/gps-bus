@@ -33,9 +33,9 @@ public class ResilientExternalApiServiceImpl implements ExternalApiService {
     @RateLimiter(name = "gpsApi")
     @Bulkhead(name = "gpsApi")
     @TimeLimiter(name = "gpsApi")
-    public Mono<List<GpsPositionDTO>> fetchAllVehiclePositions() {
-        log.debug("Fetching GPS positions with Resilience4j protection");
-        return gpsApiClient.fetchAllVehiclePositions();
+    public Mono<List<GpsPositionDTO>> fetchVehiclePositionsByIds(List<String> deviceIds) {
+        log.debug("Fetching GPS positions for {} devices with Resilience4j protection", deviceIds.size());
+        return gpsApiClient.fetchVehiclePositionsByIds(deviceIds);
     }
 
     @Override
@@ -62,7 +62,6 @@ public class ResilientExternalApiServiceImpl implements ExternalApiService {
         return busInfoApiClient.healthCheck();
     }
 
-    // ===== Fallback Methods =====
 
     private Mono<List<GpsPositionDTO>> fallbackFetchGpsPositions(Exception ex) {
         log.warn("GPS API fallback triggered: {}. Returning empty list", ex.getMessage());

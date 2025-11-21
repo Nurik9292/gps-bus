@@ -43,6 +43,8 @@ public interface VehicleRepository extends BaseRepository<Vehicle, VehicleId> {
 
     Mono<Map<String, Vehicle>> findByDeviceIds(List<String> deviceIds);
 
+    Flux<String> findAllDeviceIds();
+
     Mono<Integer> batchUpdate(List<Vehicle> vehicles);
 
     Flux<Vehicle> batchInsert(List<Vehicle> vehicles);
