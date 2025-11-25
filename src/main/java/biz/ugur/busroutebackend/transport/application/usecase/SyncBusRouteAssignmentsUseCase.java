@@ -64,10 +64,11 @@ public class SyncBusRouteAssignmentsUseCase extends BaseUseCase<List<BusInfoDTO>
                                                 busInfo.getRouteNumber().equals(vehicle.getRouteNumber())) {
                                             return Mono.just(AssignmentStatus.unchanged(vehicle.getLicensePlate(), routeId.getValue()));
                                         }
-                                        vehicle.assignToRoute(routeId);
-                                        vehicle.updateCachedRouteNumber(busInfo.getRouteNumber());
 
-                                        return vehicleRepository.save(vehicle)
+                                        var updatedVehicle = vehicle.assignToRoute(routeId);
+                                        updatedVehicle = updatedVehicle.updateCachedRouteNumber(busInfo.getRouteNumber());
+
+                                        return vehicleRepository.save(updatedVehicle)
                                                 .map(savedVehicle -> AssignmentStatus.assigned(
                                                         savedVehicle.getLicensePlate(),
                                                         busInfo.getRouteNumber()
