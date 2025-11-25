@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.messaging;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -38,16 +39,17 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("dir")
     private final Double course;
 
+    @JsonCreator
     public VehiclePositionWebSocketMessage(
-            String vehicleId,
-            String licensePlate,
-            String routeNumber,
-            Double latitude,
-            Double longitude,
-            Double speedKmh,
-            Boolean isInMotion,
-            LocalDateTime timestamp,
-            Double course) {
+            @JsonProperty("vehicle_id") String vehicleId,
+            @JsonProperty("license_plate") String licensePlate,
+            @JsonProperty("rout_number") String routeNumber,
+            @JsonProperty("latitude") Double latitude,
+            @JsonProperty("longitude") Double longitude,
+            @JsonProperty("speed_kmh") Double speedKmh,
+            @JsonProperty("is_in_motion") Boolean isInMotion,
+            @JsonProperty("timestamp") LocalDateTime timestamp,
+            @JsonProperty("dir") Double course) {
         this.vehicleId = vehicleId;
         this.licensePlate = licensePlate;
         this.routeNumber = routeNumber;

@@ -19,7 +19,9 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -397,6 +399,32 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             return Mono.just(0);
         }
 
+        return Flux.fromIterable(vehicles)
+                .flatMap(vehicle -> updateWithRetry(vehicle, 3))
+                .reduce(0, Integer::sum)
+                .doOnSuccess(count -> log.info("Batch updated {} vehicles", count));
+    }
+
+    private Mono<Integer> updateWithRetry(Vehicle vehicle, int maxRetries) {
+        return updateSingleVehicle(vehicle)
+                .retryWhen(Retry.backoff(maxRetries, Duration.ofMillis(10))
+                        .maxBackoff(Duration.ofMillis(100))
+                        .jitter(0.5)
+                        .filter(throwable -> throwable instanceof org.springframework.dao.OptimisticLockingFailureException)
+                        .doBeforeRetry(signal -> log.debug("Retrying vehicle update for {} (attempt {}/{})",
+                                vehicle.getId(), signal.totalRetries() + 1, maxRetries))
+                )
+                .doOnError(org.springframework.dao.OptimisticLockingFailureException.class,
+                        error -> log.warn("Failed to update vehicle {} after {} retries due to optimistic locking",
+                                vehicle.getId(), maxRetries))
+                .onErrorResume(org.springframework.dao.OptimisticLockingFailureException.class,
+                        error -> {
+                            log.debug("Skipping vehicle {} due to concurrent modification", vehicle.getId());
+                            return Mono.just(0);
+                        });
+    }
+
+    private Mono<Integer> updateSingleVehicle(Vehicle vehicle) {
         String sql = """
             UPDATE vehicles SET
                 current_latitude = :latitude,
@@ -410,27 +438,30 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             WHERE id = :id AND version = :version
             """;
 
-        return Flux.fromIterable(vehicles)
-                .flatMap(vehicle -> {
-                    DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
 
-                    // Use bindValue to properly handle null values
-                    spec = bindValue(spec, "latitude", vehicle.getCurrentLatitude());
-                    spec = bindValue(spec, "longitude", vehicle.getCurrentLongitude());
-                    spec = bindValue(spec, "speed", vehicle.getSpeedKmh());
-                    spec = bindValue(spec, "inMotion", vehicle.getIsInMotion());
-                    spec = bindValue(spec, "lastUpdate", vehicle.getLastPositionUpdate());
-                    spec = bindValue(spec, "course", vehicle.getCourse());
-                    spec = bindValue(spec, "updatedAt", LocalDateTime.now());
-                    spec = spec.bind("id", vehicle.getId().getValue());
-                    spec = spec.bind("version", vehicle.getVersion());
+        // Use bindValue to properly handle null values
+        spec = bindValue(spec, "latitude", vehicle.getCurrentLatitude());
+        spec = bindValue(spec, "longitude", vehicle.getCurrentLongitude());
+        spec = bindValue(spec, "speed", vehicle.getSpeedKmh());
+        spec = bindValue(spec, "inMotion", vehicle.getIsInMotion());
+        spec = bindValue(spec, "lastUpdate", vehicle.getLastPositionUpdate());
+        spec = bindValue(spec, "course", vehicle.getCourse());
+        spec = bindValue(spec, "updatedAt", LocalDateTime.now());
+        spec = spec.bind("id", vehicle.getId().getValue());
+        spec = spec.bind("version", vehicle.getVersion());
 
-                    return spec.fetch()
-                            .rowsUpdated()
-                            .map(Long::intValue);
-                })
-                .reduce(0, Integer::sum)
-                .doOnSuccess(count -> log.info("Batch updated {} vehicles", count));
+        return spec.fetch()
+                .rowsUpdated()
+                .flatMap(rowsUpdated -> {
+                    if (rowsUpdated == 0) {
+                        // No rows updated means version mismatch (optimistic lock failure)
+                        return Mono.error(new org.springframework.dao.OptimisticLockingFailureException(
+                                String.format("Optimistic lock failure for Vehicle with id: %s (expected version: %d)",
+                                        vehicle.getId(), vehicle.getVersion())));
+                    }
+                    return Mono.just(rowsUpdated.intValue());
+                });
     }
 
     @Override

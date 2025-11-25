@@ -92,6 +92,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
         return cacheRepository.getCached(cacheKey)
                 .switchIfEmpty(
                         vehicleRepository.findActiveVehicles()
+                                .filter(this::isVehicleOnLine)
                                 .flatMap(this::enrichVehicleWithRouteInfo)
                                 .collectList()
                                 .flatMapMany(vehicles ->
@@ -115,6 +116,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
                                 .flatMapMany(route ->
                                         vehicleRepository.findByAssignedRouteId(route.getId())
                                                 .filter(Vehicle::getIsActive)
+                                                .filter(v -> v.hasPosition() && v.hasRecentPosition())
                                                 .flatMap(vehicle -> enrichVehicleWithRouteInfo(vehicle, route))
                                 )
                                 .collectList()
@@ -133,6 +135,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
         }
 
         return vehicleRepository.findActiveVehicles()
+                .filter(this::isVehicleOnLine)
                 .filter(vehicle -> isVehicleInArea(vehicle, minLat, minLon, maxLat, maxLon))
                 .flatMap(this::enrichVehicleWithRouteInfo)
                 .doOnNext(vehicle -> log.trace("Vehicle in area: {}", vehicle.getLicensePlate()));
@@ -146,6 +149,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
 
         return vehicleRepository.findVehiclesWithinRadius(centerLat, centerLon, radiusMeters)
                 .filter(Vehicle::getIsActive)
+                .filter(this::isVehicleOnLine)
                 .flatMap(this::enrichVehicleWithRouteInfo)
                 .doOnNext(vehicle -> log.trace("Vehicle in radius: {}", vehicle.getLicensePlate()));
     }
@@ -177,6 +181,19 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
         }
 
         return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
+    }
+
+
+    private boolean isVehicleOnLine(Vehicle vehicle) {
+        if (!vehicle.hasAssignedRoute()) {
+            return false;
+        }
+
+        if (!vehicle.hasPosition()) {
+            return false;
+        }
+
+        return vehicle.hasRecentPosition();
     }
 
 

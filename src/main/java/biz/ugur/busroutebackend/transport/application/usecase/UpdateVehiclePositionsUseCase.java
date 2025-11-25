@@ -69,31 +69,42 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, gpsPositions.size() - validPositions.size(), 0, LocalDateTime.now(), List.of()));
             }
 
-            // Extract device IDs for bulk lookup
             List<String> deviceIds = validPositions.stream()
                     .map(GpsPositionDTO::getDeviceId)
                     .distinct()
                     .toList();
 
-            // Batch fetch existing vehicles
             return vehicleRepository.findByDeviceIds(deviceIds)
                     .flatMap(existingVehiclesMap -> processBatch(validPositions, existingVehiclesMap))
-                    .doOnSuccess(result -> log.info("GPS batch update completed: {}", result))
+                    .doOnSuccess(result -> log.info("GPS batch update completed: {}", result.updatedCount()))
                     .doOnError(error -> log.error("GPS batch update failed", error));
         });
     }
 
     private Mono<VehiclePositionUpdateResult> processBatch(List<GpsPositionDTO> validPositions, Map<String, Vehicle> existingVehicles) {
+        // Deduplicate GPS positions by device ID, keeping the latest timestamp
+        Map<String, GpsPositionDTO> latestPositionsByDevice = new java.util.LinkedHashMap<>();
+        for (GpsPositionDTO position : validPositions) {
+            String deviceId = position.getDeviceId();
+            GpsPositionDTO existing = latestPositionsByDevice.get(deviceId);
+
+            if (existing == null || position.getFixTime().isAfter(existing.getFixTime())) {
+                latestPositionsByDevice.put(deviceId, position);
+            }
+        }
+
+        log.debug("Batched {} updates into {} unique vehicles",
+                validPositions.size(), latestPositionsByDevice.size());
+
         List<Vehicle> vehiclesToUpdate = new ArrayList<>();
         List<Vehicle> vehiclesToCreate = new ArrayList<>();
         List<VehicleUpdateStatus> statuses = new ArrayList<>();
 
-        for (GpsPositionDTO gpsPosition : validPositions) {
+        for (GpsPositionDTO gpsPosition : latestPositionsByDevice.values()) {
             try {
                 Vehicle vehicle = existingVehicles.get(gpsPosition.getDeviceId());
 
                 if (vehicle != null) {
-                    // Update existing vehicle
                     Double oldLatitude = vehicle.getCurrentLatitude();
                     Double oldLongitude = vehicle.getCurrentLongitude();
                     Double oldSpeed = vehicle.getSpeedKmh();
@@ -138,7 +149,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     ));
 
                 } else {
-                    // Create new vehicle
                     licensePlateExtractor.extractFromGpsData(gpsPosition)
                             .ifPresentOrElse(
                                     licensePlate -> {
@@ -169,7 +179,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             }
         }
 
-        // Batch update and insert
         Mono<Integer> updateMono = vehiclesToUpdate.isEmpty() ?
                 Mono.just(0) : vehicleRepository.batchUpdate(vehiclesToUpdate);
 
@@ -253,7 +262,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private Mono<VehicleUpdateStatus> createNewVehicle(GpsPositionDTO gpsPosition) {
         return vehicleFactory.createOrFindFromGpsData(gpsPosition)
                 .flatMap(vehicle -> {
-                    // Update position if needed
                     Vehicle positionedVehicle = vehicleFactory.updateVehiclePosition(vehicle, gpsPosition);
 
                     return vehicleRepository.save(positionedVehicle)

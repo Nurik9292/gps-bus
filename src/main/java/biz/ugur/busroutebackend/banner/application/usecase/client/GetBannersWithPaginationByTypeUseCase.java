@@ -52,8 +52,8 @@ public class GetBannersWithPaginationByTypeUseCase extends BaseUseCase<Mono<Bann
         return bannerRepository.findActiveBannersByTypeWithPagination(bannerType, pageable)
                 .flatMap(bannerResponseMapper::toResponse)
                 .collectList()
-                .zipWhen(banners -> bannerRepository.countByType(bannerType))  // Total of this type
-                .zipWith(bannerRepository.countActiveBanners())  // Total active banners
+                .zipWhen(banners -> bannerRepository.countByType(bannerType))
+                .zipWith(bannerRepository.countActiveBanners())
                 .map(tuple -> {
                     var banners = tuple.getT1().getT1();
                     Long totalOfType = tuple.getT1().getT2();
@@ -61,10 +61,10 @@ public class GetBannersWithPaginationByTypeUseCase extends BaseUseCase<Mono<Bann
 
                     return BannerList.of(
                         banners,
-                        totalActive,  // Total active banners across all types
+                        totalActive,
                         query.getPage(),
                         query.getSize(),
-                        totalOfType  // Total banners of this type for pagination
+                        totalOfType
                     );
                 })
                 .doOnSuccess(response -> log.debug("Retrieved {} banners (page {}/{}, {} total active)",

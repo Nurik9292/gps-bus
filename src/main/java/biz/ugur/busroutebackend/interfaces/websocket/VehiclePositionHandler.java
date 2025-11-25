@@ -89,12 +89,16 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
     private Flux<WebSocketMessage> getInitialPositions(WebSocketSession session, SessionConfig config) {
         return getActiveVehiclesUseCase.execute(null)
+                .doOnNext(vehicle -> log.debug("Checking vehicle for initial positions: plate={}, route={}, inScope={}",
+                        vehicle.getLicensePlate(), vehicle.getRouteNumber(), isVehicleInScope(vehicle, config)))
                 .filter(vehicle -> isVehicleInScope(vehicle, config))
                 .take(100)
                 .map(this::convertToWebSocketMessage)
                 .collectList()
                 .map(positions -> {
                     try {
+                        log.info("Sending {} initial positions for subscription type: {}, filter: {}",
+                                positions.size(), config.getSubscriptionType(), config.getRouteFilter());
                         Map<String, Object> response = Map.of(
                                 "type", "initial_positions",
                                 "count", positions.size(),
@@ -115,6 +119,14 @@ public class VehiclePositionHandler implements WebSocketHandler {
     private Flux<WebSocketMessage> getLivePositionUpdates(WebSocketSession session,
                                                           SessionConfig config) {
         return broadcastSink.asFlux()
+                .doOnNext(positionMsg -> {
+                    boolean inScope = isPositionInScope(positionMsg, config);
+                    if (log.isDebugEnabled()) {
+                        log.debug("Live update filter: vehicle={}, route={}, subscriptionType={}, routeFilter={}, inScope={}",
+                                positionMsg.getVehicleId(), positionMsg.getRouteNumber(),
+                                config.getSubscriptionType(), config.getRouteFilter(), inScope);
+                    }
+                })
                 .filter(positionMsg -> isPositionInScope(positionMsg, config))
                 .buffer(Duration.ofMillis(500))
                 .filter(updates -> !updates.isEmpty())
@@ -129,8 +141,8 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
                         List<VehiclePositionWebSocketMessage> finalUpdates = new ArrayList<>(latestUpdates.values());
 
-                        log.debug("📦 Batched {} updates into {} unique vehicles",
-                                updates.size(), finalUpdates.size());
+                        log.debug("Batched {} updates into {} unique vehicles for subscription: {}",
+                                updates.size(), finalUpdates.size(), config.getSubscriptionType());
 
                         Map<String, Object> response = Map.of(
                                 "type", "position_update",
@@ -211,10 +223,17 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 .filter(Objects::nonNull)
                 .subscribe(
                         positionMessage -> {
-                            Sinks.EmitResult result = broadcastSink.tryEmitNext(positionMessage);
-                            if (result.isFailure()) {
-                                log.warn("Failed to emit position update: {}", result);
-                            }
+                            broadcastSink.emitNext(positionMessage, (signalType, emitResult) -> {
+                                if (emitResult == Sinks.EmitResult.FAIL_NON_SERIALIZED) {
+                                    return true; // retry
+                                }
+                                // FAIL_ZERO_SUBSCRIBER and FAIL_CANCELLED are expected when no WebSocket clients are connected
+                                if (emitResult != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
+                                        && emitResult != Sinks.EmitResult.FAIL_CANCELLED) {
+                                    log.warn("Failed to emit position update: {}", emitResult);
+                                }
+                                return false;
+                            });
                         },
                         error -> log.error("Redis subscription error: {}", error.getMessage()),
                         () -> log.info("Redis subscription completed")
@@ -223,14 +242,21 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
     public void broadcastVehiclePosition(VehiclePositionWebSocketMessage message) {
         if (message == null) {
-            log.warn("❌ Cannot broadcast null WebSocket message");
+            log.warn("Cannot broadcast null WebSocket message");
             return;
         }
 
-        Sinks.EmitResult result = broadcastSink.tryEmitNext(message);
-        if (result.isFailure()) {
-            log.warn("Failed to broadcast vehicle position: {}", result);
-        }
+        broadcastSink.emitNext(message, (signalType, emitResult) -> {
+            if (emitResult == Sinks.EmitResult.FAIL_NON_SERIALIZED) {
+                return true; // retry on concurrent access
+            }
+            // FAIL_ZERO_SUBSCRIBER and FAIL_CANCELLED are expected when no WebSocket clients are connected
+            if (emitResult != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
+                    && emitResult != Sinks.EmitResult.FAIL_CANCELLED) {
+                log.warn("Failed to broadcast vehicle position: {}", emitResult);
+            }
+            return false;
+        });
     }
 
     public Mono<WebSocketStatsDTO> getConnectionStats() {
@@ -260,12 +286,18 @@ public class VehiclePositionHandler implements WebSocketHandler {
         SessionConfig config = new SessionConfig();
 
         String query = session.getHandshakeInfo().getUri().getQuery();
+        String uri = session.getHandshakeInfo().getUri().toString();
+        log.info("WebSocket connection URI: {}", uri);
+        log.info("WebSocket query string: {}", query);
+
         if (query == null) {
             config.setSubscriptionType("all");
+            log.info("No query params - subscription type: all");
             return config;
         }
 
         Map<String, String> params = parseQueryString(query);
+        log.info("Parsed query params: {}", params);
 
         if (params.containsKey("bounds")) {
             String[] bounds = params.get("bounds").split(",");
@@ -278,6 +310,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
                     config.setBounds(lat1, lon1, lat2, lon2);
                     config.setSubscriptionType("bounds");
+                    log.info("Configured bounds subscription: {}", config.getBoundsString());
                 } catch (NumberFormatException e) {
                     log.warn("Invalid bounds format: {}", params.get("bounds"));
                 }
@@ -288,9 +321,11 @@ public class VehiclePositionHandler implements WebSocketHandler {
             String[] routes = params.get("routes").split(",");
             config.setRouteFilter(Set.of(routes));
             config.setSubscriptionType("routes");
+            log.info("Configured routes subscription: routes={}", config.getRouteFilter());
         }
         else {
             config.setSubscriptionType("all");
+            log.info("No specific filter - subscription type: all");
         }
 
         return config;
@@ -324,19 +359,19 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
     private boolean isPositionInScope(VehiclePositionWebSocketMessage position, SessionConfig config) {
         if (position == null) {
-            log.trace("❌ Position message is null, filtering out");
+            log.trace("Position message is null, filtering out");
             return false;
         }
 
         if (config == null) {
-            log.trace("⚠️ Session config is null, allowing all positions");
+            log.trace("Session config is null, allowing all positions");
             return true;
         }
 
         try {
             String subscriptionType = config.getSubscriptionType();
             if (subscriptionType == null) {
-                log.trace("⚠️ Subscription type is null, allowing all");
+                log.trace("Subscription type is null, allowing all");
                 return true;
             }
 
@@ -344,20 +379,20 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 case "routes" -> {
                     Set<String> routeFilter = config.getRouteFilter();
                     if (routeFilter == null || routeFilter.isEmpty()) {
-                        log.trace("📝 No route filter configured, filtering out");
+                        log.trace("No route filter configured, filtering out");
                         yield false;
                     }
 
                     String routeNumber = position.getRouteNumber();
 
                     if (routeNumber == null || routeNumber.trim().isEmpty()) {
-                        log.trace("🚌 Vehicle {} has no route assignment, filtering out for route subscription",
+                        log.trace("Vehicle {} has no route assignment, filtering out for route subscription",
                                 position.getVehicleId());
                         yield false;
                     }
 
                     boolean inScope = routeFilter.contains(routeNumber.trim());
-                    log.trace("📍 Route filter check for vehicle {}: route={}, inScope={}",
+                    log.trace("Route filter check for vehicle {}: route={}, inScope={}",
                             position.getVehicleId(), routeNumber, inScope);
                     yield inScope;
                 }
@@ -366,13 +401,13 @@ public class VehiclePositionHandler implements WebSocketHandler {
                     Double lon = position.getLongitude();
 
                     if (lat == null || lon == null) {
-                        log.warn("❌ Vehicle {} has null coordinates: lat={}, lon={} - filtering out",
+                        log.warn("Vehicle {} has null coordinates: lat={}, lon={} - filtering out",
                                 position.getVehicleId(), lat, lon);
                         yield false;
                     }
 
                     boolean inBounds = config.isInBounds(lat, lon);
-                    log.trace("🗺 Bounds check for vehicle {}: ({}, {}), inBounds={}",
+                    log.trace("Bounds check for vehicle {}: ({}, {}), inBounds={}",
                             position.getVehicleId(),
                             String.format("%.6f", lat),
                             String.format("%.6f", lon),
@@ -380,12 +415,12 @@ public class VehiclePositionHandler implements WebSocketHandler {
                     yield inBounds;
                 }
                 default -> {
-                    log.trace("📡 Default subscription type '{}': allowing all", subscriptionType);
+                    log.trace("Default subscription type '{}': allowing all", subscriptionType);
                     yield true;
                 }
             };
         } catch (Exception e) {
-            log.error("❌ Error in position scope check for vehicle {}: {}",
+            log.error("Error in position scope check for vehicle {}: {}",
                     position != null ? position.getVehicleId() : "null",
                     e.getMessage(), e);
             return false;

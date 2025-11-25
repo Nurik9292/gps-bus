@@ -111,7 +111,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
         Double newSpeed = speed != null ? speed : 0.0;
         Boolean newIsInMotion = newSpeed > 1.0;
-        LocalDateTime newFixTime = fixTime != null ? fixTime : LocalDateTime.now();
+        LocalDateTime newFixTime = LocalDateTime.now();
         Double newCourse = course != null ? course : 0.0;
 
         Vehicle updatedVehicle = this.toBuilder()
@@ -234,9 +234,21 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         return this.routeNumber != null ? this.routeNumber : "UNASSIGNED";
     }
 
+    /**
+     * Checks if vehicle has recent GPS position update.
+     * Default timeout is 10 minutes (600 seconds) - allows for traffic lights,
+     * traffic jams, and passenger boarding.
+     */
     public boolean hasRecentPosition() {
+        return hasRecentPosition(600); // 10 minutes default
+    }
+
+    /**
+     * Checks if vehicle has GPS position update within specified seconds.
+     */
+    public boolean hasRecentPosition(int maxAgeSeconds) {
         if (lastPositionUpdate == null) return false;
-        return lastPositionUpdate.isAfter(LocalDateTime.now().minusSeconds(300));
+        return lastPositionUpdate.isAfter(LocalDateTime.now().minusSeconds(maxAgeSeconds));
     }
 
     public VehiclePosition getCurrentPosition() {

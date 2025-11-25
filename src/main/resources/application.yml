@@ -75,7 +75,7 @@ app:
       batch-size: ${SCHEDULER_GPS_BATCH_SIZE:100}
       parallel-workers: ${SCHEDULER_GPS_PARALLEL_WORKERS:4}
       batch-timeout: ${SCHEDULER_GPS_BATCH_TIMEOUT:30s}
-      total-timeout: ${SCHEDULER_GPS_TOTAL_TIMEOUT:60s}
+      total-timeout: ${SCHEDULER_GPS_TOTAL_TIMEOUT:120s}
 
 
   admin:

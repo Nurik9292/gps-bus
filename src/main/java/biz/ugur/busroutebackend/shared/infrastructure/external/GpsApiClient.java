@@ -104,8 +104,10 @@ public class GpsApiClient {
         }
 
 
-        String fromStr = from.truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString();
-        String toStr = to.truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString();
+        String fromStr = from.truncatedTo(ChronoUnit.SECONDS).toString();
+        String toStr = to.truncatedTo(ChronoUnit.SECONDS).toString();
+
+        log.debug("GPS API request: from={}, to={}, devices={}", fromStr, toStr, deviceIds.size());
 
         return webClient.get()
                 .uri(uriBuilder -> {
@@ -146,13 +148,22 @@ public class GpsApiClient {
                     return latestPositions;
                 })
                 .timeout(Duration.ofSeconds(30))
-                .retryWhen(Retry.backoff(3, Duration.ofSeconds(2))
+                .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
+                        .maxBackoff(Duration.ofSeconds(5))
                         .filter(this::isRetryableException)
-                        .doBeforeRetry(retrySignal ->
-                                log.warn("Retrying batch request, attempt: {}", retrySignal.totalRetries() + 1)))
+                        .doBeforeRetry(retrySignal -> {
+                            Throwable failure = retrySignal.failure();
+                            log.warn("Retrying batch request, attempt {}/{}: {} - {}",
+                                    retrySignal.totalRetries() + 1, 3,
+                                    failure.getClass().getSimpleName(),
+                                    failure.getMessage());
+                        }))
                 .onErrorResume(error -> {
-                    log.error("Failed to fetch batch of {} devices: {}", deviceIds.size(), error.getMessage());
-                    return Mono.just(List.of());  // Возвращаем пустой список при ошибке
+                    log.error("Failed to fetch batch of {} devices: {} - {}",
+                            deviceIds.size(),
+                            error.getClass().getSimpleName(),
+                            error.getMessage());
+                    return Mono.just(List.of());
                 });
     }
 
@@ -191,7 +202,6 @@ public class GpsApiClient {
                 .collect(Collectors.toMap(
                         pos -> pos.getAttributes().getUniqueId(),
                         pos -> pos,
-                        // В случае дубликатов - берем с более поздним reportTime
                         (existing, replacement) ->
                                 compareReportTime(existing.getReportTime(), replacement.getReportTime()) >= 0
                                         ? existing
