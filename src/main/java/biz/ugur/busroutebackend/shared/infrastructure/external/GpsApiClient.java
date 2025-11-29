@@ -18,6 +18,8 @@ import reactor.util.retry.Retry;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -31,6 +33,12 @@ public class GpsApiClient {
 
     private static final DateTimeFormatter REPORT_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    // API expects format: 2023-10-01T12:00:00Z (ISO-8601 with Z suffix)
+    private static final DateTimeFormatter API_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'");
+
+    private static final ZoneId TURKMENISTAN_ZONE = ZoneId.of("Asia/Ashgabat");
 
     private final WebClient webClient;
     private final String token;
@@ -103,11 +111,14 @@ public class GpsApiClient {
             return Mono.just(List.of());
         }
 
+        ZonedDateTime fromLocal = from.atZone(TURKMENISTAN_ZONE);
+        ZonedDateTime toLocal = to.atZone(TURKMENISTAN_ZONE);
 
-        String fromStr = from.truncatedTo(ChronoUnit.SECONDS).toString();
-        String toStr = to.truncatedTo(ChronoUnit.SECONDS).toString();
+        String fromStr = fromLocal.toLocalDateTime().format(API_TIME_FORMATTER);
+        String toStr = toLocal.toLocalDateTime().format(API_TIME_FORMATTER);
 
-        log.debug("GPS API request: from={}, to={}, devices={}", fromStr, toStr, deviceIds.size());
+        log.debug("GPS API request: from={}, to={}, devices={} (UTC: {} to {})",
+                fromStr, toStr, deviceIds.size(), from, to);
 
         return webClient.get()
                 .uri(uriBuilder -> {

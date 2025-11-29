@@ -41,6 +41,7 @@ public class VehicleDataScheduler {
 
     private final AtomicBoolean gpsUpdateInProgress = new AtomicBoolean(false);
     private final AtomicBoolean busInfoSyncInProgress = new AtomicBoolean(false);
+    private volatile Instant lastGpsUpdateStartTime = null;
 
     private static final String GPS_UPDATE_STATS_KEY = "gps:update:stats";
     private static final String GPS_HEALTH_KEY = "gps:health";
@@ -65,6 +66,18 @@ public class VehicleDataScheduler {
 
     @Scheduled(cron = "0/30 * * * * *")
     public void updateVehiclePositions() {
+        log.info("GPS scheduler triggered. inProgress={}, lastStartTime={}",
+                gpsUpdateInProgress.get(), lastGpsUpdateStartTime);
+
+        if (gpsUpdateInProgress.get() && lastGpsUpdateStartTime != null) {
+            Duration stuckDuration = Duration.between(lastGpsUpdateStartTime, Instant.now());
+            if (stuckDuration.toSeconds() >= 150) {
+                log.warn("GPS update flag stuck for {}ms, forcing reset", stuckDuration.toMillis());
+                gpsUpdateInProgress.set(false);
+                lastGpsUpdateStartTime = null;
+            }
+        }
+
         if (!gpsUpdateInProgress.compareAndSet(false, true)) {
             log.warn("GPS update already in progress, skipping this cycle");
             return;
@@ -72,6 +85,7 @@ public class VehicleDataScheduler {
 
         try {
             Instant startTime = Instant.now();
+            lastGpsUpdateStartTime = startTime;
 
             int batchSize = schedulerProperties.getGps().getBatchSize();
             int parallelWorkers = schedulerProperties.getGps().getParallelWorkers();
@@ -88,7 +102,6 @@ public class VehicleDataScheduler {
                         log.debug("Found {} device IDs, fetching GPS positions", deviceIds.size());
                         return gpsApiClient.fetchVehiclePositionsByIds(deviceIds);
                     })
-                    .timeout(totalTimeout)
                     .doOnNext(positions -> log.debug("Fetched {} GPS positions, processing in batches of {}",
                             positions.size(), batchSize))
                     .flatMapIterable(positions -> positions)
@@ -107,6 +120,7 @@ public class VehicleDataScheduler {
                     .sequential()
                     .reduce(new VehiclePositionUpdateResult(0, 0, 0, 0, 0, LocalDateTime.now(), List.of()),
                             VehiclePositionUpdateResult::merge)
+                    .timeout(totalTimeout)
                     .publishOn(Schedulers.boundedElastic())
                     .doOnSuccess(result -> {
                         Duration duration = Duration.between(startTime, Instant.now());
@@ -121,16 +135,21 @@ public class VehicleDataScheduler {
                     })
                     .doOnError(error -> {
                         Duration duration = Duration.between(startTime, Instant.now());
-                        log.error("GPS update failed after {}ms", duration.toMillis(), error);
+                        log.error("GPS update failed after {}ms: {}", duration.toMillis(), error.getMessage());
                         saveGpsUpdateError(error, duration).subscribe();
                     })
                     .onErrorResume(error -> Mono.empty())
-                    .doFinally(signal -> gpsUpdateInProgress.set(false))
+                    .doFinally(signal -> {
+                        gpsUpdateInProgress.set(false);
+                        lastGpsUpdateStartTime = null;
+                        log.info("GPS update finished with signal: {}", signal);
+                    })
                     .subscribe();
 
         } catch (Exception e) {
             log.error("Unexpected error in GPS update scheduler", e);
             gpsUpdateInProgress.set(false);
+            lastGpsUpdateStartTime = null;
         }
     }
 
