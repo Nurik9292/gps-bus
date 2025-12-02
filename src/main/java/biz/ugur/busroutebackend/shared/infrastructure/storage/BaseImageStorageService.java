@@ -50,12 +50,9 @@ public abstract class BaseImageStorageService {
 
         return Mono.fromRunnable(() -> {
             try {
-                // Convert URL path to filesystem path
-                // Example: /avatars/2025/11/original_xxx.jpg -> /app/data/avatars/2025/11/original_xxx.jpg
-                String relativePath = urlPath.replace(dir(), "");  // Remove /avatars/ or /banners/ prefix
+                String relativePath = urlPath.replace(dir(), "");
                 Path originalPath = Paths.get(basePath(), relativePath);
 
-                // Delete original file
                 if (Files.exists(originalPath)) {
                     Files.delete(originalPath);
                     log.info("🗑️ Deleted original file: {}", originalPath);
@@ -63,7 +60,6 @@ public abstract class BaseImageStorageService {
                     log.warn("⚠️ Original file not found: {}", originalPath);
                 }
 
-                // Delete thumbnail if it exists
                 if (createThumbnails()) {
                     String thumbnailRelativePath = relativePath.replace("original_", "thumb_");
                     Path thumbPath = Paths.get(basePath(), thumbnailRelativePath);

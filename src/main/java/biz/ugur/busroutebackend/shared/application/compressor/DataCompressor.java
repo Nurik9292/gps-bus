@@ -1,6 +1,5 @@
-package biz.ugur.busroutebackend.banner.application.compresor;
+package biz.ugur.busroutebackend.shared.application.compressor;
 
-import biz.ugur.busroutebackend.banner.domain.exceptions.DataCompressionException;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -20,8 +19,8 @@ public class DataCompressor {
         }
 
         return Mono.fromCallable(() -> {
-            try(ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-                    GZIPOutputStream gzip = new GZIPOutputStream(outputStream)) {
+            try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                 GZIPOutputStream gzip = new GZIPOutputStream(outputStream)) {
                 gzip.write(data.getBytes(StandardCharsets.UTF_8));
                 gzip.finish();
                 byte[] compressed = outputStream.toByteArray();
@@ -39,11 +38,11 @@ public class DataCompressor {
 
         return Mono.fromCallable(() -> {
             byte[] compressedData = Base64.getDecoder().decode(data);
-            try(BufferedReader br =
-                        new BufferedReader(
-                                new InputStreamReader(
-                                        new GZIPInputStream(
-                                                new ByteArrayInputStream(compressedData)), StandardCharsets.UTF_8))
+            try (BufferedReader br =
+                         new BufferedReader(
+                                 new InputStreamReader(
+                                         new GZIPInputStream(
+                                                 new ByteArrayInputStream(compressedData)), StandardCharsets.UTF_8))
             ) {
                 StringBuilder sb = new StringBuilder();
                 String line;

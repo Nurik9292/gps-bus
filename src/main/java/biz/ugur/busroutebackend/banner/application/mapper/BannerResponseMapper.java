@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.banner.application.mapper;
 
-import biz.ugur.busroutebackend.banner.application.compresor.DataCompressor;
+import biz.ugur.busroutebackend.shared.application.compressor.DataCompressor;
 import biz.ugur.busroutebackend.banner.application.dto.BannerResponse;
 import biz.ugur.busroutebackend.banner.domain.model.Banner;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerPeriod;

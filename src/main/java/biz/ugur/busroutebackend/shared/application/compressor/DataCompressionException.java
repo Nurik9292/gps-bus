@@ -1,7 +1,7 @@
-package biz.ugur.busroutebackend.banner.domain.exceptions;
+package biz.ugur.busroutebackend.shared.application.compressor;
 
 
-public class DataCompressionException extends BannerDomainException {
+public class DataCompressionException extends RuntimeException {
 
     public DataCompressionException(String message) {
         super(message);

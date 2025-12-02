@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.banner.application.factory;
 
-import biz.ugur.busroutebackend.banner.application.compresor.DataCompressor;
+import biz.ugur.busroutebackend.shared.application.compressor.DataCompressor;
 import biz.ugur.busroutebackend.banner.application.dto.CreateBannerCommand;
 import biz.ugur.busroutebackend.banner.application.dto.UpdateBannerCommand;
 import biz.ugur.busroutebackend.banner.domain.enums.BannerType;
