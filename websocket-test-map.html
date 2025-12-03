@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bus WebSocket Test Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .control-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            max-width: 320px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .control-panel h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .status {
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .form-group {
+            margin-bottom: 12px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .stats {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        .log-container {
+            margin-top: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+        }
+        .log-entry {
+            margin-bottom: 2px;
+            word-break: break-all;
+        }
+        .log-entry.info { color: #4fc3f7; }
+        .log-entry.success { color: #81c784; }
+        .log-entry.error { color: #e57373; }
+        .log-entry.warning { color: #ffb74d; }
+        .vehicle-popup {
+            min-width: 180px;
+        }
+        .vehicle-popup h4 {
+            margin: 0 0 8px 0;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .vehicle-popup p {
+            margin: 4px 0;
+            font-size: 13px;
+        }
+        .vehicle-popup .label {
+            color: #666;
+        }
+        .bus-marker {
+            background: #2196F3;
+            border: 2px solid white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        .bus-marker.moving {
+            background: #4CAF50;
+        }
+        .bus-marker.stopped {
+            background: #FF9800;
+        }
+        .route-filter-list {
+            max-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+            margin-top: 5px;
+        }
+        .route-tag {
+            display: inline-block;
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin: 2px;
+            font-size: 12px;
+        }
+        .route-tag .remove {
+            cursor: pointer;
+            margin-left: 5px;
+            color: #999;
+        }
+        .route-tag .remove:hover {
+            color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div class="control-panel">
+        <h3>WebSocket Test</h3>
+
+        <div id="status" class="status disconnected">Disconnected</div>
+
+        <div class="form-group">
+            <label>Server URL</label>
+            <input type="text" id="serverUrl" value="ws://localhost:8080/api/v1/ws/vehicle-positions">
+        </div>
+
+        <div class="form-group">
+            <label>Subscription Type</label>
+            <select id="subscriptionType">
+                <option value="all">All Vehicles</option>
+                <option value="routes">By Routes</option>
+                <option value="bounds">By Map Bounds</option>
+            </select>
+        </div>
+
+        <div id="routeFilterSection" class="form-group" style="display: none;">
+            <label>Routes (comma separated or one by one)</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="routeFilter" placeholder="e.g., 29" style="flex: 1;">
+                <button class="btn btn-primary" onclick="addRoutes()" style="flex: 0 0 auto;">Add</button>
+            </div>
+            <div class="route-filter-list" id="routeList"></div>
+            <p style="font-size: 11px; color: #666; margin-top: 5px;">
+                Enter route numbers and click Add, or press Enter. Example: 29
+            </p>
+        </div>
+
+        <div id="boundsSection" class="form-group" style="display: none;">
+            <label>Use current map bounds</label>
+            <button class="btn btn-secondary" onclick="useBoundsFromMap()">Get Bounds</button>
+            <div id="currentBounds" style="font-size: 12px; margin-top: 5px;"></div>
+        </div>
+
+        <div style="margin-top: 10px;">
+            <button class="btn btn-success" id="connectBtn" onclick="connect()">Connect</button>
+            <button class="btn btn-danger" id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+            <button class="btn btn-secondary" onclick="clearVehicles()">Clear Map</button>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stats-row">
+                <span>Vehicles on map:</span>
+                <span id="vehicleCount">0</span>
+            </div>
+            <div class="stats-row">
+                <span>Messages received:</span>
+                <span id="messageCount">0</span>
+            </div>
+            <div class="stats-row">
+                <span>Last update:</span>
+                <span id="lastUpdate">-</span>
+            </div>
+        </div>
+
+        <h4 style="margin-top: 15px; margin-bottom: 5px;">Log</h4>
+        <div class="log-container" id="logContainer"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Ashgabat coordinates
+        const ASHGABAT = [37.9601, 58.3261];
+
+        // Initialize map
+        const map = L.map('map').setView(ASHGABAT, 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // State
+        let ws = null;
+        let vehicles = new Map();
+        let markers = new Map();
+        let messageCount = 0;
+        let routeFilters = new Set();
+        let currentBounds = null;
+
+        // DOM elements
+        const statusEl = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const logContainer = document.getElementById('logContainer');
+        const subscriptionType = document.getElementById('subscriptionType');
+        const routeFilterSection = document.getElementById('routeFilterSection');
+        const boundsSection = document.getElementById('boundsSection');
+
+        // Handle subscription type change
+        subscriptionType.addEventListener('change', function() {
+            routeFilterSection.style.display = this.value === 'routes' ? 'block' : 'none';
+            boundsSection.style.display = this.value === 'bounds' ? 'block' : 'none';
+        });
+
+        // Route filter handling
+        document.getElementById('routeFilter').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addRoutes();
+            }
+        });
+
+        function addRoutes() {
+            const input = document.getElementById('routeFilter');
+            const routes = input.value.split(',').map(r => r.trim()).filter(r => r);
+
+            if (routes.length === 0) {
+                log('Please enter at least one route number', 'warning');
+                return;
+            }
+
+            routes.forEach(route => routeFilters.add(route));
+            updateRouteList();
+            input.value = '';
+            log(`Added routes: ${routes.join(', ')}`, 'success');
+
+            // If connected, send subscribe message
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                sendSubscribeRoutes();
+            }
+        }
+
+        function updateRouteList() {
+            const list = document.getElementById('routeList');
+            list.innerHTML = Array.from(routeFilters).map(route =>
+                `<span class="route-tag">${route}<span class="remove" onclick="removeRoute('${route}')">&times;</span></span>`
+            ).join('');
+        }
+
+        function removeRoute(route) {
+            routeFilters.delete(route);
+            updateRouteList();
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                sendSubscribeRoutes();
+            }
+        }
+
+        function sendSubscribeRoutes() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'subscribe_routes',
+                    routes: Array.from(routeFilters)
+                }));
+                log('Subscribed to routes: ' + Array.from(routeFilters).join(', '), 'info');
+            }
+        }
+
+        function useBoundsFromMap() {
+            const bounds = map.getBounds();
+            currentBounds = [
+                bounds.getSouth(),
+                bounds.getWest(),
+                bounds.getNorth(),
+                bounds.getEast()
+            ];
+            document.getElementById('currentBounds').textContent =
+                `SW: ${currentBounds[0].toFixed(4)}, ${currentBounds[1].toFixed(4)} | ` +
+                `NE: ${currentBounds[2].toFixed(4)}, ${currentBounds[3].toFixed(4)}`;
+
+            // If connected, send subscribe message
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'subscribe_bounds',
+                    bounds: currentBounds
+                }));
+                log('Subscribed to bounds', 'info');
+            }
+        }
+
+        function getWebSocketUrl() {
+            let url = document.getElementById('serverUrl').value;
+            const type = subscriptionType.value;
+
+            if (type === 'routes' && routeFilters.size > 0) {
+                url += '?routes=' + Array.from(routeFilters).join(',');
+            } else if (type === 'bounds' && currentBounds) {
+                url += '?bounds=' + currentBounds.join(',');
+            }
+
+            log('WebSocket URL: ' + url, 'info');
+            return url;
+        }
+
+        function connect() {
+            const type = subscriptionType.value;
+
+            // Validation
+            if (type === 'routes' && routeFilters.size === 0) {
+                log('ERROR: Please add at least one route before connecting!', 'error');
+                alert('Please add at least one route number before connecting.\n\nSteps:\n1. Select "By Routes"\n2. Enter route number (e.g., 29)\n3. Click "Add"\n4. Click "Connect"');
+                return;
+            }
+
+            if (type === 'bounds' && !currentBounds) {
+                log('ERROR: Please set bounds before connecting!', 'error');
+                alert('Please set map bounds before connecting.\n\nSteps:\n1. Select "By Map Bounds"\n2. Pan/zoom to desired area\n3. Click "Get Bounds"\n4. Click "Connect"');
+                return;
+            }
+
+            if (ws) {
+                ws.close();
+            }
+
+            const url = getWebSocketUrl();
+            log('=== CONNECTING ===', 'info');
+            log('Subscription type: ' + type, 'info');
+            if (type === 'routes') {
+                log('Route filters: ' + Array.from(routeFilters).join(', '), 'info');
+            }
+            log('Full URL: ' + url, 'info');
+            setStatus('connecting', 'Connecting...');
+
+            try {
+                ws = new WebSocket(url);
+
+                ws.onopen = function() {
+                    log('Connected!', 'success');
+                    setStatus('connected', 'Connected');
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                };
+
+                ws.onmessage = function(event) {
+                    messageCount++;
+                    document.getElementById('messageCount').textContent = messageCount;
+                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleMessage(data);
+                    } catch (e) {
+                        log('Failed to parse message: ' + e.message, 'error');
+                    }
+                };
+
+                ws.onerror = function(error) {
+                    log('WebSocket error: ' + JSON.stringify(error), 'error');
+                };
+
+                ws.onclose = function(event) {
+                    log(`Connection closed (code: ${event.code}, reason: ${event.reason || 'none'})`, 'warning');
+                    setStatus('disconnected', 'Disconnected');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    ws = null;
+                };
+            } catch (e) {
+                log('Failed to connect: ' + e.message, 'error');
+                setStatus('disconnected', 'Connection Failed');
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                log('Disconnected by user', 'info');
+            }
+        }
+
+        function handleMessage(data) {
+            const type = data.type;
+
+            if (type === 'initial_positions') {
+                log(`Received ${data.count} initial positions`, 'success');
+                if (data.vehicles && Array.isArray(data.vehicles)) {
+                    log(`Vehicle routes in initial: ${data.vehicles.map(v => v.rout_number || v.route_number || 'null').join(', ')}`, 'info');
+                    data.vehicles.forEach(vehicle => updateVehicle(vehicle));
+                }
+            } else if (type === 'position_update') {
+                log(`Received ${data.count} position updates`, 'info');
+                if (data.vehicles && Array.isArray(data.vehicles)) {
+                    const routes = data.vehicles.map(v => v.rout_number || v.route_number || 'null').join(', ');
+                    log(`Vehicle routes in update: ${routes}`, 'info');
+                    data.vehicles.forEach(vehicle => updateVehicle(vehicle));
+                }
+            } else if (type === 'error') {
+                log('Server error: ' + data.message, 'error');
+            } else {
+                log('Unknown message type: ' + type, 'warning');
+            }
+
+            document.getElementById('vehicleCount').textContent = vehicles.size;
+        }
+
+        function updateVehicle(vehicle) {
+            const id = vehicle.vehicle_id;
+            if (!id) return;
+
+            vehicles.set(id, vehicle);
+
+            const lat = vehicle.latitude;
+            const lon = vehicle.longitude;
+
+            if (lat == null || lon == null) return;
+
+            if (markers.has(id)) {
+                // Update existing marker
+                const marker = markers.get(id);
+                marker.setLatLng([lat, lon]);
+                marker.setPopupContent(createPopupContent(vehicle));
+
+                // Update icon based on motion state
+                const icon = createBusIcon(vehicle);
+                marker.setIcon(icon);
+            } else {
+                // Create new marker
+                const icon = createBusIcon(vehicle);
+                const marker = L.marker([lat, lon], { icon: icon })
+                    .bindPopup(createPopupContent(vehicle))
+                    .addTo(map);
+                markers.set(id, marker);
+            }
+        }
+
+        function createBusIcon(vehicle) {
+            const isMoving = vehicle.is_in_motion;
+            const route = vehicle.rout_number || vehicle.route_number || '?';
+            const shortRoute = route.substring(0, 3);
+
+            return L.divIcon({
+                className: 'bus-marker-container',
+                html: `<div class="bus-marker ${isMoving ? 'moving' : 'stopped'}">${shortRoute}</div>`,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14],
+                popupAnchor: [0, -14]
+            });
+        }
+
+        function createPopupContent(vehicle) {
+            const speed = vehicle.speed_kmh != null ? vehicle.speed_kmh.toFixed(1) : '-';
+            const course = vehicle.dir != null ? vehicle.dir.toFixed(0) + '°' : '-';
+            const status = vehicle.is_in_motion ? 'Moving' : 'Stopped';
+            const timestamp = vehicle.timestamp || '-';
+
+            return `
+                <div class="vehicle-popup">
+                    <h4>Route ${vehicle.rout_number || vehicle.route_number || 'N/A'}</h4>
+                    <p><span class="label">Vehicle ID:</span> ${vehicle.vehicle_id}</p>
+                    <p><span class="label">License:</span> ${vehicle.license_plate || 'N/A'}</p>
+                    <p><span class="label">Speed:</span> ${speed} km/h</p>
+                    <p><span class="label">Direction:</span> ${course}</p>
+                    <p><span class="label">Status:</span> ${status}</p>
+                    <p><span class="label">Position:</span> ${vehicle.latitude?.toFixed(5)}, ${vehicle.longitude?.toFixed(5)}</p>
+                    <p><span class="label">Updated:</span> ${timestamp}</p>
+                </div>
+            `;
+        }
+
+        function clearVehicles() {
+            markers.forEach(marker => map.removeLayer(marker));
+            markers.clear();
+            vehicles.clear();
+            document.getElementById('vehicleCount').textContent = 0;
+            log('Map cleared', 'info');
+        }
+
+        function setStatus(type, text) {
+            statusEl.className = 'status ' + type;
+            statusEl.textContent = text;
+        }
+
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+
+            // Keep only last 100 messages
+            while (logContainer.children.length > 100) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+        }
+
+        // Ping to keep connection alive
+        setInterval(function() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+            }
+        }, 30000);
+
+        // Log startup
+        log('Ready. Click Connect to start.', 'info');
+    </script>
+</body>
+</html>

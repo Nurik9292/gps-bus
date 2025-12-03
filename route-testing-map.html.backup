@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bus Route Testing - Туркменистан</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        #map {
+            flex: 1;
+            height: 100%;
+        }
+
+        .sidebar {
+            width: 400px;
+            background: white;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .section {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .point-info {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .point-info strong {
+            display: block;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .coords {
+            font-family: monospace;
+            color: #666;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #e0e0e0;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .preferences {
+            display: grid;
+            gap: 10px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-group label {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .input-group input,
+        .input-group select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .results {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .trip-option {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .trip-option h3 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .trip-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .stat {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .stat strong {
+            display: block;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .route-segment {
+            padding: 10px;
+            background: white;
+            border-radius: 3px;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        .success {
+            background: #efe;
+            color: #3c3;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 13px;
+            color: #1976d2;
+            margin-top: 10px;
+        }
+
+        .api-url {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-bottom: 10px;
+            word-break: break-all;
+        }
+
+        .nearby-stops {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .stop-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .stop-item:hover {
+            background: #f5f5f5;
+        }
+
+        .stop-name {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stop-distance {
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="map"></div>
+
+        <div class="sidebar">
+            <div class="header">
+                <h1>🚌 Тестирование маршрутов</h1>
+                <p>Система планирования автобусных маршрутов</p>
+                <p style="font-size: 11px; opacity: 0.7; margin-top: 5px;">📌 v2.0 - Координаты исправлены</p>
+            </div>
+
+            <div class="section">
+                <h2>📍 Настройка API</h2>
+                <div class="input-group">
+                    <label>API Base URL</label>
+                    <input type="text" id="apiUrl" value="http://localhost:8080/api/v1/trip-planning">
+                </div>
+                <div class="info-box">
+                    💡 Кликните на карту, чтобы установить точки "откуда" (зеленая) и "куда" (красная)
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📌 Выбранные точки</h2>
+                <div id="fromPoint" class="point-info">
+                    <strong>Откуда (A):</strong>
+                    <span class="coords">Кликните на карту</span>
+                </div>
+                <div id="toPoint" class="point-info">
+                    <strong>Куда (B):</strong>
+                    <span class="coords">Кликните на карту</span>
+                </div>
+                <button class="btn btn-secondary" onclick="clearPoints()">🗑️ Очистить точки</button>
+            </div>
+
+            <div class="section">
+                <h2>⚙️ Настройки поиска</h2>
+                <div class="preferences">
+                    <div class="input-group">
+                        <label>Макс. расстояние пешком (м)</label>
+                        <input type="number" id="maxWalking" value="1200" min="100" max="3000">
+                    </div>
+                    <div class="input-group">
+                        <label>Макс. количество пересадок</label>
+                        <input type="number" id="maxTransfers" value="2" min="0" max="5">
+                    </div>
+                    <div class="input-group">
+                        <label>
+                            <input type="checkbox" id="prioritizeSpeed" checked>
+                            Приоритет - скорость
+                        </label>
+                    </div>
+                    <div class="input-group">
+                        <label>
+                            <input type="checkbox" id="prioritizeFewerTransfers" checked>
+                            Меньше пересадок
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <button class="btn btn-primary" id="searchBtn" onclick="searchRoute()" disabled>
+                    🔍 Найти маршрут
+                </button>
+                <button class="btn btn-secondary" onclick="findNearbyStops()">
+                    📍 Найти остановки рядом
+                </button>
+            </div>
+
+            <div class="section" id="resultsSection" style="display: none;">
+                <h2>📋 Результаты</h2>
+                <div id="results"></div>
+            </div>
+
+            <div class="section" id="stopsSection" style="display: none;">
+                <h2>🚏 Ближайшие остановки</h2>
+                <div id="nearbyStops" class="nearby-stops"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Глобальные переменные
+        let map = null;
+        let fromMarker = null;
+        let toMarker = null;
+        let routeLayer = null;
+        let stopsMarkers = [];
+        let fromCoords = null;
+        let toCoords = null;
+
+        // Инициализация после загрузки страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🗺️ Инициализация карты...');
+
+            // Инициализация карты (центр на Ашхабад, Туркменистан)
+            // ИСПРАВЛЕНО: поменяли местами lat и lon
+            map = L.map('map', {
+                center: [58.38, 37.95],
+                zoom: 12,
+                zoomControl: true,
+                preferCanvas: false
+            });
+
+            // Добавление слоя OpenStreetMap
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            console.log('✅ Карта инициализирована');
+
+            // Небольшая задержка перед добавлением обработчиков
+            setTimeout(function() {
+                setupMapClickHandler();
+                addTurkmenistanBounds();
+            }, 500);
+        });
+
+        // Настройка обработчика кликов
+        function setupMapClickHandler() {
+            console.log('🖱️ Установка обработчика кликов...');
+
+            map.on('click', function(e) {
+                console.log('🎯 Клик по карте:', e.latlng);
+                handleMapClick(e.latlng.lat, e.latlng.lng);
+            });
+
+            // Визуальный индикатор кликов для отладки
+            map.on('click', function(e) {
+                // ИСПРАВЛЕНО: поменяли координаты и правильно используем setTimeout
+                const clickIndicator = L.circle([e.latlng.lng, e.latlng.lat], {
+                    radius: 50,
+                    color: '#667eea',
+                    fillColor: '#667eea',
+                    fillOpacity: 0.5
+                }).addTo(map);
+
+                setTimeout(function() {
+                    map.removeLayer(clickIndicator);
+                }, 500);
+            });
+
+            console.log('✅ Обработчик кликов установлен');
+        }
+
+        // Обработка клика по карте
+        function handleMapClick(lat, lon) {
+            // ВАЖНО: из-за перевернутого формата карты:
+            // lat из e.latlng.lat на самом деле содержит ДОЛГОТУ (52-67)
+            // lon из e.latlng.lng на самом деле содержит ШИРОТУ (35-43)
+
+            const realLat = lon;  // реальная широта (35-43)
+            const realLon = lat;  // реальная долгота (52-67)
+
+            const latFixed = realLat.toFixed(6);
+            const lonFixed = realLon.toFixed(6);
+
+            console.log(`📍 Клик: e.latlng.lat=${lat.toFixed(6)}, e.latlng.lng=${lon.toFixed(6)}`);
+            console.log(`📍 Реальные координаты: Широта=${latFixed}, Долгота=${lonFixed}`);
+
+            if (!fromMarker) {
+                // Установка точки "откуда"
+                console.log('🟢 Установка точки A (откуда)');
+                fromMarker = L.marker([lat, lon], {icon: createFromIcon()}).addTo(map);
+                fromCoords = {lat: parseFloat(latFixed), lon: parseFloat(lonFixed)};
+                document.getElementById('fromPoint').innerHTML = `
+                    <strong>Откуда (A):</strong>
+                    <span class="coords">Широта: ${latFixed}, Долгота: ${lonFixed}</span>
+                `;
+            } else if (!toMarker) {
+                // Установка точки "куда"
+                console.log('🔴 Установка точки B (куда)');
+                toMarker = L.marker([lat, lon], {icon: createToIcon()}).addTo(map);
+                toCoords = {lat: parseFloat(latFixed), lon: parseFloat(lonFixed)};
+                document.getElementById('toPoint').innerHTML = `
+                    <strong>Куда (B):</strong>
+                    <span class="coords">Широта: ${latFixed}, Долгота: ${lonFixed}</span>
+                `;
+                document.getElementById('searchBtn').disabled = false;
+            } else {
+                // Перемещение точки "куда"
+                console.log('🔄 Перемещение точки B (куда)');
+                map.removeLayer(toMarker);
+                toMarker = L.marker([lat, lon], {icon: createToIcon()}).addTo(map);
+                toCoords = {lat: parseFloat(latFixed), lon: parseFloat(lonFixed)};
+                document.getElementById('toPoint').innerHTML = `
+                    <strong>Куда (B):</strong>
+                    <span class="coords">Широта: ${latFixed}, Долгота: ${lonFixed}</span>
+                `;
+            }
+        }
+
+        // Создание иконки "откуда"
+        function createFromIcon() {
+            return L.icon({
+                iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+                        <circle cx="16" cy="16" r="14" fill="#10b981" stroke="white" stroke-width="3"/>
+                        <text x="16" y="22" text-anchor="middle" font-size="16" fill="white" font-weight="bold">A</text>
+                    </svg>
+                `),
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+        }
+
+        // Создание иконки "куда"
+        function createToIcon() {
+            return L.icon({
+                iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+                        <circle cx="16" cy="16" r="14" fill="#ef4444" stroke="white" stroke-width="3"/>
+                        <text x="16" y="22" text-anchor="middle" font-size="16" fill="white" font-weight="bold">B</text>
+                    </svg>
+                `),
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+        }
+
+        // Добавление границ Туркменистана
+        function addTurkmenistanBounds() {
+            // ИСПРАВЛЕНО: поменяли местами координаты (было lat,lon - стало lon,lat)
+            const turkmenistanBounds = L.rectangle([
+                [52.0, 35.0],  // юго-запад (lon, lat)
+                [67.0, 43.0]   // северо-восток (lon, lat)
+            ], {
+                color: '#667eea',
+                weight: 2,
+                fillOpacity: 0.05,
+                dashArray: '5, 5'
+            }).addTo(map);
+
+            turkmenistanBounds.bindPopup('Границы Туркменистана<br><small>Широта: 35-43°, Долгота: 52-67°</small>');
+        }
+
+        // Очистка точек
+        function clearPoints() {
+            console.log('🗑️ Очистка всех точек');
+
+            if (fromMarker) {
+                map.removeLayer(fromMarker);
+                fromMarker = null;
+            }
+            if (toMarker) {
+                map.removeLayer(toMarker);
+                toMarker = null;
+            }
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+                routeLayer = null;
+            }
+            fromCoords = null;
+            toCoords = null;
+            document.getElementById('fromPoint').innerHTML = `
+                <strong>Откуда (A):</strong>
+                <span class="coords">Кликните на карту</span>
+            `;
+            document.getElementById('toPoint').innerHTML = `
+                <strong>Куда (B):</strong>
+                <span class="coords">Кликните на карту</span>
+            `;
+            document.getElementById('searchBtn').disabled = true;
+            document.getElementById('resultsSection').style.display = 'none';
+        }
+
+        // Поиск маршрута
+        async function searchRoute() {
+            if (!fromCoords || !toCoords) {
+                alert('Пожалуйста, выберите обе точки на карте');
+                return;
+            }
+
+            const apiUrl = document.getElementById('apiUrl').value;
+            const resultsDiv = document.getElementById('results');
+            const resultsSection = document.getElementById('resultsSection');
+
+            resultsSection.style.display = 'block';
+            resultsDiv.innerHTML = '<div class="loading">⏳ Поиск маршрута...</div>';
+
+            const requestData = {
+                from: {
+                    lat: fromCoords.lat,
+                    lon: fromCoords.lon,
+                    description: "Start point"
+                },
+                to: {
+                    lat: toCoords.lat,
+                    lon: toCoords.lon,
+                    description: "End point"
+                },
+                preferences: {
+                    max_walking_distance_meters: parseInt(document.getElementById('maxWalking').value),
+                    max_transfers: parseInt(document.getElementById('maxTransfers').value),
+                    prioritize_speed: document.getElementById('prioritizeSpeed').checked,
+                    prioritize_fewer_transfers: document.getElementById('prioritizeFewerTransfers').checked
+                }
+            };
+
+            console.log('🚀 Отправка запроса к API:');
+            console.log('From:', requestData.from);
+            console.log('To:', requestData.to);
+            console.log('Валидация: lat должна быть 35-43, lon должна быть 52-67');
+            console.log(`From - lat: ${requestData.from.lat} (в диапазоне: ${requestData.from.lat >= 35 && requestData.from.lat <= 43})`);
+            console.log(`From - lon: ${requestData.from.lon} (в диапазоне: ${requestData.from.lon >= 52 && requestData.from.lon <= 67})`);
+
+            try {
+                const response = await fetch(`${apiUrl}/search`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                displayResults(data);
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Ошибка:</strong><br>
+                        ${error.message}
+                    </div>
+                    <div class="api-url">
+                        <strong>Request:</strong><br>
+                        POST ${apiUrl}/search<br><br>
+                        ${JSON.stringify(requestData, null, 2)}
+                    </div>
+                `;
+            }
+        }
+
+        // Отображение результатов
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+
+            if (!data.data || !data.data.trip_options || data.data.trip_options.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="error">
+                        <strong>Маршруты не найдены</strong><br>
+                        ${data.data?.message || 'Попробуйте изменить параметры поиска'}
+                    </div>
+                `;
+                return;
+            }
+
+            const options = data.data.trip_options;
+            const summary = data.data.summary;
+
+            let html = `
+                <div class="success">
+                    ✅ Найдено маршрутов: ${summary.total_options}<br>
+                    Прямых: ${summary.direct_routes} | С пересадками: ${summary.transfer_routes}
+                </div>
+            `;
+
+            options.forEach((option, index) => {
+                html += `
+                    <div class="trip-option">
+                        <h3>Вариант ${index + 1} - ${option.trip_type === 'direct' ? 'Прямой' : 'С пересадками'}</h3>
+                        <div class="trip-stats">
+                            <div class="stat">
+                                <strong>${option.total_travel_minutes} мин</strong>
+                                Общее время
+                            </div>
+                            <div class="stat">
+                                <strong>${option.total_cost_manat} TMT</strong>
+                                Стоимость
+                            </div>
+                            <div class="stat">
+                                <strong>${option.transfers_count}</strong>
+                                Пересадок
+                            </div>
+                            <div class="stat">
+                                <strong>${(option.total_distance_km || 0).toFixed(1)} км</strong>
+                                Расстояние
+                            </div>
+                        </div>
+                `;
+
+                if (option.segments && option.segments.length > 0) {
+                    html += '<div style="margin-top: 10px;">';
+                    option.segments.forEach((segment, segIndex) => {
+                        const type = segment.segment_type === 'bus' ? '🚌' : '🚶';
+                        html += `
+                            <div class="route-segment">
+                                ${type} <strong>${segment.segment_type === 'bus' ? 'Автобус ' + segment.route_number : 'Пешком'}</strong><br>
+                                ${segment.from_stop_name} → ${segment.to_stop_name}<br>
+                                <small>${segment.duration_minutes} мин</small>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+
+                html += '</div>';
+            });
+
+            resultsDiv.innerHTML = html;
+        }
+
+        // Поиск остановок рядом
+        async function findNearbyStops() {
+            if (!fromCoords) {
+                alert('Пожалуйста, выберите точку на карте');
+                return;
+            }
+
+            const apiUrl = document.getElementById('apiUrl').value;
+            const stopsDiv = document.getElementById('nearbyStops');
+            const stopsSection = document.getElementById('stopsSection');
+
+            stopsSection.style.display = 'block';
+            stopsDiv.innerHTML = '<div class="loading">⏳ Поиск остановок...</div>';
+
+            // Очистка предыдущих маркеров остановок
+            stopsMarkers.forEach(marker => map.removeLayer(marker));
+            stopsMarkers = [];
+
+            try {
+                const url = `${apiUrl}/nearby-stops?lat=${fromCoords.lat}&lon=${fromCoords.lon}&radiusKm=1.0`;
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                if (!data.data || !data.data.stops || data.data.stops.length === 0) {
+                    stopsDiv.innerHTML = '<div class="error">Остановки не найдены в радиусе 1 км</div>';
+                    return;
+                }
+
+                const stops = data.data.stops;
+                let html = '';
+
+                stops.forEach(stop => {
+                    html += `
+                        <div class="stop-item" onclick="focusOnStop(${stop.latitude}, ${stop.longitude})">
+                            <div class="stop-name">🚏 ${stop.stop_name}</div>
+                            <div class="stop-distance">
+                                ${stop.stop_code ? `Код: ${stop.stop_code} | ` : ''}
+                                ${stop.distance_meters} м
+                            </div>
+                        </div>
+                    `;
+
+
+                    const marker = L.circleMarker([stop.longitude, stop.latitude], {
+                        radius: 6,
+                        fillColor: '#3b82f6',
+                        color: 'white',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    }).addTo(map);
+
+                    marker.bindPopup(`
+                        <strong>${stop.stop_name}</strong><br>
+                        ${stop.stop_code ? `Код: ${stop.stop_code}<br>` : ''}
+                        Расстояние: ${stop.distance_meters} м
+                    `);
+
+                    stopsMarkers.push(marker);
+                });
+
+                stopsDiv.innerHTML = html;
+            } catch (error) {
+                stopsDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Ошибка:</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Фокус на остановке
+        function focusOnStop(lat, lon) {
+            // ИСПРАВЛЕНО: поменяли местами координаты
+            map.setView([lon, lat], 16);
+        }
+    </script>
+</body>
+</html>

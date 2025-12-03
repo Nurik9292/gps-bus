@@ -501,4 +501,82 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 .map(row -> row.get(0, Long.class))
                 .one();
     }
+
+    @Override
+    public Flux<BusRoute> searchWithRelevance(String query, Boolean isActive, Pageable pageable) {
+        String searchQuery = query.trim().toLowerCase();
+        String searchPattern = "%" + searchQuery + "%";
+
+        StringBuilder sqlBuilder = new StringBuilder();
+        sqlBuilder.append("""
+            SELECT * FROM bus_routes
+            WHERE (LOWER(route_number) LIKE :searchPattern
+                   OR LOWER(route_name) LIKE :searchPattern
+                   OR LOWER(name_tm) LIKE :searchPattern
+                   OR LOWER(name_en) LIKE :searchPattern)
+            """);
+
+        if (isActive != null) {
+            sqlBuilder.append(" AND is_active = :isActive");
+        }
+
+        sqlBuilder.append("""
+            ORDER BY
+                CASE
+                    WHEN LOWER(route_number) = :exactQuery THEN 1
+                    WHEN LOWER(route_number) LIKE :startsWithPattern THEN 2
+                    WHEN LOWER(route_number) LIKE :searchPattern THEN 3
+                    WHEN LOWER(route_name) LIKE :startsWithPattern THEN 4
+                    ELSE 5
+                END,
+                LENGTH(route_number),
+                route_number
+            LIMIT :limit OFFSET :offset
+            """);
+
+        DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sqlBuilder.toString())
+                .bind("searchPattern", searchPattern)
+                .bind("exactQuery", searchQuery)
+                .bind("startsWithPattern", searchQuery + "%")
+                .bind("limit", pageable.getPageSize())
+                .bind("offset", pageable.getOffset());
+
+        if (isActive != null) {
+            executeSpec = executeSpec.bind("isActive", isActive);
+        }
+
+        return executeSpec
+                .map(getRowMapper())
+                .all()
+                .doOnComplete(() -> log.debug("Relevance search completed for query: '{}'", query));
+    }
+
+    @Override
+    public Mono<Long> countBySearch(String query, Boolean isActive) {
+        String searchPattern = "%" + query.trim().toLowerCase() + "%";
+
+        StringBuilder sqlBuilder = new StringBuilder();
+        sqlBuilder.append("""
+            SELECT COUNT(*) FROM bus_routes
+            WHERE (LOWER(route_number) LIKE :searchPattern
+                   OR LOWER(route_name) LIKE :searchPattern
+                   OR LOWER(name_tm) LIKE :searchPattern
+                   OR LOWER(name_en) LIKE :searchPattern)
+            """);
+
+        if (isActive != null) {
+            sqlBuilder.append(" AND is_active = :isActive");
+        }
+
+        DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sqlBuilder.toString())
+                .bind("searchPattern", searchPattern);
+
+        if (isActive != null) {
+            executeSpec = executeSpec.bind("isActive", isActive);
+        }
+
+        return executeSpec
+                .map(row -> row.get(0, Long.class))
+                .one();
+    }
 }

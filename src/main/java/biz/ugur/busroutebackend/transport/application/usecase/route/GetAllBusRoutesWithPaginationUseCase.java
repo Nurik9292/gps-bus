@@ -59,7 +59,7 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
 
     private Mono<RouteList> processInternal(GetAllRoutePaginationQuery query) {
         Pageable pageable = createPageable(query);
-        Specification<BusRoute> specification = buildSpecification(query);
+        boolean hasSearchQuery = query.query() != null && !query.query().isBlank();
 
         return correlationService.getCurrentCorrelationId()
                 .doOnNext(correlationId -> log.debug(
@@ -68,9 +68,13 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
                 ))
                 .then(
                         Mono.zip(
-                                fetchRoutes(specification, pageable),
+                                hasSearchQuery
+                                        ? fetchRoutesWithRelevance(query.query(), query.isActivate(), pageable)
+                                        : fetchRoutesWithSpecification(query, pageable),
                                 busRouteRepository.countActiveRoutes(),
-                                countRoutes(specification)
+                                hasSearchQuery
+                                        ? busRouteRepository.countBySearch(query.query(), query.isActivate())
+                                        : countRoutesWithSpecification(query)
                         )
                 )
                 .flatMap(tuple -> {
@@ -99,14 +103,20 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
                 });
     }
 
-    private Mono<List<BusRoute>> fetchRoutes(Specification<BusRoute> specification, Pageable pageable) {
+    private Mono<List<BusRoute>> fetchRoutesWithRelevance(String query, Boolean isActive, Pageable pageable) {
+        return busRouteRepository.searchWithRelevance(query, isActive, pageable).collectList();
+    }
+
+    private Mono<List<BusRoute>> fetchRoutesWithSpecification(GetAllRoutePaginationQuery query, Pageable pageable) {
+        Specification<BusRoute> specification = buildSpecificationWithoutQuery(query);
         if (specification == null) {
             return busRouteRepository.findAll(pageable).collectList();
         }
         return busRouteRepository.findBySpecification(specification, pageable).collectList();
     }
 
-    private Mono<Long> countRoutes(Specification<BusRoute> specification) {
+    private Mono<Long> countRoutesWithSpecification(GetAllRoutePaginationQuery query) {
+        Specification<BusRoute> specification = buildSpecificationWithoutQuery(query);
         if (specification == null) {
             return busRouteRepository.count();
         }
@@ -140,23 +150,13 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
     }
 
 
-    private Specification<BusRoute> buildSpecification(GetAllRoutePaginationQuery query) {
-        Specification<BusRoute> spec = null;
-
-        if (query.query() != null && !query.query().isBlank()) {
-            spec = BusRouteSpecifications.routeNumberContains(query.query())
-                    .or(BusRouteSpecifications.nameContains(query.query()));
-        }
-
+    private Specification<BusRoute> buildSpecificationWithoutQuery(GetAllRoutePaginationQuery query) {
         if (query.isActivate() != null) {
-            Specification<BusRoute> activeSpec = query.isActivate()
+            return query.isActivate()
                     ? BusRouteSpecifications.isActive()
                     : BusRouteSpecifications.isInactive();
-
-            spec = (spec == null) ? activeSpec : spec.and(activeSpec);
         }
-
-        return spec;
+        return null;
     }
 
     private Pageable createPageable(GetAllRoutePaginationQuery query) {

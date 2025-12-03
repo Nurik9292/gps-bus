@@ -1,0 +1,706 @@
+2025-10-28 00:53:03.296 [main] INFO  b.u.b.BusRouteBackendApplicationTests - Starting BusRouteBackendApplicationTests using Java 25 with PID 2043 (started by root in /home/developer/projects/bus/ugur_v4/bus-route-backend)
+2025-10-28 00:53:03.300 [main] INFO  b.u.b.BusRouteBackendApplicationTests - The following 1 profile is active: "dev"
+2025-10-28 00:53:03.933 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-28 00:53:03.934 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data R2DBC repositories in DEFAULT mode.
+2025-10-28 00:53:03.948 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 8 ms. Found 0 R2DBC repository interfaces.
+2025-10-28 00:53:04.368 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-28 00:53:04.369 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data R2DBC repositories in DEFAULT mode.
+2025-10-28 00:53:04.387 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 18 ms. Found 0 R2DBC repository interfaces.
+2025-10-28 00:53:04.395 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-28 00:53:04.396 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-10-28 00:53:04.411 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 6 ms. Found 0 Redis repository interfaces.
+2025-10-28 00:53:05.513 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer - Initializing geospatial services in value objects...
+2025-10-28 00:53:05.515 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer - ✅ Geospatial services initialization complete
+2025-10-28 00:53:05.515 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer -    - All distance calculations use centralized DistanceCalculationService
+2025-10-28 00:53:05.515 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer -    - Haversine formula: single source of truth
+2025-10-28 00:53:05.515 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer -    - Location → Coordinates migration: COMPLETED
+2025-10-28 00:53:05.516 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer -    - RoutePoint → Coordinates migration: COMPLETED
+2025-10-28 00:53:06.013 [main] INFO  b.u.b.s.i.config.DebugConfig - DEBUG >>> app.scheduling.enabled = false
+2025-10-28 00:53:06.021 [main] INFO  b.u.b.s.i.config.WebSocketConfig - 🔌 WebSocketConfig initialized with handler: VehiclePositionHandler
+2025-10-28 00:53:06.126 [main] INFO  o.s.b.a.s.r.ReactiveUserDetailsServiceAutoConfiguration - 
+
+Using generated security password: ebff9b62-4a9a-404a-ab7f-0757866c291c
+
+2025-10-28 00:53:06.184 [main] INFO  b.u.b.a.i.s.AdminSecurityConfig - Configuring Admin Security Filter Chain for /api/v1/admin/**
+2025-10-28 00:53:06.267 [main] INFO  b.u.b.c.i.s.ClientSecurityConfig - Configuring Client Security Filter Chain for /api/v1/client/** and /api/v1/mobile/**
+2025-10-28 00:53:06.269 [main] INFO  b.u.b.s.i.c.PublicSecurityConfig - Configuring Public Security Filter Chain for remaining paths
+2025-10-28 00:53:06.295 [main] INFO  b.u.b.s.i.config.CorrelationConfig - Initializing Correlation ID Generator
+2025-10-28 00:53:06.296 [main] INFO  b.u.b.s.i.config.CorrelationConfig - Initializing Correlation ID Web Filter
+2025-10-28 00:53:06.379 [main] INFO  b.u.b.s.i.config.WebSocketConfig - 🗺️ Registering WebSocket handler mappings...
+2025-10-28 00:53:06.379 [main] INFO  b.u.b.s.i.config.WebSocketConfig - ✅ WebSocket mappings registered:
+2025-10-28 00:53:06.380 [main] INFO  b.u.b.s.i.config.WebSocketConfig -    📍 /api/v1/ws/vehicle-positions -> VehiclePositionHandler
+2025-10-28 00:53:06.528 [main] INFO  o.s.b.a.e.web.EndpointLinksResolver - Exposing 4 endpoints beneath base path '/actuator'
+2025-10-28 00:53:06.586 [main] INFO  b.u.b.s.i.config.WebSocketConfig - 🔧 Creating WebSocketHandlerAdapter...
+2025-10-28 00:53:06.587 [main] INFO  b.u.b.s.i.config.WebSocketConfig - ✅ WebSocketHandlerAdapter created successfully
+2025-10-28 00:53:06.915 [main] DEBUG o.s.c.e.EventListenerMethodProcessor - 1 @EventListener methods processed on bean 'adminBootstrap': {public void biz.ugur.busroutebackend.shared.infrastructure.bootstrap.AdminBootstrap.createDefaultAdminIfNotExists()=@org.springframework.context.event.EventListener(classes={org.springframework.boot.context.event.ApplicationReadyEvent.class}, condition="", defaultExecution=true, id="", value={org.springframework.boot.context.event.ApplicationReadyEvent.class})}
+2025-10-28 00:53:06.915 [main] DEBUG o.s.c.e.EventListenerMethodProcessor - 3 @EventListener methods processed on bean 'vehicleEventHandler': {public void biz.ugur.busroutebackend.transport.infrastructure.messaging.VehicleEventHandler.handleVehiclePositionUpdated(biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent)=@org.springframework.context.event.EventListener(classes={}, condition="", defaultExecution=true, id="", value={}), public void biz.ugur.busroutebackend.transport.infrastructure.messaging.VehicleEventHandler.handleVehicleAssignedToRoute(biz.ugur.busroutebackend.transport.domain.event.VehicleAssignedToRouteEvent)=@org.springframework.context.event.EventListener(classes={}, condition="", defaultExecution=true, id="", value={}), public void biz.ugur.busroutebackend.transport.infrastructure.messaging.VehicleEventHandler.handleVehicleRegistered(biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent)=@org.springframework.context.event.EventListener(classes={biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent.class}, condition="", defaultExecution=true, id="", value={biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent.class})}
+2025-10-28 00:53:06.916 [main] DEBUG o.s.c.e.EventListenerMethodProcessor - 1 @EventListener methods processed on bean 'debugEventTap': {public void biz.ugur.busroutebackend.transport.infrastructure.services.DebugEventTap.onAny(java.lang.Object)=@org.springframework.context.event.EventListener(classes={}, condition="", defaultExecution=true, id="", value={})}
+2025-10-28 00:53:06.947 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.context.event.ContextRefreshedEvent
+2025-10-28 00:53:06.948 [main] INFO  b.u.b.BusRouteBackendApplicationTests - Started BusRouteBackendApplicationTests in 4.025 seconds (process running for 5.29)
+2025-10-28 00:53:06.948 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.boot.context.event.ApplicationStartedEvent
+2025-10-28 00:53:06.949 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.boot.availability.LivenessState
+2025-10-28 00:53:06.950 [main] INFO  b.u.b.s.i.bootstrap.AdminBootstrap - Checking for default admin user...
+2025-10-28 00:53:06.959 [main] INFO  b.u.b.s.i.bootstrap.AdminBootstrap - Creating default admin user: admin
+2025-10-28 00:53:07.040 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.boot.context.event.ApplicationReadyEvent
+2025-10-28 00:53:07.041 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.boot.availability.ReadinessState
+2025-10-28 00:53:07.042 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.PrepareTestInstanceEvent
+2025-10-28 00:53:07.045 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.BeforeTestMethodEvent
+2025-10-28 00:53:07.255 [reactor-tcp-epoll-1] INFO  b.u.b.s.i.bootstrap.AdminBootstrap - Default admin user ensured: admin
+2025-10-28 00:53:07.611 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.BeforeTestExecutionEvent
+2025-10-28 00:53:07.614 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.AfterTestExecutionEvent
+2025-10-28 00:53:07.618 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.AfterTestMethodEvent
+2025-10-28 00:53:07.622 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.AfterTestClassEvent
+2025-10-28 00:53:07.627 [main] INFO  o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [biz.ugur.busroutebackend.admin.infrastructure.repository.R2dbcAdminRepositoryIntegrationTest]: R2dbcAdminRepositoryIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2025-10-28 00:53:07.643 [main] INFO  o.s.b.t.c.SpringBootTestContextBootstrapper - Found @SpringBootConfiguration biz.ugur.busroutebackend.BusRouteBackendApplication for test class biz.ugur.busroutebackend.admin.infrastructure.repository.R2dbcAdminRepositoryIntegrationTest
+2025-10-28 00:53:07.666 [main] INFO  o.testcontainers.images.PullPolicy - Image pull policy will be performed by: DefaultPullPolicy()
+2025-10-28 00:53:07.667 [main] INFO  o.t.utility.ImageNameSubstitutor - Image name substitution will be performed by: DefaultImageNameSubstitutor (composite of 'ConfigurationFileImageNameSubstitutor' and 'PrefixingImageNameSubstitutor')
+2025-10-28 00:53:07.676 [main] INFO  o.testcontainers.DockerClientFactory - Testcontainers version: 1.21.3
+2025-10-28 00:53:07.871 [main] INFO  o.t.d.DockerClientProviderStrategy - Loaded org.testcontainers.dockerclient.UnixSocketClientProviderStrategy from ~/.testcontainers.properties, will try it first
+2025-10-28 00:53:08.092 [main] INFO  o.t.d.DockerClientProviderStrategy - Found Docker environment with local Unix socket (unix:///var/run/docker.sock)
+2025-10-28 00:53:08.093 [main] INFO  o.testcontainers.DockerClientFactory - Docker host IP address is localhost
+2025-10-28 00:53:08.110 [main] INFO  o.testcontainers.DockerClientFactory - Connected to docker: 
+  Server Version: 28.5.1
+  API Version: 1.51
+  Operating System: Docker Desktop
+  Total Memory: 7946 MB
+  Labels: 
+    com.docker.desktop.address=unix:///var/run/docker-cli.sock
+2025-10-28 00:53:08.305 [main] INFO  tc.testcontainers/ryuk:0.12.0 - Creating container for image: testcontainers/ryuk:0.12.0
+2025-10-28 00:53:08.572 [main] INFO  tc.testcontainers/ryuk:0.12.0 - Container testcontainers/ryuk:0.12.0 is starting: 8e176add0b278aa237e3465d12f084a48cecf5314af3b146f273a52300894932
+2025-10-28 00:53:08.881 [main] INFO  tc.testcontainers/ryuk:0.12.0 - Container testcontainers/ryuk:0.12.0 started in PT0.576466977S
+2025-10-28 00:53:08.885 [main] INFO  o.t.utility.RyukResourceReaper - Ryuk started - will monitor and terminate Testcontainers containers on JVM exit
+2025-10-28 00:53:08.885 [main] INFO  o.testcontainers.DockerClientFactory - Checking the system...
+2025-10-28 00:53:08.886 [main] INFO  o.testcontainers.DockerClientFactory - ✔︎ Docker server version should be at least 1.6.0
+2025-10-28 00:53:08.886 [main] INFO  tc.postgres:16-alpine - Creating container for image: postgres:16-alpine
+2025-10-28 00:53:08.990 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine is starting: 9e5d72d76b88841bfe7bdb88e89bb80344220331cea9009a52997bdddcf5716a
+2025-10-28 00:53:10.894 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine started in PT2.007831192S
+2025-10-28 00:53:10.894 [main] INFO  tc.postgres:16-alpine - Container is started (JDBC URL: jdbc:postgresql://localhost:56375/testdb?loggerLevel=OFF)
+2025-10-28 00:53:10.917 [main] INFO  b.u.b.a.i.r.R2dbcAdminRepositoryIntegrationTest - Starting R2dbcAdminRepositoryIntegrationTest using Java 25 with PID 2043 (started by root in /home/developer/projects/bus/ugur_v4/bus-route-backend)
+2025-10-28 00:53:10.917 [main] INFO  b.u.b.a.i.r.R2dbcAdminRepositoryIntegrationTest - The following 1 profile is active: "dev"
+2025-10-28 00:53:10.957 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-28 00:53:10.958 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data R2DBC repositories in DEFAULT mode.
+2025-10-28 00:53:10.965 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 6 ms. Found 0 R2DBC repository interfaces.
+2025-10-28 00:53:11.061 [main] INFO  b.u.b.a.i.r.R2dbcAdminRepositoryIntegrationTest - Started R2dbcAdminRepositoryIntegrationTest in 0.164 seconds (process running for 9.404)
+2025-10-28 00:53:12.752 [main] INFO  o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [biz.ugur.busroutebackend.admin.infrastructure.repository.R2dbcCityRepositoryIntegrationTest]: R2dbcCityRepositoryIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2025-10-28 00:53:12.753 [main] INFO  o.s.b.t.c.SpringBootTestContextBootstrapper - Found @SpringBootConfiguration biz.ugur.busroutebackend.BusRouteBackendApplication for test class biz.ugur.busroutebackend.admin.infrastructure.repository.R2dbcCityRepositoryIntegrationTest
+2025-10-28 00:53:12.754 [main] INFO  tc.postgres:16-alpine - Creating container for image: postgres:16-alpine
+2025-10-28 00:53:12.837 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine is starting: 05ce60962fbfc67753b03b941069758bd045d55101f88d42a0caa5c5d88b7173
+2025-10-28 00:53:14.674 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine started in PT1.919977499S
+2025-10-28 00:53:14.674 [main] INFO  tc.postgres:16-alpine - Container is started (JDBC URL: jdbc:postgresql://localhost:56550/testdb?loggerLevel=OFF)
+2025-10-28 00:53:14.689 [main] INFO  b.u.b.a.i.r.R2dbcCityRepositoryIntegrationTest - Starting R2dbcCityRepositoryIntegrationTest using Java 25 with PID 2043 (started by root in /home/developer/projects/bus/ugur_v4/bus-route-backend)
+2025-10-28 00:53:14.689 [main] INFO  b.u.b.a.i.r.R2dbcCityRepositoryIntegrationTest - The following 1 profile is active: "dev"
+2025-10-28 00:53:14.726 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-28 00:53:14.726 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data R2DBC repositories in DEFAULT mode.
+2025-10-28 00:53:14.735 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 7 ms. Found 0 R2DBC repository interfaces.
+2025-10-28 00:53:14.771 [main] INFO  b.u.b.a.i.r.R2dbcCityRepositoryIntegrationTest - Started R2dbcCityRepositoryIntegrationTest in 0.095 seconds (process running for 13.113)
+2025-10-28 00:53:16.786 [main] INFO  o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [biz.ugur.busroutebackend.banner.infrastructure.persistence.repository.R2dbcAdminBannerRepositoryIntegrationTest]: R2dbcAdminBannerRepositoryIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2025-10-28 00:53:16.794 [main] INFO  o.s.b.t.c.SpringBootTestContextBootstrapper - Found @SpringBootConfiguration biz.ugur.busroutebackend.BusRouteBackendApplication for test class biz.ugur.busroutebackend.banner.infrastructure.persistence.repository.R2dbcAdminBannerRepositoryIntegrationTest
+2025-10-28 00:53:16.796 [main] INFO  tc.postgres:16-alpine - Creating container for image: postgres:16-alpine
+2025-10-28 00:53:16.875 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine is starting: aa62b3374adf0d6bc97baa2cfe38d25bd5e47415ec1e7ba60df7282c96fb8809
+2025-10-28 00:53:18.606 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine started in PT1.810376878S
+2025-10-28 00:53:18.606 [main] INFO  tc.postgres:16-alpine - Container is started (JDBC URL: jdbc:postgresql://localhost:56680/testdb?loggerLevel=OFF)
+2025-10-28 00:53:18.627 [main] INFO  b.u.b.b.i.p.r.R2dbcAdminBannerRepositoryIntegrationTest - Starting R2dbcAdminBannerRepositoryIntegrationTest using Java 25 with PID 2043 (started by root in /home/developer/projects/bus/ugur_v4/bus-route-backend)
+2025-10-28 00:53:18.627 [main] INFO  b.u.b.b.i.p.r.R2dbcAdminBannerRepositoryIntegrationTest - The following 1 profile is active: "dev"
+2025-10-28 00:53:18.671 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-28 00:53:18.672 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data R2DBC repositories in DEFAULT mode.
+2025-10-28 00:53:18.680 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 7 ms. Found 0 R2DBC repository interfaces.
+2025-10-28 00:53:18.708 [main] INFO  b.u.b.b.i.p.r.R2dbcAdminBannerRepositoryIntegrationTest - Started R2dbcAdminBannerRepositoryIntegrationTest in 0.101 seconds (process running for 17.05)
+2025-10-28 00:53:19.870 [main] INFO  b.u.b.b.a.u.a.DeleteBannerUseCase - Deleting banner CorrelationId: CorrelationId[value=REQ-740206b2] - BannerId: bannerId
+2025-10-28 00:53:19.872 [main] INFO  b.u.b.b.a.u.a.DeleteBannerUseCase - Banner deleted successfully: bannerId
+2025-10-28 00:53:19.924 [main] INFO  b.u.b.b.a.u.a.DeleteBannerUseCase - Deleting banner CorrelationId: CorrelationId[value=REQ-6dbc691b] - BannerId: bannerId
+2025-10-28 00:53:19.925 [main] ERROR b.u.b.b.a.u.a.DeleteBannerUseCase - Failed to delete banner: bannerId
+java.lang.RuntimeException: delete error
+	at biz.ugur.busroutebackend.banner.application.usecase.admin.DeleteBannerUseCaseTest.deleteFailsThrowsError(DeleteBannerUseCaseTest.java:70)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:775)
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:479)
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:161)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:152)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:91)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:112)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:94)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:93)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:87)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:216)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:212)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:137)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:69)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:156)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:201)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:170)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:94)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:59)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:142)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:58)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:103)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:85)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$1(InterceptingLauncher.java:39)
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25)
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:38)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.apache.maven.surefire.junitplatform.LazyLauncher.execute(LazyLauncher.java:56)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.execute(JUnitPlatformProvider.java:194)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invokeAllTests(JUnitPlatformProvider.java:150)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invoke(JUnitPlatformProvider.java:124)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385)
+	at org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162)
+	at org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495)
+2025-10-28 00:53:20.053 [main] INFO  b.u.b.b.a.u.a.CreateBannerUseCase - Creating new banner: CorrelationId - CorrelationId[value=REQ-68e14d23] BannerTitle  title
+2025-10-28 00:53:20.054 [main] INFO  b.u.b.b.a.u.a.CreateBannerUseCase - Banner created successfully: title
+2025-10-28 00:53:20.057 [main] INFO  b.u.b.b.a.u.a.CreateBannerUseCase - Creating new banner: CorrelationId - CorrelationId[value=REQ-82380bc6] BannerTitle  title
+2025-10-28 00:53:20.058 [main] ERROR b.u.b.b.a.u.a.CreateBannerUseCase - Failed to create banner: title
+java.lang.RuntimeException: Processing failed
+	at biz.ugur.busroutebackend.banner.application.usecase.admin.CreateBannerUseCaseTest.processFailsWhenImageProcessorThrowsError(CreateBannerUseCaseTest.java:144)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:775)
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:479)
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:161)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:152)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:91)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:112)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:94)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:93)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:87)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:216)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:212)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:137)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:69)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:156)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:201)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:170)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:94)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:59)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:142)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:58)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:103)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:85)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$1(InterceptingLauncher.java:39)
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25)
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:38)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.apache.maven.surefire.junitplatform.LazyLauncher.execute(LazyLauncher.java:56)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.execute(JUnitPlatformProvider.java:194)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invokeAllTests(JUnitPlatformProvider.java:150)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invoke(JUnitPlatformProvider.java:124)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385)
+	at org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162)
+	at org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495)
+2025-10-28 00:53:20.239 [main] INFO  o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [biz.ugur.busroutebackend.banner.application.usecase.admin.GetBannersByTypeUseCaseTest]: GetBannersByTypeUseCaseTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2025-10-28 00:53:20.254 [main] INFO  b.u.b.b.a.u.a.GetBannersByTypeUseCase - Get banner by type CorrelationId: CorrelationId[value=REQ-3b7231e7] - Banner Type: main
+2025-10-28 00:53:20.255 [main] ERROR b.u.b.b.a.u.a.GetBannersByTypeUseCase - Failed to get banners by type main: Error
+2025-10-28 00:53:20.298 [main] INFO  b.u.b.b.a.u.a.GetBannersByTypeUseCase - Get banner by type CorrelationId: CorrelationId[value=REQ-1a928de7] - Banner Type: main
+2025-10-28 00:53:20.358 [main] INFO  b.u.b.b.a.u.a.UpdateBannerUseCase - Updating banner: CorrelationId - CorrelationId[value=REQ-770574f4] BannerId - banner-id
+2025-10-28 00:53:20.359 [main] INFO  b.u.b.b.a.u.a.UpdateBannerUseCase - Banner updated successfully: title
+2025-10-28 00:53:20.362 [main] INFO  b.u.b.b.a.u.a.UpdateBannerUseCase - Updating banner: CorrelationId - CorrelationId[value=REQ-c8508386] BannerId - banner-id
+2025-10-28 00:53:20.362 [main] ERROR b.u.b.b.a.u.a.UpdateBannerUseCase - Failed to update banner: banner-id
+java.lang.RuntimeException: processing failed
+	at biz.ugur.busroutebackend.banner.application.usecase.admin.UpdateBannerUseCaseTest.processFailsWhenImageProcessorThrowsError(UpdateBannerUseCaseTest.java:144)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:775)
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:479)
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:161)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:152)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:91)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:112)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:94)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:93)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:87)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:216)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:212)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:137)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:69)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:156)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:201)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:170)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:94)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:59)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:142)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:58)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:103)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:85)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$1(InterceptingLauncher.java:39)
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25)
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:38)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.apache.maven.surefire.junitplatform.LazyLauncher.execute(LazyLauncher.java:56)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.execute(JUnitPlatformProvider.java:194)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invokeAllTests(JUnitPlatformProvider.java:150)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invoke(JUnitPlatformProvider.java:124)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385)
+	at org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162)
+	at org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495)
+2025-10-28 00:53:20.390 [main] INFO  o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [biz.ugur.busroutebackend.banner.application.factory.BannerFactoryTest]: BannerFactoryTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2025-10-28 00:53:20.411 [SpringApplicationShutdownHook] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.context.event.ContextClosedEvent
+2025-10-28 01:07:37.243 [main] INFO  b.u.b.BusRouteBackendApplicationTests - Starting BusRouteBackendApplicationTests using Java 25 with PID 13925 (started by root in /home/developer/projects/bus/ugur_v4/bus-route-backend)
+2025-10-28 01:07:37.244 [main] INFO  b.u.b.BusRouteBackendApplicationTests - The following 1 profile is active: "dev"
+2025-10-27 23:06:48.909 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-27 23:06:48.910 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data R2DBC repositories in DEFAULT mode.
+2025-10-27 23:06:48.925 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 9 ms. Found 0 R2DBC repository interfaces.
+2025-10-27 23:06:49.315 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-27 23:06:49.315 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data R2DBC repositories in DEFAULT mode.
+2025-10-27 23:06:49.334 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 18 ms. Found 0 R2DBC repository interfaces.
+2025-10-27 23:06:49.340 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-27 23:06:49.342 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-10-27 23:06:49.356 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 7 ms. Found 0 Redis repository interfaces.
+2025-10-27 23:06:50.338 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer - Initializing geospatial services in value objects...
+2025-10-27 23:06:50.338 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer - ✅ Geospatial services initialization complete
+2025-10-27 23:06:50.339 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer -    - All distance calculations use centralized DistanceCalculationService
+2025-10-27 23:06:50.339 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer -    - Haversine formula: single source of truth
+2025-10-27 23:06:50.339 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer -    - Location → Coordinates migration: COMPLETED
+2025-10-27 23:06:50.339 [main] INFO  b.u.b.g.i.c.GeospatialServiceInitializer -    - RoutePoint → Coordinates migration: COMPLETED
+2025-10-27 23:06:50.761 [main] INFO  b.u.b.s.i.config.DebugConfig - DEBUG >>> app.scheduling.enabled = false
+2025-10-27 23:06:50.767 [main] INFO  b.u.b.s.i.config.WebSocketConfig - 🔌 WebSocketConfig initialized with handler: VehiclePositionHandler
+2025-10-27 23:06:50.857 [main] INFO  o.s.b.a.s.r.ReactiveUserDetailsServiceAutoConfiguration - 
+
+Using generated security password: 8d62bf34-1061-41a9-8636-7c1114f43d56
+
+2025-10-27 23:06:50.907 [main] INFO  b.u.b.a.i.s.AdminSecurityConfig - Configuring Admin Security Filter Chain for /api/v1/admin/**
+2025-10-27 23:06:50.989 [main] INFO  b.u.b.c.i.s.ClientSecurityConfig - Configuring Client Security Filter Chain for /api/v1/client/** and /api/v1/mobile/**
+2025-10-27 23:06:50.992 [main] INFO  b.u.b.s.i.c.PublicSecurityConfig - Configuring Public Security Filter Chain for remaining paths
+2025-10-27 23:06:51.014 [main] INFO  b.u.b.s.i.config.CorrelationConfig - Initializing Correlation ID Generator
+2025-10-27 23:06:51.014 [main] INFO  b.u.b.s.i.config.CorrelationConfig - Initializing Correlation ID Web Filter
+2025-10-27 23:06:51.097 [main] INFO  b.u.b.s.i.config.WebSocketConfig - 🗺️ Registering WebSocket handler mappings...
+2025-10-27 23:06:51.098 [main] INFO  b.u.b.s.i.config.WebSocketConfig - ✅ WebSocket mappings registered:
+2025-10-27 23:06:51.098 [main] INFO  b.u.b.s.i.config.WebSocketConfig -    📍 /api/v1/ws/vehicle-positions -> VehiclePositionHandler
+2025-10-27 23:06:51.223 [main] INFO  o.s.b.a.e.web.EndpointLinksResolver - Exposing 4 endpoints beneath base path '/actuator'
+2025-10-27 23:06:51.265 [main] INFO  b.u.b.s.i.config.WebSocketConfig - 🔧 Creating WebSocketHandlerAdapter...
+2025-10-27 23:06:51.266 [main] INFO  b.u.b.s.i.config.WebSocketConfig - ✅ WebSocketHandlerAdapter created successfully
+2025-10-27 23:06:51.554 [main] DEBUG o.s.c.e.EventListenerMethodProcessor - 1 @EventListener methods processed on bean 'adminBootstrap': {public void biz.ugur.busroutebackend.shared.infrastructure.bootstrap.AdminBootstrap.createDefaultAdminIfNotExists()=@org.springframework.context.event.EventListener(classes={org.springframework.boot.context.event.ApplicationReadyEvent.class}, condition="", defaultExecution=true, id="", value={org.springframework.boot.context.event.ApplicationReadyEvent.class})}
+2025-10-27 23:06:51.555 [main] DEBUG o.s.c.e.EventListenerMethodProcessor - 3 @EventListener methods processed on bean 'vehicleEventHandler': {public void biz.ugur.busroutebackend.transport.infrastructure.messaging.VehicleEventHandler.handleVehiclePositionUpdated(biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent)=@org.springframework.context.event.EventListener(classes={}, condition="", defaultExecution=true, id="", value={}), public void biz.ugur.busroutebackend.transport.infrastructure.messaging.VehicleEventHandler.handleVehicleAssignedToRoute(biz.ugur.busroutebackend.transport.domain.event.VehicleAssignedToRouteEvent)=@org.springframework.context.event.EventListener(classes={}, condition="", defaultExecution=true, id="", value={}), public void biz.ugur.busroutebackend.transport.infrastructure.messaging.VehicleEventHandler.handleVehicleRegistered(biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent)=@org.springframework.context.event.EventListener(classes={biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent.class}, condition="", defaultExecution=true, id="", value={biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent.class})}
+2025-10-27 23:06:51.556 [main] DEBUG o.s.c.e.EventListenerMethodProcessor - 1 @EventListener methods processed on bean 'debugEventTap': {public void biz.ugur.busroutebackend.transport.infrastructure.services.DebugEventTap.onAny(java.lang.Object)=@org.springframework.context.event.EventListener(classes={}, condition="", defaultExecution=true, id="", value={})}
+2025-10-27 23:06:51.581 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.context.event.ContextRefreshedEvent
+2025-10-27 23:06:51.581 [main] INFO  b.u.b.BusRouteBackendApplicationTests - Started BusRouteBackendApplicationTests in -7245.351 seconds (process running for 4.644)
+2025-10-27 23:06:51.582 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.boot.context.event.ApplicationStartedEvent
+2025-10-27 23:06:51.583 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.boot.availability.LivenessState
+2025-10-27 23:06:51.584 [main] INFO  b.u.b.s.i.bootstrap.AdminBootstrap - Checking for default admin user...
+2025-10-27 23:06:51.592 [main] INFO  b.u.b.s.i.bootstrap.AdminBootstrap - Creating default admin user: admin
+2025-10-27 23:06:51.663 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.boot.context.event.ApplicationReadyEvent
+2025-10-27 23:06:51.670 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.boot.availability.ReadinessState
+2025-10-27 23:06:51.671 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.PrepareTestInstanceEvent
+2025-10-27 23:06:51.675 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.BeforeTestMethodEvent
+2025-10-27 23:06:51.839 [reactor-tcp-epoll-1] INFO  b.u.b.s.i.bootstrap.AdminBootstrap - Default admin user ensured: admin
+2025-10-27 23:06:52.186 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.BeforeTestExecutionEvent
+2025-10-27 23:06:52.189 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.AfterTestExecutionEvent
+2025-10-27 23:06:52.192 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.AfterTestMethodEvent
+2025-10-27 23:06:52.196 [main] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.test.context.event.AfterTestClassEvent
+2025-10-27 23:06:52.202 [main] INFO  o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [biz.ugur.busroutebackend.admin.infrastructure.repository.R2dbcAdminRepositoryIntegrationTest]: R2dbcAdminRepositoryIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2025-10-27 23:06:52.219 [main] INFO  o.s.b.t.c.SpringBootTestContextBootstrapper - Found @SpringBootConfiguration biz.ugur.busroutebackend.BusRouteBackendApplication for test class biz.ugur.busroutebackend.admin.infrastructure.repository.R2dbcAdminRepositoryIntegrationTest
+2025-10-27 23:06:52.241 [main] INFO  o.testcontainers.images.PullPolicy - Image pull policy will be performed by: DefaultPullPolicy()
+2025-10-27 23:06:52.242 [main] INFO  o.t.utility.ImageNameSubstitutor - Image name substitution will be performed by: DefaultImageNameSubstitutor (composite of 'ConfigurationFileImageNameSubstitutor' and 'PrefixingImageNameSubstitutor')
+2025-10-27 23:06:52.249 [main] INFO  o.testcontainers.DockerClientFactory - Testcontainers version: 1.21.3
+2025-10-27 23:06:52.438 [main] INFO  o.t.d.DockerClientProviderStrategy - Loaded org.testcontainers.dockerclient.UnixSocketClientProviderStrategy from ~/.testcontainers.properties, will try it first
+2025-10-27 23:06:52.626 [main] INFO  o.t.d.DockerClientProviderStrategy - Found Docker environment with local Unix socket (unix:///var/run/docker.sock)
+2025-10-27 23:06:52.628 [main] INFO  o.testcontainers.DockerClientFactory - Docker host IP address is localhost
+2025-10-27 23:06:52.643 [main] INFO  o.testcontainers.DockerClientFactory - Connected to docker: 
+  Server Version: 28.5.1
+  API Version: 1.51
+  Operating System: Docker Desktop
+  Total Memory: 7946 MB
+  Labels: 
+    com.docker.desktop.address=unix:///var/run/docker-cli.sock
+2025-10-28 01:07:41.736 [main] INFO  tc.testcontainers/ryuk:0.12.0 - Creating container for image: testcontainers/ryuk:0.12.0
+2025-10-28 01:07:41.969 [main] INFO  tc.testcontainers/ryuk:0.12.0 - Container testcontainers/ryuk:0.12.0 is starting: aedede3b4c93b453a37e27fb1fa07b190804a51f7826892b99242ab265db6fb7
+2025-10-28 01:07:42.471 [main] INFO  tc.testcontainers/ryuk:0.12.0 - Container testcontainers/ryuk:0.12.0 started in PT0.7355295S
+2025-10-28 01:07:42.478 [main] INFO  o.t.utility.RyukResourceReaper - Ryuk started - will monitor and terminate Testcontainers containers on JVM exit
+2025-10-28 01:07:42.478 [main] INFO  o.testcontainers.DockerClientFactory - Checking the system...
+2025-10-28 01:07:42.480 [main] INFO  o.testcontainers.DockerClientFactory - ✔︎ Docker server version should be at least 1.6.0
+2025-10-28 01:07:42.480 [main] INFO  tc.postgres:16-alpine - Creating container for image: postgres:16-alpine
+2025-10-28 01:07:42.605 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine is starting: 8a4103646b1295ef92e662ecfac60ee4e1b68b55291ec9fe2b00e3ed114e5071
+2025-10-27 23:06:55.674 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine started in PT-2H-46.805891852S
+2025-10-27 23:06:55.675 [main] INFO  tc.postgres:16-alpine - Container is started (JDBC URL: jdbc:postgresql://localhost:56278/testdb?loggerLevel=OFF)
+2025-10-27 23:06:55.696 [main] INFO  b.u.b.a.i.r.R2dbcAdminRepositoryIntegrationTest - Starting R2dbcAdminRepositoryIntegrationTest using Java 25 with PID 13925 (started by root in /home/developer/projects/bus/ugur_v4/bus-route-backend)
+2025-10-27 23:06:55.697 [main] INFO  b.u.b.a.i.r.R2dbcAdminRepositoryIntegrationTest - The following 1 profile is active: "dev"
+2025-10-27 23:06:55.753 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-27 23:06:55.753 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data R2DBC repositories in DEFAULT mode.
+2025-10-27 23:06:55.763 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 9 ms. Found 0 R2DBC repository interfaces.
+2025-10-27 23:06:55.851 [main] INFO  b.u.b.a.i.r.R2dbcAdminRepositoryIntegrationTest - Started R2dbcAdminRepositoryIntegrationTest in 0.173 seconds (process running for 8.901)
+2025-10-27 23:06:57.471 [main] INFO  o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [biz.ugur.busroutebackend.admin.infrastructure.repository.R2dbcCityRepositoryIntegrationTest]: R2dbcCityRepositoryIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2025-10-27 23:06:57.473 [main] INFO  o.s.b.t.c.SpringBootTestContextBootstrapper - Found @SpringBootConfiguration biz.ugur.busroutebackend.BusRouteBackendApplication for test class biz.ugur.busroutebackend.admin.infrastructure.repository.R2dbcCityRepositoryIntegrationTest
+2025-10-27 23:06:57.474 [main] INFO  tc.postgres:16-alpine - Creating container for image: postgres:16-alpine
+2025-10-27 23:06:57.572 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine is starting: 3c6c69cc8243228ec33ef75b0cc461e0db52bd1cbabaf6255b4be5bff3b4058c
+2025-10-27 23:06:59.455 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine started in PT1.980474076S
+2025-10-27 23:06:59.455 [main] INFO  tc.postgres:16-alpine - Container is started (JDBC URL: jdbc:postgresql://localhost:61686/testdb?loggerLevel=OFF)
+2025-10-27 23:06:59.469 [main] INFO  b.u.b.a.i.r.R2dbcCityRepositoryIntegrationTest - Starting R2dbcCityRepositoryIntegrationTest using Java 25 with PID 13925 (started by root in /home/developer/projects/bus/ugur_v4/bus-route-backend)
+2025-10-27 23:06:59.469 [main] INFO  b.u.b.a.i.r.R2dbcCityRepositoryIntegrationTest - The following 1 profile is active: "dev"
+2025-10-27 23:06:59.502 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-27 23:06:59.502 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data R2DBC repositories in DEFAULT mode.
+2025-10-27 23:06:59.509 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 6 ms. Found 0 R2DBC repository interfaces.
+2025-10-27 23:06:59.548 [main] INFO  b.u.b.a.i.r.R2dbcCityRepositoryIntegrationTest - Started R2dbcCityRepositoryIntegrationTest in 0.092 seconds (process running for 12.537)
+2025-10-27 23:07:01.372 [main] INFO  o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [biz.ugur.busroutebackend.banner.infrastructure.persistence.repository.R2dbcAdminBannerRepositoryIntegrationTest]: R2dbcAdminBannerRepositoryIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2025-10-27 23:07:01.379 [main] INFO  o.s.b.t.c.SpringBootTestContextBootstrapper - Found @SpringBootConfiguration biz.ugur.busroutebackend.BusRouteBackendApplication for test class biz.ugur.busroutebackend.banner.infrastructure.persistence.repository.R2dbcAdminBannerRepositoryIntegrationTest
+2025-10-27 23:07:01.380 [main] INFO  tc.postgres:16-alpine - Creating container for image: postgres:16-alpine
+2025-10-27 23:07:01.460 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine is starting: 389d37e1fe34ff2065e5c38402897e851de4459bed758abe59f984af4a9f22cc
+2025-10-28 01:07:52.197 [main] INFO  tc.postgres:16-alpine - Container postgres:16-alpine started in PT2H50.817379216S
+2025-10-28 01:07:52.197 [main] INFO  tc.postgres:16-alpine - Container is started (JDBC URL: jdbc:postgresql://localhost:54035/testdb?loggerLevel=OFF)
+2025-10-28 01:07:52.210 [main] INFO  b.u.b.b.i.p.r.R2dbcAdminBannerRepositoryIntegrationTest - Starting R2dbcAdminBannerRepositoryIntegrationTest using Java 25 with PID 13925 (started by root in /home/developer/projects/bus/ugur_v4/bus-route-backend)
+2025-10-28 01:07:52.211 [main] INFO  b.u.b.b.i.p.r.R2dbcAdminBannerRepositoryIntegrationTest - The following 1 profile is active: "dev"
+2025-10-28 01:07:52.242 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-10-28 01:07:52.242 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data R2DBC repositories in DEFAULT mode.
+2025-10-28 01:07:52.249 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 6 ms. Found 0 R2DBC repository interfaces.
+2025-10-28 01:07:52.275 [main] INFO  b.u.b.b.i.p.r.R2dbcAdminBannerRepositoryIntegrationTest - Started R2dbcAdminBannerRepositoryIntegrationTest in 0.076 seconds (process running for 16.489)
+2025-10-27 23:07:04.507 [main] INFO  b.u.b.b.a.u.a.DeleteBannerUseCase - Deleting banner CorrelationId: CorrelationId[value=REQ-d85fcafd] - BannerId: bannerId
+2025-10-27 23:07:04.510 [main] INFO  b.u.b.b.a.u.a.DeleteBannerUseCase - Banner deleted successfully: bannerId
+2025-10-27 23:07:04.562 [main] INFO  b.u.b.b.a.u.a.DeleteBannerUseCase - Deleting banner CorrelationId: CorrelationId[value=REQ-932fe325] - BannerId: bannerId
+2025-10-27 23:07:04.562 [main] ERROR b.u.b.b.a.u.a.DeleteBannerUseCase - Failed to delete banner: bannerId
+java.lang.RuntimeException: delete error
+	at biz.ugur.busroutebackend.banner.application.usecase.admin.DeleteBannerUseCaseTest.deleteFailsThrowsError(DeleteBannerUseCaseTest.java:70)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:775)
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:479)
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:161)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:152)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:91)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:112)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:94)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:93)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:87)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:216)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:212)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:137)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:69)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:156)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:201)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:170)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:94)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:59)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:142)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:58)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:103)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:85)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$1(InterceptingLauncher.java:39)
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25)
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:38)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.apache.maven.surefire.junitplatform.LazyLauncher.execute(LazyLauncher.java:56)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.execute(JUnitPlatformProvider.java:194)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invokeAllTests(JUnitPlatformProvider.java:150)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invoke(JUnitPlatformProvider.java:124)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385)
+	at org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162)
+	at org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495)
+2025-10-27 23:07:04.675 [main] INFO  b.u.b.b.a.u.a.CreateBannerUseCase - Creating new banner: CorrelationId - CorrelationId[value=REQ-b89d9459] BannerTitle  title
+2025-10-27 23:07:04.676 [main] INFO  b.u.b.b.a.u.a.CreateBannerUseCase - Banner created successfully: title
+2025-10-27 23:07:04.679 [main] INFO  b.u.b.b.a.u.a.CreateBannerUseCase - Creating new banner: CorrelationId - CorrelationId[value=REQ-741044c3] BannerTitle  title
+2025-10-27 23:07:04.679 [main] ERROR b.u.b.b.a.u.a.CreateBannerUseCase - Failed to create banner: title
+java.lang.RuntimeException: Processing failed
+	at biz.ugur.busroutebackend.banner.application.usecase.admin.CreateBannerUseCaseTest.processFailsWhenImageProcessorThrowsError(CreateBannerUseCaseTest.java:144)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:775)
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:479)
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:161)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:152)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:91)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:112)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:94)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:93)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:87)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:216)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:212)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:137)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:69)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:156)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:201)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:170)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:94)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:59)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:142)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:58)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:103)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:85)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$1(InterceptingLauncher.java:39)
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25)
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:38)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.apache.maven.surefire.junitplatform.LazyLauncher.execute(LazyLauncher.java:56)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.execute(JUnitPlatformProvider.java:194)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invokeAllTests(JUnitPlatformProvider.java:150)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invoke(JUnitPlatformProvider.java:124)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385)
+	at org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162)
+	at org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495)
+2025-10-27 23:07:04.862 [main] INFO  o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [biz.ugur.busroutebackend.banner.application.usecase.admin.GetBannersByTypeUseCaseTest]: GetBannersByTypeUseCaseTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2025-10-27 23:07:04.873 [main] INFO  b.u.b.b.a.u.a.GetBannersByTypeUseCase - Get banner by type CorrelationId: CorrelationId[value=REQ-6d62326e] - Banner Type: main
+2025-10-27 23:07:04.875 [main] ERROR b.u.b.b.a.u.a.GetBannersByTypeUseCase - Failed to get banners by type main: Error
+2025-10-27 23:07:04.920 [main] INFO  b.u.b.b.a.u.a.GetBannersByTypeUseCase - Get banner by type CorrelationId: CorrelationId[value=REQ-2ee0fe8f] - Banner Type: main
+2025-10-27 23:07:04.972 [main] INFO  b.u.b.b.a.u.a.UpdateBannerUseCase - Updating banner: CorrelationId - CorrelationId[value=REQ-850967c5] BannerId - banner-id
+2025-10-27 23:07:04.972 [main] INFO  b.u.b.b.a.u.a.UpdateBannerUseCase - Banner updated successfully: title
+2025-10-27 23:07:04.975 [main] INFO  b.u.b.b.a.u.a.UpdateBannerUseCase - Updating banner: CorrelationId - CorrelationId[value=REQ-9566653e] BannerId - banner-id
+2025-10-27 23:07:04.975 [main] ERROR b.u.b.b.a.u.a.UpdateBannerUseCase - Failed to update banner: banner-id
+java.lang.RuntimeException: processing failed
+	at biz.ugur.busroutebackend.banner.application.usecase.admin.UpdateBannerUseCaseTest.processFailsWhenImageProcessorThrowsError(UpdateBannerUseCaseTest.java:144)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:775)
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:479)
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:161)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:152)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:91)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:112)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:94)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:93)
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:87)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:216)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:212)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:137)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:69)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:156)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:201)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:170)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:94)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:59)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:142)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:58)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:103)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:85)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$1(InterceptingLauncher.java:39)
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25)
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:38)
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47)
+	at org.apache.maven.surefire.junitplatform.LazyLauncher.execute(LazyLauncher.java:56)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.execute(JUnitPlatformProvider.java:194)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invokeAllTests(JUnitPlatformProvider.java:150)
+	at org.apache.maven.surefire.junitplatform.JUnitPlatformProvider.invoke(JUnitPlatformProvider.java:124)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385)
+	at org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162)
+	at org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495)
+2025-10-27 23:07:04.998 [main] INFO  o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [biz.ugur.busroutebackend.banner.application.factory.BannerFactoryTest]: BannerFactoryTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2025-10-27 23:07:05.017 [SpringApplicationShutdownHook] INFO  b.u.b.t.i.services.DebugEventTap - Spring event received: org.springframework.context.event.ContextClosedEvent

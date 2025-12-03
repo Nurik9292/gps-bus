@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS API Test - Bus Tracking</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+        }
+
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .controls h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 5px;
+            color: #555;
+        }
+
+        .form-group input, .form-group select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            font-size: 14px;
+            color: #777;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        #map {
+            height: 600px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .data-panel {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .data-panel h3 {
+            background: #34495e;
+            color: white;
+            padding: 15px;
+            font-size: 16px;
+        }
+
+        .bus-list {
+            max-height: 550px;
+            overflow-y: auto;
+        }
+
+        .bus-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .bus-item:hover {
+            background: #f8f9fa;
+        }
+
+        .bus-item.selected {
+            background: #e3f2fd;
+            border-left: 3px solid #2196f3;
+        }
+
+        .bus-item .bus-id {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .bus-item .bus-info {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #27ae60;
+            color: white;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 968px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            #map {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>GPS API Test - Bus Tracking System</h1>
+        <p>Тестирование нового GPS API с отображением на карте</p>
+    </div>
+
+    <div class="container">
+        <div class="controls">
+            <h2>Параметры запроса</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>API Endpoint</label>
+                    <input type="text" id="apiUrl" value="http://localhost:8080/api/vehicles/positions" />
+                </div>
+                <div class="form-group">
+                    <label>JWT Token (Bearer)</label>
+                    <input type="text" id="jwtToken" placeholder="Вставьте JWT токен здесь" style="font-family: monospace; font-size: 12px;" />
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Количество автобусов</label>
+                    <select id="busCount">
+                        <option value="10">10 автобусов</option>
+                        <option value="50" selected>50 автобусов</option>
+                        <option value="100">100 автобусов</option>
+                        <option value="all">Все автобусы</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Интервал обновления (сек)</label>
+                    <input type="number" id="refreshInterval" value="30" min="5" max="300" />
+                </div>
+                <div class="form-group" style="display: flex; align-items: flex-end;">
+                    <button class="btn btn-success" onclick="testLogin()" style="width: 100%;">Получить токен</button>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="fetchBuses()">Загрузить данные</button>
+                <button class="btn btn-success" onclick="startAutoRefresh()">Авто-обновление</button>
+                <button class="btn" onclick="stopAutoRefresh()" style="background: #e74c3c; color: white;">Остановить</button>
+            </div>
+        </div>
+
+        <div id="message"></div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="value" id="totalBuses">0</div>
+                <div class="label">Всего автобусов</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="movingBuses">0</div>
+                <div class="label">В движении</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="avgSpeed">0</div>
+                <div class="label">Средняя скорость</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="lastUpdate">-</div>
+                <div class="label">Последнее обновление</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div id="map"></div>
+
+            <div class="data-panel">
+                <h3>Список автобусов</h3>
+                <div class="bus-list" id="busList">
+                    <div class="loading">
+                        <div>Нажмите "Загрузить данные" для начала</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Global variables
+        let map;
+        let markers = {};
+        let buses = [];
+        let autoRefreshInterval = null;
+
+        // Initialize map (Turkmenistan - Ashgabat)
+        function initMap() {
+            map = L.map('map').setView([37.9601, 58.3261], 13);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+        }
+
+        // Get JWT token from localStorage or input
+        function getJwtToken() {
+            const inputToken = document.getElementById('jwtToken').value.trim();
+            if (inputToken) {
+                localStorage.setItem('jwt_token', inputToken);
+                return inputToken;
+            }
+            return localStorage.getItem('jwt_token') || '';
+        }
+
+        // Test login and get token
+        async function testLogin() {
+            const messageDiv = document.getElementById('message');
+
+            // Show prompt for credentials
+            const username = prompt('Введите username (например: admin или client):');
+            if (!username) return;
+
+            const password = prompt('Введите password:');
+            if (!password) return;
+
+            messageDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Авторизация...</div>';
+
+            try {
+                // Try admin login first
+                let response = await fetch('http://localhost:8080/api/admin/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                // If admin fails, try client login
+                if (!response.ok) {
+                    response = await fetch('http://localhost:8080/api/client/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username, password })
+                    });
+                }
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: Неверные учетные данные`);
+                }
+
+                const data = await response.json();
+                // Handle ApiResponse wrapper: data.data.accessToken or direct accessToken
+                const token = data.data?.accessToken || data.accessToken || data.data?.token || data.token;
+
+                if (token) {
+                    document.getElementById('jwtToken').value = token;
+                    localStorage.setItem('jwt_token', token);
+                    messageDiv.innerHTML = '<div class="success">✅ Токен получен успешно!</div>';
+                    setTimeout(() => messageDiv.innerHTML = '', 3000);
+                } else {
+                    throw new Error('Токен не найден в ответе');
+                }
+
+            } catch (error) {
+                console.error('Login error:', error);
+                messageDiv.innerHTML = `<div class="error">Ошибка авторизации: ${error.message}</div>`;
+            }
+        }
+
+        // Fetch buses from API
+        async function fetchBuses() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const busCount = document.getElementById('busCount').value;
+            const jwtToken = getJwtToken();
+            const messageDiv = document.getElementById('message');
+
+            // Check if token exists
+            if (!jwtToken) {
+                messageDiv.innerHTML = '<div class="error">❌ JWT токен не указан! Нажмите "Получить токен" или вставьте токен вручную.</div>';
+                return;
+            }
+
+            // Show loading
+            messageDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Загрузка данных...</div>';
+            document.getElementById('busList').innerHTML = '<div class="loading"><div class="spinner"></div>Загрузка...</div>';
+
+            try {
+                const url = busCount === 'all' ? apiUrl : `${apiUrl}?limit=${busCount}`;
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        throw new Error('Токен недействителен или истек. Получите новый токен.');
+                    }
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                buses = data.data || data;  // Handle ApiResponse wrapper
+
+                messageDiv.innerHTML = `<div class="success">✅ Успешно загружено ${buses.length} автобусов</div>`;
+                setTimeout(() => messageDiv.innerHTML = '', 3000);
+
+                updateMap();
+                updateBusList();
+                updateStats();
+
+            } catch (error) {
+                console.error('Error fetching buses:', error);
+                messageDiv.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+                document.getElementById('busList').innerHTML = `<div class="loading">Ошибка загрузки данных</div>`;
+            }
+        }
+
+        // Update map with bus markers
+        function updateMap() {
+            // Clear existing markers
+            Object.values(markers).forEach(marker => map.removeLayer(marker));
+            markers = {};
+
+            if (buses.length === 0) return;
+
+            // Create bus icon
+            const busIcon = L.divIcon({
+                className: 'bus-marker',
+                html: `<div style="
+                    background: #3498db;
+                    color: white;
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 18px;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                ">🚌</div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+
+            const movingBusIcon = L.divIcon({
+                className: 'bus-marker',
+                html: `<div style="
+                    background: #27ae60;
+                    color: white;
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 18px;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                ">🚌</div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+
+            // Add markers for each bus
+            buses.forEach(bus => {
+                if (bus.latitude && bus.longitude) {
+                    const isMoving = bus.speed && bus.speed > 0;
+                    const marker = L.marker([bus.latitude, bus.longitude], {
+                        icon: isMoving ? movingBusIcon : busIcon
+                    }).addTo(map);
+
+                    const popupContent = `
+                        <div style="min-width: 200px;">
+                            <h3 style="margin: 0 0 10px 0; color: #2c3e50;">${bus.licensePlate || 'N/A'}</h3>
+                            <p style="margin: 5px 0;"><strong>Device ID:</strong> ${bus.deviceId || 'N/A'}</p>
+                            <p style="margin: 5px 0;"><strong>Скорость:</strong> ${bus.speed ? bus.speed.toFixed(1) : '0'} км/ч</p>
+                            <p style="margin: 5px 0;"><strong>Координаты:</strong> ${bus.latitude?.toFixed(6)}, ${bus.longitude?.toFixed(6)}</p>
+                            <p style="margin: 5px 0;"><strong>Статус:</strong> ${isMoving ? '🟢 В движении' : '🔴 Остановлен'}</p>
+                            ${bus.fixTime ? `<p style="margin: 5px 0; font-size: 12px; color: #777;"><strong>Обновлено:</strong> ${new Date(bus.fixTime).toLocaleString('ru-RU')}</p>` : ''}
+                        </div>
+                    `;
+
+                    marker.bindPopup(popupContent);
+                    markers[bus.deviceId || bus.licensePlate] = marker;
+                }
+            });
+
+            // Fit map to show all markers
+            if (Object.keys(markers).length > 0) {
+                const group = L.featureGroup(Object.values(markers));
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+
+        // Update bus list
+        function updateBusList() {
+            const busList = document.getElementById('busList');
+
+            if (buses.length === 0) {
+                busList.innerHTML = '<div class="loading">Нет данных</div>';
+                return;
+            }
+
+            const html = buses.map((bus, index) => {
+                const isMoving = bus.speed && bus.speed > 0;
+                const status = isMoving ? '🟢' : '🔴';
+
+                return `
+                    <div class="bus-item" onclick="selectBus(${index})">
+                        <div class="bus-id">${status} ${bus.licensePlate || 'N/A'}</div>
+                        <div class="bus-info">
+                            Device: ${bus.deviceId || 'N/A'}<br>
+                            Скорость: ${bus.speed ? bus.speed.toFixed(1) : '0'} км/ч<br>
+                            ${bus.fixTime ? `Обновлено: ${new Date(bus.fixTime).toLocaleTimeString('ru-RU')}` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            busList.innerHTML = html;
+        }
+
+        // Update statistics
+        function updateStats() {
+            const totalBuses = buses.length;
+            const movingBuses = buses.filter(bus => bus.speed && bus.speed > 0).length;
+            const avgSpeed = buses.length > 0
+                ? (buses.reduce((sum, bus) => sum + (bus.speed || 0), 0) / buses.length).toFixed(1)
+                : 0;
+
+            document.getElementById('totalBuses').textContent = totalBuses;
+            document.getElementById('movingBuses').textContent = movingBuses;
+            document.getElementById('avgSpeed').textContent = avgSpeed + ' км/ч';
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('ru-RU');
+        }
+
+        // Select bus and show on map
+        function selectBus(index) {
+            const bus = buses[index];
+            const marker = markers[bus.deviceId || bus.licensePlate];
+
+            if (marker) {
+                map.setView(marker.getLatLng(), 16);
+                marker.openPopup();
+            }
+
+            // Update UI
+            document.querySelectorAll('.bus-item').forEach((item, i) => {
+                if (i === index) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+
+        // Auto refresh
+        function startAutoRefresh() {
+            const interval = parseInt(document.getElementById('refreshInterval').value) * 1000;
+
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+
+            autoRefreshInterval = setInterval(fetchBuses, interval);
+
+            document.getElementById('message').innerHTML = '<div class="success">Авто-обновление включено</div>';
+            setTimeout(() => document.getElementById('message').innerHTML = '', 2000);
+
+            // Fetch immediately
+            fetchBuses();
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+
+                document.getElementById('message').innerHTML = '<div class="error">Авто-обновление остановлено</div>';
+                setTimeout(() => document.getElementById('message').innerHTML = '', 2000);
+            }
+        }
+
+        // Initialize on page load
+        window.onload = function() {
+            initMap();
+
+            // Load saved token from localStorage
+            const savedToken = localStorage.getItem('jwt_token');
+            if (savedToken) {
+                document.getElementById('jwtToken').value = savedToken;
+                document.getElementById('message').innerHTML = '<div class="success">ℹ️ Токен загружен из кэша. Проверьте срок действия.</div>';
+                setTimeout(() => document.getElementById('message').innerHTML = '', 5000);
+            }
+        };
+    </script>
+</body>
+</html>
