@@ -77,7 +77,6 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
     }
 
     private Mono<Admin> applyUpdates(Admin admin, UpdateCommand command, String adminId) {
-        // Apply basic updates
         Admin updatedAdmin = admin.updateProfile(command.username(), command.fullName());
 
         if (command.newPassword() != null && !command.newPassword().trim().isEmpty()) {
@@ -91,7 +90,6 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
                 updatedAdmin = updatedAdmin.deactivate();
         }
 
-        // Process avatar if provided
         if (command.avatar() != null) {
             String oldAvatarPath = admin.getAvatar();
             Admin finalAdmin = updatedAdmin;
@@ -103,7 +101,6 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
                 .flatMap(newAvatarPath -> {
                     log.info("New avatar saved: {} - Deleting old avatar: {}", newAvatarPath, oldAvatarPath);
 
-                    // Delete old avatar if exists and is different from new one
                     return deleteOldAvatar(oldAvatarPath, newAvatarPath)
                         .then(Mono.just(finalAdmin.updateAvatar(newAvatarPath)))
                         .doOnSuccess(a -> log.info("Avatar updated successfully for admin: {}", adminId));
@@ -118,7 +115,6 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
             return Mono.empty();
         }
 
-        // If it's a base64 image, save it to storage
         if (avatar.startsWith("data:image/")) {
             return avatarStorageService.save(adminId, avatar)
                 .map(BaseImageStorageService.Result::originalPath)
@@ -129,12 +125,10 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
                 });
         }
 
-        // If it's already a URL, just return it
         return Mono.just(avatar);
     }
 
     private Mono<Void> deleteOldAvatar(String oldAvatarPath, String newAvatarPath) {
-        // Don't delete if old avatar doesn't exist or is same as new one
         if (oldAvatarPath == null || oldAvatarPath.isBlank() ||
             oldAvatarPath.equals(newAvatarPath) || oldAvatarPath.startsWith("data:")) {
             return Mono.empty();
@@ -145,7 +139,6 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
         return avatarStorageService.delete(oldAvatarPath)
             .doOnSuccess(v -> log.info("Old avatar deleted successfully: {}", oldAvatarPath))
             .onErrorResume(error -> {
-                // Don't fail the update if avatar deletion fails
                 log.warn("Failed to delete old avatar {}: {}", oldAvatarPath, error.getMessage());
                 return Mono.empty();
             });

@@ -48,7 +48,6 @@ public class DeleteAdminUseCase extends BaseUseCase<Mono<DeleteAdminUseCase.Requ
                     return adminRepository.findById(AdminId.of(idValue))
                             .switchIfEmpty(Mono.error(new AdminNotFoundException(idValue, "id", correlationId)))
                             .flatMap(admin -> {
-                                // Store avatar path before deletion
                                 String avatarPath = admin.getAvatar();
 
                                 Mono<Void> deleteMono;
@@ -68,7 +67,6 @@ public class DeleteAdminUseCase extends BaseUseCase<Mono<DeleteAdminUseCase.Requ
                                     deleteMono = adminRepository.deleteById(AdminId.of(idValue));
                                 }
 
-                                // Delete admin from DB, then delete avatar from storage
                                 return deleteMono
                                         .then(Mono.defer(() -> {
                                             if (avatarPath != null && !avatarPath.isBlank()) {
@@ -76,7 +74,6 @@ public class DeleteAdminUseCase extends BaseUseCase<Mono<DeleteAdminUseCase.Requ
                                                 return avatarStorageService.delete(avatarPath)
                                                         .doOnSuccess(v -> log.info("Avatar deleted successfully for admin: {}", idValue))
                                                         .onErrorResume(error -> {
-                                                            // Don't fail admin deletion if avatar deletion fails
                                                             log.warn("Failed to delete avatar for admin {}: {}", idValue, error.getMessage());
                                                             return Mono.empty();
                                                         });

@@ -44,7 +44,6 @@ public class UpdateAdminStatusUseCase  extends BaseUseCase<Mono<UpdateAdminStatu
            return adminRepository.findById(AdminId.of(request.id))
                            .switchIfEmpty(Mono.error(new AdminNotFoundException(request.id, "id", correlationId)))
                            .map(admin ->  {
-                               // Admin is immutable - activate()/deactivate() return new instances
                                if(request.status)
                                    return admin.activate();
                                else

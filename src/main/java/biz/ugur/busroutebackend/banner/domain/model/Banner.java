@@ -171,7 +171,6 @@ public class Banner extends AggregateRoot<Banner, BannerId> {
             changes.put("replyTime", replyTime);
         }
 
-        // Create new instance with updated values
         Banner updatedBanner = this.toBuilder()
                 .title(title)
                 .type(type)

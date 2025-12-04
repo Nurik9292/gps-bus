@@ -44,7 +44,6 @@ public class UpdateCurrentAdminProfileUseCase extends BaseUseCase<Mono<UpdateCur
                     return adminRepository.findById(request.adminId())
                             .switchIfEmpty(Mono.error(new AdminNotFoundException(adminId, "id", correlationId)))
                             .flatMap(admin -> {
-                                // Admin is immutable - updateProfile() returns a new instance
                                 Admin updatedAdmin = admin.updateProfile(request.username(), request.fullName());
                                 return adminRepository.save(updatedAdmin);
                             })

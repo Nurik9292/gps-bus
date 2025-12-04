@@ -18,7 +18,6 @@ public interface StopFavoriteRepository extends BaseRepository<StopFavorite, Sto
 
     Mono<Void> deleteByClientIdAndStopId(ClientId clientId, BusStopId stopId);
 
-    // Specification Pattern Support
     Flux<StopFavorite> findBySpecification(Specification<StopFavorite> specification);
 
     Flux<StopFavorite> findBySpecification(Specification<StopFavorite> specification, Pageable pageable);

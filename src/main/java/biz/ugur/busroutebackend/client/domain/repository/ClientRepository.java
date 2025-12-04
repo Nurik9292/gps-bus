@@ -27,7 +27,6 @@ public interface ClientRepository extends BaseRepository<Client, ClientId> {
 
     Mono<Long> countActiveClients();
 
-    // Specification Pattern Support
     Flux<Client> findBySpecification(Specification<Client> specification);
 
     Flux<Client> findBySpecification(Specification<Client> specification, Pageable pageable);

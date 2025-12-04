@@ -45,27 +45,18 @@ public class VehicleShiftScheduler {
         this.redisTemplate = redisTemplate;
     }
 
-    /**
-     * First shift starts at 07:00 - assigns vehicles to their first shift routes
-     */
     @Scheduled(cron = "0 0 7 * * *")
     public void applyFirstShift() {
         log.info("First shift starting at 07:00 - applying shift assignments");
         applyShiftAssignments(ShiftType.FIRST);
     }
 
-    /**
-     * Second shift starts at 14:00 - assigns vehicles to their second shift routes
-     */
     @Scheduled(cron = "0 0 14 * * *")
     public void applySecondShift() {
         log.info("Second shift starting at 14:00 - applying shift assignments");
         applyShiftAssignments(ShiftType.SECOND);
     }
 
-    /**
-     * Applies route assignments for the given shift type
-     */
     public void applyShiftAssignments(ShiftType shiftType) {
         if (!shiftChangeInProgress.compareAndSet(false, true)) {
             log.warn("Shift change already in progress, skipping");
@@ -145,9 +136,6 @@ public class VehicleShiftScheduler {
                 });
     }
 
-    /**
-     * Manually trigger shift change for current shift (useful for testing or manual intervention)
-     */
     public Mono<ShiftChangeResult> applyCurrentShift() {
         ShiftType currentShift = ShiftType.getCurrentShift();
         log.info("Manually applying current shift: {}", currentShift);

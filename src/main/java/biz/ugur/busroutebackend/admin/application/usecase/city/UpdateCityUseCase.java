@@ -43,7 +43,6 @@ public class UpdateCityUseCase extends BaseUseCase<Mono<CityUpdate>, CityResult>
             return cityRepository.findById(CityId.of(update.id()))
                     .switchIfEmpty(Mono.error(new IllegalArgumentException("City not found with ID: " + update.id())))
                     .flatMap(city -> {
-                        // Check if name is changing and if new name already exists
                         if (!city.getName().equals(update.name())) {
                             return cityRepository.existsByNameAndIdNot(update.name(), CityId.of(update.id()))
                                     .flatMap(exists -> {

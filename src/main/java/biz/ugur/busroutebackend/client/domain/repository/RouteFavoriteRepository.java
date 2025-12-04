@@ -18,7 +18,6 @@ public interface RouteFavoriteRepository extends BaseRepository<RouteFavorite, R
 
     Mono<Void> deleteByClientIdAndRouteId(ClientId clientId, BusRouteId routeId);
 
-    // Specification Pattern Support
     Flux<RouteFavorite> findBySpecification(Specification<RouteFavorite> specification);
 
     Flux<RouteFavorite> findBySpecification(Specification<RouteFavorite> specification, Pageable pageable);

@@ -67,7 +67,7 @@ public class AdminPrincipal implements UserDetails {
 
     @Override
     public String getPassword() {
-        return null; // JWT-based authentication, no password stored
+        return null;
     }
 
     @Override
