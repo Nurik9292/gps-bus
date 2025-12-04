@@ -22,9 +22,10 @@
 6. [Notification Management](#6-notification-management)
 7. [City Management](#7-city-management)
 8. [External Services Management](#8-external-services-management)
-9. [Common Response Format](#9-common-response-format)
-10. [Error Handling](#10-error-handling)
-11. [Pagination](#11-pagination)
+9. [Shift Assignment Management](#9-shift-assignment-management)
+10. [Common Response Format](#10-common-response-format)
+11. [Error Handling](#11-error-handling)
+12. [Pagination](#12-pagination)
 
 ---
 
@@ -1970,7 +1971,396 @@ Authorization: Bearer brt_abc123...
 
 ---
 
-## 9. Common Response Format
+## 9. Shift Assignment Management
+
+**Base Path**: `/api/v1/admin/shift-assignments`
+
+**Authentication**: Required for all endpoints
+
+Управление назначениями автобусов на маршруты по сменам. Система поддерживает две фиксированные смены:
+- **Первая смена (FIRST)**: 07:00 - 14:00
+- **Вторая смена (SECOND)**: 14:00 - 21:00
+
+Один автобус может быть назначен на разные маршруты в разные смены. Переключение маршрутов происходит автоматически по расписанию (cron: 07:00 и 14:00).
+
+### 9.1 Get All Shift Assignments
+
+Получение списка всех активных назначений.
+
+**Endpoint**: `GET /api/v1/admin/shift-assignments`
+
+**Response**: `200 OK`
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "assignments": [
+      {
+        "id": "uuid",
+        "vehicle_id": "vehicle-uuid",
+        "vehicle_license_plate": "1234 ABC",
+        "vehicle_device_id": "device-123",
+        "route_id": "route-uuid",
+        "route_number": "15",
+        "route_name": "Центр - Вокзал",
+        "shift_type": "FIRST",
+        "shift_start_time": "07:00:00",
+        "shift_end_time": "14:00:00",
+        "is_active": true,
+        "is_currently_active": true,
+        "created_at": "2025-12-04T10:00:00",
+        "updated_at": "2025-12-04T10:00:00"
+      },
+      {
+        "id": "uuid-2",
+        "vehicle_id": "vehicle-uuid",
+        "vehicle_license_plate": "1234 ABC",
+        "vehicle_device_id": "device-123",
+        "route_id": "route-uuid-2",
+        "route_number": "29",
+        "route_name": "Аэропорт - Центр",
+        "shift_type": "SECOND",
+        "shift_start_time": "14:00:00",
+        "shift_end_time": "21:00:00",
+        "is_active": true,
+        "is_currently_active": false,
+        "created_at": "2025-12-04T10:00:00",
+        "updated_at": "2025-12-04T10:00:00"
+      }
+    ],
+    "total_count": 2
+  }
+}
+```
+
+**Response Fields**:
+- `is_currently_active`: `true` если текущее время попадает в интервал смены и назначение активно
+
+---
+
+### 9.2 Get Shift Assignment by ID
+
+Получение назначения по ID.
+
+**Endpoint**: `GET /api/v1/admin/shift-assignments/{id}`
+
+**Path Parameters**:
+- `id` (string, required): ID назначения
+
+**Response**: `200 OK`
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "id": "uuid",
+    "vehicle_id": "vehicle-uuid",
+    "vehicle_license_plate": "1234 ABC",
+    "vehicle_device_id": "device-123",
+    "route_id": "route-uuid",
+    "route_number": "15",
+    "route_name": "Центр - Вокзал",
+    "shift_type": "FIRST",
+    "shift_start_time": "07:00:00",
+    "shift_end_time": "14:00:00",
+    "is_active": true,
+    "is_currently_active": true,
+    "created_at": "2025-12-04T10:00:00",
+    "updated_at": "2025-12-04T10:00:00"
+  }
+}
+```
+
+**Error Responses**:
+- `404 NOT FOUND`: Назначение не найдено
+```json
+{
+  "success": false,
+  "message": "Shift assignment not found: {id}",
+  "data": null
+}
+```
+
+---
+
+### 9.3 Get Vehicle Shifts
+
+Получение обеих смен для конкретного автобуса.
+
+**Endpoint**: `GET /api/v1/admin/shift-assignments/vehicle/{vehicleId}`
+
+**Path Parameters**:
+- `vehicleId` (string, required): ID автобуса
+
+**Response**: `200 OK`
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "vehicle_id": "vehicle-uuid",
+    "vehicle_license_plate": "1234 ABC",
+    "vehicle_device_id": "device-123",
+    "first_shift": {
+      "id": "uuid-1",
+      "vehicle_id": "vehicle-uuid",
+      "vehicle_license_plate": "1234 ABC",
+      "vehicle_device_id": "device-123",
+      "route_id": "route-uuid-15",
+      "route_number": "15",
+      "route_name": "Центр - Вокзал",
+      "shift_type": "FIRST",
+      "shift_start_time": "07:00:00",
+      "shift_end_time": "14:00:00",
+      "is_active": true,
+      "is_currently_active": true,
+      "created_at": "2025-12-04T10:00:00",
+      "updated_at": "2025-12-04T10:00:00"
+    },
+    "second_shift": {
+      "id": "uuid-2",
+      "vehicle_id": "vehicle-uuid",
+      "vehicle_license_plate": "1234 ABC",
+      "vehicle_device_id": "device-123",
+      "route_id": "route-uuid-29",
+      "route_number": "29",
+      "route_name": "Аэропорт - Центр",
+      "shift_type": "SECOND",
+      "shift_start_time": "14:00:00",
+      "shift_end_time": "21:00:00",
+      "is_active": true,
+      "is_currently_active": false,
+      "created_at": "2025-12-04T10:00:00",
+      "updated_at": "2025-12-04T10:00:00"
+    }
+  }
+}
+```
+
+**Notes**:
+- `first_shift` или `second_shift` может быть `null` если назначение для этой смены не создано
+- Если автобус назначен только на одну смену, другая смена будет содержать пустой объект с `id: null`
+
+**Error Responses**:
+- `404 NOT FOUND`: Автобус не найден
+```json
+{
+  "success": false,
+  "message": "Vehicle not found with id: {vehicleId}",
+  "data": null
+}
+```
+
+---
+
+### 9.4 Create Shift Assignment
+
+Создание нового назначения автобуса на маршрут для конкретной смены.
+
+**Endpoint**: `POST /api/v1/admin/shift-assignments`
+
+**Request Body**:
+```json
+{
+  "vehicle_id": "vehicle-uuid",      // required
+  "route_id": "route-uuid",          // required
+  "shift_type": "FIRST"              // required: "FIRST" or "SECOND"
+}
+```
+
+**Response**: `201 Created`
+```json
+{
+  "success": true,
+  "message": "Created successfully",
+  "data": {
+    "id": "generated-uuid",
+    "vehicle_id": "vehicle-uuid",
+    "vehicle_license_plate": "1234 ABC",
+    "vehicle_device_id": "device-123",
+    "route_id": "route-uuid",
+    "route_number": "15",
+    "route_name": "Центр - Вокзал",
+    "shift_type": "FIRST",
+    "shift_start_time": "07:00:00",
+    "shift_end_time": "14:00:00",
+    "is_active": true,
+    "is_currently_active": true,
+    "created_at": "2025-12-04T10:00:00",
+    "updated_at": "2025-12-04T10:00:00"
+  }
+}
+```
+
+**Validation Rules**:
+- `vehicle_id`: required, must exist in database
+- `route_id`: required, must exist in database
+- `shift_type`: required, must be `"FIRST"` or `"SECOND"`
+- One vehicle can have only one assignment per shift (unique constraint)
+
+**Validation Errors**:
+
+**Vehicle not found** (400):
+```json
+{
+  "success": false,
+  "message": "Vehicle not found: {vehicleId}",
+  "error": {
+    "code": "TRANSPORT.SHIFT_ASSIGNMENT_VALIDATION"
+  }
+}
+```
+
+**Route not found** (400):
+```json
+{
+  "success": false,
+  "message": "Route not found: {routeId}",
+  "error": {
+    "code": "TRANSPORT.SHIFT_ASSIGNMENT_VALIDATION"
+  }
+}
+```
+
+**Assignment already exists** (400):
+```json
+{
+  "success": false,
+  "message": "Vehicle {vehicleId} already has assignment for shift FIRST",
+  "error": {
+    "code": "TRANSPORT.SHIFT_ASSIGNMENT_VALIDATION"
+  }
+}
+```
+
+---
+
+### 9.5 Update Shift Assignment
+
+Обновление маршрута в существующем назначении.
+
+**Endpoint**: `PUT /api/v1/admin/shift-assignments/{id}`
+
+**Path Parameters**:
+- `id` (string, required): ID назначения
+
+**Request Body**:
+```json
+{
+  "route_id": "new-route-uuid"       // required
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "id": "uuid",
+    "vehicle_id": "vehicle-uuid",
+    "vehicle_license_plate": "1234 ABC",
+    "vehicle_device_id": "device-123",
+    "route_id": "new-route-uuid",
+    "route_number": "7",
+    "route_name": "Новый маршрут",
+    "shift_type": "FIRST",
+    "shift_start_time": "07:00:00",
+    "shift_end_time": "14:00:00",
+    "is_active": true,
+    "is_currently_active": true,
+    "created_at": "2025-12-04T10:00:00",
+    "updated_at": "2025-12-04T11:00:00"
+  }
+}
+```
+
+**Notes**:
+- Изменение `shift_type` не поддерживается - для изменения смены нужно удалить текущее назначение и создать новое
+- Изменения применяются при следующем переключении смены (07:00 или 14:00)
+
+---
+
+### 9.6 Delete Shift Assignment
+
+Удаление назначения.
+
+**Endpoint**: `DELETE /api/v1/admin/shift-assignments/{id}`
+
+**Path Parameters**:
+- `id` (string, required): ID назначения
+
+**Response**: `204 No Content`
+
+**Notes**:
+- Удаление необратимо
+- Автобус перестанет автоматически назначаться на маршрут в эту смену
+
+---
+
+### 9.7 Shift Types Reference
+
+| Shift Type | Start Time | End Time | Description |
+|------------|------------|----------|-------------|
+| `FIRST` | 07:00 | 14:00 | Первая (утренняя) смена |
+| `SECOND` | 14:00 | 21:00 | Вторая (дневная/вечерняя) смена |
+
+### 9.8 Automatic Shift Switching (Cron Jobs)
+
+Система автоматически переключает маршруты автобусов по расписанию:
+
+| Time | Action |
+|------|--------|
+| 07:00 | Применить назначения первой смены (FIRST) |
+| 14:00 | Применить назначения второй смены (SECOND) |
+
+**Алгоритм переключения**:
+1. Получить все активные назначения для текущей смены
+2. Для каждого назначения:
+   - Найти автобус (Vehicle)
+   - Обновить `assigned_route_id` автобуса
+   - Обновить кешированный `route_number`
+   - Сохранить изменения в БД
+3. Статистика сохраняется в Redis
+
+**Scheduler Location**: `src/main/java/biz/ugur/busroutebackend/transport/scheduler/VehicleShiftScheduler.java`
+
+### 9.9 Use Case Example
+
+**Сценарий**: Автобус `1234 ABC` работает на маршруте 15 утром и на маршруте 29 вечером.
+
+**Step 1**: Создать назначение на первую смену
+```bash
+curl -X POST /api/v1/admin/shift-assignments \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "vehicle_id": "vehicle-uuid",
+    "route_id": "route-15-uuid",
+    "shift_type": "FIRST"
+  }'
+```
+
+**Step 2**: Создать назначение на вторую смену
+```bash
+curl -X POST /api/v1/admin/shift-assignments \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "vehicle_id": "vehicle-uuid",
+    "route_id": "route-29-uuid",
+    "shift_type": "SECOND"
+  }'
+```
+
+**Результат**:
+- В 07:00 автобус автоматически назначится на маршрут 15
+- В 14:00 автобус автоматически переключится на маршрут 29
+
+---
+
+## 10. Common Response Format
 
 Все успешные ответы API следуют единому формату:
 
@@ -1995,7 +2385,7 @@ Authorization: Bearer brt_abc123...
 
 ---
 
-## 10. Error Handling
+## 11. Error Handling
 
 В случае ошибки API возвращает следующий формат:
 
@@ -2063,7 +2453,7 @@ Authorization: Bearer brt_abc123...
 
 ---
 
-## 11. Pagination
+## 12. Pagination
 
 Endpoints с поддержкой пагинации принимают следующие параметры:
 
@@ -2174,12 +2564,14 @@ API следует принципам Clean Architecture и DDD:
 | Notifications | `/api/v1/admin/notifications` | 6 |
 | Cities | `/api/v1/admin/cities` | 6 |
 | External Services | `/api/v1/admin/external-services` | 7 |
+| Shift Assignments | `/api/v1/admin/shift-assignments` | 6 |
 
-**Total Endpoints**: 49
+**Total Endpoints**: 55
 
 **Notes**:
 - Banner endpoints now include `reply_time` field support for POPUP type banners (v1.2)
 - Notification Management added (v1.3)
+- Shift Assignment Management added (v1.4)
 
 ---
 
@@ -2193,6 +2585,7 @@ API следует принципам Clean Architecture и DDD:
 - `AdminNotificationController`: `src/main/java/biz/ugur/busroutebackend/interfaces/rest/admin/V1/controller/AdminNotificationController.java`
 - `AdminCityController`: `src/main/java/biz/ugur/busroutebackend/interfaces/rest/admin/V1/controller/AdminCityController.java`
 - `AdminExternalServicesController`: `src/main/java/biz/ugur/busroutebackend/interfaces/rest/admin/V1/controller/AdminExternalServicesController.java`
+- `AdminShiftAssignmentController`: `src/main/java/biz/ugur/busroutebackend/interfaces/rest/admin/V1/controller/AdminShiftAssignmentController.java`
 
 ---
 
@@ -2207,11 +2600,12 @@ API следует принципам Clean Architecture и DDD:
 
 ---
 
-**Documentation Version**: 1.3
-**Last Updated**: 2025-12-02
+**Documentation Version**: 1.4
+**Last Updated**: 2025-12-04
 **API Version**: V1
 
 **Changelog**:
+- **v1.4** (2025-12-04): Added Shift Assignment Management section (6 endpoints) - автоматическое переключение маршрутов автобусов по сменам (07:00/14:00)
 - **v1.3** (2025-12-02): Added Notification Management section (6 endpoints)
 - **v1.2** (2025-11-18): Added `reply_time` field for Banner Management (required for `popup` type banners)
 - **v1.1** (2025-11-13): Added External Services Management section

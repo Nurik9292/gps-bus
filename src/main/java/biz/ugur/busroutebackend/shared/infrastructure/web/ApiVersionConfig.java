@@ -21,6 +21,7 @@ public class ApiVersionConfig {
     public static final String Banners = "/banners";
     public static final String NOTIFICATIONS = "/notifications";
     public static final String EXTERNAL_SERVICES = "/external-services";
+    public static final String SHIFT_ASSIGNMENTS = "/shift-assignments";
 
     public static final String V1_MOBILE = API_V1 + MOBILE;
     public static final String V1_ADMIN = API_V1 + ADMIN;
@@ -46,6 +47,8 @@ public class ApiVersionConfig {
     public static final String V1_ADMIN_STOPS = V1_ADMIN + STOPS;
     public static final String V1_ADMIN_USERS = V1_ADMIN + USERS;
     public static final String V1_ADMIN_EXTERNAL_SERVICES = V1_ADMIN + EXTERNAL_SERVICES;
+    public static final String V1_ADMIN_SHIFT_ASSIGNMENTS = V1_ADMIN + SHIFT_ASSIGNMENTS;
+    public static final String V1_ADMIN_VEHICLES = V1_ADMIN + VEHICLES;
 
 
     public static final String V1_CLIENT_AUTH = V1_CLIENT + AUTH;

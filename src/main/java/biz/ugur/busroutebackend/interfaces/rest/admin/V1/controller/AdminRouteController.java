@@ -5,6 +5,8 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.route.BusRouteU
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.route.BusRouteListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.route.BusRouteResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.route.CheckRouteNumberResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.route.RouteSelectOption;
+import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
@@ -14,6 +16,8 @@ import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN_ROUTES;
 
@@ -29,6 +33,7 @@ public class AdminRouteController extends BasePaginatedController {
     private final CheckRouteNumberUseCase checkRouteNumberUseCase;
     private final GetAllBusRoutesUseCase getAllRoutesUseCase;
     private final GetRouteByIdUseCase getRouteByIdUseCase;
+    private final BusRouteRepository busRouteRepository;
 
 
     public AdminRouteController(CreateBusRouteUseCase createBusRouteUseCase,
@@ -38,6 +43,7 @@ public class AdminRouteController extends BasePaginatedController {
                                 CheckRouteNumberUseCase checkRouteNumberUseCase,
                                 GetAllBusRoutesUseCase getAllRoutesUseCase,
                                 GetRouteByIdUseCase getRouteByIdUseCase,
+                                BusRouteRepository busRouteRepository,
                                 MessageSource messageSource) {
         super(messageSource);
         this.createBusRouteUseCase = createBusRouteUseCase;
@@ -47,6 +53,7 @@ public class AdminRouteController extends BasePaginatedController {
         this.checkRouteNumberUseCase = checkRouteNumberUseCase;
         this.getAllRoutesUseCase = getAllRoutesUseCase;
         this.getRouteByIdUseCase = getRouteByIdUseCase;
+        this.busRouteRepository = busRouteRepository;
     }
 
     @Override
@@ -77,7 +84,22 @@ public class AdminRouteController extends BasePaginatedController {
               .map(BusRouteListResponse::fromResult));
     }
 
-    @GetMapping("/{id}")
+    /**
+     * Lightweight endpoint for select boxes.
+     * Returns only id, routeNumber, and routeName for all active routes.
+     */
+    @GetMapping("/select-options")
+    public Mono<ResponseEntity<ApiResponse<List<RouteSelectOption>>>> getSelectOptions() {
+        return ok(busRouteRepository.findActiveRoutes()
+                .map(route -> new RouteSelectOption(
+                        route.getId().getValue(),
+                        route.getRouteNumber(),
+                        route.getRouteName()
+                ))
+                .collectList());
+    }
+
+    @GetMapping("/{id:[a-f0-9\\-]{36}}")
     public Mono<ResponseEntity<ApiResponse<BusRouteResponse>>> getRouteById(@PathVariable String id) {
 
         return ok(Mono.just(new GetRouteByIdUseCase.Query(id))
@@ -95,7 +117,7 @@ public class AdminRouteController extends BasePaginatedController {
     }
 
 
-    @PutMapping("/{routeId}")
+    @PutMapping("/{routeId:[a-f0-9\\-]{36}}")
     public Mono<ResponseEntity<ApiResponse<BusRouteResponse>>> updateRoute(@PathVariable String routeId,
             @Valid @RequestBody BusRouteUpdateRequest request) {
 
@@ -105,7 +127,7 @@ public class AdminRouteController extends BasePaginatedController {
     }
 
 
-    @DeleteMapping("/{routeId}")
+    @DeleteMapping("/{routeId:[a-f0-9\\-]{36}}")
     public Mono<ResponseEntity<Void>> deleteRoute(@PathVariable String routeId) {
 
         return deleteBusRouteUseCase.execute(routeId)
