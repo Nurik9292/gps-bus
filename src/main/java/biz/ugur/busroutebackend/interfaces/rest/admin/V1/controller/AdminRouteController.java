@@ -99,7 +99,7 @@ public class AdminRouteController extends BasePaginatedController {
                 .collectList());
     }
 
-    @GetMapping("/{id:[a-f0-9\\-]{36}}")
+    @GetMapping("/{id}")
     public Mono<ResponseEntity<ApiResponse<BusRouteResponse>>> getRouteById(@PathVariable String id) {
 
         return ok(Mono.just(new GetRouteByIdUseCase.Query(id))
@@ -117,7 +117,7 @@ public class AdminRouteController extends BasePaginatedController {
     }
 
 
-    @PutMapping("/{routeId:[a-f0-9\\-]{36}}")
+    @PutMapping("/{routeId}")
     public Mono<ResponseEntity<ApiResponse<BusRouteResponse>>> updateRoute(@PathVariable String routeId,
             @Valid @RequestBody BusRouteUpdateRequest request) {
 
@@ -127,7 +127,7 @@ public class AdminRouteController extends BasePaginatedController {
     }
 
 
-    @DeleteMapping("/{routeId:[a-f0-9\\-]{36}}")
+    @DeleteMapping("/{routeId}")
     public Mono<ResponseEntity<Void>> deleteRoute(@PathVariable String routeId) {
 
         return deleteBusRouteUseCase.execute(routeId)
