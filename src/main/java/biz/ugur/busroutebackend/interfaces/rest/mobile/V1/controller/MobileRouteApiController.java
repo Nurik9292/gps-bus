@@ -1,11 +1,13 @@
 package biz.ugur.busroutebackend.interfaces.rest.mobile.V1.controller;
 
 import biz.ugur.busroutebackend.client.application.usecase.RouteIsFavoriteUseCase;
+import biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response.MobileRouteAlternativesResponse;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response.MobileRouteListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response.MobileRouteResponse;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteStops;
 import biz.ugur.busroutebackend.transport.application.usecase.route.*;
+import biz.ugur.busroutebackend.transport.application.usecase.routealternative.GetActiveAlternativesForRouteUseCase;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,9 +24,9 @@ public class MobileRouteApiController extends BaseMobileController {
     private final GetAllBusRoutesUseCase getAllRoutesUseCase;
     private final GetRouteByNumberUseCase getRouteByNumberUseCase;
     private final GetRouteByIdUseCase getRouteByIdUseCase;
-
     private final GetAllBusRoutesWithPaginationUseCase getAllBusRoutesWithPaginationUseCase;
     private final GetRouteStopsUseCase getRouteStopsUseCase;
+    private final GetActiveAlternativesForRouteUseCase getActiveAlternativesForRouteUseCase;
 
     protected MobileRouteApiController(MessageSource messageSource,
                                        RequestedContentTypeResolver requestedContentTypeResolver,
@@ -33,13 +35,15 @@ public class MobileRouteApiController extends BaseMobileController {
                                        GetRouteByIdUseCase getRouteByIdUseCase,
                                        RouteIsFavoriteUseCase routeIsFavoriteUseCase,
                                        GetAllBusRoutesWithPaginationUseCase getAllBusRoutesWithPaginationUseCase,
-                                       GetRouteStopsUseCase getRouteStopsUseCase) {
+                                       GetRouteStopsUseCase getRouteStopsUseCase,
+                                       GetActiveAlternativesForRouteUseCase getActiveAlternativesForRouteUseCase) {
         super(messageSource, requestedContentTypeResolver, routeIsFavoriteUseCase);
         this.getAllRoutesUseCase = getAllRoutesUseCase;
         this.getRouteByNumberUseCase = getRouteByNumberUseCase;
         this.getRouteByIdUseCase = getRouteByIdUseCase;
         this.getAllBusRoutesWithPaginationUseCase = getAllBusRoutesWithPaginationUseCase;
         this.getRouteStopsUseCase = getRouteStopsUseCase;
+        this.getActiveAlternativesForRouteUseCase = getActiveAlternativesForRouteUseCase;
     }
 
     @Override
@@ -140,5 +144,31 @@ public class MobileRouteApiController extends BaseMobileController {
     @GetMapping("/{routeId}/stops")
     public Mono<ResponseEntity<ApiResponse<RouteStops>>> getStopsByRoute(@PathVariable String routeId) {
         return ok(getRouteStopsUseCase.execute(Mono.just(routeId)));
+    }
+
+
+    @GetMapping("/{routeId}/alternatives")
+    public Mono<ResponseEntity<ApiResponse<MobileRouteAlternativesResponse>>> getRouteAlternatives(@PathVariable String routeId) {
+        return ok(getCurrentPrincipal().flatMap(principal ->
+                Mono.just(new GetRouteByIdUseCase.Query(routeId))
+                        .as(getRouteByIdUseCase::execute)
+                        .flatMap(primaryRoute ->
+                                getActiveAlternativesForRouteUseCase.execute(new GetActiveAlternativesForRouteUseCase.Request(routeId))
+                                        .flatMap(routeData ->
+                                                routeIsFavoriteUseCase
+                                                        .execute(new RouteIsFavoriteUseCase.Request(principal.getClientId(), routeData.id()))
+                                                        .map(isFavorite -> MobileRouteResponse.from(routeData, isFavorite))
+                                        )
+                                        .collectList()
+                                        .map(alternatives -> MobileRouteAlternativesResponse.builder()
+                                                .primaryRouteId(routeId)
+                                                .primaryRouteNumber(primaryRoute.routeNumber())
+                                                .primaryRouteIsActive(primaryRoute.isActive())
+                                                .alternatives(alternatives)
+                                                .alternativesCount(alternatives.size())
+                                                .build()
+                                        )
+                        )
+        ));
     }
 }
