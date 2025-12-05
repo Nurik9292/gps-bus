@@ -304,9 +304,9 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
             throw new RouteValidationException("routeNumber", "Route number cannot be null or empty");
         }
         String normalized = routeNumber.trim().toUpperCase();
-        if (!normalized.matches("\\d{1,3}[A-Z]?")) {
+        if (!normalized.matches("\\d{1,3}[A-Z]{0,3}")) {
             throw new RouteValidationException("routeNumber",
-                    "Invalid route number format. Expected: '29' or '7A', got: " + routeNumber);
+                    "Invalid route number format. Expected: '29', '7A' or '7AL', got: " + routeNumber);
         }
         return normalized;
     }

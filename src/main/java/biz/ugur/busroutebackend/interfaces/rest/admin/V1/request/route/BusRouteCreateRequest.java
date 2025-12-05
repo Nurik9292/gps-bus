@@ -12,7 +12,7 @@ import java.util.List;
 public class BusRouteCreateRequest {
 
     @NotBlank(message = "Route number is required")
-    @Pattern(regexp = "^[0-9]{1,3}[A-Z]?$", message = "Route number format should be like '29' or '7A'")
+    @Pattern(regexp = "^[0-9]{1,3}[A-Z]{0,3}$", message = "Route number format should be like '29', '7A' or '7AL'")
     @JsonProperty("route_number")
     private String routeNumber;
 
