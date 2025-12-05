@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.route;
 
 import biz.ugur.busroutebackend.transport.application.dto.route.CreateRoute;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.*;
 import lombok.Data;
@@ -44,13 +45,15 @@ public class BusRouteCreateRequest {
     private String cityId;
 
     @JsonProperty("forward_stops")
+    @JsonAlias("forward_stops_ids")
     private List<String> forwardStopIds;
 
     @JsonProperty("backward_stops")
+    @JsonAlias("backward_stops_ids")
     private List<String> backwardStopIds;
 
     @JsonProperty("forward_geometry")
-    private List<List<Double>> forwardGeometry; // [[lat, lon], [lat, lon], ...]
+    private List<List<Double>> forwardGeometry;
 
     @JsonProperty("backward_geometry")
     private List<List<Double>> backwardGeometry;
