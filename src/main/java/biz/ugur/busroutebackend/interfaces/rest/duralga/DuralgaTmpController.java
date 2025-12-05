@@ -1,8 +1,11 @@
 package biz.ugur.busroutebackend.interfaces.rest.duralga;
 
+import biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response.MobileRouteAlternativesResponse;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response.MobileRouteResponse;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
+import biz.ugur.busroutebackend.transport.application.usecase.route.GetRouteByIdUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.route.GetRouteByNumberUseCase;
+import biz.ugur.busroutebackend.transport.application.usecase.routealternative.GetActiveAlternativesForRouteUseCase;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,15 +19,21 @@ import reactor.core.publisher.Mono;
 public class DuralgaTmpController extends BaseController {
 
     private final GetRouteByNumberUseCase getRouteByNumberUseCase;
+    private final GetRouteByIdUseCase getRouteByIdUseCase;
+    private final GetActiveAlternativesForRouteUseCase getActiveAlternativesForRouteUseCase;
 
     public DuralgaTmpController(MessageSource messageSource,
-                                GetRouteByNumberUseCase getRouteByNumberUseCase) {
+                                GetRouteByNumberUseCase getRouteByNumberUseCase,
+                                GetRouteByIdUseCase getRouteByIdUseCase,
+                                GetActiveAlternativesForRouteUseCase getActiveAlternativesForRouteUseCase) {
         super(messageSource);
         this.getRouteByNumberUseCase = getRouteByNumberUseCase;
+        this.getRouteByIdUseCase = getRouteByIdUseCase;
+        this.getActiveAlternativesForRouteUseCase = getActiveAlternativesForRouteUseCase;
     }
 
     @GetMapping("/{routeNumber}")
-    public Mono<ResponseEntity<BaseController.ApiResponse<MobileRouteResponse>>> getRouteByNumber(
+    public Mono<ResponseEntity<ApiResponse<MobileRouteResponse>>> getRouteByNumber(
             @PathVariable String routeNumber
     ) {
         return Mono.just(new GetRouteByNumberUseCase.Query(routeNumber))
@@ -37,5 +46,29 @@ public class DuralgaTmpController extends BaseController {
     @Override
     protected String getControllerName() {
         return DuralgaTmpController.class.getSimpleName();
+    }
+
+    @GetMapping("/{routeId}/alternatives")
+    public Mono<ResponseEntity<ApiResponse<MobileRouteAlternativesResponse>>> getRouteAlternatives(@PathVariable String routeId) {
+        return Mono.just(new GetRouteByIdUseCase.Query(routeId))
+                .as(getRouteByIdUseCase::execute)
+                .flatMap(primaryRoute ->
+                        getActiveAlternativesForRouteUseCase.execute(
+                                        new GetActiveAlternativesForRouteUseCase.Request(routeId)
+                                )
+                                .map(routeData -> MobileRouteResponse.from(routeData, false))
+                                .collectList()
+                                .map(alternatives ->
+                                        MobileRouteAlternativesResponse.builder()
+                                                .primaryRouteId(routeId)
+                                                .primaryRouteNumber(primaryRoute.routeNumber())
+                                                .primaryRouteIsActive(primaryRoute.isActive())
+                                                .alternatives(alternatives)
+                                                .alternativesCount(alternatives.size())
+                                                .build()
+                                )
+                )
+                .map(ApiResponse::success)
+                .map(ResponseEntity::ok);
     }
 }
