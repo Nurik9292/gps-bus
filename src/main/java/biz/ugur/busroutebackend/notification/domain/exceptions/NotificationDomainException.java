@@ -1,13 +1,19 @@
 package biz.ugur.busroutebackend.notification.domain.exceptions;
 
+import biz.ugur.busroutebackend.shared.domain.exception.AbstractDomainException;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 
-public class NotificationDomainException extends RuntimeException {
+public abstract class NotificationDomainException extends AbstractDomainException {
 
-    public NotificationDomainException(String message) {
-        super(message);
+    protected NotificationDomainException(String errorCode, String message) {
+        super("NOTIFICATION." + errorCode, message);
     }
 
-    public NotificationDomainException(String message, Throwable cause) {
-        super(message, cause);
+    protected NotificationDomainException(String errorCode, String message, Severity severity) {
+        super("NOTIFICATION." + errorCode, message, severity);
+    }
+
+    protected NotificationDomainException(String errorCode, String message, Severity severity, CorrelationId correlationId) {
+        super("NOTIFICATION." + errorCode, message, severity, correlationId);
     }
 }

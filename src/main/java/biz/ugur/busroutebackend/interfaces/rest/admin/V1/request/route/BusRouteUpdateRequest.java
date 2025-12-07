@@ -11,7 +11,7 @@ import java.util.List;
 public class BusRouteUpdateRequest {
 
     @NotBlank(message = "Route number is required")
-    @Pattern(regexp = "^[0-9]{1,3}[A-Z]?$", message = "Route number format should be like '29' or '7A'")
+    @Pattern(regexp = "^[0-9]{1,3}[A-Z]{0,5}$", message = "Route number format should be like '29', '7A' or '7ALT'")
     @JsonProperty("route_number")
     private String routeNumber;
 

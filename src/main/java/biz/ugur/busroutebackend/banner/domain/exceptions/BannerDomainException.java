@@ -1,13 +1,19 @@
 package biz.ugur.busroutebackend.banner.domain.exceptions;
 
+import biz.ugur.busroutebackend.shared.domain.exception.AbstractDomainException;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 
-public class BannerDomainException extends RuntimeException {
+public abstract class BannerDomainException extends AbstractDomainException {
 
-    public BannerDomainException(String message) {
-        super(message);
+    protected BannerDomainException(String errorCode, String message) {
+        super("BANNER." + errorCode, message);
     }
 
-    public BannerDomainException(String message, Throwable cause) {
-        super(message, cause);
+    protected BannerDomainException(String errorCode, String message, Severity severity) {
+        super("BANNER." + errorCode, message, severity);
+    }
+
+    protected BannerDomainException(String errorCode, String message, Severity severity, CorrelationId correlationId) {
+        super("BANNER." + errorCode, message, severity, correlationId);
     }
 }
