@@ -45,6 +45,18 @@ public abstract class BaseController {
     }
 
 
+    protected <T> Mono<ResponseEntity<ApiResponse<T>>> okOrNotFound(Mono<T> data) {
+        Objects.requireNonNull(data, "Data mono cannot be null");
+
+        return data.map(d -> ResponseEntity.ok(ApiResponse.success(d)))
+                .switchIfEmpty(Mono.just(new ResponseEntity<>(
+                        ApiResponse.error("NOT_FOUND", "Resource not found"),
+                        HttpStatus.NOT_FOUND)))
+                .doOnSuccess(response -> logResponse("OK_OR_NOT_FOUND", response))
+                .doOnError(error -> logError("OK_OR_NOT_FOUND", error));
+    }
+
+
 
     protected <T> Mono<ResponseEntity<ApiResponse<T>>> created(Mono<T> data) {
         Objects.requireNonNull(data, "Data mono cannot be null");
