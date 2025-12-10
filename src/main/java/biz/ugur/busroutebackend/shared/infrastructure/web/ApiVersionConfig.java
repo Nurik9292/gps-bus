@@ -23,8 +23,11 @@ public class ApiVersionConfig {
     public static final String EXTERNAL_SERVICES = "/external-services";
     public static final String SHIFT_ASSIGNMENTS = "/shift-assignments";
     public static final String ROUTE_ALTERNATIVES = "/route-alternatives";
+    public static final String LEGAL = "/legal";
+    public static final String DASHBOARD = "/dashboard";
 
     public static final String V1_MOBILE = API_V1 + MOBILE;
+    public static final String V1_LEGAL = API_V1 + LEGAL;
     public static final String V1_ADMIN = API_V1 + ADMIN;
     public static final String V1_CLIENT = API_V1 + CLIENT;
     public static final String V1_ROUTING = API_V1 + ROUTING;
@@ -51,6 +54,7 @@ public class ApiVersionConfig {
     public static final String V1_ADMIN_SHIFT_ASSIGNMENTS = V1_ADMIN + SHIFT_ASSIGNMENTS;
     public static final String V1_ADMIN_VEHICLES = V1_ADMIN + VEHICLES;
     public static final String V1_ADMIN_ROUTE_ALTERNATIVES = V1_ADMIN + ROUTE_ALTERNATIVES;
+    public static final String V1_ADMIN_DASHBOARD = V1_ADMIN + DASHBOARD;
 
 
     public static final String V1_CLIENT_AUTH = V1_CLIENT + AUTH;

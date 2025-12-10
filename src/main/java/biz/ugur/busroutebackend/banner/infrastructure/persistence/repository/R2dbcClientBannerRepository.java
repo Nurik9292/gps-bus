@@ -24,13 +24,13 @@ public class R2dbcClientBannerRepository extends BannerBaseRepository implements
         WHERE is_active = true
         AND (start_date IS NULL OR start_date <= NOW())
         AND (end_date IS NULL OR end_date >= NOW())
-        AND type = :type
+        AND LOWER(type) = LOWER(:type)
         ORDER BY display_order ASC, created_at DESC
         LIMIT :limit OFFSET :offset
         """;
 
         return databaseClient.sql(sql)
-                .bind("type", type.getValue().toUpperCase())
+                .bind("type", type.getValue())
                 .bind("limit", pageable.getPageSize())
                 .bind("offset", pageable.getOffset())
                 .map(getRowMapper())
@@ -41,7 +41,7 @@ public class R2dbcClientBannerRepository extends BannerBaseRepository implements
     public Mono<Long> countByType(BannerType type) {
         String sql = """
             SELECT COUNT(*) FROM banners
-            WHERE type = :type
+            WHERE LOWER(type) = LOWER(:type)
             AND is_active = true
             AND (start_date IS NULL OR start_date <= NOW())
             AND (end_date IS NULL OR end_date >= NOW())

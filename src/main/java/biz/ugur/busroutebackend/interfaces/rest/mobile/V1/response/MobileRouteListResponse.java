@@ -7,10 +7,6 @@ import lombok.Data;
 
 import java.util.List;
 
-/**
- * REST response DTO for mobile route list with pagination.
- * Part of the Interfaces layer (Mobile API).
- */
 @Data
 @Builder
 public class MobileRouteListResponse {

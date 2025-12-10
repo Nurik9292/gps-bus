@@ -51,7 +51,7 @@ public class R2dbcAdminBannerRepository extends BannerBaseRepository implements 
         String sql = """
             SELECT * FROM banners
             WHERE is_active = true
-            AND type = :type
+            AND LOWER(type) = LOWER(:type)
             AND (start_date IS NULL OR start_date <= NOW())
             AND (end_date IS NULL OR end_date >= NOW())
             ORDER BY display_order ASC, created_at DESC
@@ -67,7 +67,7 @@ public class R2dbcAdminBannerRepository extends BannerBaseRepository implements 
     public Mono<Long> countByType(biz.ugur.busroutebackend.banner.domain.enums.BannerType type) {
         String sql = """
             SELECT COUNT(*) FROM banners
-            WHERE type = :type
+            WHERE LOWER(type) = LOWER(:type)
             AND is_active = true
             AND (start_date IS NULL OR start_date <= NOW())
             AND (end_date IS NULL OR end_date >= NOW())
