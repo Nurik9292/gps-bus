@@ -15,8 +15,8 @@ public class VehicleValidationService {
             return false;
         }
 
-        if (gpsPosition.getDeviceId() == null || gpsPosition.getDeviceId().trim().isEmpty()) {
-            log.trace("GPS position has empty device ID");
+        if (gpsPosition.getDeviceId() == null || gpsPosition.getDeviceId().isBlank()) {
+            log.debug("GPS position has invalid device ID: {}", gpsPosition.getDeviceId());
             return false;
         }
 

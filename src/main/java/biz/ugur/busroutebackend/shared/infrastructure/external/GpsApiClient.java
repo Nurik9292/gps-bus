@@ -164,16 +164,20 @@ public class GpsApiClient {
                         .filter(this::isRetryableException)
                         .doBeforeRetry(retrySignal -> {
                             Throwable failure = retrySignal.failure();
-                            log.warn("Retrying batch request, attempt {}/{}: {} - {}",
+                            log.warn("Retrying GPS API batch request for {} devices, attempt {}/{}: {} - {}",
+                                    deviceIds.size(),
                                     retrySignal.totalRetries() + 1, 3,
                                     failure.getClass().getSimpleName(),
                                     failure.getMessage());
                         }))
                 .onErrorResume(error -> {
-                    log.error("Failed to fetch batch of {} devices: {} - {}",
+                    String errorDetails = buildErrorDetails(error);
+                    log.error("Failed to fetch GPS batch of {} devices after 3 retries: {} - {}. Details: {}",
                             deviceIds.size(),
                             error.getClass().getSimpleName(),
-                            error.getMessage());
+                            error.getMessage(),
+                            errorDetails,
+                            error);
                     return Mono.just(List.of());
                 });
     }
@@ -277,6 +281,34 @@ public class GpsApiClient {
 
         String message = "GPS API integration error: " + throwable.getMessage();
         return new GpsApiException(message, throwable);
+    }
+
+    private String buildErrorDetails(Throwable error) {
+        if (error instanceof WebClientResponseException) {
+            WebClientResponseException ex = (WebClientResponseException) error;
+
+            // Check if the cause is ReadTimeoutException
+            if (ex.getCause() instanceof io.netty.handler.timeout.ReadTimeoutException) {
+                return String.format("HTTP %d received but ReadTimeout while reading response body (GPS API is responding slowly). Consider increasing read-timeout.",
+                        ex.getStatusCode().value());
+            }
+
+            return String.format("HTTP %d - %s, Body: %s",
+                    ex.getStatusCode().value(),
+                    ex.getStatusText(),
+                    ex.getResponseBodyAsString());
+        } else if (error instanceof io.netty.handler.timeout.ReadTimeoutException) {
+            return "ReadTimeout - GPS API is too slow to send response data. Consider increasing read-timeout setting.";
+        } else if (error instanceof io.netty.handler.timeout.WriteTimeoutException) {
+            return "WriteTimeout - Failed to send request data to GPS API in time";
+        } else if (error instanceof java.util.concurrent.TimeoutException) {
+            return "Request timeout - GPS API didn't respond in time";
+        } else if (error instanceof java.net.ConnectException) {
+            return "Connection refused - GPS API server may be down";
+        } else if (error instanceof java.io.IOException) {
+            return "Network I/O error: " + error.getMessage();
+        }
+        return error.getClass().getName();
     }
 
     public static class GpsApiException extends RuntimeException {

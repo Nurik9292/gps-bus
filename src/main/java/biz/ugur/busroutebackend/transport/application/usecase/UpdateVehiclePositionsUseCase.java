@@ -71,8 +71,14 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
             List<String> deviceIds = validPositions.stream()
                     .map(GpsPositionDTO::getDeviceId)
+                    .filter(deviceId -> deviceId != null && !deviceId.isBlank())
                     .distinct()
                     .toList();
+
+            if (deviceIds.isEmpty()) {
+                log.warn("No valid device IDs found after filtering {} positions", validPositions.size());
+                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validPositions.size(), 0, LocalDateTime.now(), List.of()));
+            }
 
             return vehicleRepository.findByDeviceIds(deviceIds)
                     .flatMap(existingVehiclesMap -> processBatch(validPositions, existingVehiclesMap))

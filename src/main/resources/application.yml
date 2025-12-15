@@ -129,6 +129,9 @@ external:
       base-url: ${GPS_API_BASE_URL:http://95.85.97.118/app-overseas-newenergy-core}
       token: ${GPS_API_TOKEN:YT2AE19C2B1A4FDD8F10B934DA1E6905}
       timeout: ${GPS_API_TIMEOUT:30s}
+      connect-timeout: ${GPS_API_CONNECT_TIMEOUT:10s}
+      read-timeout: ${GPS_API_READ_TIMEOUT:60s}
+      write-timeout: ${GPS_API_WRITE_TIMEOUT:10s}
       batch-size: ${GPS_API_BATCH_SIZE:50}
       max-concurrent-batches: ${GPS_API_MAX_CONCURRENT_BATCHES:3}
       time-window-minutes: ${GPS_API_TIME_WINDOW_MINUTES:60}
@@ -145,6 +148,9 @@ external:
       username: ${BUS_INFO_API_USERNAME:duralga}
       password: ${BUS_INFO_API_PASSWORD:S[A$@gmm.)-5yTzh}
       timeout: 10s
+      connect-timeout: ${BUS_INFO_API_CONNECT_TIMEOUT:10s}
+      read-timeout: ${BUS_INFO_API_READ_TIMEOUT:30s}
+      write-timeout: ${BUS_INFO_API_WRITE_TIMEOUT:10s}
       retry:
         max-attempts: 3
         initial-interval: 1s

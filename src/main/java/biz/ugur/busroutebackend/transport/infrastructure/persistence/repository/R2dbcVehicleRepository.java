@@ -372,9 +372,18 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             return Mono.just(Map.of());
         }
 
-        // Use named parameters instead of positional ones
+        List<String> validDeviceIds = deviceIds.stream()
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .toList();
+
+        if (validDeviceIds.isEmpty()) {
+            log.warn("No valid device IDs found after filtering from {} original IDs", deviceIds.size());
+            return Mono.just(Map.of());
+        }
+
         List<String> namedParams = new ArrayList<>();
-        for (int i = 0; i < deviceIds.size(); i++) {
+        for (int i = 0; i < validDeviceIds.size(); i++) {
             namedParams.add(":deviceId" + i);
         }
         String placeholders = String.join(",", namedParams);
@@ -382,14 +391,16 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         String sql = "SELECT * FROM vehicles WHERE device_id IN (" + placeholders + ")";
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
-        for (int i = 0; i < deviceIds.size(); i++) {
-            spec = spec.bind("deviceId" + i, deviceIds.get(i));
+        for (int i = 0; i < validDeviceIds.size(); i++) {
+            spec = spec.bind("deviceId" + i, validDeviceIds.get(i));
         }
 
         return spec.map(getRowMapper())
                 .all()
                 .collectMap(Vehicle::getDeviceId)
-                .doOnSuccess(map -> log.debug("Found {} vehicles by device IDs", map.size()));
+                .doOnSuccess(map -> log.debug("Found {} vehicles out of {} device IDs", map.size(), validDeviceIds.size()))
+                .doOnError(error -> log.error("Failed to find vehicles by device IDs: requested={}, error={}",
+                        validDeviceIds.size(), error.getMessage(), error));
     }
 
     @Override

@@ -64,7 +64,7 @@ public class VehicleDataScheduler {
     }
 
 
-    @Scheduled(cron = "0/30 * * * * *")
+    @Scheduled(cron = "0/10 * * * * *")
     public void updateVehiclePositions() {
         log.info("GPS scheduler triggered. inProgress={}, lastStartTime={}",
                 gpsUpdateInProgress.get(), lastGpsUpdateStartTime);
@@ -112,8 +112,11 @@ public class VehicleDataScheduler {
                             updateVehiclePositionsUseCase.execute(batch)
                                     .timeout(batchTimeout)
                                     .onErrorResume(error -> {
-                                        log.error("Failed to process GPS batch of {} vehicles: {}",
-                                                batch.size(), error.getMessage());
+                                        log.error("Failed to process GPS batch of {} vehicles: {} - {}",
+                                                batch.size(),
+                                                error.getClass().getSimpleName(),
+                                                error.getMessage(),
+                                                error);
                                         return Mono.just(VehiclePositionUpdateResult.failed(batch.size()));
                                     })
                     )

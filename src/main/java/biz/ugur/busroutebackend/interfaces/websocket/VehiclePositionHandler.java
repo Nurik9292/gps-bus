@@ -62,7 +62,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
         Flux<WebSocketMessage> outbound = createOutboundMessageStream(session, sessionConfig);
 
         Mono<Void> inbound = session.receive()
-                .doOnNext(message -> handleIncomingMessage(sessionId, sessionConfig, message))
+                .doOnNext(message -> handleIncomingMessage(session, sessionId, sessionConfig, message))
                 .doOnError(error -> log.error("Error in inbound stream for session {}: {}",
                         sessionId, error.getMessage()))
                 .then();
@@ -83,8 +83,13 @@ public class VehiclePositionHandler implements WebSocketHandler {
         Flux<WebSocketMessage> liveUpdates = getLivePositionUpdates(session, config);
 
         return Flux.merge(initialPositions, liveUpdates)
-                .onErrorContinue((error, obj) ->
-                        log.warn("Error sending message: {}", error.getMessage()));
+                .onErrorContinue((error, obj) -> {
+                    log.error("Error sending WebSocket message - Error type: {}, Message: {}, Object type: {}",
+                            error.getClass().getName(),
+                            error.getMessage(),
+                            obj != null ? obj.getClass().getName() : "null",
+                            error);
+                });
     }
 
     private Flux<WebSocketMessage> getInitialPositions(WebSocketSession session, SessionConfig config) {
@@ -115,6 +120,39 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 .doOnNext(msg -> log.debug("Sent initial positions to session"));
     }
 
+    /**
+     * Отправляет текущие позиции транспортных средств для заданной конфигурации подписки.
+     * Используется при смене маршрута или границ клиентом.
+     */
+    private Mono<Void> sendCurrentPositionsForConfig(WebSocketSession session, SessionConfig config) {
+        return getActiveVehiclesUseCase.execute(null)
+                .filter(vehicle -> isVehicleInScope(vehicle, config))
+                .take(100)
+                .map(this::convertToWebSocketMessage)
+                .collectList()
+                .flatMap(positions -> {
+                    if (positions.isEmpty()) {
+                        log.debug("No vehicles found for subscription: type={}, filter={}",
+                                config.getSubscriptionType(), config.getRouteFilter());
+                    }
+                    try {
+                        // Используем тот же формат что и initial_positions для совместимости с клиентом
+                        Map<String, Object> response = Map.of(
+                                "type", "initial_positions",
+                                "count", positions.size(),
+                                "vehicles", positions,
+                                "timestamp", Instant.now().toString()
+                        );
+                        String json = objectMapper.writeValueAsString(response);
+                        log.info("Sending {} positions for subscription change: type={}, filter={}",
+                                positions.size(), config.getSubscriptionType(), config.getRouteFilter());
+                        return session.send(Mono.just(session.textMessage(json)));
+                    } catch (JsonProcessingException e) {
+                        log.error("Error serializing subscription update positions: {}", e.getMessage());
+                        return Mono.empty();
+                    }
+                });
+    }
 
     private Flux<WebSocketMessage> getLivePositionUpdates(WebSocketSession session,
                                                           SessionConfig config) {
@@ -163,7 +201,8 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
 
-    private void handleIncomingMessage(String sessionId, SessionConfig config, WebSocketMessage message) {
+    private void handleIncomingMessage(WebSocketSession session, String sessionId,
+                                        SessionConfig config, WebSocketMessage message) {
         try {
             String payload = message.getPayloadAsText();
             @SuppressWarnings("unchecked")
@@ -182,7 +221,15 @@ public class VehiclePositionHandler implements WebSocketHandler {
                     if (routes != null) {
                         config.setRouteFilter(Set.copyOf(routes));
                         config.setSubscriptionType("routes");
-                        log.debug("Session {} updated route subscription: {}", sessionId, routes);
+                        log.info("Session {} updated route subscription: {}", sessionId, routes);
+
+                        // Отправляем текущие позиции для нового маршрута
+                        sendCurrentPositionsForConfig(session, config)
+                                .subscribe(
+                                        msg -> log.debug("Sent updated positions for route change"),
+                                        error -> log.warn("Error sending positions after route change: {}",
+                                                error.getMessage())
+                                );
                     }
                     break;
 
@@ -192,7 +239,15 @@ public class VehiclePositionHandler implements WebSocketHandler {
                     if (bounds != null && bounds.size() == 4) {
                         config.setBounds(bounds.get(0), bounds.get(1), bounds.get(2), bounds.get(3));
                         config.setSubscriptionType("bounds");
-                        log.debug("Session {} updated bounds subscription", sessionId);
+                        log.info("Session {} updated bounds subscription", sessionId);
+
+                        // Отправляем текущие позиции для новых границ
+                        sendCurrentPositionsForConfig(session, config)
+                                .subscribe(
+                                        msg -> log.debug("Sent updated positions for bounds change"),
+                                        error -> log.warn("Error sending positions after bounds change: {}",
+                                                error.getMessage())
+                                );
                     }
                     break;
 
@@ -208,15 +263,30 @@ public class VehiclePositionHandler implements WebSocketHandler {
         redisTemplate.listenToChannel("vehicle-position-updates")
                 .filter(Objects::nonNull)
                 .mapNotNull(message -> {
-                    Object messageObj = message.getMessage();
                     try {
-                        return objectMapper.readValue(
-                                message.getMessage().toString(),
-                                VehiclePositionWebSocketMessage.class
-                        );
+                        Object messageObj = message.getMessage();
 
+                        // Handle different message types from Redis
+                        if (messageObj instanceof VehiclePositionWebSocketMessage) {
+                            // Already deserialized by Redis
+                            return (VehiclePositionWebSocketMessage) messageObj;
+                        } else if (messageObj instanceof String) {
+                            // JSON string - parse it
+                            return objectMapper.readValue(
+                                    (String) messageObj,
+                                    VehiclePositionWebSocketMessage.class
+                            );
+                        } else {
+                            // Try to convert via Jackson (handles Map, ArrayList, etc.)
+                            return objectMapper.convertValue(
+                                    messageObj,
+                                    VehiclePositionWebSocketMessage.class
+                            );
+                        }
                     } catch (Exception e) {
-                        log.warn("Error parsing Redis message: {}", e.getMessage());
+                        log.warn("Error parsing Redis message of type {}: {}",
+                                message.getMessage() != null ? message.getMessage().getClass().getName() : "null",
+                                e.getMessage());
                         return null;
                     }
                 })
