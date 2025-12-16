@@ -5,7 +5,9 @@ import biz.ugur.busroutebackend.shared.domain.specification.SqlCriteria;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
+import biz.ugur.busroutebackend.transport.domain.repository.NearbyRouteQueryRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.NearbyRouteInfo;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteInAreaInfo;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteVehicleStatistics;
@@ -29,7 +31,7 @@ import java.util.function.BiFunction;
 @Repository
 @Slf4j
 public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRouteId>
-        implements BusRouteRepository {
+        implements BusRouteRepository, NearbyRouteQueryRepository {
 
     private final BusRouteEntityMapper entityMapper;
 
@@ -578,5 +580,49 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
         return executeSpec
                 .map(row -> row.get(0, Long.class))
                 .one();
+    }
+
+    @Override
+    public Flux<NearbyRouteInfo> findRoutesNearLocation(Double latitude, Double longitude, Integer radiusMeters) {
+        log.debug("Searching for routes near ({}, {}) within {}m", latitude, longitude, radiusMeters);
+
+        String sql = """
+            SELECT DISTINCT ON (br.route_number)
+                br.id as route_id,
+                br.route_number,
+                br.route_color,
+                MIN(ST_Distance(
+                    ST_SetSRID(ST_Point(bs.longitude, bs.latitude), 4326)::geography,
+                    ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326)::geography
+                )) OVER (PARTITION BY br.id) as min_distance
+            FROM bus_stops bs
+            JOIN route_stops rs ON bs.id = rs.stop_id
+            JOIN bus_routes br ON rs.route_id = br.id
+            WHERE bs.is_active = true
+            AND br.is_active = true
+            AND ST_DWithin(
+                ST_SetSRID(ST_Point(bs.longitude, bs.latitude), 4326)::geography,
+                ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326)::geography,
+                :radiusMeters
+            )
+            ORDER BY br.route_number, min_distance
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("centerLat", latitude)
+                .bind("centerLon", longitude)
+                .bind("radiusMeters", radiusMeters)
+                .map(this::mapToNearbyRouteInfo)
+                .all()
+                .doOnComplete(() -> log.debug("Completed search for routes near ({}, {}) within {}m",
+                        latitude, longitude, radiusMeters));
+    }
+
+    private NearbyRouteInfo mapToNearbyRouteInfo(Row row, RowMetadata metadata) {
+        return new NearbyRouteInfo(
+                row.get("route_id", String.class),
+                row.get("route_number", String.class),
+                row.get("route_color", String.class)
+        );
     }
 }

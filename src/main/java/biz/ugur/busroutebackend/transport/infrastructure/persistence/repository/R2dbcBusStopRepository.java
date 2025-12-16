@@ -397,13 +397,13 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
             JOIN target_stop_routes tsr ON v.assigned_route_id = tsr.route_id
                 -- Filter by direction: only show vehicles traveling in the same direction as the target stop
                 AND (v.current_direction IS NULL OR v.current_direction = tsr.direction)
+                AND (v.last_stop_sequence IS NULL OR v.last_stop_sequence < tsr.target_sequence)
             WHERE v.is_active = true
             AND v.last_position_update > CURRENT_TIMESTAMP - (INTERVAL '1 minute' * :maxAgeMinutes)
             AND v.current_latitude IS NOT NULL
             AND v.current_longitude IS NOT NULL
         ),
 
-        -- Pre-join all route stops with coordinates
         route_stops_with_coords AS (
             SELECT
                 rs.route_id,

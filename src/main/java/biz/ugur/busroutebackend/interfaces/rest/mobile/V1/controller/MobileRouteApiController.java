@@ -4,8 +4,14 @@ import biz.ugur.busroutebackend.client.application.usecase.RouteIsFavoriteUseCas
 import biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response.MobileRouteAlternativesResponse;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response.MobileRouteListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response.MobileRouteResponse;
+import biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response.NearbyRoutesResponse;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteStops;
+import biz.ugur.busroutebackend.transport.application.mapper.NearbyRoutesMapper;
 import biz.ugur.busroutebackend.transport.application.services.RouteResolutionService;
 import biz.ugur.busroutebackend.transport.application.usecase.route.*;
 import biz.ugur.busroutebackend.transport.application.usecase.routealternative.GetActiveAlternativesForRouteUseCase;
@@ -27,6 +33,8 @@ public class MobileRouteApiController extends BaseMobileController {
     private final GetRouteStopsUseCase getRouteStopsUseCase;
     private final GetActiveAlternativesForRouteUseCase getActiveAlternativesForRouteUseCase;
     private final RouteResolutionService routeResolutionService;
+    private final GetNearbyRoutesUseCase getNearbyRoutesUseCase;
+    private final NearbyRoutesMapper nearbyRoutesMapper;
 
     protected MobileRouteApiController(MessageSource messageSource,
                                        RequestedContentTypeResolver requestedContentTypeResolver,
@@ -35,13 +43,17 @@ public class MobileRouteApiController extends BaseMobileController {
                                        GetAllBusRoutesWithPaginationUseCase getAllBusRoutesWithPaginationUseCase,
                                        GetRouteStopsUseCase getRouteStopsUseCase,
                                        GetActiveAlternativesForRouteUseCase getActiveAlternativesForRouteUseCase,
-                                       RouteResolutionService routeResolutionService) {
+                                       RouteResolutionService routeResolutionService,
+                                       GetNearbyRoutesUseCase getNearbyRoutesUseCase,
+                                       NearbyRoutesMapper nearbyRoutesMapper) {
         super(messageSource, requestedContentTypeResolver, routeIsFavoriteUseCase);
         this.getRouteByIdUseCase = getRouteByIdUseCase;
         this.getAllBusRoutesWithPaginationUseCase = getAllBusRoutesWithPaginationUseCase;
         this.getRouteStopsUseCase = getRouteStopsUseCase;
         this.getActiveAlternativesForRouteUseCase = getActiveAlternativesForRouteUseCase;
         this.routeResolutionService = routeResolutionService;
+        this.getNearbyRoutesUseCase = getNearbyRoutesUseCase;
+        this.nearbyRoutesMapper = nearbyRoutesMapper;
     }
 
     @Override
@@ -146,6 +158,16 @@ public class MobileRouteApiController extends BaseMobileController {
         return ok(getRouteStopsUseCase.execute(Mono.just(routeId)));
     }
 
+    @GetMapping("/nearby")
+    public Mono<ResponseEntity<ApiResponse<NearbyRoutesResponse>>> getNearbyRoutes(
+            @RequestParam @DecimalMin("35.0") @DecimalMax("43.0") Double lat,
+            @RequestParam @DecimalMin("52.0") @DecimalMax("67.0") Double lon,
+            @RequestParam(defaultValue = "500") @Min(100) @Max(5000) Integer radiusMeters) {
+
+        return ok(getNearbyRoutesUseCase
+                .execute(Mono.just(new GetNearbyRoutesUseCase.Query(lat, lon, radiusMeters)))
+                .map(nearbyRoutesMapper::toResponse));
+    }
 
     @GetMapping("/{routeId}/alternatives")
     public Mono<ResponseEntity<ApiResponse<MobileRouteAlternativesResponse>>> getRouteAlternatives(@PathVariable String routeId) {
