@@ -41,6 +41,7 @@ public class ApiVersionConfig {
     public static final String V1_MOBILE_ROUTES = V1_MOBILE + ROUTES;
     public static final String V1_MOBILE_STOPS = V1_MOBILE + STOPS;
     public static final String V1_MOBILE_VEHICLES = V1_MOBILE + VEHICLES;
+    public static final String V1_MOBILE_DASHBOARD = V1_MOBILE + DASHBOARD;
 
 
     public static final String V1_ADMIN_AUTH =  V1_ADMIN + AUTH;
