@@ -9,10 +9,8 @@ import lombok.Getter;
 @Builder
 public class MobileDashboardStatisticsResponse {
 
-    @JsonProperty("active_clients")
     private final long activeClients;
 
-    @JsonProperty("active_vehicles")
     private final long activeVehicles;
 
     public static MobileDashboardStatisticsResponse fromResult(MobileDashboardStatisticsResult result) {
