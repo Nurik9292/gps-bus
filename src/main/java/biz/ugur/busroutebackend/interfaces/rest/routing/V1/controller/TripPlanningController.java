@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -29,13 +30,16 @@ public class TripPlanningController extends BaseController {
 
     private final SearchTripsUseCase searchTripsUseCase;
     private final BusStopRepository busStopRepository;
+    private final DatabaseClient databaseClient;
 
     public TripPlanningController(SearchTripsUseCase searchTripsUseCase,
                                   BusStopRepository busStopRepository,
+                                  DatabaseClient databaseClient,
                                   MessageSource messageSource) {
         super(messageSource);
         this.searchTripsUseCase = searchTripsUseCase;
         this.busStopRepository = busStopRepository;
+        this.databaseClient = databaseClient;
     }
 
     @Override
@@ -79,7 +83,7 @@ public class TripPlanningController extends BaseController {
                 .defaultIfEmpty(Map.of(
                         "status", "success",
                         "message", "No stops found in the specified radius",
-                        "stops", java.util.List.of(),
+                        "stops", List.of(),
                         "search_location", Map.of("latitude", lat, "longitude", lon),
                         "search_radius_km", radiusKm
                 )));
@@ -104,13 +108,24 @@ public class TripPlanningController extends BaseController {
 
     @GetMapping("/stats")
     public Mono<ResponseEntity<Map<String, Object>>> getStatistics() {
-        return Mono.fromCallable(() -> Map.of(
+        return databaseClient.sql("""
+                SELECT route_number
+                FROM mv_active_routes_summary
+                WHERE active_vehicles >= 1
+                ORDER BY active_vehicles DESC, moving_vehicles DESC
+                LIMIT 5
+                """)
+                .map(row -> row.get("route_number", String.class))
+                .all()
+                .collectList()
+                .defaultIfEmpty(List.of())
+                .map(popularRoutes -> Map.<String, Object>of(
                         "status", "success",
                         "statistics", Map.of(
                                 "total_searches_today", 0,
                                 "average_search_time_ms", 850,
                                 "success_rate_percent", 95.2,
-                                "most_popular_routes", List.of("29", "12", "7A"),
+                                "most_popular_routes", popularRoutes.isEmpty() ? List.of("N/A") : popularRoutes,
                                 "average_options_per_search", 3.4
                         ),
                         "timestamp", LocalDateTime.now().toString()

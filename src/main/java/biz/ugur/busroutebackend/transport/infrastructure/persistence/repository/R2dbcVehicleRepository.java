@@ -68,6 +68,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         columns.put("route_number", persistenceEntity.getRouteNumber());
         columns.put("is_active", persistenceEntity.getIsActive());
         columns.put("course", persistenceEntity.getCourse());
+        columns.put("current_direction", persistenceEntity.getCurrentDirection());
+        columns.put("last_stop_sequence", persistenceEntity.getLastStopSequence());
         return columns;
     }
 
@@ -82,11 +84,13 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             INSERT INTO vehicles (
                 id, device_id, license_plate, current_latitude, current_longitude,
                 speed_kmh, is_in_motion, last_position_update, assigned_route_id,
-                route_number, is_active, created_at, updated_at, course, version
+                route_number, is_active, created_at, updated_at, course,
+                current_direction, last_stop_sequence, version
             ) VALUES (
                 :id, :device_id, :license_plate, :current_latitude, :current_longitude,
                 :speed_kmh, :is_in_motion, :last_position_update, :assigned_route_id,
-                :route_number, :is_active, :created_at, :updated_at, :course, :version
+                :route_number, :is_active, :created_at, :updated_at, :course,
+                :current_direction, :last_stop_sequence, :version
             ) RETURNING *
             """;
 
@@ -126,6 +130,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 is_active = :is_active,
                 updated_at = :updated_at,
                 course = :course,
+                current_direction = :current_direction,
+                last_stop_sequence = :last_stop_sequence,
                 version = :version
             WHERE id = :id AND version = :old_version
             RETURNING *
@@ -348,6 +354,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .routeNumber(row.get("route_number", String.class))
                 .isActive(row.get("is_active", Boolean.class))
                 .course(row.get("course", Double.class))
+                .currentDirection(safeGet(row, "current_direction", Integer.class, null))
+                .lastStopSequence(safeGet(row, "last_stop_sequence", Integer.class, null))
                 .createdAt(safeGet(row, "created_at", LocalDateTime.class, null))
                 .updatedAt(safeGet(row, "updated_at", LocalDateTime.class, null))
                 .version(safeGet(row, "version", Long.class, 0L))
@@ -444,6 +452,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 is_in_motion = :inMotion,
                 last_position_update = :lastUpdate,
                 course = :course,
+                current_direction = :currentDirection,
+                last_stop_sequence = :lastStopSequence,
                 updated_at = :updatedAt,
                 version = version + 1
             WHERE id = :id AND version = :version
@@ -458,6 +468,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         spec = bindValue(spec, "inMotion", vehicle.getIsInMotion());
         spec = bindValue(spec, "lastUpdate", vehicle.getLastPositionUpdate());
         spec = bindValue(spec, "course", vehicle.getCourse());
+        spec = bindValue(spec, "currentDirection", vehicle.getCurrentDirection());
+        spec = bindValue(spec, "lastStopSequence", vehicle.getLastStopSequence());
         spec = bindValue(spec, "updatedAt", LocalDateTime.now());
         spec = spec.bind("id", vehicle.getId().getValue());
         spec = spec.bind("version", vehicle.getVersion());
@@ -486,11 +498,13 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             INSERT INTO vehicles (
                 id, device_id, license_plate, current_latitude, current_longitude,
                 speed_kmh, is_in_motion, last_position_update, assigned_route_id,
-                route_number, is_active, course, created_at, updated_at, version
+                route_number, is_active, course, current_direction, last_stop_sequence,
+                created_at, updated_at, version
             ) VALUES (
                 :id, :device_id, :license_plate, :current_latitude, :current_longitude,
                 :speed_kmh, :is_in_motion, :last_position_update, :assigned_route_id,
-                :route_number, :is_active, :course, :created_at, :updated_at, :version
+                :route_number, :is_active, :course, :current_direction, :last_stop_sequence,
+                :created_at, :updated_at, :version
             ) RETURNING *
             """;
 

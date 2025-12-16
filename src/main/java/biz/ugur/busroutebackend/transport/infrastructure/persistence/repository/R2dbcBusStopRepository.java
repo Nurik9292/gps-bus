@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.transport.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.geospatial.infrastructure.postgis.PostGISQueryBuilder;
+import biz.ugur.busroutebackend.routing.infrastructure.config.ETAProperties;
 import biz.ugur.busroutebackend.shared.domain.specification.Specification;
 import biz.ugur.busroutebackend.shared.domain.specification.SqlCriteria;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
@@ -32,10 +33,14 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         implements BusStopRepository {
 
     private final BusStopEntityMapper entityMapper;
+    private final ETAProperties etaProperties;
 
-    public R2dbcBusStopRepository(DatabaseClient databaseClient, BusStopEntityMapper entityMapper) {
+    public R2dbcBusStopRepository(DatabaseClient databaseClient,
+                                   BusStopEntityMapper entityMapper,
+                                   ETAProperties etaProperties) {
         super(databaseClient, "bus_stops", BusStop.class);
         this.entityMapper = entityMapper;
+        this.etaProperties = etaProperties;
     }
 
     @Override
@@ -85,9 +90,6 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
     public Flux<BusStop> findStopsWithinRadius(Double centerLat, Double centerLon, Double radiusKm) {
         log.debug("Searching for stops within {}km of ({}, {})", radiusKm, centerLat, centerLon);
 
-        // P1+P2 OPTIMIZATION: Efficient distance calculation without duplication
-        // ST_DWithin filters (uses spatial index), KNN operator sorts AND provides distance
-        // The <-> operator result can be extracted for distance display
         String sql = """
             SELECT *,
                 ST_Distance(
@@ -321,11 +323,35 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
 
     @Override
     public Flux<BusArrivalInfo> findArrivingVehicles(BusStopId stopId, Double stopLatitude, Double stopLongitude) {
-        // CRITICAL FIX: Removed expensive LATERAL JOIN that was causing 2-8s query times
-        // Old approach: For each vehicle, scanned ALL stops on route and calculated ST_Distance for each
-        // New approach: Use window function with KNN operator (<->) which uses spatial index
+        int maxAgeMinutes = etaProperties.getPosition().getMaxAgeMinutes();
+        int maxEtaMinutes = etaProperties.getPosition().getMaxEtaMinutes();
+        int atStopDistance = etaProperties.getPosition().getAtStopDistanceMeters();
+
+        double movingThreshold = etaProperties.getSpeed().getMovingThresholdKmh();
+        double morningRushSpeed = etaProperties.getSpeed().getMorningRushKmh();
+        double eveningRushSpeed = etaProperties.getSpeed().getEveningRushKmh();
+        double lunchSpeed = etaProperties.getSpeed().getLunchTimeKmh();
+        double normalSpeed = etaProperties.getSpeed().getNormalKmh();
+
+        double trafficMorningRush = etaProperties.getTraffic().getMorningRush();
+        double trafficEveningRush = etaProperties.getTraffic().getEveningRush();
+        double trafficDaytime = etaProperties.getTraffic().getDaytime();
+        double trafficEvening = etaProperties.getTraffic().getEvening();
+        double trafficNight = etaProperties.getTraffic().getNight();
+
         String sql = """
         WITH
+        traffic_multiplier AS (
+            SELECT
+                CASE
+                    WHEN EXTRACT(HOUR FROM CURRENT_TIMESTAMP) BETWEEN 7 AND 9 THEN :trafficMorningRush
+                    WHEN EXTRACT(HOUR FROM CURRENT_TIMESTAMP) BETWEEN 17 AND 19 THEN :trafficEveningRush
+                    WHEN EXTRACT(HOUR FROM CURRENT_TIMESTAMP) BETWEEN 10 AND 16 THEN :trafficDaytime
+                    WHEN EXTRACT(HOUR FROM CURRENT_TIMESTAMP) BETWEEN 20 AND 22 THEN :trafficEvening
+                    ELSE :trafficNight
+                END as multiplier
+        ),
+
         target_stop_routes AS (
             SELECT DISTINCT
                 rs.route_id,
@@ -351,6 +377,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 v.is_in_motion,
                 v.last_position_update,
                 v.course,
+                v.current_direction as vehicle_direction,
                 tsr.route_id,
                 tsr.direction,
                 tsr.target_sequence,
@@ -361,16 +388,22 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 ST_Distance(
                     ST_Point(v.current_longitude, v.current_latitude)::geography,
                     ST_Point(:stopLon, :stopLat)::geography
-                ) as distance_to_stop
+                ) as distance_to_stop,
+                degrees(ST_Azimuth(
+                    ST_Point(v.current_longitude, v.current_latitude)::geography,
+                    ST_Point(:stopLon, :stopLat)::geography
+                )) as bearing_to_stop
             FROM vehicles v
             JOIN target_stop_routes tsr ON v.assigned_route_id = tsr.route_id
+                -- Filter by direction: only show vehicles traveling in the same direction as the target stop
+                AND (v.current_direction IS NULL OR v.current_direction = tsr.direction)
             WHERE v.is_active = true
-            AND v.last_position_update > CURRENT_TIMESTAMP - INTERVAL '24 hours'
+            AND v.last_position_update > CURRENT_TIMESTAMP - (INTERVAL '1 minute' * :maxAgeMinutes)
             AND v.current_latitude IS NOT NULL
             AND v.current_longitude IS NOT NULL
         ),
 
-        -- OPTIMIZATION: Pre-join all route stops with coordinates in one pass
+        -- Pre-join all route stops with coordinates
         route_stops_with_coords AS (
             SELECT
                 rs.route_id,
@@ -387,7 +420,6 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
             AND bs.longitude IS NOT NULL
         ),
 
-        -- OPTIMIZATION: Use window function instead of LATERAL JOIN
         vehicle_stops_ranked AS (
             SELECT
                 rv.vehicle_id,
@@ -397,6 +429,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 rv.speed_kmh,
                 rv.is_in_motion,
                 rv.course,
+                rv.bearing_to_stop,
                 rv.route_id,
                 rv.direction,
                 rv.target_sequence,
@@ -410,14 +443,12 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 rsc.stop_name,
                 rsc.latitude as stop_latitude,
                 rsc.longitude as stop_longitude,
-                -- Use KNN operator for fast nearest-neighbor search with spatial index
                 ST_Distance(
                     ST_Point(rv.current_longitude, rv.current_latitude)::geography,
                     ST_Point(rsc.longitude, rsc.latitude)::geography
                 ) as distance_to_current_stop,
                 ROW_NUMBER() OVER (
                     PARTITION BY rv.vehicle_id
-                    -- KNN operator uses spatial index - MUCH faster than ST_Distance in ORDER BY
                     ORDER BY ST_Point(rsc.longitude, rsc.latitude)::geography <->
                              ST_Point(rv.current_longitude, rv.current_latitude)::geography
                 ) as stop_rank
@@ -436,6 +467,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 speed_kmh,
                 is_in_motion,
                 course,
+                bearing_to_stop,
                 route_id,
                 direction,
                 target_sequence,
@@ -449,51 +481,59 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 stop_name as current_stop_name,
                 distance_to_current_stop
             FROM vehicle_stops_ranked
-            WHERE stop_rank = 1  -- Only keep the nearest stop for each vehicle
+            WHERE stop_rank = 1
         ),
 
         vehicles_with_eta AS (
             SELECT
                 vcs.*,
+                tm.multiplier as traffic_multiplier,
                 CASE
-                    -- Автобус еще не дошел до целевой остановки
+                    WHEN vcs.course IS NULL THEN true
+                    WHEN vcs.speed_kmh < :movingThreshold THEN true
+                    WHEN ABS(vcs.course - vcs.bearing_to_stop) < 90 THEN true
+                    WHEN ABS(vcs.course - vcs.bearing_to_stop) > 270 THEN true
+                    ELSE false
+                END as is_moving_towards_stop,
+                -- Calculate base ETA then apply traffic multiplier
+                CASE
+                    -- Vehicle approaching target stop
                     WHEN vcs.current_sequence < vcs.target_sequence THEN
-                        CASE
-                            -- Автобус движется с нормальной скоростью
-                            WHEN vcs.speed_kmh > 5 THEN
-                                GREATEST(1, ROUND((vcs.target_distance - vcs.current_distance) / (vcs.speed_kmh * 1000.0 / 60.0))::integer)
+                        GREATEST(1, ROUND(
+                            CASE
+                                -- Vehicle moving at normal speed - use actual speed
+                                WHEN vcs.speed_kmh > :movingThreshold THEN
+                                    (vcs.target_distance - vcs.current_distance) / (vcs.speed_kmh * 1000.0 / 60.0)
 
-                            -- Автобус стоит или движется медленно - учитываем время дня
-                            WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 7 AND 9 THEN
-                                -- Утренний час пик - медленное движение
-                                GREATEST(2, ROUND((vcs.target_distance - vcs.current_distance) / (12.0 * 1000.0 / 60.0))::integer)
+                                -- Vehicle stopped/slow - use time-based average speeds
+                                WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 7 AND 9 THEN
+                                    (vcs.target_distance - vcs.current_distance) / (:morningRushSpeed * 1000.0 / 60.0)
 
-                            WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 17 AND 19 THEN
-                                -- Вечерний час пик - медленное движение
-                                GREATEST(2, ROUND((vcs.target_distance - vcs.current_distance) / (12.0 * 1000.0 / 60.0))::integer)
+                                WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 17 AND 19 THEN
+                                    (vcs.target_distance - vcs.current_distance) / (:eveningRushSpeed * 1000.0 / 60.0)
 
-                            WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 12 AND 14 THEN
-                                -- Обеденное время - средняя скорость
-                                GREATEST(1, ROUND((vcs.target_distance - vcs.current_distance) / (18.0 * 1000.0 / 60.0))::integer)
+                                WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 12 AND 14 THEN
+                                    (vcs.target_distance - vcs.current_distance) / (:lunchSpeed * 1000.0 / 60.0)
 
-                            ELSE
-                                -- Обычное время - хорошая скорость
-                                GREATEST(1, ROUND((vcs.target_distance - vcs.current_distance) / (25.0 * 1000.0 / 60.0))::integer)
-                        END
+                                ELSE
+                                    (vcs.target_distance - vcs.current_distance) / (:normalSpeed * 1000.0 / 60.0)
+                            END
+                            * tm.multiplier 
+                        )::integer)
 
-                    -- Автобус на остановке или очень близко
-                    WHEN vcs.current_sequence = vcs.target_sequence AND vcs.distance_to_current_stop < 200 THEN 1
+                    WHEN vcs.current_sequence = vcs.target_sequence AND vcs.distance_to_current_stop < :atStopDistance THEN 1
 
-                    -- Автобус прошел остановку - не показываем
+                    -- Vehicle passed the stop
                     ELSE NULL
                 END as calculated_eta,
 
                 CASE
                     WHEN vcs.current_sequence < vcs.target_sequence THEN 'approaching'
-                    WHEN vcs.current_sequence = vcs.target_sequence AND vcs.distance_to_current_stop < 200 THEN 'at_stop'
+                    WHEN vcs.current_sequence = vcs.target_sequence AND vcs.distance_to_current_stop < :atStopDistance THEN 'at_stop'
                     ELSE 'passed'
                 END as calculated_status
             FROM vehicle_current_stops vcs
+            CROSS JOIN traffic_multiplier tm
         )
 
         SELECT DISTINCT ON (route_number)
@@ -514,7 +554,8 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         FROM vehicles_with_eta vwe
         WHERE vwe.calculated_eta IS NOT NULL
         AND vwe.calculated_eta > 0
-        AND vwe.calculated_eta < 120
+        AND vwe.calculated_eta < :maxEtaMinutes
+        AND vwe.is_moving_towards_stop = true
         ORDER BY vwe.route_number, vwe.calculated_eta
         """;
 
@@ -522,10 +563,22 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 .bind("stopId", stopId.getValue())
                 .bind("stopLat", stopLatitude)
                 .bind("stopLon", stopLongitude)
+                .bind("maxAgeMinutes", maxAgeMinutes)
+                .bind("maxEtaMinutes", maxEtaMinutes)
+                .bind("atStopDistance", atStopDistance)
+                .bind("movingThreshold", movingThreshold)
+                .bind("morningRushSpeed", morningRushSpeed)
+                .bind("eveningRushSpeed", eveningRushSpeed)
+                .bind("lunchSpeed", lunchSpeed)
+                .bind("normalSpeed", normalSpeed)
+                .bind("trafficMorningRush", trafficMorningRush)
+                .bind("trafficEveningRush", trafficEveningRush)
+                .bind("trafficDaytime", trafficDaytime)
+                .bind("trafficEvening", trafficEvening)
+                .bind("trafficNight", trafficNight)
                 .map(this::mapToBusArrivalInfo)
                 .all()
-                .filter(arrival -> arrival.getEstimatedArrivalMinutes() < 120)
-                .doOnNext(arrival -> log.trace("Route {} closest bus: {} ETA {} min",
+                .doOnNext(arrival -> log.trace("Route {} closest bus: {} ETA {} min (traffic adjusted)",
                         arrival.getRouteNumber(), arrival.getLicensePlate(), arrival.getEstimatedArrivalMinutes()));
     }
 

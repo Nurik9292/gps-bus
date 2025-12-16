@@ -9,6 +9,7 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Repository
@@ -227,4 +228,50 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
             Integer totalTravelTime,
             Integer totalDistance
     ) {}
+
+    @Override
+    public Mono<Integer> findNearestStopSequence(String routeId, Double latitude, Double longitude) {
+        if (routeId == null || latitude == null || longitude == null) {
+            return Mono.empty();
+        }
+
+        String sql = """
+            SELECT rs.stop_sequence
+            FROM route_stops rs
+            JOIN bus_stops bs ON rs.stop_id = bs.id
+            WHERE rs.route_id = :routeId
+            ORDER BY (
+                6371000 * acos(
+                    cos(radians(:latitude)) * cos(radians(bs.latitude)) *
+                    cos(radians(bs.longitude) - radians(:longitude)) +
+                    sin(radians(:latitude)) * sin(radians(bs.latitude))
+                )
+            )
+            LIMIT 1
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("routeId", routeId)
+                .bind("latitude", latitude)
+                .bind("longitude", longitude)
+                .map(row -> row.get("stop_sequence", Integer.class))
+                .one();
+    }
+
+    @Override
+    public Mono<Map<String, Integer>> findNearestStopSequencesBatch(
+            List<VehiclePositionKey> vehiclePositions) {
+
+        if (vehiclePositions == null || vehiclePositions.isEmpty()) {
+            return Mono.just(java.util.Collections.emptyMap());
+        }
+
+        return reactor.core.publisher.Flux.fromIterable(vehiclePositions)
+                .flatMap(pos -> findNearestStopSequence(pos.routeId(), pos.latitude(), pos.longitude())
+                        .map(seq -> java.util.Map.entry(pos.vehicleId(), seq))
+                        .defaultIfEmpty(java.util.Map.entry(pos.vehicleId(), -1))
+                )
+                .filter(entry -> entry.getValue() != -1)
+                .collectMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue);
+    }
 }

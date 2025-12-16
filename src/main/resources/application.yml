@@ -77,6 +77,29 @@ app:
       batch-timeout: ${SCHEDULER_GPS_BATCH_TIMEOUT:30s}
       total-timeout: ${SCHEDULER_GPS_TOTAL_TIMEOUT:120s}
 
+  eta:
+    position:
+      max-age-minutes: ${ETA_POSITION_MAX_AGE_MINUTES:10}
+      at-stop-distance-meters: ${ETA_AT_STOP_DISTANCE_METERS:200}
+      max-eta-minutes: ${ETA_MAX_MINUTES:60}
+    speed:
+      moving-threshold-kmh: ${ETA_SPEED_MOVING_THRESHOLD:5.0}
+      morning-rush-kmh: ${ETA_SPEED_MORNING_RUSH:12.0}
+      evening-rush-kmh: ${ETA_SPEED_EVENING_RUSH:12.0}
+      lunch-time-kmh: ${ETA_SPEED_LUNCH_TIME:18.0}
+      normal-kmh: ${ETA_SPEED_NORMAL:25.0}
+      night-kmh: ${ETA_SPEED_NIGHT:30.0}
+    cache:
+      stop-arrivals-ttl-seconds: ${ETA_CACHE_STOP_ARRIVALS_TTL:15}
+      waiting-time-ttl-minutes: ${ETA_CACHE_WAITING_TIME_TTL:10}
+      travel-time-ttl-minutes: ${ETA_CACHE_TRAVEL_TIME_TTL:30}
+    traffic:
+      morning-rush: ${ETA_TRAFFIC_MORNING_RUSH:1.2}
+      evening-rush: ${ETA_TRAFFIC_EVENING_RUSH:1.4}
+      daytime: ${ETA_TRAFFIC_DAYTIME:1.1}
+      evening: ${ETA_TRAFFIC_EVENING:1.1}
+      night: ${ETA_TRAFFIC_NIGHT:0.9}
+      weekend-factor: ${ETA_TRAFFIC_WEEKEND_FACTOR:0.8}
 
   admin:
     default-username: ${ADMIN_DEFAULT_USERNAME:admin}

@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.routing.infrastructure.services;
 
 import biz.ugur.busroutebackend.routing.domain.repository.ETARepository;
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
+import biz.ugur.busroutebackend.routing.infrastructure.config.ETAProperties;
 import biz.ugur.busroutebackend.geospatial.domain.constants.GeoConstants;
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
@@ -23,8 +24,8 @@ public class LiveETACalculationService implements ETACalculationService {
     private final ETARepository etaRepository;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final DistanceCalculationService distanceService;
+    private final ETAProperties etaProperties;
 
-    private static final double AVERAGE_WALKING_SPEED_KMH = GeoConstants.AVERAGE_WALKING_SPEED_KMH;
     private static final double AVERAGE_WALKING_SPEED_M_PER_MIN = GeoConstants.AVERAGE_WALKING_SPEED_M_PER_MIN;
     private static final int MAX_REASONABLE_WALKING_TIME = GeoConstants.MAX_WALKING_TIME_MINUTES;
     private static final int MIN_WALKING_TIME = GeoConstants.MIN_WALKING_TIME_MINUTES;
@@ -32,11 +33,13 @@ public class LiveETACalculationService implements ETACalculationService {
     public LiveETACalculationService(VehicleRepository vehicleRepository,
                                      ETARepository etaRepository,
                                      ReactiveRedisTemplate<String, Object> redisTemplate,
-                                     DistanceCalculationService distanceService) {
+                                     DistanceCalculationService distanceService,
+                                     ETAProperties etaProperties) {
         this.vehicleRepository = vehicleRepository;
         this.etaRepository = etaRepository;
         this.redisTemplate = redisTemplate;
         this.distanceService = distanceService;
+        this.etaProperties = etaProperties;
     }
 
     @Override
@@ -76,8 +79,9 @@ public class LiveETACalculationService implements ETACalculationService {
     public Mono<Integer> calculateWaitingTimeMinutes(String routeNumber, String stopName, LocalDateTime currentTime) {
         log.debug("Calculating wait time for route {} at stop {} at {}", routeNumber, stopName, currentTime);
 
-        String cacheKey = String.format("wait_time:%s:%s:%d", routeNumber, stopName,
-                currentTime.getHour());
+        int timeSlot = (currentTime.getHour() * 4) + (currentTime.getMinute() / 15);
+        String cacheKey = String.format("wait_time:%s:%s:%d", routeNumber, stopName, timeSlot);
+        int cacheTtlMinutes = etaProperties.getCache().getWaitingTimeTtlMinutes();
 
         return redisTemplate.opsForValue()
                 .get(cacheKey)
@@ -85,9 +89,8 @@ public class LiveETACalculationService implements ETACalculationService {
                 .switchIfEmpty(
                         calculateWaitingTimeFromData(routeNumber, stopName, currentTime)
                                 .flatMap(waitTime ->
-                                        // Кэшируем на 15 минут
                                         redisTemplate.opsForValue()
-                                                .set(cacheKey, waitTime, Duration.ofMinutes(15))
+                                                .set(cacheKey, waitTime, Duration.ofMinutes(cacheTtlMinutes))
                                                 .thenReturn(waitTime)
                                 )
                 )
@@ -99,6 +102,7 @@ public class LiveETACalculationService implements ETACalculationService {
         log.debug("Calculating travel time for route {} from {} to {}", routeNumber, fromStopName, toStopName);
 
         String cacheKey = String.format("travel_time:%s:%s:%s", routeNumber, fromStopName, toStopName);
+        int cacheTtlMinutes = etaProperties.getCache().getTravelTimeTtlMinutes();
 
         return redisTemplate.opsForValue()
                 .get(cacheKey)
@@ -107,7 +111,7 @@ public class LiveETACalculationService implements ETACalculationService {
                         calculateTravelTimeFromDatabase(routeNumber, fromStopName, toStopName)
                                 .flatMap(travelTime ->
                                         redisTemplate.opsForValue()
-                                                .set(cacheKey, travelTime, Duration.ofHours(1))
+                                                .set(cacheKey, travelTime, Duration.ofMinutes(cacheTtlMinutes))
                                                 .thenReturn(travelTime)
                                 )
                 )
@@ -191,10 +195,9 @@ public class LiveETACalculationService implements ETACalculationService {
     private Mono<Integer> calculateTravelTimeFromDatabase(String routeNumber, String fromStopName, String toStopName) {
         return etaRepository.calculateTravelTimeFromDatabase(routeNumber, fromStopName, toStopName)
                 .switchIfEmpty(Mono.fromCallable(() -> {
-                    // Fallback: если маршрут не найден, возвращаем базовое время
                     log.warn("No route data found for {} from {} to {}, using fallback",
                             routeNumber, fromStopName, toStopName);
-                    return 15; // 15 минут по умолчанию
+                    return 15;
                 }));
     }
 
@@ -213,34 +216,6 @@ public class LiveETACalculationService implements ETACalculationService {
         }
 
         return baseWalkingTime + 1;
-    }
-
-
-    private int adjustForTrafficConditions(int baseTime) {
-        LocalDateTime now = LocalDateTime.now();
-        int hour = now.getHour();
-        int dayOfWeek = now.getDayOfWeek().getValue();
-
-        double trafficMultiplier = GeoConstants.TRAFFIC_MULTIPLIER_NO_TRAFFIC;
-
-        if (hour >= 7 && hour <= 9) {
-            trafficMultiplier = GeoConstants.TRAFFIC_MULTIPLIER_MODERATE;
-        }
-        else if (hour >= 17 && hour <= 19) {
-            trafficMultiplier = GeoConstants.TRAFFIC_MULTIPLIER_HEAVY; // Вечерние пробки обычно хуже
-        }
-        else if (hour >= 10 && hour <= 16) {
-            trafficMultiplier = GeoConstants.TRAFFIC_MULTIPLIER_LIGHT;
-        }
-        else if (hour >= 20 && hour <= 22) {
-            trafficMultiplier = GeoConstants.TRAFFIC_MULTIPLIER_LIGHT;
-        }
-
-        if (dayOfWeek >= 6) {
-            trafficMultiplier *= 0.8;
-        }
-
-        return (int) Math.ceil(baseTime * trafficMultiplier);
     }
 
     private int calculateBaseWaitingTime(LocalDateTime departureTime) {

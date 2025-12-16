@@ -5,6 +5,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Map;
 
 
 public interface RouteStopRepository {
@@ -26,4 +27,11 @@ public interface RouteStopRepository {
     Mono<RouteStopsData> getAllRouteStopsData(String routeId);
 
     Mono<RouteStopsStatistics> getRouteStopsStatistics(String routeId);
+
+    Mono<Integer> findNearestStopSequence(String routeId, Double latitude, Double longitude);
+
+    Mono<Map<String, Integer>> findNearestStopSequencesBatch(
+            java.util.List<VehiclePositionKey> vehiclePositions);
+
+    record VehiclePositionKey(String vehicleId, String routeId, Double latitude, Double longitude) {}
 }

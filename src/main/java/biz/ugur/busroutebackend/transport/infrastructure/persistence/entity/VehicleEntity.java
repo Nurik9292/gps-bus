@@ -55,6 +55,12 @@ public class VehicleEntity {
     @Column("course")
     private Double course;
 
+    @Column("current_direction")
+    private Integer currentDirection;
+
+    @Column("last_stop_sequence")
+    private Integer lastStopSequence;
+
     @Column("created_at")
     private LocalDateTime createdAt;
 

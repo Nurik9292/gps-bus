@@ -34,6 +34,10 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     private final LocalDateTime lastPositionUpdate;
     private final Double course;
 
+    private final Integer currentDirection;
+
+    private final Integer lastStopSequence;
+
     private final BusRouteId assignedRouteId;
     private final String routeNumber;
 
@@ -56,6 +60,8 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .isInMotion(false)
                 .speedKmh(0.0)
                 .course(0.0)
+                .currentDirection(null)
+                .lastStopSequence(null)
                 .lastPositionUpdate(LocalDateTime.now())
                 .version(0L)
                 .build();
@@ -82,6 +88,8 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
             String routeNumber,
             Boolean isActive,
             Double course,
+            Integer currentDirection,
+            Integer lastStopSequence,
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
             Long version) {
@@ -99,6 +107,8 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .routeNumber(routeNumber)
                 .isActive(isActive != null ? isActive : true)
                 .course(course != null ? course : 0.0)
+                .currentDirection(currentDirection)
+                .lastStopSequence(lastStopSequence)
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
                 .version(version != null ? version : 0L)
@@ -150,6 +160,39 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 fixTime,
                 course
         );
+    }
+
+
+    public Vehicle updateDirection(Integer newStopSequence) {
+        if (newStopSequence == null) {
+            return this;
+        }
+
+        Integer newDirection = this.currentDirection;
+
+        if (this.lastStopSequence != null && !this.lastStopSequence.equals(newStopSequence)) {
+            if (newStopSequence > this.lastStopSequence) {
+                newDirection = 0;
+            } else {
+                newDirection = 1;
+            }
+            log.debug("Vehicle {} direction detected: {} -> {} (seq: {} -> {})",
+                    licensePlate, this.currentDirection, newDirection, this.lastStopSequence, newStopSequence);
+        }
+
+        return this.toBuilder()
+                .currentDirection(newDirection)
+                .lastStopSequence(newStopSequence)
+                .build();
+    }
+
+
+    public boolean isTravelingInDirection(int direction) {
+        return this.currentDirection != null && this.currentDirection == direction;
+    }
+
+    public boolean hasKnownDirection() {
+        return this.currentDirection != null;
     }
 
     public Vehicle assignToRoute(BusRouteId routeId) {
@@ -234,18 +277,11 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         return this.routeNumber != null ? this.routeNumber : "UNASSIGNED";
     }
 
-    /**
-     * Checks if vehicle has recent GPS position update.
-     * Default timeout is 10 minutes (600 seconds) - allows for traffic lights,
-     * traffic jams, and passenger boarding.
-     */
+
     public boolean hasRecentPosition() {
-        return hasRecentPosition(600); // 10 minutes default
+        return hasRecentPosition(600);
     }
 
-    /**
-     * Checks if vehicle has GPS position update within specified seconds.
-     */
     public boolean hasRecentPosition(int maxAgeSeconds) {
         if (lastPositionUpdate == null) return false;
         return lastPositionUpdate.isAfter(LocalDateTime.now().minusSeconds(maxAgeSeconds));

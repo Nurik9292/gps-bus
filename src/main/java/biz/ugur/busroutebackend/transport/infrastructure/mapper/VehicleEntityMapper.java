@@ -28,6 +28,8 @@ public class VehicleEntityMapper {
                 .routeNumber(domain.getRouteNumber())
                 .isActive(domain.getIsActive())
                 .course(domain.getCourse())
+                .currentDirection(domain.getCurrentDirection())
+                .lastStopSequence(domain.getLastStopSequence())
                 .createdAt(domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt())
                 .version(domain.getVersion())
@@ -52,6 +54,8 @@ public class VehicleEntityMapper {
                 entity.getRouteNumber(),
                 entity.getIsActive(),
                 entity.getCourse(),
+                entity.getCurrentDirection(),
+                entity.getLastStopSequence(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 entity.getVersion()

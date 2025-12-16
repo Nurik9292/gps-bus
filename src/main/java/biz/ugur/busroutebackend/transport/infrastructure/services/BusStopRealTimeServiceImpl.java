@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.services;
 import biz.ugur.busroutebackend.admin.domain.exceptions.BusStopException;
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.interfaces.rest.transport.V1.response.BusStopArrivalsResponse;
+import biz.ugur.busroutebackend.routing.infrastructure.config.ETAProperties;
 import biz.ugur.busroutebackend.transport.application.dto.BusArrivalInfo;
 import biz.ugur.busroutebackend.transport.application.dto.NearbyStopArrivalsResponse;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
@@ -30,22 +31,26 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final DistanceCalculationService distanceCalculationService;
     private final ObjectMapper objectMapper;
+    private final ETAProperties etaProperties;
 
     public BusStopRealTimeServiceImpl(
             BusStopRepository busStopRepository,
             PerformanceLogRepository performanceLogRepository,
             ReactiveRedisTemplate<String, Object> redisTemplate,
             DistanceCalculationService distanceCalculationService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ETAProperties etaProperties) {
         this.busStopRepository = busStopRepository;
         this.performanceLogRepository = performanceLogRepository;
         this.redisTemplate = redisTemplate;
         this.distanceCalculationService = distanceCalculationService;
         this.objectMapper = objectMapper;
+        this.etaProperties = etaProperties;
     }
 
     public Mono<BusStopArrivalsResponse> getStopArrivals(String stopId) {
         String cacheKey = "stop_arrivals:" + stopId;
+        int cacheTtlSeconds = etaProperties.getCache().getStopArrivalsTtlSeconds();
 
         long startTime = System.currentTimeMillis();
 
@@ -53,7 +58,6 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 .get(cacheKey)
                 .flatMap(cached -> {
                     try {
-                        // Properly convert Object (LinkedHashMap) to BusStopArrivalsResponse
                         BusStopArrivalsResponse response = objectMapper.convertValue(cached, BusStopArrivalsResponse.class);
                         log.debug("Cache HIT for stop {}", stopId);
                         return Mono.just(response);
@@ -67,13 +71,11 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                                 .flatMap(response -> {
                                     long calculationTime = System.currentTimeMillis() - startTime;
 
-                                    // ✅ Логируем производительность для мониторинга
                                     logETAPerformance(stopId, response.getArrivals().size(),
                                             0, calculationTime, false);
 
                                     return redisTemplate.opsForValue()
-                                            // ✅ ИСПРАВЛЕНИЕ: Сокращаем TTL для real-time точности
-                                            .set(cacheKey, response, Duration.ofSeconds(15))
+                                            .set(cacheKey, response, Duration.ofSeconds(cacheTtlSeconds))
                                             .thenReturn(response);
                                 })
                                 .doOnNext(calculated -> log.debug("Cache MISS for stop {}, calculated {} routes",
@@ -160,15 +162,5 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 .doOnCancel(() -> log.debug("Stopped streaming arrivals for stop {}", stopId));
     }
 
-    public static class BusStopNotFoundException extends RuntimeException {
-        public BusStopNotFoundException(String message) {
-            super(message);
-        }
-    }
 
-    public static class ETACalculationException extends RuntimeException {
-        public ETACalculationException(String message, Throwable cause) {
-            super(message, cause);
-        }
-    }
 }

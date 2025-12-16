@@ -11,6 +11,7 @@ import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.service.LicensePlateExtractor;
 import biz.ugur.busroutebackend.transport.domain.service.PositionChangeDetector;
+import biz.ugur.busroutebackend.transport.domain.service.VehicleDirectionDetectionService;
 import biz.ugur.busroutebackend.transport.domain.service.VehicleValidationService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -31,12 +32,14 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private final VehicleValidationService validationService;
     private final PositionChangeDetector positionChangeDetector;
     private final LicensePlateExtractor licensePlateExtractor;
+    private final VehicleDirectionDetectionService directionDetectionService;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
                                          VehicleFactory vehicleFactory,
                                          VehicleValidationService validationService,
                                          PositionChangeDetector positionChangeDetector,
                                          LicensePlateExtractor licensePlateExtractor,
+                                         VehicleDirectionDetectionService directionDetectionService,
                                          EventBus eventBus,
                                          CorrelationContextService correlationContextService) {
         super(correlationContextService, eventBus);
@@ -45,6 +48,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         this.validationService = validationService;
         this.positionChangeDetector = positionChangeDetector;
         this.licensePlateExtractor = licensePlateExtractor;
+        this.directionDetectionService = directionDetectionService;
     }
 
     @Override
@@ -185,17 +189,25 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             }
         }
 
-        Mono<Integer> updateMono = vehiclesToUpdate.isEmpty() ?
-                Mono.just(0) : vehicleRepository.batchUpdate(vehiclesToUpdate);
+        // Update directions for vehicles with assigned routes before saving
+        Mono<List<Vehicle>> vehiclesWithDirections = vehiclesToUpdate.isEmpty() ?
+                Mono.just(List.of()) :
+                directionDetectionService.updateVehicleDirectionsBatch(vehiclesToUpdate)
+                        .doOnNext(updated -> log.debug("Direction detection completed for {} vehicles", updated.size()));
 
-        Mono<List<Vehicle>> insertMono = vehiclesToCreate.isEmpty() ?
-                Mono.just(List.of()) : vehicleRepository.batchInsert(vehiclesToCreate).collectList();
+        return vehiclesWithDirections.flatMap(updatedVehicles -> {
+            Mono<Integer> updateMono = updatedVehicles.isEmpty() ?
+                    Mono.just(0) : vehicleRepository.batchUpdate(updatedVehicles);
 
-        return Mono.zip(updateMono, insertMono)
-                .map(tuple -> {
-                    log.info("Batch operations: {} updated, {} created", tuple.getT1(), tuple.getT2().size());
-                    return createResult(statuses);
-                });
+            Mono<List<Vehicle>> insertMono = vehiclesToCreate.isEmpty() ?
+                    Mono.just(List.of()) : vehicleRepository.batchInsert(vehiclesToCreate).collectList();
+
+            return Mono.zip(updateMono, insertMono)
+                    .map(tuple -> {
+                        log.info("Batch operations: {} updated, {} created", tuple.getT1(), tuple.getT2().size());
+                        return createResult(statuses);
+                    });
+        });
     }
 
     private Mono<VehicleUpdateStatus> updateVehiclePosition(GpsPositionDTO gpsPosition) {

@@ -21,8 +21,9 @@ public class RoutingDomainConfig {
     public ETACalculationService etaCalculationService(VehicleRepository vehicleRepository,
                                                        ETARepository etaRepository,
                                                        ReactiveRedisTemplate<String, Object> redisTemplate,
-                                                       DistanceCalculationService distanceService) {
-        return new LiveETACalculationService(vehicleRepository, etaRepository, redisTemplate, distanceService);
+                                                       DistanceCalculationService distanceService,
+                                                       ETAProperties etaProperties) {
+        return new LiveETACalculationService(vehicleRepository, etaRepository, redisTemplate, distanceService, etaProperties);
     }
 
     @Bean

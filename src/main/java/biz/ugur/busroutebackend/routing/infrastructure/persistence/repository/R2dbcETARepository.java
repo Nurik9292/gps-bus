@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.routing.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.routing.domain.repository.ETARepository;
+import biz.ugur.busroutebackend.routing.infrastructure.config.ETAProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -16,9 +17,12 @@ import java.time.LocalDateTime;
 public class R2dbcETARepository implements ETARepository {
 
     private final DatabaseClient databaseClient;
+    private final ETAProperties etaProperties;
 
     @Override
     public Mono<Integer> getVehicleBasedWaitingTime(String routeNumber, String stopName) {
+        int maxAgeMinutes = etaProperties.getPosition().getMaxAgeMinutes();
+
         return databaseClient.sql("""
             WITH route_vehicles AS (
                 SELECT
@@ -35,22 +39,23 @@ public class R2dbcETARepository implements ETARepository {
                 WHERE br.route_number = :routeNumber
                 AND bs.stop_name ILIKE :stopName
                 AND v.is_active = true
-                AND v.last_position_update > CURRENT_TIMESTAMP - INTERVAL '10 minutes'
+                AND v.last_position_update > CURRENT_TIMESTAMP - (INTERVAL '1 minute' * :maxAgeMinutes)
                 ORDER BY distance_to_stop
                 LIMIT 3
             )
             SELECT
                 CASE
                     WHEN COUNT(*) = 0 THEN NULL
-                    WHEN MIN(distance_to_stop) < 500 THEN 2  -- Автобус очень близко
-                    WHEN MIN(distance_to_stop) < 1000 THEN 5 -- Автобус близко
-                    WHEN AVG(speed_kmh) > 10 THEN 8         -- Автобусы движутся
-                    ELSE 12                                  -- Автобусы стоят или медленно едут
+                    WHEN MIN(distance_to_stop) < 500 THEN 2
+                    WHEN MIN(distance_to_stop) < 1000 THEN 5
+                    WHEN AVG(speed_kmh) > 10 THEN 8
+                    ELSE 12
                 END as estimated_wait_minutes
             FROM route_vehicles
             """)
                 .bind("routeNumber", routeNumber)
                 .bind("stopName", "%" + stopName + "%")
+                .bind("maxAgeMinutes", maxAgeMinutes)
                 .map(row -> row.get("estimated_wait_minutes", Integer.class))
                 .one()
                 .filter(waitTime -> waitTime != null)
@@ -61,12 +66,20 @@ public class R2dbcETARepository implements ETARepository {
     @Override
     public Mono<Integer> getStatisticalWaitingTime(String routeNumber, LocalDateTime currentTime) {
         return databaseClient.sql("""
+            WITH popular_routes AS (
+                -- Динамическое определение популярных маршрутов по количеству активных автобусов
+                SELECT route_number
+                FROM mv_active_routes_summary
+                WHERE active_vehicles >= 3
+                ORDER BY active_vehicles DESC, moving_vehicles DESC
+                LIMIT 10
+            )
             SELECT
                 CASE
-                    WHEN route_number IN ('1', '2', '3', '4', '5') THEN 6    -- Основные маршруты
-                    WHEN route_number IN ('7', '12', '29', '30') THEN 8      -- Популярные маршруты
-                    WHEN route_number SIMILAR TO '%[A-Z]' THEN 12            -- Экспресс маршруты
-                    ELSE 10                                                   -- Обычные маршруты
+                    WHEN br.route_number IN ('1', '2', '3', '4', '5') THEN 6    -- Основные маршруты
+                    WHEN br.route_number IN (SELECT route_number FROM popular_routes) THEN 8  -- Популярные маршруты (динамически)
+                    WHEN br.route_number SIMILAR TO '%[A-Z]' THEN 12            -- Экспресс маршруты
+                    ELSE 10                                                      -- Обычные маршруты
                 END as base_wait_time,
                 CASE
                     WHEN :hour BETWEEN 7 AND 9 THEN -2    -- Час пик утром - чаще
@@ -74,9 +87,9 @@ public class R2dbcETARepository implements ETARepository {
                     WHEN :hour BETWEEN 22 AND 6 THEN 5    -- Ночь - реже
                     ELSE 0                                 -- Обычное время
                 END as time_adjustment
-            FROM bus_routes
-            WHERE route_number = :routeNumber
-            AND is_active = true
+            FROM bus_routes br
+            WHERE br.route_number = :routeNumber
+            AND br.is_active = true
             LIMIT 1
             """)
                 .bind("routeNumber", routeNumber)
