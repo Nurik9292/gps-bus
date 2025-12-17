@@ -18,7 +18,6 @@ import reactor.core.publisher.Sinks;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -56,13 +55,15 @@ public class VehiclePositionHandler implements WebSocketHandler {
         SessionConfig sessionConfig = parseSessionConfig(session);
         activeSessions.put(sessionId, sessionConfig);
 
-        log.info("WebSocket connection established: {} (total: {})",
-                sessionId, activeSessions.size());
+        String clientIp = getClientIp(session);
+
+        log.info("WebSocket connection established: {} from {} (total: {}, routes: {})",
+                sessionId, clientIp, activeSessions.size(), sessionConfig.getRouteFilter());
 
         Flux<WebSocketMessage> outbound = createOutboundMessageStream(session, sessionConfig);
 
         Mono<Void> inbound = session.receive()
-                .doOnNext(message -> handleIncomingMessage(session, sessionId, sessionConfig, message))
+                .flatMap(message -> handleIncomingMessage(session, sessionId, sessionConfig, message))
                 .doOnError(error -> log.error("Error in inbound stream for session {}: {}",
                         sessionId, error.getMessage()))
                 .then();
@@ -71,9 +72,21 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 .and(inbound)
                 .doFinally(signalType -> {
                     activeSessions.remove(sessionId);
-                    log.info("WebSocket connection closed: {} (total: {}, signal: {})",
-                            sessionId, activeSessions.size(), signalType);
+                    log.info("WebSocket connection closed: {} from {} (total: {}, signal: {})",
+                            sessionId, clientIp, activeSessions.size(), signalType);
                 });
+    }
+
+    private String getClientIp(WebSocketSession session) {
+        try {
+            var remoteAddress = session.getHandshakeInfo().getRemoteAddress();
+            if (remoteAddress != null) {
+                return remoteAddress.getAddress().getHostAddress();
+            }
+        } catch (Exception e) {
+            log.debug("Could not get client IP: {}", e.getMessage());
+        }
+        return "unknown";
     }
 
     private Flux<WebSocketMessage> createOutboundMessageStream(WebSocketSession session,
@@ -120,10 +133,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 .doOnNext(msg -> log.debug("Sent initial positions to session"));
     }
 
-    /**
-     * Отправляет текущие позиции транспортных средств для заданной конфигурации подписки.
-     * Используется при смене маршрута или границ клиентом.
-     */
+
     private Mono<Void> sendCurrentPositionsForConfig(WebSocketSession session, SessionConfig config) {
         return getActiveVehiclesUseCase.execute(null)
                 .filter(vehicle -> isVehicleInScope(vehicle, config))
@@ -136,7 +146,6 @@ public class VehiclePositionHandler implements WebSocketHandler {
                                 config.getSubscriptionType(), config.getRouteFilter());
                     }
                     try {
-                        // Используем тот же формат что и initial_positions для совместимости с клиентом
                         Map<String, Object> response = Map.of(
                                 "type", "initial_positions",
                                 "count", positions.size(),
@@ -159,10 +168,10 @@ public class VehiclePositionHandler implements WebSocketHandler {
         return broadcastSink.asFlux()
                 .doOnNext(positionMsg -> {
                     boolean inScope = isPositionInScope(positionMsg, config);
-                    if (log.isDebugEnabled()) {
-                        log.debug("Live update filter: vehicle={}, route={}, subscriptionType={}, routeFilter={}, inScope={}",
-                                positionMsg.getVehicleId(), positionMsg.getRouteNumber(),
-                                config.getSubscriptionType(), config.getRouteFilter(), inScope);
+                    if ("routes".equals(config.getSubscriptionType())) {
+                        log.info("Live update filter: sessionId={}, vehicle={}, vehicleRoute={}, subscribedRoutes={}, inScope={}",
+                                session.getId(), positionMsg.getVehicleId(), positionMsg.getRouteNumber(),
+                                config.getRouteFilter(), inScope);
                     }
                 })
                 .filter(positionMsg -> isPositionInScope(positionMsg, config))
@@ -201,62 +210,82 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
 
-    private void handleIncomingMessage(WebSocketSession session, String sessionId,
-                                        SessionConfig config, WebSocketMessage message) {
+    private Mono<Void> handleIncomingMessage(WebSocketSession session, String sessionId,
+                                              SessionConfig config, WebSocketMessage message) {
         try {
             String payload = message.getPayloadAsText();
-            @SuppressWarnings("unchecked")
-            Map<String, Object> clientMessage = objectMapper.readValue(payload, Map.class);
+            var clientMessage = objectMapper.readValue(payload,
+                    biz.ugur.busroutebackend.interfaces.websocket.dto.WebSocketClientMessage.class);
 
-            String messageType = (String) clientMessage.get("type");
-
-            switch (messageType) {
-                case "ping":
-                    log.debug("Received ping from session {}", sessionId);
-                    break;
-
-                case "subscribe_routes":
-                    @SuppressWarnings("unchecked")
-                    java.util.List<String> routes = (List<String>) clientMessage.get("routes");
-                    if (routes != null) {
-                        config.setRouteFilter(Set.copyOf(routes));
-                        config.setSubscriptionType("routes");
-                        log.info("Session {} updated route subscription: {}", sessionId, routes);
-
-                        // Отправляем текущие позиции для нового маршрута
-                        sendCurrentPositionsForConfig(session, config)
-                                .subscribe(
-                                        msg -> log.debug("Sent updated positions for route change"),
-                                        error -> log.warn("Error sending positions after route change: {}",
-                                                error.getMessage())
-                                );
-                    }
-                    break;
-
-                case "subscribe_bounds":
-                    @SuppressWarnings("unchecked")
-                    java.util.List<Double> bounds = (List<Double>) clientMessage.get("bounds");
-                    if (bounds != null && bounds.size() == 4) {
-                        config.setBounds(bounds.get(0), bounds.get(1), bounds.get(2), bounds.get(3));
-                        config.setSubscriptionType("bounds");
-                        log.info("Session {} updated bounds subscription", sessionId);
-
-                        // Отправляем текущие позиции для новых границ
-                        sendCurrentPositionsForConfig(session, config)
-                                .subscribe(
-                                        msg -> log.debug("Sent updated positions for bounds change"),
-                                        error -> log.warn("Error sending positions after bounds change: {}",
-                                                error.getMessage())
-                                );
-                    }
-                    break;
-
-                default:
-                    log.debug("Unknown message type from session {}: {}", sessionId, messageType);
+            String messageType = clientMessage.getType();
+            if (messageType == null) {
+                log.debug("Received message without type from session {}", sessionId);
+                return Mono.empty();
             }
+
+            return switch (messageType) {
+                case "ping" -> handlePing(sessionId);
+                case "subscribe_routes" -> handleSubscribeRoutes(session, sessionId, config, clientMessage);
+                case "subscribe_bounds" -> handleSubscribeBounds(session, sessionId, config, clientMessage);
+                default -> {
+                    log.debug("Unknown message type from session {}: {}", sessionId, messageType);
+                    yield Mono.empty();
+                }
+            };
         } catch (Exception e) {
             log.warn("Failed to handle message from session {}: {}", sessionId, e.getMessage());
+            return Mono.empty();
         }
+    }
+
+    private Mono<Void> handlePing(String sessionId) {
+        log.debug("Received ping from session {}", sessionId);
+        return Mono.empty();
+    }
+
+    private Mono<Void> handleSubscribeRoutes(WebSocketSession session, String sessionId, SessionConfig config,
+                                              biz.ugur.busroutebackend.interfaces.websocket.dto.WebSocketClientMessage message) {
+        if (!message.hasRoutes()) {
+            log.debug("Subscribe routes message without routes from session {}", sessionId);
+            return Mono.empty();
+        }
+
+        Set<String> oldFilter = config.getRouteFilter();
+        config.setRouteFilter(Set.copyOf(message.getRoutes()));
+        config.setSubscriptionType("routes");
+
+        log.info("Session {} updated route subscription: {} -> {} (total active sessions: {})",
+                sessionId, oldFilter, message.getRoutes(), activeSessions.size());
+
+        if (log.isDebugEnabled()) {
+            activeSessions.forEach((sid, cfg) ->
+                    log.debug("Active session {}: type={}, routes={}",
+                            sid, cfg.getSubscriptionType(), cfg.getRouteFilter()));
+        }
+
+        return sendCurrentPositionsForConfig(session, config)
+                .doOnSuccess(v -> log.debug("Sent updated positions for route change"))
+                .doOnError(error -> log.warn("Error sending positions after route change: {}", error.getMessage()))
+                .onErrorResume(e -> Mono.empty());
+    }
+
+    private Mono<Void> handleSubscribeBounds(WebSocketSession session, String sessionId, SessionConfig config,
+                                              biz.ugur.busroutebackend.interfaces.websocket.dto.WebSocketClientMessage message) {
+        if (!message.hasValidBounds()) {
+            log.debug("Subscribe bounds message with invalid bounds from session {}", sessionId);
+            return Mono.empty();
+        }
+
+        var bounds = message.getBounds();
+        config.setBounds(bounds.get(0), bounds.get(1), bounds.get(2), bounds.get(3));
+        config.setSubscriptionType("bounds");
+
+        log.info("Session {} updated bounds subscription: {}", sessionId, config.getBoundsString());
+
+        return sendCurrentPositionsForConfig(session, config)
+                .doOnSuccess(v -> log.debug("Sent updated positions for bounds change"))
+                .doOnError(error -> log.warn("Error sending positions after bounds change: {}", error.getMessage()))
+                .onErrorResume(e -> Mono.empty());
     }
 
     private void subscribeToRedisUpdates() {
@@ -266,26 +295,23 @@ public class VehiclePositionHandler implements WebSocketHandler {
                     try {
                         Object messageObj = message.getMessage();
 
-                        // Handle different message types from Redis
                         if (messageObj instanceof VehiclePositionWebSocketMessage) {
-                            // Already deserialized by Redis
                             return (VehiclePositionWebSocketMessage) messageObj;
                         } else if (messageObj instanceof String) {
-                            // JSON string - parse it
                             return objectMapper.readValue(
                                     (String) messageObj,
                                     VehiclePositionWebSocketMessage.class
                             );
                         } else {
-                            // Try to convert via Jackson (handles Map, ArrayList, etc.)
                             return objectMapper.convertValue(
                                     messageObj,
                                     VehiclePositionWebSocketMessage.class
                             );
                         }
                     } catch (Exception e) {
+                        message.getMessage();
                         log.warn("Error parsing Redis message of type {}: {}",
-                                message.getMessage() != null ? message.getMessage().getClass().getName() : "null",
+                                message.getMessage().getClass().getName(),
                                 e.getMessage());
                         return null;
                     }
@@ -295,9 +321,8 @@ public class VehiclePositionHandler implements WebSocketHandler {
                         positionMessage -> {
                             broadcastSink.emitNext(positionMessage, (signalType, emitResult) -> {
                                 if (emitResult == Sinks.EmitResult.FAIL_NON_SERIALIZED) {
-                                    return true; // retry
+                                    return true;
                                 }
-                                // FAIL_ZERO_SUBSCRIBER and FAIL_CANCELLED are expected when no WebSocket clients are connected
                                 if (emitResult != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
                                         && emitResult != Sinks.EmitResult.FAIL_CANCELLED) {
                                     log.warn("Failed to emit position update: {}", emitResult);
@@ -318,9 +343,8 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
         broadcastSink.emitNext(message, (signalType, emitResult) -> {
             if (emitResult == Sinks.EmitResult.FAIL_NON_SERIALIZED) {
-                return true; // retry on concurrent access
+                return true;
             }
-            // FAIL_ZERO_SUBSCRIBER and FAIL_CANCELLED are expected when no WebSocket clients are connected
             if (emitResult != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
                     && emitResult != Sinks.EmitResult.FAIL_CANCELLED) {
                 log.warn("Failed to broadcast vehicle position: {}", emitResult);
@@ -386,7 +410,6 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 }
             }
         }
-        // Подписка на маршруты
         else if (params.containsKey("routes")) {
             String[] routes = params.get("routes").split(",");
             config.setRouteFilter(Set.of(routes));
@@ -491,7 +514,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
             };
         } catch (Exception e) {
             log.error("Error in position scope check for vehicle {}: {}",
-                    position != null ? position.getVehicleId() : "null",
+                    position.getVehicleId(),
                     e.getMessage(), e);
             return false;
         }
