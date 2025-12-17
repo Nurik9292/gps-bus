@@ -35,7 +35,8 @@ public class CreateExternalServiceUseCase {
                             request.description(),
                             createdByAdminId,
                             request.allowedEndpoints(),
-                            request.rateLimitPerMinute()
+                            request.rateLimitPerMinute(),
+                            request.canManageClients()
                     );
 
                     return externalServiceRepository.save(service);

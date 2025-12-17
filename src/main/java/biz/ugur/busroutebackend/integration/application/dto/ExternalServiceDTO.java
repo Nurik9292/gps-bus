@@ -16,6 +16,7 @@ public record ExternalServiceDTO(
         Boolean isActive,
         List<String> allowedEndpoints,
         Integer rateLimitPerMinute,
+        Boolean canManageClients,
         LocalDateTime lastUsedAt,
         String createdByAdminId,
         LocalDateTime createdAt,

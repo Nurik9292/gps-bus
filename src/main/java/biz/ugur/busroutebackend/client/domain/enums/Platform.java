@@ -7,7 +7,8 @@ public enum Platform {
     ANDROID("Android"),
     IOS("iOS"),
     WEB("Web"),
-    MOBILE_WEB("Mobile Web");
+    MOBILE_WEB("Mobile Web"),
+    API("API Integration");
 
     private final String displayName;
 

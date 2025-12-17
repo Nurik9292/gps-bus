@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.client.domain.repository.ClientRepository;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
@@ -91,5 +92,51 @@ public class R2dbcClientRepository extends ClientBaseRepository implements Clien
     public Mono<Long> countActiveClients() {
         return countByStatus(ClientStatus.ACTIVE)
                 .doOnSuccess(count -> log.debug("Active clients count: {}", count));
+    }
+
+    @Override
+    public Mono<Client> findByServiceAndExternalUserId(String serviceId, String externalUserId) {
+        String sql = """
+            SELECT * FROM clients
+            WHERE created_by_service_id = :serviceId
+            AND external_user_id = :externalUserId
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("serviceId", serviceId)
+                .bind("externalUserId", externalUserId)
+                .map(getRowMapper())
+                .one()
+                .doOnSuccess(client -> log.debug("Found client by service {} and external user {}",
+                        serviceId, externalUserId));
+    }
+
+    @Override
+    public Flux<Client> findByCreatedByServiceId(String serviceId, Pageable pageable) {
+        String sql = """
+            SELECT * FROM clients
+            WHERE created_by_service_id = :serviceId
+            ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("serviceId", serviceId)
+                .bind("limit", pageable.getPageSize())
+                .bind("offset", pageable.getOffset())
+                .map(getRowMapper())
+                .all()
+                .doOnComplete(() -> log.debug("Found clients for service {}", serviceId));
+    }
+
+    @Override
+    public Mono<Long> countByCreatedByServiceId(String serviceId) {
+        String sql = "SELECT COUNT(*) FROM clients WHERE created_by_service_id = :serviceId";
+
+        return databaseClient.sql(sql)
+                .bind("serviceId", serviceId)
+                .map(row -> row.get(0, Long.class))
+                .one()
+                .doOnSuccess(count -> log.debug("Client count for service '{}': {}", serviceId, count));
     }
 }

@@ -52,4 +52,39 @@ public class IntegrationSecurityConfig {
                 )
                 .build();
     }
+
+
+    @Bean
+    @Order(0)
+    public SecurityWebFilterChain integrationClientsSecurityFilterChain(
+            ServerHttpSecurity http,
+            ExternalServiceRepository externalServiceRepository,
+            ApiTokenRateLimiter rateLimiter) {
+
+        log.info("Configuring Integration Clients Security Filter Chain for /api/v1/integration/**");
+
+        ApiTokenAuthenticationFilter apiTokenFilter =
+                new ApiTokenAuthenticationFilter(externalServiceRepository, rateLimiter);
+
+        return http
+                .securityMatcher(new PathPatternParserServerWebExchangeMatcher("/api/v1/integration/**"))
+
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
+                .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
+                .logout(ServerHttpSecurity.LogoutSpec::disable)
+
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(SecurityExceptionHandlers.authenticationEntryPoint())
+                        .accessDeniedHandler(SecurityExceptionHandlers.accessDeniedHandler())
+                )
+
+                .addFilterAt(apiTokenFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+
+                .authorizeExchange(exchanges -> exchanges
+                        .pathMatchers("/api/v1/integration/**").authenticated()
+                        .anyExchange().authenticated()
+                )
+                .build();
+    }
 }

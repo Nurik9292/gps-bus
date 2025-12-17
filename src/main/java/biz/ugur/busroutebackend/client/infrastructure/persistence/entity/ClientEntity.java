@@ -60,4 +60,10 @@ public class ClientEntity {
 
     @Column("version")
     private Long version;
+
+    @Column("created_by_service_id")
+    private String createdByServiceId;
+
+    @Column("external_user_id")
+    private String externalUserId;
 }

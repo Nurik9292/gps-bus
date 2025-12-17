@@ -25,6 +25,8 @@ public class ApiVersionConfig {
     public static final String ROUTE_ALTERNATIVES = "/route-alternatives";
     public static final String LEGAL = "/legal";
     public static final String DASHBOARD = "/dashboard";
+    public static final String INTEGRATION = "/integration";
+    public static final String CLIENTS = "/clients";
 
     public static final String V1_MOBILE = API_V1 + MOBILE;
     public static final String V1_LEGAL = API_V1 + LEGAL;
@@ -60,4 +62,7 @@ public class ApiVersionConfig {
 
     public static final String V1_CLIENT_AUTH = V1_CLIENT + AUTH;
     public static final String V1_CLIENT_FAVORITES = V1_CLIENT + FAVORITES;
+
+    public static final String V1_INTEGRATION = API_V1 + INTEGRATION;
+    public static final String V1_INTEGRATION_CLIENTS = V1_INTEGRATION + CLIENTS;
 }

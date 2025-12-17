@@ -51,6 +51,8 @@ public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, C
         columns.put("created_at", entity.getCreatedAt());
         columns.put("updated_at", entity.getUpdatedAt());
         columns.put("version", entity.getVersion());
+        columns.put("created_by_service_id", entity.getCreatedByServiceId());
+        columns.put("external_user_id", entity.getExternalUserId());
         return columns;
     }
 
@@ -69,6 +71,8 @@ public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, C
                 .createdAt(row.get("created_at", LocalDateTime.class))
                 .updatedAt(row.get("updated_at", LocalDateTime.class))
                 .version(row.get("version", Long.class))
+                .createdByServiceId(row.get("created_by_service_id", String.class))
+                .externalUserId(row.get("external_user_id", String.class))
                 .build());
     }
 
@@ -105,7 +109,6 @@ public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, C
                 .bind("limit", pageable.getPageSize())
                 .bind("offset", pageable.getOffset());
 
-        // Bind all parameters from specification
         for (Map.Entry<String, Object> entry : criteria.getParameters().entrySet()) {
             executeSpec = bindValue(executeSpec, entry.getKey(), entry.getValue());
         }

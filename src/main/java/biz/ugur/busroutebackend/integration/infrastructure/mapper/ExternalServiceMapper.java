@@ -20,6 +20,7 @@ public class ExternalServiceMapper {
                 entity.getIsActive(),
                 entity.getAllowedEndpoints(),
                 entity.getRateLimitPerMinute(),
+                entity.getCanManageClients(),
                 entity.getLastUsedAt(),
                 AdminId.of(entity.getCreatedByAdminId()),
                 entity.getCreatedAt(),
@@ -37,6 +38,7 @@ public class ExternalServiceMapper {
                 .isActive(domain.getIsActive())
                 .allowedEndpoints(domain.getAllowedEndpoints())
                 .rateLimitPerMinute(domain.getRateLimitPerMinute())
+                .canManageClients(domain.getCanManageClients())
                 .lastUsedAt(domain.getLastUsedAt())
                 .createdByAdminId(domain.getCreatedByAdminId().getValue())
                 .createdAt(domain.getCreatedAt())

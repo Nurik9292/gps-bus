@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.client.domain.model;
 import biz.ugur.busroutebackend.client.domain.enums.ClientStatus;
 import biz.ugur.busroutebackend.client.domain.enums.Platform;
 import biz.ugur.busroutebackend.client.domain.event.ClientAuthenticatedEvent;
+import biz.ugur.busroutebackend.client.domain.event.ClientCreatedViaServiceEvent;
 import biz.ugur.busroutebackend.client.domain.event.ClientOtpVerifiedEvent;
 import biz.ugur.busroutebackend.client.domain.event.ClientRegisteredEvent;
 import biz.ugur.busroutebackend.client.domain.exceptions.ClientAuthenticationException;
@@ -41,6 +42,9 @@ public class Client extends AggregateRoot<Client, ClientId> {
     private LocalDateTime updatedAt;
     private Long version;
 
+    private String createdByServiceId;
+    private String externalUserId;
+
     public static Client create(String name, String phoneNumber, Platform platform) {
         String validatedName = validateName(name);
         String validatedPhone = validatePhone(phoneNumber);
@@ -70,6 +74,51 @@ public class Client extends AggregateRoot<Client, ClientId> {
         return client;
     }
 
+    public static Client createViaExternalService(String name, String serviceId, String externalUserId) {
+        if (serviceId == null || serviceId.isBlank()) {
+            throw new ClientValidationException("serviceId", "Service ID cannot be null or empty");
+        }
+        if (externalUserId == null || externalUserId.isBlank()) {
+            throw new ClientValidationException("externalUserId", "External user ID cannot be null or empty");
+        }
+
+        String validatedName = validateName(name);
+        String virtualPhone = generateIntegrationPhone(serviceId, externalUserId);
+
+        LocalDateTime now = LocalDateTime.now();
+
+        Client client = Client.builder()
+                .id(ClientId.generate())
+                .name(validatedName)
+                .phoneNumber(virtualPhone)
+                .platform(Platform.API)
+                .status(ClientStatus.ACTIVE)
+                .otpVerify(true)
+                .createdByServiceId(serviceId)
+                .externalUserId(externalUserId)
+                .lastActivity(now)
+                .build();
+
+        client.createdAt = now;
+        client.updatedAt = now;
+        client.version = 0L;
+
+        client.registerEvent(new ClientCreatedViaServiceEvent(
+                client.id.getValue(),
+                serviceId,
+                externalUserId
+        ));
+
+        return client;
+    }
+
+
+    private static String generateIntegrationPhone(String serviceId, String externalUserId) {
+        String serviceHash = serviceId.replace("-", "").substring(0, Math.min(6, serviceId.replace("-", "").length())).toUpperCase();
+        String userHash = String.valueOf(Math.abs(externalUserId.hashCode()) % 100000000);
+        return "+993INT" + serviceHash + "_" + userHash;
+    }
+
     public static Client fromDatabase(ClientId id,
                                       String name,
                                       String phoneNumber,
@@ -82,8 +131,9 @@ public class Client extends AggregateRoot<Client, ClientId> {
                                       String refreshToken,
                                       LocalDateTime createdAt,
                                       LocalDateTime updatedAt,
-                                      Long version) {
-
+                                      Long version,
+                                      String createdByServiceId,
+                                      String externalUserId) {
 
         Client client = builder()
                 .id(id)
@@ -96,6 +146,8 @@ public class Client extends AggregateRoot<Client, ClientId> {
                 .lastActivity(lastActivity)
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
+                .createdByServiceId(createdByServiceId)
+                .externalUserId(externalUserId)
                 .build();
 
         client.createdAt = createdAt;
@@ -238,6 +290,20 @@ public class Client extends AggregateRoot<Client, ClientId> {
         return this.accessToken != null && this.refreshToken != null;
     }
 
+
+    public boolean isCreatedByService() {
+        return createdByServiceId != null;
+    }
+
+
+    public boolean belongsToService(String serviceId) {
+        return serviceId != null && serviceId.equals(this.createdByServiceId);
+    }
+
+
+    public boolean isApiClient() {
+        return Platform.API.equals(this.platform);
+    }
 
     @Override
     public LocalDateTime getCreatedAt() {

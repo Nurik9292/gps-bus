@@ -17,6 +17,8 @@ public record CreateExternalServiceRequest(
         List<String> allowedEndpoints,
 
         @Min(value = 1, message = "Rate limit must be positive")
-        Integer rateLimitPerMinute
+        Integer rateLimitPerMinute,
+
+        Boolean canManageClients
 ) {
 }

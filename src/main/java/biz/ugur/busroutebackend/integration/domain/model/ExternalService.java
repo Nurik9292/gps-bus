@@ -2,6 +2,8 @@ package biz.ugur.busroutebackend.integration.domain.model;
 
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.integration.domain.events.*;
+import biz.ugur.busroutebackend.integration.domain.exceptions.ClientManagementNotAllowedException;
+import biz.ugur.busroutebackend.integration.domain.exceptions.ExternalServiceBlockedException;
 import biz.ugur.busroutebackend.integration.domain.exceptions.UnauthorizedEndpointException;
 import biz.ugur.busroutebackend.integration.domain.valueobjects.ApiToken;
 import biz.ugur.busroutebackend.integration.domain.valueobjects.ExternalServiceId;
@@ -31,6 +33,7 @@ public class ExternalService extends AggregateRoot<ExternalService, ExternalServ
     private final Boolean isActive;
     private final List<String> allowedEndpoints;
     private final Integer rateLimitPerMinute;
+    private final Boolean canManageClients;
     private final LocalDateTime lastUsedAt;
     private final AdminId createdByAdminId;
     private LocalDateTime createdAt;
@@ -42,7 +45,8 @@ public class ExternalService extends AggregateRoot<ExternalService, ExternalServ
                                           String description,
                                           AdminId createdByAdminId,
                                           List<String> allowedEndpoints,
-                                          Integer rateLimitPerMinute) {
+                                          Integer rateLimitPerMinute,
+                                          Boolean canManageClients) {
         validateName(name);
         validateRateLimit(rateLimitPerMinute);
 
@@ -57,6 +61,7 @@ public class ExternalService extends AggregateRoot<ExternalService, ExternalServ
                 .isActive(true)
                 .allowedEndpoints(allowedEndpoints != null ? new ArrayList<>(allowedEndpoints) : null)
                 .rateLimitPerMinute(rateLimitPerMinute)
+                .canManageClients(canManageClients != null ? canManageClients : false)
                 .lastUsedAt(null)
                 .createdByAdminId(createdByAdminId)
                 .build();
@@ -79,6 +84,7 @@ public class ExternalService extends AggregateRoot<ExternalService, ExternalServ
                                                 Boolean isActive,
                                                 List<String> allowedEndpoints,
                                                 Integer rateLimitPerMinute,
+                                                Boolean canManageClients,
                                                 LocalDateTime lastUsedAt,
                                                 AdminId createdByAdminId,
                                                 LocalDateTime createdAt,
@@ -92,6 +98,7 @@ public class ExternalService extends AggregateRoot<ExternalService, ExternalServ
                 .isActive(isActive)
                 .allowedEndpoints(allowedEndpoints != null ? new ArrayList<>(allowedEndpoints) : null)
                 .rateLimitPerMinute(rateLimitPerMinute)
+                .canManageClients(canManageClients != null ? canManageClients : false)
                 .lastUsedAt(lastUsedAt)
                 .createdByAdminId(createdByAdminId)
                 .build();
@@ -172,6 +179,21 @@ public class ExternalService extends AggregateRoot<ExternalService, ExternalServ
         return this.toBuilder()
                 .lastUsedAt(LocalDateTime.now())
                 .build();
+    }
+
+
+    public boolean canManageClients() {
+        return Boolean.TRUE.equals(canManageClients) && Boolean.TRUE.equals(isActive);
+    }
+
+
+    public void validateClientManagement() {
+        if (!Boolean.TRUE.equals(isActive)) {
+            throw ExternalServiceBlockedException.byId(this.id);
+        }
+        if (!Boolean.TRUE.equals(canManageClients)) {
+            throw new ClientManagementNotAllowedException(this.id.getValue());
+        }
     }
 
     public boolean isEndpointAllowed(String endpoint) {

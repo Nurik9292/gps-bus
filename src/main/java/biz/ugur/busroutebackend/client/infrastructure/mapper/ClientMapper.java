@@ -26,7 +26,9 @@ public class ClientMapper {
                 entity.getRefreshToken(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
-                entity.getVersion()
+                entity.getVersion(),
+                entity.getCreatedByServiceId(),
+                entity.getExternalUserId()
         );
     }
 
@@ -45,6 +47,8 @@ public class ClientMapper {
                 .createdAt(client.getCreatedAt())
                 .updatedAt(client.getUpdatedAt())
                 .version(client.getVersion())
+                .createdByServiceId(client.getCreatedByServiceId())
+                .externalUserId(client.getExternalUserId())
                 .build();
     }
 }

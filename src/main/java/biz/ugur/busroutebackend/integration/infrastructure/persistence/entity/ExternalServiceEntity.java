@@ -44,6 +44,9 @@ public class ExternalServiceEntity {
     @Column("rate_limit_per_minute")
     private Integer rateLimitPerMinute;
 
+    @Column("can_manage_clients")
+    private Boolean canManageClients;
+
     @Column("last_used_at")
     private LocalDateTime lastUsedAt;
 

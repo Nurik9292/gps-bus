@@ -32,4 +32,10 @@ public interface ClientRepository extends BaseRepository<Client, ClientId> {
     Flux<Client> findBySpecification(Specification<Client> specification, Pageable pageable);
 
     Mono<Long> countBySpecification(Specification<Client> specification);
+
+    Mono<Client> findByServiceAndExternalUserId(String serviceId, String externalUserId);
+
+    Flux<Client> findByCreatedByServiceId(String serviceId, Pageable pageable);
+
+    Mono<Long> countByCreatedByServiceId(String serviceId);
 }
