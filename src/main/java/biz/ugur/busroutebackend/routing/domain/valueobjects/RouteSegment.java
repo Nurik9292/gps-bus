@@ -111,6 +111,7 @@ public class RouteSegment extends ValueObject {
         return parseWKTToGeoJSON(routeGeometryWkt);
     }
 
+
     private List<Double[]> parseWKTToGeoJSON(String wkt) {
         List<Double[]> coordinates = new ArrayList<>();
 
@@ -122,10 +123,9 @@ public class RouteSegment extends ValueObject {
                 String[] lonLat = point.trim().split(" ");
                 if (lonLat.length == 2) {
                     try {
-                        coordinates.add(new Double[]{
-                                Double.parseDouble(lonLat[0]),
-                                Double.parseDouble(lonLat[1])
-                        });
+                        double longitude = Double.parseDouble(lonLat[0]);
+                        double latitude = Double.parseDouble(lonLat[1]);
+                        coordinates.add(new Double[]{latitude, longitude});
                     } catch (NumberFormatException e) {
                         log.warn("Failed to parse coordinate: {}", point);
                     }

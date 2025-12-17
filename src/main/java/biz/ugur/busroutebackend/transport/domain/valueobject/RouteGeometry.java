@@ -16,7 +16,6 @@ public class RouteGeometry extends ValueObject {
 
     private final List<Coordinates> points;
 
-    // Service for distance calculations
     private static DistanceCalculationService distanceService;
 
     public RouteGeometry(List<Coordinates> points) {
@@ -31,9 +30,6 @@ public class RouteGeometry extends ValueObject {
         this.points = List.copyOf(points);
     }
 
-    /**
-     * Set the distance calculation service (for dependency injection).
-     */
     public static void setDistanceCalculationService(DistanceCalculationService service) {
         distanceService = service;
     }
@@ -46,10 +42,9 @@ public class RouteGeometry extends ValueObject {
         List<Coordinates> points = coordinates.stream()
                 .map(coord -> {
                     if (coord.size() != 2) {
-                        throw new IllegalArgumentException("Each coordinate must have exactly 2 values [longitude, latitude]");
+                        throw new IllegalArgumentException("Each coordinate must have exactly 2 values [latitude, longitude]");
                     }
-                    // GeoJSON format: [longitude, latitude]
-                    return Coordinates.of(coord.get(1), coord.get(0));
+                    return Coordinates.of(coord.get(0), coord.get(1));
                 })
                 .toList();
 
@@ -64,10 +59,9 @@ public class RouteGeometry extends ValueObject {
         List<Coordinates> points = coordinates.stream()
                 .map(coord -> {
                     if (coord.length != 2) {
-                        throw new IllegalArgumentException("Each coordinate must have exactly 2 values [longitude, latitude]");
+                        throw new IllegalArgumentException("Each coordinate must have exactly 2 values [latitude, longitude]");
                     }
-                    // GeoJSON format: [longitude, latitude]
-                    return Coordinates.of(coord[1], coord[0]);
+                    return Coordinates.of(coord[0], coord[1]);
                 })
                 .toList();
 
@@ -123,22 +117,17 @@ public class RouteGeometry extends ValueObject {
 
     public List<List<Double>> toCoordinates() {
         return points.stream()
-                .map(point -> List.of(point.getLongitudeAsDouble(), point.getLatitudeAsDouble()))
+                .map(point -> List.of(point.getLatitudeAsDouble(), point.getLongitudeAsDouble()))
                 .toList();
     }
 
     public List<Double[]> toCoordinateArrays() {
         return points.stream()
-                .map(point -> new Double[]{point.getLongitudeAsDouble(), point.getLatitudeAsDouble()})
+                .map(point -> new Double[]{point.getLatitudeAsDouble(), point.getLongitudeAsDouble()})
                 .toList();
     }
 
-    /**
-     * Calculate total distance of the route in meters.
-     * Uses DistanceCalculationService for accurate calculations.
-     *
-     * @return Total distance in meters
-     */
+
     public double calculateDistanceMeters() {
         if (points.size() < 2) {
             return 0.0;
@@ -174,7 +163,6 @@ public class RouteGeometry extends ValueObject {
             return false;
         }
 
-        // All Coordinates are valid by construction (validated in Coordinates class)
         return true;
     }
 
@@ -183,14 +171,7 @@ public class RouteGeometry extends ValueObject {
         return new RouteGeometry(reversedPoints);
     }
 
-    /**
-     * Check if route contains a point within tolerance.
-     * Uses DistanceCalculationService for accurate distance calculations.
-     *
-     * @param point Point to check
-     * @param toleranceMeters Tolerance in meters
-     * @return true if route contains point within tolerance
-     */
+
     public boolean containsPoint(Coordinates point, double toleranceMeters) {
         if (distanceService == null) {
             throw new IllegalStateException(

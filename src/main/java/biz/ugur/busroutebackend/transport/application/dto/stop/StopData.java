@@ -42,7 +42,7 @@ public record StopData(
                 stop.getCreatedAt(),
                 stop.getUpdatedAt(),
                 stop.getCityId(),
-                stop.toCoordinates().toGeoJson()
+                stop.toCoordinates().toArray()
         );
     }
 
