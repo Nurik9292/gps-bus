@@ -49,18 +49,6 @@ public class BusInfoApiClient {
                 .exchangeToMono(response -> {
                     HttpStatusCode statusCode = response.statusCode();
                     HttpStatus status = HttpStatus.resolve(statusCode.value());
-                    String contentType = response.headers().contentType().map(MediaType::toString).orElse("unknown");
-
-//                    if (contentType.contains("text/html")) {
-//                        log.error("Bus Info API returned HTML instead of JSON - auth failed or endpoint changed");
-//                        return Mono.just(Collections.emptyList());
-//                        return response.bodyToMono(String.class)
-//                                .defaultIfEmpty("<empty>")
-//                                .map(body -> {
-//                                    log.error("Bus Info API returned HTML (auth failed or endpoint changed). Body:\n{}", body);
-//                                    return Collections.emptyList();
-//                                });
-//                    }
 
                     if (status == HttpStatus.UNAUTHORIZED) {
                         log.error("Bus Info API authentication failed");
@@ -94,12 +82,7 @@ public class BusInfoApiClient {
                             return Mono.error(new BusInfoApiException("Failed to parse BusInfoDTO JSON", e));
                         }
                     });
-
-//                    return response.bodyToFlux(BusInfoDTO.class)
-//                            .collectList()
-//                            .doOnNext(list -> list.forEach(dto ->
-//                                    log.debug("Parsed BusInfoDTO: {}", dto)
-//                            ));
+                    
                 })
                 .timeout(Duration.ofSeconds(30))
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(2))

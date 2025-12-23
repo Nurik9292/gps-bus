@@ -65,25 +65,25 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
             updated_at,
             version
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (:id, :originLat, :originLon, :destLat, :destLon, :searchTime, :optionsCount, :maxTransfers, :maxWalkingDist, :createdAt, :updatedAt, :version)
         RETURNING *
         """;
 
         log.info("➕ Inserting new TripPlan: {}", tripPlan.getId().getValue());
 
         return databaseClient.sql(sql)
-                .bind(0, entity.getId())
-                .bind(1, entity.getOriginLatitude())
-                .bind(2, entity.getOriginLongitude())
-                .bind(3, entity.getDestinationLatitude())
-                .bind(4, entity.getDestinationLongitude())
-                .bind(5, entity.getSearchTime() != null ? entity.getSearchTime() : LocalDateTime.now())
-                .bind(6, entity.getOptionsCount() != null ? entity.getOptionsCount() : 0)
-                .bind(7, entity.getMaxTransfers() != null ? entity.getMaxTransfers() : 2)
-                .bind(8, entity.getMaxWalkingDistanceMeters() != null ? entity.getMaxWalkingDistanceMeters() : 800)
-                .bind(9, convertToOffsetDateTime(entity.getCreatedAt()))
-                .bind(10, OffsetDateTime.now())
-                .bind(11, 0L)
+                .bind("id", entity.getId())
+                .bind("originLat", entity.getOriginLatitude())
+                .bind("originLon", entity.getOriginLongitude())
+                .bind("destLat", entity.getDestinationLatitude())
+                .bind("destLon", entity.getDestinationLongitude())
+                .bind("searchTime", entity.getSearchTime() != null ? entity.getSearchTime() : LocalDateTime.now())
+                .bind("optionsCount", entity.getOptionsCount() != null ? entity.getOptionsCount() : 0)
+                .bind("maxTransfers", entity.getMaxTransfers() != null ? entity.getMaxTransfers() : 2)
+                .bind("maxWalkingDist", entity.getMaxWalkingDistanceMeters() != null ? entity.getMaxWalkingDistanceMeters() : 800)
+                .bind("createdAt", convertToOffsetDateTime(entity.getCreatedAt()))
+                .bind("updatedAt", OffsetDateTime.now())
+                .bind("version", 0L)
                 .map(getRowMapper())
                 .one()
                 .onErrorResume(error -> {
@@ -100,19 +100,19 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
     private Mono<TripPlan> updateExisting(TripPlan tripPlan) {
         String sql = """
         UPDATE trip_plans SET
-            options_count = ?,
-            updated_at = ?,
+            options_count = :optionsCount,
+            updated_at = :updatedAt,
             version = version + 1
-        WHERE id = ?
+        WHERE id = :id
         RETURNING *
         """;
 
         log.info("🔄 Updating existing TripPlan: {}", tripPlan.getId().getValue());
 
         return databaseClient.sql(sql)
-                .bind(0, tripPlan.getTripOptionsCount())
-                .bind(1, OffsetDateTime.now())
-                .bind(2, tripPlan.getId().getValue())
+                .bind("optionsCount", tripPlan.getTripOptionsCount())
+                .bind("updatedAt", OffsetDateTime.now())
+                .bind("id", tripPlan.getId().getValue())
                 .map(getRowMapper())
                 .one()
                 .switchIfEmpty(Mono.error(new RuntimeException("Failed to update TripPlan: " + tripPlan.getId().getValue())));
@@ -120,10 +120,10 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
 
     @Override
     public Mono<TripPlan> findById(TripPlanId id) {
-        String sql = "SELECT * FROM trip_plans WHERE id = ?";
+        String sql = "SELECT * FROM trip_plans WHERE id = :id";
 
         return databaseClient.sql(sql)
-                .bind(0, id.getValue())
+                .bind("id", id.getValue())
                 .map(getRowMapper())
                 .all()
                 .take(1)

@@ -587,4 +587,105 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .map(row -> row.get(0, Long.class))
                 .one();
     }
+
+    @Override
+    @Transactional
+    public Mono<Long> clearAllRouteAssignments() {
+        String sql = """
+            UPDATE vehicles
+            SET route_number = NULL,
+                assigned_route_id = NULL,
+                updated_at = :updatedAt
+            WHERE is_active = true
+            AND (route_number IS NOT NULL OR assigned_route_id IS NOT NULL)
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("updatedAt", LocalDateTime.now())
+                .fetch()
+                .rowsUpdated()
+                .doOnSuccess(count -> log.info("Cleared route assignments for {} vehicles", count));
+    }
+
+    @Override
+    public Mono<Map<String, Vehicle>> findAllWithRouteAssignment() {
+        String sql = """
+            SELECT * FROM vehicles
+            WHERE is_active = true
+            AND route_number IS NOT NULL
+            """;
+
+        return databaseClient.sql(sql)
+                .map(getRowMapper())
+                .all()
+                .collectMap(Vehicle::getLicensePlate)
+                .doOnSuccess(map -> log.debug("Found {} vehicles with route assignments", map.size()));
+    }
+
+    @Override
+    @Transactional
+    public Mono<Integer> updateRouteAssignment(String licensePlate, BusRouteId routeId, String routeNumber) {
+        String sql = """
+            UPDATE vehicles
+            SET route_number = :routeNumber,
+                assigned_route_id = :routeId,
+                updated_at = :updatedAt
+            WHERE license_plate = :licensePlate
+            AND is_active = true
+            """;
+
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
+                .bind("licensePlate", licensePlate)
+                .bind("updatedAt", LocalDateTime.now());
+
+        spec = bindValue(spec, "routeNumber", routeNumber);
+        spec = bindValue(spec, "routeId", routeId != null ? routeId.getValue() : null);
+
+        return spec.fetch()
+                .rowsUpdated()
+                .map(Long::intValue)
+                .doOnSuccess(count -> {
+                    if (count > 0) {
+                        log.debug("Updated route assignment for vehicle {}: route={}", licensePlate, routeNumber);
+                    } else {
+                        log.warn("Vehicle not found for route assignment update: {}", licensePlate);
+                    }
+                });
+    }
+
+    @Override
+    @Transactional
+    public Mono<Integer> clearRouteAssignmentsByLicensePlates(List<String> licensePlates) {
+        if (licensePlates == null || licensePlates.isEmpty()) {
+            return Mono.just(0);
+        }
+
+        List<String> namedParams = new ArrayList<>();
+        for (int i = 0; i < licensePlates.size(); i++) {
+            namedParams.add(":plate" + i);
+        }
+        String placeholders = String.join(",", namedParams);
+
+        String sql = String.format("""
+            UPDATE vehicles
+            SET route_number = NULL,
+                assigned_route_id = NULL,
+                updated_at = :updatedAt
+            WHERE license_plate IN (%s)
+            AND is_active = true
+            """, placeholders);
+
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
+                .bind("updatedAt", LocalDateTime.now());
+
+        for (int i = 0; i < licensePlates.size(); i++) {
+            spec = spec.bind("plate" + i, licensePlates.get(i));
+        }
+
+        return spec.fetch()
+                .rowsUpdated()
+                .map(Long::intValue)
+                .doOnSuccess(count -> log.info("Cleared route assignments for {} vehicles (requested: {})",
+                        count, licensePlates.size()));
+    }
 }

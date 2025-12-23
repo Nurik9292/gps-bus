@@ -445,7 +445,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
         return databaseClient.sql(buildTwoTransferRoutesQuery())
                 .bind("fromStopIds", fromStopIds)
                 .bind("toStopIds", toStopIds)
-                .bind("maxTransferDistanceKm", maxTransferDistanceKm)
                 .bind("limit", TWO_TRANSFER_LIMIT)
                 .map(this::mapToTwoTransferRouteResult)
                 .all()
@@ -454,9 +453,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
     }
 
     private String buildTwoTransferRoutesQuery() {
-        // P3 OPTIMIZATION: All 8 direction combinations for complete route coverage
-        // FFF, FFB, FBF, FBB, BFF, BFB, BBF, BBB
-        // P2 OPTIMIZATION: CTE for vehicle counts to avoid duplicate subqueries
         return """
             WITH route_vehicle_counts AS (
                 SELECT assigned_route_id, COUNT(*) as vehicle_count
@@ -936,7 +932,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 .longitude(row.get("to_lon", BigDecimal.class))
                 .build();
 
-        // Extract travel times and vehicle counts
         Integer firstSegmentMinutes = row.get("first_segment_minutes", Integer.class);
         Integer secondSegmentMinutes = row.get("second_segment_minutes", Integer.class);
         Integer thirdSegmentMinutes = row.get("third_segment_minutes", Integer.class);
@@ -945,12 +940,10 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
         Long secondRouteVehicles = row.get("second_route_vehicles", Long.class);
         Long thirdRouteVehicles = row.get("third_route_vehicles", Long.class);
 
-        // Adjust travel times based on vehicle availability
         int adjustedFirstMinutes = adjustTravelTimeByVehicleCount(firstSegmentMinutes, firstRouteVehicles);
         int adjustedSecondMinutes = adjustTravelTimeByVehicleCount(secondSegmentMinutes, secondRouteVehicles);
         int adjustedThirdMinutes = adjustTravelTimeByVehicleCount(thirdSegmentMinutes, thirdRouteVehicles);
 
-        // Calculate wait times at transfers
         Boolean isFirstTransferMajor = row.get("first_transfer_is_major", Boolean.class);
         Boolean isSecondTransferMajor = row.get("second_transfer_is_major", Boolean.class);
 
@@ -966,8 +959,8 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 adjustedSecondMinutes,
                 secondTransferWait,
                 adjustedThirdMinutes,
-                0.0, // walkingDistanceToStart - will be calculated later
-                0.0  // walkingDistanceFromEnd - will be calculated later
+                0.0,
+                0.0
         );
     }
 
@@ -989,9 +982,9 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
     private int calculateTransferWaitTime(Boolean isMajorStop, Long fromRouteVehicles, Long toRouteVehicles) {
         int baseTransferTime = Boolean.TRUE.equals(isMajorStop) ? 3 : 5;
 
-        long avgVehicles = (fromRouteVehicles != null && toRouteVehicles != null)
-                ? (fromRouteVehicles + toRouteVehicles) / 2
-                : (fromRouteVehicles != null ? fromRouteVehicles : toRouteVehicles);
+        long fromVehicles = fromRouteVehicles != null ? fromRouteVehicles : 0L;
+        long toVehicles = toRouteVehicles != null ? toRouteVehicles : 0L;
+        long avgVehicles = (fromVehicles + toVehicles) / 2;
 
         if (avgVehicles == 0) return baseTransferTime + 5;
         if (avgVehicles >= 4) return baseTransferTime;

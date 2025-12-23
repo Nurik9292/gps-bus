@@ -253,9 +253,9 @@ public class VehicleDataScheduler {
                 })
                 .doOnSuccess(result -> {
                     if (result != null && result.assignedCount() > 0) {
-                        log.info("Initial route sync successful: assigned={}, unassigned={}, total={}",
+                        log.info("Initial route sync successful: assigned={}, unassigned={}, processedAt={}",
                                 result.assignedCount(),
-                                result.unchangedCount(),
+                                result.unassignedCount(),
                                 result.processedAt());
                     } else {
                         log.info("Initial route sync: no assignments needed");

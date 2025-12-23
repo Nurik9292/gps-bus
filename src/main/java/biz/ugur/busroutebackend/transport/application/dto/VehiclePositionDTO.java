@@ -1,11 +1,14 @@
 package biz.ugur.busroutebackend.transport.application.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class VehiclePositionDTO {
 
     @JsonProperty("vehicle_id")
@@ -95,6 +98,7 @@ public class VehiclePositionDTO {
                 && isValidCoordinate(currentLatitude, currentLongitude);
     }
 
+    @JsonIgnore
     public boolean isMovingFast() {
         return speedKmh != null && speedKmh > 50.0;
     }

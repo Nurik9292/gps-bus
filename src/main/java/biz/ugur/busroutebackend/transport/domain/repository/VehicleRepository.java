@@ -54,4 +54,12 @@ public interface VehicleRepository extends BaseRepository<Vehicle, VehicleId> {
     Flux<Vehicle> findBySpecification(Specification<Vehicle> specification, Pageable pageable);
 
     Mono<Long> countBySpecification(Specification<Vehicle> specification);
+
+    Mono<Long> clearAllRouteAssignments();
+
+    Mono<Map<String, Vehicle>> findAllWithRouteAssignment();
+
+    Mono<Integer> updateRouteAssignment(String licensePlate, BusRouteId routeId, String routeNumber);
+
+    Mono<Integer> clearRouteAssignmentsByLicensePlates(List<String> licensePlates);
 }

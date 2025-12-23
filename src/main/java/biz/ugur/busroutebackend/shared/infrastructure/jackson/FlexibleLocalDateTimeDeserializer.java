@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
@@ -27,6 +29,7 @@ public class FlexibleLocalDateTimeDeserializer extends JsonDeserializer<LocalDat
             return null;
         }
 
+        // Try local datetime formatters first (without timezone)
         for (DateTimeFormatter formatter : FORMATTERS) {
             try {
                 return LocalDateTime.parse(dateString, formatter);
@@ -34,12 +37,26 @@ public class FlexibleLocalDateTimeDeserializer extends JsonDeserializer<LocalDat
             }
         }
 
+        // Try ISO 8601 formats with timezone (e.g., "2025-12-08T09:03:00.000Z")
+        try {
+            return ZonedDateTime.parse(dateString, DateTimeFormatter.ISO_DATE_TIME).toLocalDateTime();
+        } catch (DateTimeParseException ignored) {
+        }
+
+        // Try offset datetime (e.g., "2025-12-08T09:03:00.000+05:00")
+        try {
+            return OffsetDateTime.parse(dateString, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toLocalDateTime();
+        } catch (DateTimeParseException ignored) {
+        }
+
+        // Try simple date format (converts to start of day)
         try {
             LocalDate date = LocalDate.parse(dateString, DateTimeFormatter.ISO_LOCAL_DATE);
             return date.atStartOfDay();
         } catch (DateTimeParseException e) {
             throw new IOException("Unable to parse date: " + dateString +
-                    ". Expected formats: yyyy-MM-dd'T'HH:mm:ss, yyyy-MM-dd'T'HH:mm, or yyyy-MM-dd", e);
+                    ". Expected formats: yyyy-MM-dd'T'HH:mm:ss, yyyy-MM-dd'T'HH:mm, yyyy-MM-dd, " +
+                    "or ISO 8601 with timezone (e.g., 2025-12-08T09:03:00.000Z)", e);
         }
     }
 }

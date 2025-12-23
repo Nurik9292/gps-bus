@@ -6,6 +6,8 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.vehicle.Vehicl
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.vehicle.VehicleResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.vehicle.VehicleSelectOption;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
+import biz.ugur.busroutebackend.transport.application.services.ExternalApiService;
+import biz.ugur.busroutebackend.transport.application.usecase.SyncBusRouteAssignmentsUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.vehicle.*;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import jakarta.validation.Valid;
@@ -69,10 +71,7 @@ public class AdminVehicleController extends BasePaginatedController {
                 .map(VehicleListResponse::fromResult));
     }
 
-    /**
-     * Lightweight endpoint for select boxes.
-     * Returns only id, deviceId, and licensePlate for all active vehicles.
-     */
+
     @GetMapping("/select-options")
     public Mono<ResponseEntity<ApiResponse<List<VehicleSelectOption>>>> getSelectOptions() {
         return ok(vehicleRepository.findActiveVehicles()
