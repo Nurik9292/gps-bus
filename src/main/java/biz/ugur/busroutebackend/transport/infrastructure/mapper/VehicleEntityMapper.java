@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.mapper;
 
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteSource;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import biz.ugur.busroutebackend.transport.infrastructure.persistence.entity.VehicleEntity;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,19 @@ public class VehicleEntityMapper {
                 .course(domain.getCourse())
                 .currentDirection(domain.getCurrentDirection())
                 .lastStopSequence(domain.getLastStopSequence())
+                // Garage tracking
+                .lastGarageId(domain.getLastGarageId())
+                .garageEntryTime(domain.getGarageEntryTime())
+                .garageExitTime(domain.getGarageExitTime())
+                .isInGarage(domain.getIsInGarage())
+                // Route source
+                .routeSource(domain.getRouteSource() != null ? domain.getRouteSource().name() : null)
+                .routeConfidence(domain.getRouteConfidence())
+                .gpsDetectionEnabled(domain.getGpsDetectionEnabled())
+                // Manual assignment
+                .assignedBy(domain.getAssignedBy())
+                .manualAssignmentReason(domain.getManualAssignmentReason())
+                // Metadata
                 .createdAt(domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt())
                 .version(domain.getVersion())
@@ -56,6 +70,19 @@ public class VehicleEntityMapper {
                 entity.getCourse(),
                 entity.getCurrentDirection(),
                 entity.getLastStopSequence(),
+                // Garage tracking
+                entity.getLastGarageId(),
+                entity.getGarageEntryTime(),
+                entity.getGarageExitTime(),
+                entity.getIsInGarage(),
+                // Route source
+                entity.getRouteSource() != null ? RouteSource.valueOf(entity.getRouteSource()) : null,
+                entity.getRouteConfidence(),
+                entity.getGpsDetectionEnabled(),
+                // Manual assignment
+                entity.getAssignedBy(),
+                entity.getManualAssignmentReason(),
+                // Metadata
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 entity.getVersion()

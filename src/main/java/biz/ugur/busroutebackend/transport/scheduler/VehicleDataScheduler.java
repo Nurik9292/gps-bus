@@ -33,14 +33,16 @@ public class VehicleDataScheduler {
 
     private final ExternalApiService externalApiService;
     private final UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase;
-    private final SyncBusRouteAssignmentsUseCase syncBusRouteAssignmentsUseCase;
+    // ЗАКОММЕНТИРОВАНО 2025-12-23: Переход на автономную систему (GPS + Shift Assignments)
+    // private final SyncBusRouteAssignmentsUseCase syncBusRouteAssignmentsUseCase;
     private final VehicleRepository vehicleRepository;
     private final GpsApiClient gpsApiClient;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final SchedulerProperties schedulerProperties;
 
     private final AtomicBoolean gpsUpdateInProgress = new AtomicBoolean(false);
-    private final AtomicBoolean busInfoSyncInProgress = new AtomicBoolean(false);
+    // ЗАКОММЕНТИРОВАНО 2025-12-23: Bus Info API sync больше не используется
+    // private final AtomicBoolean busInfoSyncInProgress = new AtomicBoolean(false);
     private volatile Instant lastGpsUpdateStartTime = null;
 
     private static final String GPS_UPDATE_STATS_KEY = "gps:update:stats";
@@ -49,14 +51,16 @@ public class VehicleDataScheduler {
 
     public VehicleDataScheduler(ExternalApiService externalApiService,
                                 UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase,
-                                SyncBusRouteAssignmentsUseCase syncBusRouteAssignmentsUseCase,
+                                // ЗАКОММЕНТИРОВАНО 2025-12-23: Bus Info API sync
+                                // SyncBusRouteAssignmentsUseCase syncBusRouteAssignmentsUseCase,
                                 VehicleRepository vehicleRepository,
                                 GpsApiClient gpsApiClient,
                                 ReactiveRedisTemplate<String, Object> redisTemplate,
                                 SchedulerProperties schedulerProperties) {
         this.externalApiService = externalApiService;
         this.updateVehiclePositionsUseCase = updateVehiclePositionsUseCase;
-        this.syncBusRouteAssignmentsUseCase = syncBusRouteAssignmentsUseCase;
+        // ЗАКОММЕНТИРОВАНО 2025-12-23: Bus Info API sync
+        // this.syncBusRouteAssignmentsUseCase = syncBusRouteAssignmentsUseCase;
         this.vehicleRepository = vehicleRepository;
         this.gpsApiClient = gpsApiClient;
         this.redisTemplate = redisTemplate;
@@ -158,39 +162,55 @@ public class VehicleDataScheduler {
 
 
 
-    @Scheduled(cron = "0 */2 * * * *")
-    public void syncBusRouteAssignments() {
-        if (!busInfoSyncInProgress.compareAndSet(false, true)) {
-            log.warn("Bus info sync already in progress, skipping this cycle");
-            return;
-        }
-
-        try {
-            log.info("Starting scheduled bus route assignments sync");
-            Instant startTime = Instant.now();
-
-            externalApiService.fetchAllBusInfo()
-                    .flatMap(busInfos -> {
-                        log.info("Fetched {} bus route assignments, processing...", busInfos.size());
-                        return syncBusRouteAssignmentsUseCase.execute(busInfos);
-                    })
-                    .doOnSuccess(result -> {
-                        Duration duration = Duration.between(startTime, Instant.now());
-                        log.info("Bus route sync completed in {}ms: {}", duration.toMillis(), result);
-                    })
-                    .doOnError(error -> {
-                        Duration duration = Duration.between(startTime, Instant.now());
-                        log.error("Bus route sync failed after {}ms", duration.toMillis(), error);
-                    })
-                    .onErrorResume(error -> Mono.empty())
-                    .doFinally(signal -> busInfoSyncInProgress.set(false))
-                    .subscribe();
-
-        } catch (Exception e) {
-            log.error("Unexpected error in bus route sync scheduler", e);
-            busInfoSyncInProgress.set(false);
-        }
-    }
+    /*
+     * ============================================================================
+     * ЗАКОММЕНТИРОВАНО 2025-12-23: Bus Info API Sync
+     * Причина: Переход на автономную систему назначения маршрутов
+     *
+     * Этот метод синхронизировал назначения маршрутов из внешней системы Имдат
+     * каждые 2 минуты. Больше не используется.
+     *
+     * Альтернативы:
+     * 1. VehicleShiftScheduler.applyFirstShift() / applySecondShift() - плановые назначения в 07:00 и 14:00
+     * 2. GPS Auto-Detection - автоматическое определение по GPS (DetectRouteByGpsUseCase)
+     * 3. Immediate Assignments - немедленное ручное назначение через админ панель
+     *
+     * Для восстановления: раскомментировать этот метод и поля выше.
+     * ============================================================================
+     */
+    // @Scheduled(cron = "0 */2 * * * *")
+    // public void syncBusRouteAssignments() {
+    //     if (!busInfoSyncInProgress.compareAndSet(false, true)) {
+    //         log.warn("Bus info sync already in progress, skipping this cycle");
+    //         return;
+    //     }
+    //
+    //     try {
+    //         log.info("Starting scheduled bus route assignments sync");
+    //         Instant startTime = Instant.now();
+    //
+    //         externalApiService.fetchAllBusInfo()
+    //                 .flatMap(busInfos -> {
+    //                     log.info("Fetched {} bus route assignments, processing...", busInfos.size());
+    //                     return syncBusRouteAssignmentsUseCase.execute(busInfos);
+    //                 })
+    //                 .doOnSuccess(result -> {
+    //                     Duration duration = Duration.between(startTime, Instant.now());
+    //                     log.info("Bus route sync completed in {}ms: {}", duration.toMillis(), result);
+    //                 })
+    //                 .doOnError(error -> {
+    //                     Duration duration = Duration.between(startTime, Instant.now());
+    //                     log.error("Bus route sync failed after {}ms", duration.toMillis(), error);
+    //                 })
+    //                 .onErrorResume(error -> Mono.empty())
+    //                 .doFinally(signal -> busInfoSyncInProgress.set(false))
+    //                 .subscribe();
+    //
+    //     } catch (Exception e) {
+    //         log.error("Unexpected error in bus route sync scheduler", e);
+    //         busInfoSyncInProgress.set(false);
+    //     }
+    // }
 
 
     @Scheduled(cron = "0 * 6 * * *")
@@ -200,14 +220,15 @@ public class VehicleDataScheduler {
                 .doOnNext(healthy -> log.debug("GPS API health: {}", healthy ? "OK" : "FAILED"))
                 .flatMap(healthy -> saveHealthStatus(GPS_HEALTH_KEY, healthy).thenReturn(healthy));
 
-        Mono<Boolean> busInfoHealth = externalApiService.busInfoHealthCheck()
-                .doOnNext(healthy -> log.debug("Bus Info API health: {}", healthy ? "OK" : "FAILED"))
-                .flatMap(healthy -> saveHealthStatus(BUS_INFO_HEALTH_KEY, healthy).thenReturn(healthy));
+        // ЗАКОММЕНТИРОВАНО 2025-12-23: Bus Info API больше не используется
+        // Mono<Boolean> busInfoHealth = externalApiService.busInfoHealthCheck()
+        //         .doOnNext(healthy -> log.debug("Bus Info API health: {}", healthy ? "OK" : "FAILED"))
+        //         .flatMap(healthy -> saveHealthStatus(BUS_INFO_HEALTH_KEY, healthy).thenReturn(healthy));
 
-        Mono.zip(gpsHealth, busInfoHealth)
+        gpsHealth
                 .publishOn(Schedulers.boundedElastic())
                 .subscribe(
-                        tuple -> log.debug("Health check completed: GPS={}, BusInfo={}", tuple.getT1(), tuple.getT2()),
+                        healthy -> log.debug("Health check completed: GPS={}", healthy),
                         error -> log.error("Health check failed", error)
                 );
     }
@@ -227,41 +248,54 @@ public class VehicleDataScheduler {
 
     }
 
-    @EventListener(ApplicationReadyEvent.class)
-    public void onApplicationReady(ApplicationReadyEvent event) {
-        log.info("Application ready - triggering initial route sync");
-
-        Mono.delay(Duration.ofSeconds(10))
-                .then(Mono.defer(this::performInitialRouteSync))
-                .subscribeOn(Schedulers.boundedElastic())
-                .subscribe(
-                        result -> log.info("Initial route sync completed: {}", result),
-                        error -> log.error("Initial route sync failed", error)
-                );
-    }
-
-    private Mono<SyncBusRouteAssignmentsUseCase.BusRouteAssignmentResult> performInitialRouteSync() {
-        log.info("Performing initial route synchronization...");
-
-        return externalApiService.fetchAllBusInfo()
-                .flatMap(busInfos -> {
-                    if (busInfos.isEmpty()) {
-                        log.warn("No bus info available for initial sync");
-                        return Mono.empty();
-                    }
-                    return syncBusRouteAssignmentsUseCase.execute(busInfos);
-                })
-                .doOnSuccess(result -> {
-                    if (result != null && result.assignedCount() > 0) {
-                        log.info("Initial route sync successful: assigned={}, unassigned={}, processedAt={}",
-                                result.assignedCount(),
-                                result.unassignedCount(),
-                                result.processedAt());
-                    } else {
-                        log.info("Initial route sync: no assignments needed");
-                    }
-                });
-    }
+    /*
+     * ============================================================================
+     * ЗАКОММЕНТИРОВАНО 2025-12-23: Initial Bus Info Sync при старте приложения
+     * Причина: Больше не используем Bus Info API
+     *
+     * Эти методы запускали синхронизацию маршрутов из Имдат при старте приложения.
+     *
+     * Новое поведение:
+     * - VehicleShiftScheduler автоматически применяет shift assignments в 07:00 и 14:00
+     * - GPS автоопределение начинает работать сразу после запуска
+     * - Не нужна начальная синхронизация с внешней системой
+     * ============================================================================
+     */
+    // @EventListener(ApplicationReadyEvent.class)
+    // public void onApplicationReady(ApplicationReadyEvent event) {
+    //     log.info("Application ready - triggering initial route sync");
+    //
+    //     Mono.delay(Duration.ofSeconds(10))
+    //             .then(Mono.defer(this::performInitialRouteSync))
+    //             .subscribeOn(Schedulers.boundedElastic())
+    //             .subscribe(
+    //                     result -> log.info("Initial route sync completed: {}", result),
+    //                     error -> log.error("Initial route sync failed", error)
+    //             );
+    // }
+    //
+    // private Mono<SyncBusRouteAssignmentsUseCase.BusRouteAssignmentResult> performInitialRouteSync() {
+    //     log.info("Performing initial route synchronization...");
+    //
+    //     return externalApiService.fetchAllBusInfo()
+    //             .flatMap(busInfos -> {
+    //                 if (busInfos.isEmpty()) {
+    //                     log.warn("No bus info available for initial sync");
+    //                     return Mono.empty();
+    //                 }
+    //                 return syncBusRouteAssignmentsUseCase.execute(busInfos);
+    //             })
+    //             .doOnSuccess(result -> {
+    //                 if (result != null && result.assignedCount() > 0) {
+    //                     log.info("Initial route sync successful: assigned={}, unassigned={}, processedAt={}",
+    //                             result.assignedCount(),
+    //                             result.unassignedCount(),
+    //                             result.processedAt());
+    //                 } else {
+    //                     log.info("Initial route sync: no assignments needed");
+    //                 }
+    //             });
+    // }
 
 
     private Mono<Void> saveGpsUpdateStats(VehiclePositionUpdateResult result, Duration duration) {

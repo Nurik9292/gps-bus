@@ -70,6 +70,18 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         columns.put("course", persistenceEntity.getCourse());
         columns.put("current_direction", persistenceEntity.getCurrentDirection());
         columns.put("last_stop_sequence", persistenceEntity.getLastStopSequence());
+        // Garage tracking
+        columns.put("last_garage_id", persistenceEntity.getLastGarageId());
+        columns.put("garage_entry_time", persistenceEntity.getGarageEntryTime());
+        columns.put("garage_exit_time", persistenceEntity.getGarageExitTime());
+        columns.put("is_in_garage", persistenceEntity.getIsInGarage());
+        // Route source
+        columns.put("route_source", persistenceEntity.getRouteSource());
+        columns.put("route_confidence", persistenceEntity.getRouteConfidence());
+        columns.put("gps_detection_enabled", persistenceEntity.getGpsDetectionEnabled());
+        // Manual assignment
+        columns.put("assigned_by", persistenceEntity.getAssignedBy());
+        columns.put("manual_assignment_reason", persistenceEntity.getManualAssignmentReason());
         return columns;
     }
 
@@ -85,12 +97,18 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 id, device_id, license_plate, current_latitude, current_longitude,
                 speed_kmh, is_in_motion, last_position_update, assigned_route_id,
                 route_number, is_active, created_at, updated_at, course,
-                current_direction, last_stop_sequence, version
+                current_direction, last_stop_sequence, version,
+                last_garage_id, garage_entry_time, garage_exit_time, is_in_garage,
+                route_source, route_confidence, gps_detection_enabled,
+                assigned_by, manual_assignment_reason
             ) VALUES (
                 :id, :device_id, :license_plate, :current_latitude, :current_longitude,
                 :speed_kmh, :is_in_motion, :last_position_update, :assigned_route_id,
                 :route_number, :is_active, :created_at, :updated_at, :course,
-                :current_direction, :last_stop_sequence, :version
+                :current_direction, :last_stop_sequence, :version,
+                :last_garage_id, :garage_entry_time, :garage_exit_time, :is_in_garage,
+                :route_source, :route_confidence, :gps_detection_enabled,
+                :assigned_by, :manual_assignment_reason
             ) RETURNING *
             """;
 
@@ -132,6 +150,15 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 course = :course,
                 current_direction = :current_direction,
                 last_stop_sequence = :last_stop_sequence,
+                last_garage_id = :last_garage_id,
+                garage_entry_time = :garage_entry_time,
+                garage_exit_time = :garage_exit_time,
+                is_in_garage = :is_in_garage,
+                route_source = :route_source,
+                route_confidence = :route_confidence,
+                gps_detection_enabled = :gps_detection_enabled,
+                assigned_by = :assigned_by,
+                manual_assignment_reason = :manual_assignment_reason,
                 version = :version
             WHERE id = :id AND version = :old_version
             RETURNING *
@@ -356,6 +383,19 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .course(row.get("course", Double.class))
                 .currentDirection(safeGet(row, "current_direction", Integer.class, null))
                 .lastStopSequence(safeGet(row, "last_stop_sequence", Integer.class, null))
+                // Garage tracking fields
+                .lastGarageId(safeGet(row, "last_garage_id", String.class, null))
+                .garageEntryTime(safeGet(row, "garage_entry_time", LocalDateTime.class, null))
+                .garageExitTime(safeGet(row, "garage_exit_time", LocalDateTime.class, null))
+                .isInGarage(safeGet(row, "is_in_garage", Boolean.class, false))
+                // Route source fields
+                .routeSource(safeGet(row, "route_source", String.class, null))
+                .routeConfidence(safeGet(row, "route_confidence", Integer.class, 0))
+                .gpsDetectionEnabled(safeGet(row, "gps_detection_enabled", Boolean.class, true))
+                // Manual assignment fields
+                .assignedBy(safeGet(row, "assigned_by", String.class, null))
+                .manualAssignmentReason(safeGet(row, "manual_assignment_reason", String.class, null))
+                // Metadata
                 .createdAt(safeGet(row, "created_at", LocalDateTime.class, null))
                 .updatedAt(safeGet(row, "updated_at", LocalDateTime.class, null))
                 .version(safeGet(row, "version", Long.class, 0L))
@@ -499,12 +539,18 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 id, device_id, license_plate, current_latitude, current_longitude,
                 speed_kmh, is_in_motion, last_position_update, assigned_route_id,
                 route_number, is_active, course, current_direction, last_stop_sequence,
-                created_at, updated_at, version
+                created_at, updated_at, version,
+                last_garage_id, garage_entry_time, garage_exit_time, is_in_garage,
+                route_source, route_confidence, gps_detection_enabled,
+                assigned_by, manual_assignment_reason
             ) VALUES (
                 :id, :device_id, :license_plate, :current_latitude, :current_longitude,
                 :speed_kmh, :is_in_motion, :last_position_update, :assigned_route_id,
                 :route_number, :is_active, :course, :current_direction, :last_stop_sequence,
-                :created_at, :updated_at, :version
+                :created_at, :updated_at, :version,
+                :last_garage_id, :garage_entry_time, :garage_exit_time, :is_in_garage,
+                :route_source, :route_confidence, :gps_detection_enabled,
+                :assigned_by, :manual_assignment_reason
             ) RETURNING *
             """;
 

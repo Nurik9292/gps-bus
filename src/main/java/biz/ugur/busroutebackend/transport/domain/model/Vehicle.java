@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.transport.domain.event.VehicleAssignedToRouteEve
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteSource;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehiclePosition;
 import lombok.Builder;
@@ -43,6 +44,21 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
     private final Boolean isActive;
 
+    // Garage tracking fields
+    private final String lastGarageId;
+    private final LocalDateTime garageEntryTime;
+    private final LocalDateTime garageExitTime;
+    private final Boolean isInGarage;
+
+    // Route source tracking fields
+    private final RouteSource routeSource;
+    private final Integer routeConfidence;
+    private final Boolean gpsDetectionEnabled;
+
+    // Manual assignment fields
+    private final String assignedBy;
+    private final String manualAssignmentReason;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long version;
@@ -63,6 +79,18 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .currentDirection(null)
                 .lastStopSequence(null)
                 .lastPositionUpdate(LocalDateTime.now())
+                // Garage tracking initialization
+                .lastGarageId(null)
+                .garageEntryTime(null)
+                .garageExitTime(null)
+                .isInGarage(false)
+                // Route source initialization
+                .routeSource(RouteSource.UNKNOWN)
+                .routeConfidence(0)
+                .gpsDetectionEnabled(true)
+                // Manual assignment initialization
+                .assignedBy(null)
+                .manualAssignmentReason(null)
                 .version(0L)
                 .build();
 
@@ -90,6 +118,19 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
             Double course,
             Integer currentDirection,
             Integer lastStopSequence,
+            // Garage tracking fields
+            String lastGarageId,
+            LocalDateTime garageEntryTime,
+            LocalDateTime garageExitTime,
+            Boolean isInGarage,
+            // Route source fields
+            RouteSource routeSource,
+            Integer routeConfidence,
+            Boolean gpsDetectionEnabled,
+            // Manual assignment fields
+            String assignedBy,
+            String manualAssignmentReason,
+            // Metadata
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
             Long version) {
@@ -109,6 +150,19 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .course(course != null ? course : 0.0)
                 .currentDirection(currentDirection)
                 .lastStopSequence(lastStopSequence)
+                // Garage tracking
+                .lastGarageId(lastGarageId)
+                .garageEntryTime(garageEntryTime)
+                .garageExitTime(garageExitTime)
+                .isInGarage(isInGarage != null ? isInGarage : false)
+                // Route source
+                .routeSource(routeSource != null ? routeSource : RouteSource.UNKNOWN)
+                .routeConfidence(routeConfidence != null ? routeConfidence : 0)
+                .gpsDetectionEnabled(gpsDetectionEnabled != null ? gpsDetectionEnabled : true)
+                // Manual assignment
+                .assignedBy(assignedBy)
+                .manualAssignmentReason(manualAssignmentReason)
+                // Metadata
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
                 .version(version != null ? version : 0L)
@@ -311,6 +365,64 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
             return null;
         }
         return Coordinates.of(currentLatitude, currentLongitude);
+    }
+
+    /**
+     * Mark vehicle as entered garage
+     *
+     * @param garageId ID of the garage
+     * @return Updated vehicle
+     */
+    public Vehicle enterGarage(String garageId) {
+        if (garageId == null || garageId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Garage ID cannot be null or empty");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        return this.toBuilder()
+                .lastGarageId(garageId)
+                .garageEntryTime(now)
+                .garageExitTime(null)  // Clear exit time
+                .isInGarage(true)
+                .build();
+    }
+
+    /**
+     * Mark vehicle as exited garage
+     *
+     * @return Updated vehicle
+     */
+    public Vehicle exitGarage() {
+        if (!Boolean.TRUE.equals(isInGarage)) {
+            log.warn("Attempted to exit garage for vehicle {} that is not in garage", licensePlate);
+            return this;  // No change
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        return this.toBuilder()
+                .garageExitTime(now)
+                .isInGarage(false)
+                .build();
+    }
+
+    /**
+     * Check if vehicle is currently in garage
+     */
+    public boolean isCurrentlyInGarage() {
+        return Boolean.TRUE.equals(isInGarage);
+    }
+
+    /**
+     * Get time since vehicle entered garage (in minutes)
+     * Returns null if vehicle is not in garage
+     */
+    public Long getMinutesSinceGarageEntry() {
+        if (!Boolean.TRUE.equals(isInGarage) || garageEntryTime == null) {
+            return null;
+        }
+        return java.time.Duration.between(garageEntryTime, LocalDateTime.now()).toMinutes();
     }
 
 

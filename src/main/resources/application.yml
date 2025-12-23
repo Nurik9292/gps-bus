@@ -166,19 +166,24 @@ external:
       rate-limit:
         requests-per-minute: 60
 
-    bus-info:
-      base-url: ${BUS_INFO_API_BASE_URL:https://edu.ayauk.gov.tm}
-      username: ${BUS_INFO_API_USERNAME:duralga}
-      password: ${BUS_INFO_API_PASSWORD:S[A$@gmm.)-5yTzh}
-      timeout: 10s
-      connect-timeout: ${BUS_INFO_API_CONNECT_TIMEOUT:10s}
-      read-timeout: ${BUS_INFO_API_READ_TIMEOUT:30s}
-      write-timeout: ${BUS_INFO_API_WRITE_TIMEOUT:10s}
-      retry:
-        max-attempts: 3
-        initial-interval: 1s
-        multiplier: 2.0
-        max-interval: 10s
+    # ============================================================================
+    # ЗАКОММЕНТИРОВАНО 2025-12-23: Bus Info API (Имдат) больше не используется
+    # Причина: Переход на автономную систему (GPS + Shift Assignments)
+    # Для восстановления: раскомментировать этот блок и код в VehicleDataScheduler
+    # ============================================================================
+    # bus-info:
+    #   base-url: ${BUS_INFO_API_BASE_URL:https://edu.ayauk.gov.tm}
+    #   username: ${BUS_INFO_API_USERNAME:duralga}
+    #   password: ${BUS_INFO_API_PASSWORD:S[A$@gmm.)-5yTzh}
+    #   timeout: 10s
+    #   connect-timeout: ${BUS_INFO_API_CONNECT_TIMEOUT:10s}
+    #   read-timeout: ${BUS_INFO_API_READ_TIMEOUT:30s}
+    #   write-timeout: ${BUS_INFO_API_WRITE_TIMEOUT:10s}
+    #   retry:
+    #     max-attempts: 3
+    #     initial-interval: 1s
+    #     multiplier: 2.0
+    #     max-interval: 10s
 
 business:
   routing:
@@ -193,9 +198,42 @@ business:
     position-max-age: 5
     stop-arrival-radius: 50
 
-  bus-info:
-    sync-interval: 24
-    sync-time: "06:00"
+    # Приоритет источников назначения маршрутов
+    route-assignment-priority:
+      - SHIFT_ASSIGNMENT    # Плановое назначение по сменам (приоритет 1)
+      - GPS_DETECTED        # GPS-автоопределение (приоритет 2)
+      - MANUAL              # Ручное назначение диспетчером (приоритет 3)
+
+  # ЗАКОММЕНТИРОВАНО 2025-12-23: Bus Info API sync больше не используется
+  # bus-info:
+  #   sync-interval: 24
+  #   sync-time: "06:00"
+
+  # Настройки геозон гаражей
+  garage:
+    # Определение входа в гараж
+    entry-detection:
+      min-idle-time-minutes: 10        # Минимум простоя для считается "в гараже"
+      speed-threshold-kmh: 2.0         # Максимальная скорость (км/ч) для считается неподвижным
+
+    # Определение выхода из гаража
+    exit-detection:
+      min-distance-meters: 50          # Дополнительное расстояние к radius гаража
+      min-speed-kmh: 5.0               # Минимальная скорость (км/ч) для считается движением
+
+  # Настройки GPS-автоопределения маршрутов
+  gps-route-detection:
+    enabled: true
+    check-interval-seconds: 30         # Проверка каждые 30 секунд
+    min-gps-points: 5                  # Минимум GPS точек для анализа
+    deviation-threshold-meters: 500    # Порог отклонения от маршрута
+    min-confidence-percentage: 70.0    # Минимальная уверенность для назначения
+    max-distance-for-match-meters: 100 # Максимальное расстояние от точки до LineString
+
+  # История GPS точек для автоопределения маршрутов
+  gps-history:
+    max-points: 100                    # Максимум точек в истории на каждый транспорт
+    ttl-minutes: 30                    # TTL для Redis кеша (минуты)
 
 cache:
   redis:
