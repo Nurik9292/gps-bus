@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.interfaces.rest.mobile.V1.controller;
 
 
 import biz.ugur.busroutebackend.client.application.usecase.RouteIsFavoriteUseCase;
+import biz.ugur.busroutebackend.client.application.usecase.StopIsFavoriteUseCase;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response.MobileStopListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.mobile.V1.response.MobileStopResponse;
 import biz.ugur.busroutebackend.interfaces.rest.transport.V1.response.BusStopArrivalsResponse;
@@ -31,6 +32,7 @@ public class MobileStopApiController extends BaseMobileController {
     private final GetRoutesByStopIdUseCase  getRoutesByStopIdUseCase;
     private final GetBusStopByIdUseCase getBusStopByIdUseCase;
     private final BusStopRealTimeServiceImpl busStopRealTimeService;
+    private final StopIsFavoriteUseCase stopIsFavoriteUseCase;
 
     public MobileStopApiController(MessageSource messageSource,
                                    RequestedContentTypeResolver requestedContentTypeResolver,
@@ -38,12 +40,14 @@ public class MobileStopApiController extends BaseMobileController {
                                    GetAllBusStopsUseCase getAllStopsUseCase,
                                    GetRoutesByStopIdUseCase getRoutesByStopIdUseCase,
                                    GetBusStopByIdUseCase getBusStopByIdUseCase,
-                                   BusStopRealTimeServiceImpl busStopRealTimeService) {
+                                   BusStopRealTimeServiceImpl busStopRealTimeService,
+                                   StopIsFavoriteUseCase stopIsFavoriteUseCase) {
         super(messageSource, requestedContentTypeResolver, routeIsFavoriteUseCase);
         this.getAllStopsUseCase = getAllStopsUseCase;
         this.getRoutesByStopIdUseCase = getRoutesByStopIdUseCase;
         this.getBusStopByIdUseCase = getBusStopByIdUseCase;
         this.busStopRealTimeService = busStopRealTimeService;
+        this.stopIsFavoriteUseCase = stopIsFavoriteUseCase;
     }
 
     @Override
@@ -61,8 +65,9 @@ public class MobileStopApiController extends BaseMobileController {
                             .flatMap(stopList ->
                                     Flux.fromIterable(stopList.getStops())
                                             .flatMap(stopData -> {
-                                                Mono<Boolean> isFavoriteMono = routeIsFavoriteUseCase
-                                                        .execute(new RouteIsFavoriteUseCase.Request(principal.getClientId(), stopData.id()));
+                                                Mono<Boolean> isFavoriteMono = stopIsFavoriteUseCase
+                                                        .execute(new StopIsFavoriteUseCase.Request(principal.getClientId(), stopData.id()))
+                                                        .defaultIfEmpty(false);
 
                                                 Mono<List<String>> forwardRoutesMono = getRoutesByStopIdUseCase
                                                         .execute(Mono.just(new GetRoutesByStopIdUseCase.Query(stopData.id(), 0)))
@@ -122,8 +127,8 @@ public class MobileStopApiController extends BaseMobileController {
         return ok(getCurrentPrincipal().flatMap(principal ->
                 getBusStopByIdUseCase.execute(Mono.just(new GetBusStopByIdUseCase.Query(stopId)))
                         .flatMap(stopData -> {
-                            Mono<Boolean> isFavoriteMono = routeIsFavoriteUseCase
-                                    .execute(new RouteIsFavoriteUseCase.Request(principal.getClientId(), stopData.id()))
+                            Mono<Boolean> isFavoriteMono = stopIsFavoriteUseCase
+                                    .execute(new StopIsFavoriteUseCase.Request(principal.getClientId(), stopData.id()))
                                     .defaultIfEmpty(false);
 
                             Mono<List<String>> forwardRoutesMono = getRoutesByStopIdUseCase
