@@ -17,17 +17,7 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Scheduler for GPS-based route detection.
- *
- * This scheduler periodically checks vehicles to detect route changes
- * based on their GPS history.
- *
- * Business Logic:
- * 1. Get all active vehicles with GPS detection enabled
- * 2. For each vehicle, check if GPS history indicates route deviation
- * 3. Auto-reassign routes when deviation is detected and better match found
- */
+
 @Slf4j
 @Component
 @ConditionalOnProperty(prefix = "business.gps-route-detection", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -53,14 +43,7 @@ public class GpsRouteDetectionScheduler {
         this.gpsHistoryService = gpsHistoryService;
     }
 
-    /**
-     * Run GPS route detection every 30 seconds.
-     * Only processes vehicles with:
-     * - gpsDetectionEnabled = true
-     * - isActive = true
-     * - hasPosition = true
-     * - Not currently in garage
-     */
+
     @Scheduled(cron = "0/30 * * * * *")
     public void detectRoutesByGps() {
         if (!detectionInProgress.compareAndSet(false, true)) {
@@ -130,11 +113,7 @@ public class GpsRouteDetectionScheduler {
             return false;
         }
 
-        if (!vehicle.hasRecentPosition(120)) {
-            return false;
-        }
-
-        return true;
+        return vehicle.hasRecentPosition(120);
     }
 
     private Mono<DetectRouteByGpsUseCase.Result> processVehicle(Vehicle vehicle) {
@@ -150,19 +129,4 @@ public class GpsRouteDetectionScheduler {
                 });
     }
 
-    public long getRouteChangesCount() {
-        return routeChangesCount.get();
-    }
-
-    public long getCheckCount() {
-        return checkCount.get();
-    }
-
-    public long getLastDetectionTimeMs() {
-        return lastDetectionTime.get();
-    }
-
-    public boolean isDetectionInProgress() {
-        return detectionInProgress.get();
-    }
 }

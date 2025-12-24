@@ -10,6 +10,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -21,9 +22,11 @@ import java.util.List;
 public class ResilientExternalApiServiceImpl implements ExternalApiService {
 
     private final GpsApiClient gpsApiClient;
+    @Nullable
     private final BusInfoApiClient busInfoApiClient;
 
-    public ResilientExternalApiServiceImpl(GpsApiClient gpsApiClient, BusInfoApiClient busInfoApiClient) {
+    public ResilientExternalApiServiceImpl(GpsApiClient gpsApiClient,
+                                           @Nullable BusInfoApiClient busInfoApiClient) {
         this.gpsApiClient = gpsApiClient;
         this.busInfoApiClient = busInfoApiClient;
     }
@@ -44,6 +47,10 @@ public class ResilientExternalApiServiceImpl implements ExternalApiService {
     @Bulkhead(name = "busInfoApi")
     @TimeLimiter(name = "busInfoApi")
     public Mono<List<BusInfoDTO>> fetchAllBusInfo() {
+        if (busInfoApiClient == null) {
+            log.debug("BusInfoApiClient is disabled, returning empty list");
+            return Mono.just(List.of());
+        }
         log.debug("Fetching bus info with Resilience4j protection");
         return busInfoApiClient.fetchAllBusInfo();
     }
@@ -59,6 +66,10 @@ public class ResilientExternalApiServiceImpl implements ExternalApiService {
     @CircuitBreaker(name = "busInfoApi", fallbackMethod = "fallbackHealthCheck")
     @RateLimiter(name = "busInfoApi")
     public Mono<Boolean> busInfoHealthCheck() {
+        if (busInfoApiClient == null) {
+            log.debug("BusInfoApiClient is disabled");
+            return Mono.just(false);
+        }
         return busInfoApiClient.healthCheck();
     }
 

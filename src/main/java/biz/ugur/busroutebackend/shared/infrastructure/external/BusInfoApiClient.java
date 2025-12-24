@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
@@ -22,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 
 @Component("busInfoApiClientComponent")
+@ConditionalOnProperty(prefix = "external.api.bus-info", name = "base-url")
 @Slf4j
 public class BusInfoApiClient {
 

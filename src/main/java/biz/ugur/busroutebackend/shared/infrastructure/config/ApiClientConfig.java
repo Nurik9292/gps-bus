@@ -5,6 +5,7 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -44,6 +45,7 @@ public class ApiClientConfig {
     }
 
     @Bean("busInfoApiClient")
+    @ConditionalOnProperty(prefix = "external.api.bus-info", name = "base-url")
     public WebClient busInfoApiClient(
             @Value("${external.api.bus-info.base-url}") String baseUrl,
             @Value("${external.api.bus-info.timeout:30s}") Duration timeout,
