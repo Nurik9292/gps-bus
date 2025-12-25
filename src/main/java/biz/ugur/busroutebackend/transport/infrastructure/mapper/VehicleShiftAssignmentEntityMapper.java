@@ -22,6 +22,7 @@ public class VehicleShiftAssignmentEntityMapper {
                 .routeId(domain.getRouteId().getValue())
                 .shiftType(domain.getShiftType().name())
                 .isActive(domain.getIsActive())
+                .assignedBy(domain.getAssignedBy())
                 .createdAt(domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt())
                 .version(domain.getVersion())
@@ -39,6 +40,7 @@ public class VehicleShiftAssignmentEntityMapper {
                 BusRouteId.of(entity.getRouteId()),
                 ShiftType.fromString(entity.getShiftType()),
                 entity.getIsActive(),
+                entity.getAssignedBy(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 entity.getVersion()

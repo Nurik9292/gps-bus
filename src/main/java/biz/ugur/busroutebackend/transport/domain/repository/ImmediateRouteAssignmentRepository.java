@@ -28,4 +28,6 @@ public interface ImmediateRouteAssignmentRepository {
     Mono<Long> countActive();
 
     Mono<Integer> deactivateByVehicleId(VehicleId vehicleId);
+
+    Mono<Integer> deactivateAll();
 }

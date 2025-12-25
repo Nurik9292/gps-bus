@@ -75,6 +75,7 @@ public class ShiftAssignmentDataMapper {
                 shiftType.getEndTime(),
                 assignment.getIsActive(),
                 assignment.isCurrentlyActive(),
+                assignment.getAssignedBy(),
                 assignment.getCreatedAt(),
                 assignment.getUpdatedAt()
         );
@@ -94,6 +95,7 @@ public class ShiftAssignmentDataMapper {
                 shiftType.getEndTime(),
                 false,
                 false,
+                null,
                 null,
                 null
         );

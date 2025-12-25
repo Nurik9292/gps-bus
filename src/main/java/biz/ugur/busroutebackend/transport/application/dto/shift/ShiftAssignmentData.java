@@ -16,6 +16,7 @@ public record ShiftAssignmentData(
         LocalTime shiftEndTime,
         Boolean isActive,
         Boolean isCurrentlyActive,
+        String assignedBy,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

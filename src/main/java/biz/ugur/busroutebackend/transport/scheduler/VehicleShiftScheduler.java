@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.scheduler;
 
+import biz.ugur.busroutebackend.transport.application.usecase.immediate.ClearAllImmediateAssignmentsUseCase;
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.model.VehicleShiftAssignment;
@@ -17,6 +18,8 @@ import reactor.core.scheduler.Schedulers;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -25,7 +28,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 @ConditionalOnProperty(prefix = "app.scheduling", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class VehicleShiftScheduler {
 
+    public static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
+
     private final VehicleShiftAssignmentRepository shiftAssignmentRepository;
+    private final ClearAllImmediateAssignmentsUseCase clearAllImmediateAssignmentsUseCase;
     private final VehicleRepository vehicleRepository;
     private final BusRouteRepository busRouteRepository;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
@@ -36,25 +42,42 @@ public class VehicleShiftScheduler {
 
     public VehicleShiftScheduler(
             VehicleShiftAssignmentRepository shiftAssignmentRepository,
+            ClearAllImmediateAssignmentsUseCase clearAllImmediateAssignmentsUseCase,
             VehicleRepository vehicleRepository,
             BusRouteRepository busRouteRepository,
             ReactiveRedisTemplate<String, Object> redisTemplate) {
         this.shiftAssignmentRepository = shiftAssignmentRepository;
+        this.clearAllImmediateAssignmentsUseCase = clearAllImmediateAssignmentsUseCase;
         this.vehicleRepository = vehicleRepository;
         this.busRouteRepository = busRouteRepository;
         this.redisTemplate = redisTemplate;
     }
 
-    @Scheduled(cron = "0 0 7 * * *")
+
+    @Scheduled(cron = "0 0 7 * * *", zone = "Asia/Ashgabat")
     public void applyFirstShift() {
-        log.info("First shift starting at 07:00 - applying shift assignments");
+        log.info("First shift starting at 07:00 (Ashgabat) - applying shift assignments");
         applyShiftAssignments(ShiftType.FIRST);
     }
 
-    @Scheduled(cron = "0 0 14 * * *")
+
+    @Scheduled(cron = "0 0 14 * * *", zone = "Asia/Ashgabat")
     public void applySecondShift() {
-        log.info("Second shift starting at 14:00 - applying shift assignments");
+        log.info("Second shift starting at 14:00 (Ashgabat) - applying shift assignments");
         applyShiftAssignments(ShiftType.SECOND);
+    }
+
+
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Ashgabat")
+    public void midnightReset() {
+        ZonedDateTime now = ZonedDateTime.now(ASHGABAT_ZONE);
+        log.info("Midnight reset starting at {} (Ashgabat) - clearing all immediate assignments", now);
+
+        clearAllImmediateAssignmentsUseCase.execute(null)
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnSuccess(result -> log.info("Midnight reset completed: cleared={} assignments", result.clearedCount()))
+                .doOnError(error -> log.error("Midnight reset failed: {}", error.getMessage()))
+                .subscribe();
     }
 
     public void applyShiftAssignments(ShiftType shiftType) {
@@ -92,10 +115,8 @@ public class VehicleShiftScheduler {
                                           AtomicInteger failCount) {
         return vehicleRepository.findById(assignment.getVehicleId())
                 .flatMap(vehicle -> {
-                    // Assign vehicle to the shift's route
                     Vehicle updatedVehicle = vehicle.assignToRoute(assignment.getRouteId());
 
-                    // Get route number for caching
                     return busRouteRepository.findById(assignment.getRouteId())
                             .map(route -> updatedVehicle.updateCachedRouteNumber(route.getRouteNumber()))
                             .defaultIfEmpty(updatedVehicle);

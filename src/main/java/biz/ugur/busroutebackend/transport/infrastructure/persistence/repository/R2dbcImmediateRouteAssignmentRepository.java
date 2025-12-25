@@ -184,6 +184,22 @@ public class R2dbcImmediateRouteAssignmentRepository implements ImmediateRouteAs
                 .map(Long::intValue);
     }
 
+    @Override
+    public Mono<Integer> deactivateAll() {
+        String sql = """
+            UPDATE immediate_route_assignments
+            SET is_active = false, updated_at = :now
+            WHERE is_active = true
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("now", LocalDateTime.now())
+                .fetch()
+                .rowsUpdated()
+                .map(Long::intValue)
+                .doOnSuccess(count -> log.info("Deactivated {} immediate assignments", count));
+    }
+
     private ImmediateRouteAssignmentEntity mapRowToEntity(io.r2dbc.spi.Row row) {
         return ImmediateRouteAssignmentEntity.builder()
                 .id(row.get("id", String.class))

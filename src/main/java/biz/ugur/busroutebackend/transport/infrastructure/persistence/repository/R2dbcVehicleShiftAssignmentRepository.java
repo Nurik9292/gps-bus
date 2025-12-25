@@ -58,6 +58,7 @@ public class R2dbcVehicleShiftAssignmentRepository
         columns.put("route_id", persistenceEntity.getRouteId());
         columns.put("shift_type", persistenceEntity.getShiftType());
         columns.put("is_active", persistenceEntity.getIsActive());
+        columns.put("assigned_by", persistenceEntity.getAssignedBy());
         return columns;
     }
 
@@ -71,10 +72,10 @@ public class R2dbcVehicleShiftAssignmentRepository
 
         String sql = """
             INSERT INTO vehicle_shift_assignments (
-                id, vehicle_id, route_id, shift_type, is_active,
+                id, vehicle_id, route_id, shift_type, is_active, assigned_by,
                 created_at, updated_at, version
             ) VALUES (
-                :id, :vehicle_id, :route_id, :shift_type, :is_active,
+                :id, :vehicle_id, :route_id, :shift_type, :is_active, :assigned_by,
                 :created_at, :updated_at, :version
             ) RETURNING *
             """;
@@ -108,6 +109,7 @@ public class R2dbcVehicleShiftAssignmentRepository
                 route_id = :route_id,
                 shift_type = :shift_type,
                 is_active = :is_active,
+                assigned_by = :assigned_by,
                 updated_at = :updated_at,
                 version = :version
             WHERE id = :id AND version = :old_version
@@ -263,6 +265,7 @@ public class R2dbcVehicleShiftAssignmentRepository
                 .routeId(row.get("route_id", String.class))
                 .shiftType(row.get("shift_type", String.class))
                 .isActive(row.get("is_active", Boolean.class))
+                .assignedBy(safeGet(row, "assigned_by", String.class, null))
                 .createdAt(safeGet(row, "created_at", LocalDateTime.class, null))
                 .updatedAt(safeGet(row, "updated_at", LocalDateTime.class, null))
                 .version(safeGet(row, "version", Long.class, 0L))

@@ -21,12 +21,17 @@ public class VehicleShiftAssignment extends AggregateRoot<VehicleShiftAssignment
     private final BusRouteId routeId;
     private final ShiftType shiftType;
     private final Boolean isActive;
+    private final String assignedBy;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long version;
 
     public static VehicleShiftAssignment create(VehicleId vehicleId, BusRouteId routeId, ShiftType shiftType) {
+        return create(vehicleId, routeId, shiftType, null);
+    }
+
+    public static VehicleShiftAssignment create(VehicleId vehicleId, BusRouteId routeId, ShiftType shiftType, String assignedBy) {
         if (vehicleId == null) {
             throw new IllegalArgumentException("Vehicle ID cannot be null");
         }
@@ -43,6 +48,7 @@ public class VehicleShiftAssignment extends AggregateRoot<VehicleShiftAssignment
                 .routeId(routeId)
                 .shiftType(shiftType)
                 .isActive(true)
+                .assignedBy(assignedBy)
                 .version(0L)
                 .build();
     }
@@ -53,6 +59,7 @@ public class VehicleShiftAssignment extends AggregateRoot<VehicleShiftAssignment
             BusRouteId routeId,
             ShiftType shiftType,
             Boolean isActive,
+            String assignedBy,
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
             Long version) {
@@ -63,6 +70,7 @@ public class VehicleShiftAssignment extends AggregateRoot<VehicleShiftAssignment
                 .routeId(routeId)
                 .shiftType(shiftType)
                 .isActive(isActive != null ? isActive : true)
+                .assignedBy(assignedBy)
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
                 .version(version != null ? version : 0L)

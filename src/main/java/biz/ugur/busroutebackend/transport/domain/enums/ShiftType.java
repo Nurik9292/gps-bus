@@ -3,11 +3,15 @@ package biz.ugur.busroutebackend.transport.domain.enums;
 import lombok.Getter;
 
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 @Getter
 public enum ShiftType {
     FIRST(LocalTime.of(7, 0), LocalTime.of(14, 0)),
     SECOND(LocalTime.of(14, 0), LocalTime.of(21, 0));
+
+    public static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
 
     private final LocalTime startTime;
     private final LocalTime endTime;
@@ -18,11 +22,13 @@ public enum ShiftType {
     }
 
     public static ShiftType getCurrentShift() {
-        LocalTime now = LocalTime.now();
+        LocalTime now = ZonedDateTime.now(ASHGABAT_ZONE).toLocalTime();
         if (now.isBefore(FIRST.startTime)) {
-            return SECOND; // Before 7:00 - still second shift from previous day
+            return SECOND;
         } else if (now.isBefore(SECOND.startTime)) {
             return FIRST;
+        } else if (now.isBefore(SECOND.endTime)) {
+            return SECOND;
         } else {
             return SECOND;
         }
@@ -39,7 +45,13 @@ public enum ShiftType {
         };
     }
 
+
     public boolean isActive() {
-        return this == getCurrentShift();
+        LocalTime now = ZonedDateTime.now(ASHGABAT_ZONE).toLocalTime();
+        return !now.isBefore(startTime) && now.isBefore(endTime);
+    }
+
+    public static ZonedDateTime getCurrentAshgabatTime() {
+        return ZonedDateTime.now(ASHGABAT_ZONE);
     }
 }

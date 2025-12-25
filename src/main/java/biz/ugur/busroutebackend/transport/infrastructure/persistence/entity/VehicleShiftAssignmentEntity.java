@@ -33,6 +33,9 @@ public class VehicleShiftAssignmentEntity {
     @Column("is_active")
     private Boolean isActive;
 
+    @Column("assigned_by")
+    private String assignedBy;
+
     @Column("created_at")
     private LocalDateTime createdAt;
 

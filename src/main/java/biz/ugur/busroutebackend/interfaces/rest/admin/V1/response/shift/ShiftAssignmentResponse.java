@@ -19,6 +19,7 @@ public record ShiftAssignmentResponse(
         @JsonProperty("shift_end_time") LocalTime shiftEndTime,
         @JsonProperty("is_active") Boolean isActive,
         @JsonProperty("is_currently_active") Boolean isCurrentlyActive,
+        @JsonProperty("assigned_by") String assignedBy,
         @JsonProperty("created_at") LocalDateTime createdAt,
         @JsonProperty("updated_at") LocalDateTime updatedAt
 ) {
@@ -36,6 +37,7 @@ public record ShiftAssignmentResponse(
                 data.shiftEndTime(),
                 data.isActive(),
                 data.isCurrentlyActive(),
+                data.assignedBy(),
                 data.createdAt(),
                 data.updatedAt()
         );
