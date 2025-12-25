@@ -62,10 +62,9 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
             max_transfers,
             max_walking_distance_meters,
             created_at,
-            updated_at,
-            version
+            updated_at
         )
-        VALUES (:id, :originLat, :originLon, :destLat, :destLon, :searchTime, :optionsCount, :maxTransfers, :maxWalkingDist, :createdAt, :updatedAt, :version)
+        VALUES (:id, :originLat, :originLon, :destLat, :destLon, :searchTime, :optionsCount, :maxTransfers, :maxWalkingDist, :createdAt, :updatedAt)
         RETURNING *
         """;
 
@@ -83,7 +82,6 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
                 .bind("maxWalkingDist", entity.getMaxWalkingDistanceMeters() != null ? entity.getMaxWalkingDistanceMeters() : 800)
                 .bind("createdAt", convertToOffsetDateTime(entity.getCreatedAt()))
                 .bind("updatedAt", OffsetDateTime.now())
-                .bind("version", 0L)
                 .map(getRowMapper())
                 .one()
                 .onErrorResume(error -> {
@@ -101,8 +99,7 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
         String sql = """
         UPDATE trip_plans SET
             options_count = :optionsCount,
-            updated_at = :updatedAt,
-            version = version + 1
+            updated_at = :updatedAt
         WHERE id = :id
         RETURNING *
         """;
@@ -205,7 +202,7 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
                     .maxWalkingDistanceMeters(row.get("max_walking_distance_meters", Integer.class))
                     .createdAt(row.get("created_at", LocalDateTime.class))
                     .updatedAt(row.get("updated_at", LocalDateTime.class))
-                    .version(row.get("version", Long.class))
+                    .version(0L)
                     .build();
 
             // Convert to domain model using mapper
@@ -228,7 +225,6 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
         columns.put("max_walking_distance_meters", persistenceEntity.getMaxWalkingDistanceMeters());
         columns.put("created_at", persistenceEntity.getCreatedAt());
         columns.put("updated_at", persistenceEntity.getUpdatedAt());
-        columns.put("version", persistenceEntity.getVersion());
         return columns;
     }
 

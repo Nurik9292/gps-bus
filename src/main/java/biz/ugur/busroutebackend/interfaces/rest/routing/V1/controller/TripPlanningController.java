@@ -11,6 +11,7 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -26,6 +27,7 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 @RestController
 @RequestMapping(V1_ROUTING)
 @CrossOrigin(origins = "*")
+@Slf4j
 public class TripPlanningController extends BaseController {
 
     private final SearchTripsUseCase searchTripsUseCase;
@@ -51,8 +53,18 @@ public class TripPlanningController extends BaseController {
     @PostMapping("/search")
     @RateLimiter(name = "searchApi")
     public Mono<ResponseEntity<ApiResponse<TripSearchResponse>>> searchTrips(@Valid @RequestBody TripSearchRequest request) {
+        log.info("🔍 TRIP SEARCH REQUEST: from=[{}, {}] to=[{}, {}]",
+                request.getFrom() != null ? request.getFrom().getLatitude() : "null",
+                request.getFrom() != null ? request.getFrom().getLongitude() : "null",
+                request.getTo() != null ? request.getTo().getLatitude() : "null",
+                request.getTo() != null ? request.getTo().getLongitude() : "null");
+
         return ok(Mono.just(request)
-                .as(searchTripsUseCase::execute));
+                .as(searchTripsUseCase::execute)
+                .doOnNext(response -> log.info("🔍 TRIP SEARCH RESPONSE: status={}, options={}, error_type={}",
+                        response.getStatus(),
+                        response.getTripOptions() != null ? response.getTripOptions().size() : 0,
+                        response.getErrorType())));
     }
 
     @GetMapping("/nearby-stops")

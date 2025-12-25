@@ -46,10 +46,25 @@ public class ParallelRouteSearchService {
     }
 
     public Mono<TripPlan> searchAllRoutes(SearchContext context) {
+        log.info("[{}] 🚀 Starting route search from [{}, {}] to [{}, {}]",
+                context.searchId(),
+                context.fromLocation().getLatitudeAsDouble(),
+                context.fromLocation().getLongitudeAsDouble(),
+                context.toLocation().getLatitudeAsDouble(),
+                context.toLocation().getLongitudeAsDouble());
+
         return nearbyStopsService.findStopsForBothLocations(context)
+                .doOnNext(stopsContext -> log.info("[{}] 📍 Found stops: from={}, to={}",
+                        context.searchId(),
+                        stopsContext.fromStops().size(),
+                        stopsContext.toStops().size()))
                 .flatMap(stopsContext -> {
 
                     if (stopsContext.hasInsufficientStops()) {
+                        log.warn("[{}] ⚠️ INSUFFICIENT STOPS - from={}, to={}",
+                                context.searchId(),
+                                stopsContext.fromStops().size(),
+                                stopsContext.toStops().size());
                         return Mono.just(tripPlanFactory.createNew(
                                 context.fromLocation(),
                                 context.toLocation(),
@@ -99,7 +114,12 @@ public class ParallelRouteSearchService {
                                                  Mono<SearchResult> twoTransferSearch) {
         return Mono.zip(directSearch, oneTransferSearch, twoTransferSearch)
                 .map(results -> {
-//                    tripPlanCombiner.combine(context, results)
+                        log.info("[{}] 🔍 Search results: direct={}, oneTransfer={}, twoTransfer={}",
+                                context.searchId(),
+                                results.getT1().getOptionsCount(),
+                                results.getT2().getOptionsCount(),
+                                results.getT3().getOptionsCount());
+
                         List<SearchResult> allResults = List.of(
                                 results.getT1(),
                                 results.getT2(),

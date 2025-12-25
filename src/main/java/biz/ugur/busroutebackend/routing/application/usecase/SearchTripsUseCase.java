@@ -115,7 +115,8 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
                 .onErrorResume(error -> {
                     log.warn("[{}] Continuing without saving trip plan", context.searchId());
                     return Mono.just(tripPlan);
-                });
+                })
+                .thenReturn(tripPlan);
     }
 
     private Mono<TripSearchResponse> cacheIfSuccessful(String cacheKey, TripSearchResponse response,
