@@ -5,14 +5,17 @@ import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEve
 import biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
 
 @Component
 @Slf4j
@@ -23,6 +26,10 @@ public class VehicleEventHandler {
     private static final Duration UNASSIGN_ROUTE_TTL = Duration.ofMinutes(5);
     private static final Duration VEHICLE_INFO_TTL = Duration.ofDays(30);
 
+    private static final Duration OPERATION_TIMEOUT = Duration.ofSeconds(5);
+    private static final int MAX_RETRY_ATTEMPTS = 2;
+    private static final Duration RETRY_DELAY = Duration.ofMillis(100);
+
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final VehiclePositionWebSocketPublisher webSocketPublisher;
 
@@ -32,84 +39,79 @@ public class VehicleEventHandler {
         this.webSocketPublisher = webSocketPublisher;
     }
 
+    @Async
     @EventListener
-    public void handleVehiclePositionUpdated(VehiclePositionUpdatedEvent event) {
-        if (event == null) {
-            log.warn("Received null VehiclePositionUpdatedEvent");
-            return;
-        }
-        log.info("Handling VehiclePositionUpdated: {}", event);
+    public CompletableFuture<Void> handleVehiclePositionUpdated(VehiclePositionUpdatedEvent event) {
+        log.debug("Processing vehicle position update: vehicleId={}, plate={}",
+                event.getVehicleId(), event.getLicensePlate());
 
-        cacheVehiclePosition(event)
-                .then(updateVehicleStatistics(event))
+        return cacheVehiclePosition(event)
                 .then(broadcastPositionUpdate(event))
-                .publishOn(Schedulers.boundedElastic())
-                .subscribe(
-                        unused -> log.trace("Vehicle position processed: {}", event.getVehicleId()),
-                        error -> log.error("Error processing vehicle position: {}", event.getVehicleId(), error)
-                );
+                .timeout(OPERATION_TIMEOUT)
+                .retryWhen(createRetrySpec("position update"))
+                .doOnSuccess(v -> log.trace("Vehicle position processed: {}", event.getVehicleId()))
+                .doOnError(error -> log.error("Failed to process vehicle position: vehicleId={}, error={}",
+                        event.getVehicleId(), error.getMessage()))
+                .onErrorComplete()
+                .toFuture();
     }
 
+    @Async
     @EventListener
-    public void handleVehicleAssignedToRoute(VehicleAssignedToRouteEvent event) {
-        if (event == null) {
-            log.warn("Received null VehicleAssignedToRouteEvent");
-            return;
-        }
-        log.debug("Handling VehicleAssignedToRoute: {}", event);
+    public CompletableFuture<Void> handleVehicleAssignedToRoute(VehicleAssignedToRouteEvent event) {
+        log.debug("Processing route assignment: vehicleId={}, newRouteId={}",
+                event.getVehicleId(), event.getNewRouteId());
 
-        updateRouteAssignmentCache(event)
+        return updateRouteAssignmentCache(event)
                 .then(notifyRouteAssignmentChange(event))
-                .publishOn(Schedulers.boundedElastic())
-                .subscribe(
-                        unused -> log.trace("Route assignment processed: {}", event.getVehicleId()),
-                        error -> log.error("Error processing route assignment: {}", event.getVehicleId(), error)
-                );
+                .timeout(OPERATION_TIMEOUT)
+                .retryWhen(createRetrySpec("route assignment"))
+                .doOnSuccess(v -> log.trace("Route assignment processed: {}", event.getVehicleId()))
+                .doOnError(error -> log.error("Failed to process route assignment: vehicleId={}, error={}",
+                        event.getVehicleId(), error.getMessage()))
+                .onErrorComplete()
+                .toFuture();
     }
 
-    @EventListener(VehicleRegisteredEvent.class)
-    public void handleVehicleRegistered(VehicleRegisteredEvent event) {
-        if (event == null) {
-            log.warn("Received null VehicleRegisteredEvent");
-            return;
-        }
-        log.info("New vehicle registered: {} | Plate: {}", event.getDeviceId(), event.getLicensePlate());
+    @Async
+    @EventListener
+    public CompletableFuture<Void> handleVehicleRegistered(VehicleRegisteredEvent event) {
+        log.info("New vehicle registered: deviceId={}, plate={}",
+                event.getDeviceId(), event.getLicensePlate());
 
-        initializeVehicleCache(event)
-                .publishOn(Schedulers.boundedElastic())
-                .subscribe(
-                        unused -> log.trace("Vehicle cache initialized: {}", event.getVehicleId()),
-                        error -> log.error("Failed to initialize vehicle cache: {}", event.getVehicleId(), error)
-                );
+        return initializeVehicleCache(event)
+                .then()
+                .timeout(OPERATION_TIMEOUT)
+                .retryWhen(createRetrySpec("vehicle registration"))
+                .doOnSuccess(v -> log.debug("Vehicle cache initialized: {}", event.getVehicleId()))
+                .doOnError(error -> log.error("Failed to initialize vehicle cache: vehicleId={}, error={}",
+                        event.getVehicleId(), error.getMessage()))
+                .onErrorComplete()
+                .toFuture();
     }
 
-
-    private Mono<Void> cacheVehiclePosition(VehiclePositionUpdatedEvent event) {
+    private Mono<Boolean> cacheVehiclePosition(VehiclePositionUpdatedEvent event) {
         String key = "vehicle:position:" + event.getVehicleId();
 
-        Map<String, Object> data = new HashMap<>();
-        data.put("vehicleId", event.getVehicleId());
-        data.put("deviceId", event.getDeviceId());
-        data.put("licensePlate", event.getLicensePlate());
-        data.put("latitude", event.getLatitude());
-        data.put("longitude", event.getLongitude());
-        data.put("speedKmh", event.getSpeedKmh());
-        data.put("inMotion", event.getIsInMotion());
-        data.put("timestamp", String.valueOf(event.getPositionTimestamp()));
-        data.put("lastUpdated", String.valueOf(event.getOccurredAt()));
+        Map<String, Object> data = Map.of(
+                "vehicleId", event.getVehicleId(),
+                "deviceId", nullSafe(event.getDeviceId()),
+                "licensePlate", nullSafe(event.getLicensePlate()),
+                "latitude", event.getLatitude(),
+                "longitude", event.getLongitude(),
+                "speedKmh", nullSafe(event.getSpeedKmh(), 0.0),
+                "inMotion", nullSafe(event.getIsInMotion(), false),
+                "timestamp", String.valueOf(event.getPositionTimestamp()),
+                "lastUpdated", String.valueOf(event.getOccurredAt())
+        );
 
         return redisTemplate.opsForValue()
                 .set(key, data, POSITION_CACHE_TTL)
-                .then(Mono.fromRunnable(() -> log.trace("Cached vehicle position: {}", event.getVehicleId())));
-    }
-
-    private Mono<Void> updateVehicleStatistics(VehiclePositionUpdatedEvent event) {
-        String statsKey = "vehicles:stats:motion";
-        String motionKey = Boolean.TRUE.equals(event.getIsInMotion()) ? "in_motion" : "stopped";
-
-        return redisTemplate.opsForHash()
-                .increment(statsKey, motionKey, 1)
-                .then(Mono.fromRunnable(() -> log.trace("Updated motion stats for {}", event.getVehicleId())));
+                .doOnSuccess(success -> {
+                    if (Boolean.TRUE.equals(success)) {
+                        log.trace("Cached vehicle position: {}", event.getVehicleId());
+                    }
+                });
     }
 
     private Mono<Void> broadcastPositionUpdate(VehiclePositionUpdatedEvent event) {
@@ -126,24 +128,29 @@ public class VehicleEventHandler {
         );
 
         return webSocketPublisher.broadcastVehiclePosition(msg)
-                .then(Mono.fromRunnable(() -> log.trace("Broadcasted position for {}", event.getVehicleId())));
+                .doOnSuccess(v -> log.trace("Broadcasted position: {}", event.getVehicleId()));
     }
 
-    private Mono<Void> updateRouteAssignmentCache(VehicleAssignedToRouteEvent event) {
+    private Mono<Boolean> updateRouteAssignmentCache(VehicleAssignedToRouteEvent event) {
         String key = "vehicle:route:" + event.getVehicleId();
 
-        Map<String, Object> data = new HashMap<>();
-        data.put("vehicleId", event.getVehicleId());
-        data.put("licensePlate", event.getLicensePlate());
-        data.put("previousRouteId", event.getPreviousRouteId());
-        data.put("newRouteId", event.getNewRouteId());
-        data.put("assignmentTime", String.valueOf(event.getOccurredAt()));
+        Map<String, Object> data = Map.of(
+                "vehicleId", event.getVehicleId(),
+                "licensePlate", nullSafe(event.getLicensePlate()),
+                "previousRouteId", nullSafe(event.getPreviousRouteId()),
+                "newRouteId", nullSafe(event.getNewRouteId()),
+                "assignmentTime", String.valueOf(event.getOccurredAt())
+        );
 
         Duration ttl = event.isUnassignment() ? UNASSIGN_ROUTE_TTL : ROUTE_CACHE_TTL;
 
         return redisTemplate.opsForValue()
                 .set(key, data, ttl)
-                .then(Mono.fromRunnable(() -> log.trace("Updated route cache: {}", event.getVehicleId())));
+                .doOnSuccess(success -> {
+                    if (Boolean.TRUE.equals(success)) {
+                        log.trace("Updated route cache: {}", event.getVehicleId());
+                    }
+                });
     }
 
     private Mono<Void> notifyRouteAssignmentChange(VehicleAssignedToRouteEvent event) {
@@ -156,21 +163,49 @@ public class VehicleEventHandler {
         );
 
         return webSocketPublisher.broadcastRouteAssignment(msg)
-                .then(Mono.fromRunnable(() -> log.trace("Broadcasted route assignment: {}", event.getVehicleId())));
+                .doOnSuccess(v -> log.trace("Broadcasted route assignment: {}", event.getVehicleId()));
     }
 
-    private Mono<Void> initializeVehicleCache(VehicleRegisteredEvent event) {
+    private Mono<Boolean> initializeVehicleCache(VehicleRegisteredEvent event) {
         String key = "vehicle:info:" + event.getVehicleId();
 
-        Map<String, Object> info = new HashMap<>();
-        info.put("vehicleId", event.getVehicleId());
-        info.put("deviceId", event.getDeviceId());
-        info.put("licensePlate", event.getLicensePlate());
-        info.put("registeredAt", String.valueOf(event.getOccurredAt()));
-        info.put("status", "active");
+        Map<String, Object> info = Map.of(
+                "vehicleId", event.getVehicleId(),
+                "deviceId", nullSafe(event.getDeviceId()),
+                "licensePlate", nullSafe(event.getLicensePlate()),
+                "registeredAt", String.valueOf(event.getOccurredAt()),
+                "status", "active"
+        );
 
         return redisTemplate.opsForValue()
                 .set(key, info, VEHICLE_INFO_TTL)
-                .then(Mono.fromRunnable(() -> log.trace("Vehicle info cached: {}", event.getVehicleId())));
+                .doOnSuccess(success -> {
+                    if (Boolean.TRUE.equals(success)) {
+                        log.trace("Vehicle info cached: {}", event.getVehicleId());
+                    }
+                });
+    }
+
+    private Retry createRetrySpec(String operationName) {
+        return Retry.backoff(MAX_RETRY_ATTEMPTS, RETRY_DELAY)
+                .filter(this::isRetryableException)
+                .doBeforeRetry(signal -> log.warn("Retrying {} after error: {}, attempt {}/{}",
+                        operationName,
+                        signal.failure().getMessage(),
+                        signal.totalRetries() + 1,
+                        MAX_RETRY_ATTEMPTS));
+    }
+
+    private boolean isRetryableException(Throwable ex) {
+        return ex instanceof RedisConnectionFailureException
+                || ex.getCause() instanceof RedisConnectionFailureException;
+    }
+
+    private static String nullSafe(String value) {
+        return value != null ? value : "";
+    }
+
+    private static <T> T nullSafe(T value, T defaultValue) {
+        return value != null ? value : defaultValue;
     }
 }
