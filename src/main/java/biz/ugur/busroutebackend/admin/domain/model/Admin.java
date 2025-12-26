@@ -5,15 +5,11 @@ import biz.ugur.busroutebackend.admin.domain.events.AdminPasswordChangedEvent;
 import biz.ugur.busroutebackend.admin.domain.events.AdminProfileUpdatedEvent;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
+import biz.ugur.busroutebackend.shared.domain.services.PasswordEncoder;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
-import org.springframework.security.crypto.bcrypt.BCrypt;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -36,25 +32,29 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     private LocalDateTime updatedAt;
     private Long version;
 
-    private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-
 
     public static Admin create(String username,
-                               String password,
+                               String encodedPassword,
                                String fullName,
                                String avatar,
                                Boolean isSuperAdmin,
                                Boolean isActive) {
+        LocalDateTime now = LocalDateTime.now();
+
         Admin admin = builder()
                 .id(AdminId.generate())
                 .username(username)
-                .passwordHash(passwordEncoder.encode(password))
+                .passwordHash(encodedPassword)
                 .fullName(fullName)
                 .isSuperAdmin(isSuperAdmin)
                 .isActive(isActive)
-                .lastLoginAt(LocalDateTime.now())
+                .lastLoginAt(now)
                 .avatar(avatar)
                 .build();
+
+        admin.createdAt = now;
+        admin.updatedAt = now;
+        admin.version = 0L;
 
         admin.registerEvent(new AdminCreatedEvent(
                 admin.id.getValue(),
@@ -97,9 +97,9 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     }
 
 
-    public Admin changePassword(String newPassword) {
+    public Admin changePassword(String encodedNewPassword) {
         Admin updatedAdmin = this.toBuilder()
-                .passwordHash(passwordEncoder.encode(newPassword))
+                .passwordHash(encodedNewPassword)
                 .build();
 
         updatedAdmin.registerEvent(new AdminPasswordChangedEvent(
@@ -110,8 +110,8 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         return updatedAdmin;
     }
 
-    public boolean checkPassword(String password) {
-        return passwordEncoder.matches(password, this.passwordHash);
+    public boolean checkPassword(String rawPassword, PasswordEncoder encoder) {
+        return encoder.matches(rawPassword, this.passwordHash);
     }
 
     public Admin updateLastLogin() {
@@ -309,17 +309,4 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         }
         return cleaned;
     }
-
-    private String encodePassword(String password) {
-        if (password == null || password.trim().isEmpty()) {
-            throw new IllegalArgumentException("Password cannot be empty");
-        }
-        if (password.trim().length() < 8) {
-            throw new IllegalArgumentException("Password must be at least 8 characters long");
-        }
-        return BCrypt.hashpw(password,
-                BCrypt.gensalt());
-    }
-
-
 }

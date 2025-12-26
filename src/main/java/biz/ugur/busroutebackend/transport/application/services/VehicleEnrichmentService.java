@@ -1,16 +1,17 @@
-package biz.ugur.busroutebackend.transport.domain.service;
+package biz.ugur.busroutebackend.transport.application.services;
 
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Map;
 
 
 @Slf4j
+@Service
 public class VehicleEnrichmentService {
-
 
     public VehiclePositionDTO enrichPosition(GpsPositionDTO gpsPosition, Map<String, String> routeMapping) {
         String routeNumber = routeMapping.get(gpsPosition.getDeviceId());
@@ -35,11 +36,9 @@ public class VehicleEnrichmentService {
         return enrichedDto;
     }
 
-
     private String generateVehicleId(GpsPositionDTO gpsPosition) {
         return "vehicle-" + gpsPosition.getDeviceId();
     }
-
 
     public boolean hasValidRoute(VehiclePositionDTO enrichedPosition) {
         return enrichedPosition.getRouteNumber() != null;

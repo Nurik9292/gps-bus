@@ -56,15 +56,15 @@ public class VehicleShiftScheduler {
 
     @Scheduled(cron = "0 0 7 * * *", zone = "Asia/Ashgabat")
     public void applyFirstShift() {
-        log.info("First shift starting at 07:00 (Ashgabat) - applying shift assignments");
+        log.info("First shift starting at 07:00 (Ashgabat) - applying FIRST shift assignments");
         applyShiftAssignments(ShiftType.FIRST);
     }
 
 
     @Scheduled(cron = "0 0 14 * * *", zone = "Asia/Ashgabat")
     public void applySecondShift() {
-        log.info("Second shift starting at 14:00 (Ashgabat) - applying shift assignments");
-        applyShiftAssignments(ShiftType.SECOND);
+        log.info("Second shift starting at 14:00 (Ashgabat) - clearing FIRST shift and applying SECOND shift assignments");
+        clearAndApplyShiftAssignments(ShiftType.SECOND);
     }
 
 
@@ -76,8 +76,47 @@ public class VehicleShiftScheduler {
         clearAllImmediateAssignmentsUseCase.execute(null)
                 .subscribeOn(Schedulers.boundedElastic())
                 .doOnSuccess(result -> log.info("Midnight reset completed: cleared={} assignments", result.clearedCount()))
-                .doOnError(error -> log.error("Midnight reset failed: {}", error.getMessage()))
-                .subscribe();
+                .subscribe(
+                        result -> {},
+                        error -> log.error("Midnight reset failed: {}", error.getMessage())
+                );
+    }
+
+    public void clearAndApplyShiftAssignments(ShiftType shiftType) {
+        if (!shiftChangeInProgress.compareAndSet(false, true)) {
+            log.warn("Shift change already in progress, skipping");
+            return;
+        }
+
+        Instant startTime = Instant.now();
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failCount = new AtomicInteger(0);
+
+        log.info("Clearing all route assignments before applying {} shift", shiftType);
+
+        vehicleRepository.clearAllRouteAssignments()
+                .doOnSuccess(clearedCount -> log.info("Cleared {} vehicle route assignments", clearedCount))
+                .thenMany(shiftAssignmentRepository.findActiveByShiftType(shiftType))
+                .flatMap(assignment -> applyAssignment(assignment, successCount, failCount))
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnComplete(() -> {
+                    Duration duration = Duration.between(startTime, Instant.now());
+                    log.info("Shift change completed: shift={}, duration={}ms, success={}, failed={}",
+                            shiftType, duration.toMillis(), successCount.get(), failCount.get());
+                    saveShiftChangeStats(shiftType, successCount.get(), failCount.get(), duration).subscribe(
+                            unused -> {},
+                            err -> log.warn("Failed to save shift change stats: {}", err.getMessage())
+                    );
+                })
+                .doFinally(signal -> shiftChangeInProgress.set(false))
+                .subscribe(
+                        vehicle -> {},
+                        error -> {
+                            Duration duration = Duration.between(startTime, Instant.now());
+                            log.error("Shift change failed: shift={}, duration={}ms, error={}",
+                                    shiftType, duration.toMillis(), error.getMessage());
+                        }
+                );
     }
 
     public void applyShiftAssignments(ShiftType shiftType) {
@@ -99,15 +138,20 @@ public class VehicleShiftScheduler {
                     Duration duration = Duration.between(startTime, Instant.now());
                     log.info("Shift change completed: shift={}, duration={}ms, success={}, failed={}",
                             shiftType, duration.toMillis(), successCount.get(), failCount.get());
-                    saveShiftChangeStats(shiftType, successCount.get(), failCount.get(), duration).subscribe();
-                })
-                .doOnError(error -> {
-                    Duration duration = Duration.between(startTime, Instant.now());
-                    log.error("Shift change failed: shift={}, duration={}ms, error={}",
-                            shiftType, duration.toMillis(), error.getMessage());
+                    saveShiftChangeStats(shiftType, successCount.get(), failCount.get(), duration).subscribe(
+                            unused -> {},
+                            err -> log.warn("Failed to save shift change stats: {}", err.getMessage())
+                    );
                 })
                 .doFinally(signal -> shiftChangeInProgress.set(false))
-                .subscribe();
+                .subscribe(
+                        vehicle -> {},
+                        error -> {
+                            Duration duration = Duration.between(startTime, Instant.now());
+                            log.error("Shift change failed: shift={}, duration={}ms, error={}",
+                                    shiftType, duration.toMillis(), error.getMessage());
+                        }
+                );
     }
 
     private Mono<Vehicle> applyAssignment(VehicleShiftAssignment assignment,
@@ -159,7 +203,7 @@ public class VehicleShiftScheduler {
 
     public Mono<ShiftChangeResult> applyCurrentShift() {
         ShiftType currentShift = ShiftType.getCurrentShift();
-        log.info("Manually applying current shift: {}", currentShift);
+        log.info("Manually applying current shift: {} (with clear)", currentShift);
 
         if (!shiftChangeInProgress.compareAndSet(false, true)) {
             return Mono.just(new ShiftChangeResult(currentShift.name(), 0, 0, 0, false, "Shift change already in progress"));
@@ -169,7 +213,9 @@ public class VehicleShiftScheduler {
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failCount = new AtomicInteger(0);
 
-        return shiftAssignmentRepository.findActiveByShiftType(currentShift)
+        return vehicleRepository.clearAllRouteAssignments()
+                .doOnSuccess(clearedCount -> log.info("Cleared {} vehicle route assignments before manual shift apply", clearedCount))
+                .thenMany(shiftAssignmentRepository.findActiveByShiftType(currentShift))
                 .flatMap(assignment -> applyAssignment(assignment, successCount, failCount))
                 .then(Mono.fromSupplier(() -> {
                     Duration duration = Duration.between(startTime, Instant.now());

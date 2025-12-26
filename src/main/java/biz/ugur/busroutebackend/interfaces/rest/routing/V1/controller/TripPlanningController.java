@@ -1,7 +1,9 @@
 package biz.ugur.busroutebackend.interfaces.rest.routing.V1.controller;
 
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.interfaces.rest.routing.V1.request.TripSearchRequest;
 import biz.ugur.busroutebackend.interfaces.rest.routing.V1.response.TripSearchResponse;
+import biz.ugur.busroutebackend.routing.application.usecase.GetRoutingStatisticsUseCase;
 import biz.ugur.busroutebackend.routing.application.usecase.SearchTripsUseCase;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
@@ -14,7 +16,6 @@ import jakarta.validation.constraints.Min;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -32,16 +33,19 @@ public class TripPlanningController extends BaseController {
 
     private final SearchTripsUseCase searchTripsUseCase;
     private final BusStopRepository busStopRepository;
-    private final DatabaseClient databaseClient;
+    private final GetRoutingStatisticsUseCase getRoutingStatisticsUseCase;
+    private final DistanceCalculationService distanceCalculationService;
 
     public TripPlanningController(SearchTripsUseCase searchTripsUseCase,
                                   BusStopRepository busStopRepository,
-                                  DatabaseClient databaseClient,
+                                  GetRoutingStatisticsUseCase getRoutingStatisticsUseCase,
+                                  DistanceCalculationService distanceCalculationService,
                                   MessageSource messageSource) {
         super(messageSource);
         this.searchTripsUseCase = searchTripsUseCase;
         this.busStopRepository = busStopRepository;
-        this.databaseClient = databaseClient;
+        this.getRoutingStatisticsUseCase = getRoutingStatisticsUseCase;
+        this.distanceCalculationService = distanceCalculationService;
     }
 
     @Override
@@ -81,8 +85,10 @@ public class TripPlanningController extends BaseController {
                         "latitude", stop.getLatitude().doubleValue(),
                         "longitude", stop.getLongitude().doubleValue(),
                         "is_major_stop", stop.getIsMajorStop(),
-                        "distance_meters", Math.round(calculateDistance(lat, lon,
-                                stop.getLatitude().doubleValue(), stop.getLongitude().doubleValue()))
+                        "distance_meters", Math.round(distanceCalculationService.calculateDistance(
+                                lat, lon,
+                                stop.getLatitude().doubleValue(), stop.getLongitude().doubleValue()
+                        ).getMeters())
                 ))
                 .collectList()
                 .map(stops -> Map.of(
@@ -120,27 +126,11 @@ public class TripPlanningController extends BaseController {
 
     @GetMapping("/stats")
     public Mono<ResponseEntity<Map<String, Object>>> getStatistics() {
-        return databaseClient.sql("""
-                SELECT route_number
-                FROM mv_active_routes_summary
-                WHERE active_vehicles >= 1
-                ORDER BY active_vehicles DESC, moving_vehicles DESC
-                LIMIT 5
-                """)
-                .map(row -> row.get("route_number", String.class))
-                .all()
-                .collectList()
-                .defaultIfEmpty(List.of())
-                .map(popularRoutes -> Map.<String, Object>of(
-                        "status", "success",
-                        "statistics", Map.of(
-                                "total_searches_today", 0,
-                                "average_search_time_ms", 850,
-                                "success_rate_percent", 95.2,
-                                "most_popular_routes", popularRoutes.isEmpty() ? List.of("N/A") : popularRoutes,
-                                "average_options_per_search", 3.4
-                        ),
-                        "timestamp", LocalDateTime.now().toString()
+        return getRoutingStatisticsUseCase.execute()
+                .map(response -> Map.<String, Object>of(
+                        "status", response.status(),
+                        "statistics", response.statistics(),
+                        "timestamp", response.timestamp()
                 ))
                 .map(ResponseEntity::ok);
     }
@@ -215,22 +205,5 @@ public class TripPlanningController extends BaseController {
                         "max_trip_duration_hours", 4
                 )
         ));
-    }
-
-
-    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-        final int R = 6371000;
-
-        double lat1Rad = Math.toRadians(lat1);
-        double lat2Rad = Math.toRadians(lat2);
-        double deltaLatRad = Math.toRadians(lat2 - lat1);
-        double deltaLonRad = Math.toRadians(lon2 - lon1);
-
-        double a = Math.sin(deltaLatRad/2) * Math.sin(deltaLatRad/2) +
-                Math.cos(lat1Rad) * Math.cos(lat2Rad) *
-                        Math.sin(deltaLonRad/2) * Math.sin(deltaLonRad/2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-        return R * c;
     }
 }

@@ -96,16 +96,4 @@ public class AvatarStorageService extends BaseImageStorageService implements Ava
     protected String dir() {
         return "/avatars/";
     }
-
-
-    @Deprecated(since = "1.0", forRemoval = true)
-    public record AvatarResult(String originalPath, String thumbnailPath, int originalSize, int thumbnailSize) {
-        public String getDisplayUrl() {
-            return thumbnailPath != null ? thumbnailPath : originalPath;
-        }
-
-        public String getFullUrl(String baseUrl) {
-            return baseUrl + getDisplayUrl();
-        }
-    }
 }

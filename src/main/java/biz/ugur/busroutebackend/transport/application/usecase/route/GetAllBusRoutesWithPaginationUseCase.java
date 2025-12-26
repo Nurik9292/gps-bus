@@ -14,10 +14,9 @@ import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.specification.BusRouteSpecifications;
+import biz.ugur.busroutebackend.shared.application.util.PaginationHelper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -160,11 +159,8 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
     }
 
     private Pageable createPageable(GetAllRoutePaginationQuery query) {
-        Sort sort = Sort.by(
-                query.sortOrder().equalsIgnoreCase("desc") ?
-                        Sort.Direction.DESC : Sort.Direction.ASC,
-                query.sortField()
+        return PaginationHelper.createPageable(
+                query.page(), query.size(), query.sortField(), query.sortOrder()
         );
-        return PageRequest.of(query.page() - 1, query.size(), sort);
     }
 }

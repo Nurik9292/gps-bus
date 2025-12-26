@@ -17,21 +17,14 @@ import biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistory
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
-/**
- * Use case for detecting and auto-assigning routes based on GPS data.
- *
- * Business Logic:
- * 1. Get GPS history for vehicle
- * 2. Check if vehicle is deviating from current route (if assigned)
- * 3. If deviating, search all routes for best match
- * 4. Auto-reassign if confidence > threshold
- */
+
 @Service
 @Slf4j
 public class DetectRouteByGpsUseCase extends BaseUseCase<DetectRouteByGpsUseCase.Request, DetectRouteByGpsUseCase.Result> {
@@ -82,15 +75,28 @@ public class DetectRouteByGpsUseCase extends BaseUseCase<DetectRouteByGpsUseCase
                         return Mono.just(Result.insufficientData("No GPS history"));
                     }
 
+                    List<RouteGeometryMatchingService.GpsPoint> domainPoints = convertToDomainGpsPoints(gpsPoints);
+
                     if (vehicle.hasAssignedRoute()) {
-                        return checkDeviationAndReassign(vehicle, gpsPoints);
+                        return checkDeviationAndReassign(vehicle, domainPoints);
                     } else {
-                        return findBestMatchingRoute(vehicle, gpsPoints);
+                        return findBestMatchingRoute(vehicle, domainPoints);
                     }
                 });
     }
 
-    private Mono<Result> checkDeviationAndReassign(Vehicle vehicle, List<GpsPoint> gpsPoints) {
+    private List<RouteGeometryMatchingService.GpsPoint> convertToDomainGpsPoints(List<GpsPoint> gpsPoints) {
+        return gpsPoints.stream()
+                .map(gp -> new RouteGeometryMatchingService.GpsPoint(
+                        gp.getLat(),
+                        gp.getLon(),
+                        gp.getSpeed(),
+                        gp.getTime() != null ? gp.getTime().toEpochSecond(ZoneOffset.UTC) : null
+                ))
+                .collect(Collectors.toList());
+    }
+
+    private Mono<Result> checkDeviationAndReassign(Vehicle vehicle, List<RouteGeometryMatchingService.GpsPoint> gpsPoints) {
         return busRouteRepository.findById(vehicle.getAssignedRouteId())
                 .flatMap(currentRoute -> {
                     boolean isDeviating = matchingService.isDeviatingFromRoute(gpsPoints, currentRoute);
@@ -107,7 +113,7 @@ public class DetectRouteByGpsUseCase extends BaseUseCase<DetectRouteByGpsUseCase
                 .switchIfEmpty(findBestMatchingRoute(vehicle, gpsPoints));
     }
 
-    private Mono<Result> findBestMatchingRoute(Vehicle vehicle, List<GpsPoint> gpsPoints) {
+    private Mono<Result> findBestMatchingRoute(Vehicle vehicle, List<RouteGeometryMatchingService.GpsPoint> gpsPoints) {
         return busRouteRepository.findActiveRoutes()
                 .filter(BusRoute::hasGeometry)
                 .flatMap(route -> Mono.just(matchingService.calculateMatchScore(gpsPoints, route)))
@@ -124,10 +130,6 @@ public class DetectRouteByGpsUseCase extends BaseUseCase<DetectRouteByGpsUseCase
                     RouteMatchResult bestMatch = matches.stream()
                             .max(Comparator.comparingInt(RouteMatchResult::confidence))
                             .orElse(null);
-
-                    if (bestMatch == null) {
-                        return Mono.just(Result.noMatch("No valid match found"));
-                    }
 
                     if (vehicle.hasAssignedRoute()
                             && vehicle.getAssignedRouteId().getValue().equals(bestMatch.routeId())) {

@@ -10,10 +10,9 @@ import biz.ugur.busroutebackend.transport.application.dto.stop.StopData;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.domain.specification.BusStopSpecifications;
+import biz.ugur.busroutebackend.shared.application.util.PaginationHelper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -108,12 +107,8 @@ public class GetAllBusStopsUseCase extends BaseUseCase<Mono<GetAllStopPagination
     }
 
     private Pageable createPageable(GetAllStopPaginationQuery query) {
-        Sort sort = Sort.by(
-                query.sortOrder().equalsIgnoreCase("desc") ?
-                        Sort.Direction.DESC : Sort.Direction.ASC,
-                query.sortField()
+        return PaginationHelper.createPageable(
+                query.page(), query.size(), query.sortField(), query.sortOrder()
         );
-
-        return PageRequest.of(query.page() - 1, query.size(), sort);
     }
 }

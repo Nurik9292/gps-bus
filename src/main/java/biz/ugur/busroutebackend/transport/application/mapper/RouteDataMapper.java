@@ -15,30 +15,7 @@ import java.util.List;
 public class RouteDataMapper {
 
     public Mono<RouteData> toRouteData(BusRoute busRoute) {
-        RouteData dto = new RouteData(
-                busRoute.getId().getValue(),
-                busRoute.getRouteNumber(),
-                busRoute.getRouteName(),
-                busRoute.getNameTm(),
-                busRoute.getNameEn(),
-                busRoute.getRouteColor(),
-                busRoute.getCityId(),
-                busRoute.getIsActive(),
-                busRoute.getEstimatedDurationMinutes(),
-                0,
-                0,
-                convertMetersToKm(busRoute.getTotalDistanceForwardMeters()),
-                convertMetersToKm(busRoute.getTotalDistanceBackwardMeters()),
-                getBackwardGeometry(busRoute),
-                getForwardGeometry(busRoute),
-                0L,
-                busRoute.getCreatedAt(),
-                busRoute.getUpdatedAt(),
-                List.of(),
-                List.of()
-        );
-
-        return Mono.just(dto);
+        return Mono.just(toRouteDataSync(busRoute));
     }
 
     public Mono<RouteData> toRouteDataWithStops(
@@ -47,58 +24,23 @@ public class RouteDataMapper {
             List<RouteStopDTO> backwardStops,
             Long activeVehicleCount
     ) {
-        RouteData dto = new RouteData(
-                busRoute.getId().getValue(),
-                busRoute.getRouteNumber(),
-                busRoute.getRouteName(),
-                busRoute.getNameTm(),
-                busRoute.getNameEn(),
-                busRoute.getRouteColor(),
-                busRoute.getCityId(),
-                busRoute.getIsActive(),
-                busRoute.getEstimatedDurationMinutes(),
-                forwardStops.size(),
-                backwardStops.size(),
-                convertMetersToKm(busRoute.getTotalDistanceForwardMeters()),
-                convertMetersToKm(busRoute.getTotalDistanceBackwardMeters()),
-                getBackwardGeometry(busRoute),
-                getForwardGeometry(busRoute),
-                activeVehicleCount != null ? activeVehicleCount : 0L,
-                busRoute.getCreatedAt(),
-                busRoute.getUpdatedAt(),
-                forwardStops,
-                backwardStops
-        );
-
-        return Mono.just(dto);
+        return Mono.just(toRouteDataWithStopsSync(busRoute, forwardStops, backwardStops, activeVehicleCount));
     }
 
     public RouteData toRouteDataSync(BusRoute busRoute) {
-        return new RouteData(
-                busRoute.getId().getValue(),
-                busRoute.getRouteNumber(),
-                busRoute.getRouteName(),
-                busRoute.getNameTm(),
-                busRoute.getNameEn(),
-                busRoute.getRouteColor(),
-                busRoute.getCityId(),
-                busRoute.getIsActive(),
-                busRoute.getEstimatedDurationMinutes(),
-                0,
-                0,
-                convertMetersToKm(busRoute.getTotalDistanceForwardMeters()),
-                convertMetersToKm(busRoute.getTotalDistanceBackwardMeters()),
-                getBackwardGeometry(busRoute),
-                getForwardGeometry(busRoute),
-                0L,
-                busRoute.getCreatedAt(),
-                busRoute.getUpdatedAt(),
-                List.of(),
-                List.of()
-        );
+        return createRouteData(busRoute, List.of(), List.of(), 0L);
     }
 
     public RouteData toRouteDataWithStopsSync(
+            BusRoute busRoute,
+            List<RouteStopDTO> forwardStops,
+            List<RouteStopDTO> backwardStops,
+            Long activeVehicleCount
+    ) {
+        return createRouteData(busRoute, forwardStops, backwardStops, activeVehicleCount);
+    }
+
+    private RouteData createRouteData(
             BusRoute busRoute,
             List<RouteStopDTO> forwardStops,
             List<RouteStopDTO> backwardStops,
@@ -127,7 +69,6 @@ public class RouteDataMapper {
                 backwardStops
         );
     }
-
 
     private BigDecimal convertMetersToKm(Integer meters) {
         if (meters == null) {

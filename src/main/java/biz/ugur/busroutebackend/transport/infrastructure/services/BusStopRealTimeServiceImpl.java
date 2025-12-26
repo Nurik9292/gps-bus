@@ -17,6 +17,7 @@ import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -71,11 +72,15 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                                 .flatMap(response -> {
                                     long calculationTime = System.currentTimeMillis() - startTime;
 
-                                    logETAPerformance(stopId, response.getArrivals().size(),
+                                    // Log performance asynchronously without blocking response
+                                    Mono<Void> logMono = logETAPerformance(stopId, response.getArrivals().size(),
                                             0, calculationTime, false);
 
-                                    return redisTemplate.opsForValue()
-                                            .set(cacheKey, response, Duration.ofSeconds(cacheTtlSeconds))
+                                    Mono<Boolean> cacheMono = redisTemplate.opsForValue()
+                                            .set(cacheKey, response, Duration.ofSeconds(cacheTtlSeconds));
+
+                                    // Execute both in parallel, return response when cache is set
+                                    return Mono.zip(cacheMono, logMono.thenReturn(true))
                                             .thenReturn(response);
                                 })
                                 .doOnNext(calculated -> log.debug("Cache MISS for stop {}, calculated {} routes",
@@ -86,15 +91,18 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
     }
 
 
-    private void logETAPerformance(String stopId, int routesCount, int vehiclesProcessed,
-                                   long calculationTimeMs, boolean cacheHit) {
-        performanceLogRepository.logETAPerformance(
-                stopId,
-                routesCount,
-                vehiclesProcessed,
-                calculationTimeMs,
-                cacheHit
-        ).subscribe();
+    private Mono<Void> logETAPerformance(String stopId, int routesCount, int vehiclesProcessed,
+                                         long calculationTimeMs, boolean cacheHit) {
+        return performanceLogRepository.logETAPerformance(
+                        stopId,
+                        routesCount,
+                        vehiclesProcessed,
+                        calculationTimeMs,
+                        cacheHit
+                )
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnError(error -> log.warn("Failed to log ETA performance for stop {}: {}", stopId, error.getMessage()))
+                .onErrorResume(error -> Mono.empty());
     }
 
     private Mono<BusStopArrivalsResponse> calculateStopArrivals(String stopId) {

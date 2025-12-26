@@ -16,8 +16,6 @@ public class RouteGeometry extends ValueObject {
 
     private final List<Coordinates> points;
 
-    private static DistanceCalculationService distanceService;
-
     public RouteGeometry(List<Coordinates> points) {
         if (points == null || points.isEmpty()) {
             throw new IllegalArgumentException("Route geometry must contain at least one point");
@@ -28,10 +26,6 @@ public class RouteGeometry extends ValueObject {
         }
 
         this.points = List.copyOf(points);
-    }
-
-    public static void setDistanceCalculationService(DistanceCalculationService service) {
-        distanceService = service;
     }
 
     public static RouteGeometry fromCoordinates(List<List<Double>> coordinates) {
@@ -128,16 +122,14 @@ public class RouteGeometry extends ValueObject {
     }
 
 
-    public double calculateDistanceMeters() {
+
+    public double calculateDistanceMeters(DistanceCalculationService distanceService) {
         if (points.size() < 2) {
             return 0.0;
         }
 
         if (distanceService == null) {
-            throw new IllegalStateException(
-                "DistanceCalculationService not initialized. " +
-                "Ensure GeospatialServiceInitializer has been executed during application startup."
-            );
+            throw new IllegalArgumentException("DistanceCalculationService cannot be null");
         }
 
         double totalDistance = 0.0;
@@ -149,6 +141,26 @@ public class RouteGeometry extends ValueObject {
                 prev.getLatitudeAsDouble(), prev.getLongitudeAsDouble(),
                 curr.getLatitudeAsDouble(), curr.getLongitudeAsDouble()
             ).getMeters();
+        }
+
+        return totalDistance;
+    }
+
+    public double calculateDistanceMetersSimple() {
+        if (points.size() < 2) {
+            return 0.0;
+        }
+
+        double totalDistance = 0.0;
+
+        for (int i = 1; i < points.size(); i++) {
+            Coordinates prev = points.get(i - 1);
+            Coordinates curr = points.get(i);
+
+            totalDistance += DistanceCalculationService.haversineDistanceMeters(
+                    prev.getLatitudeAsDouble(), prev.getLongitudeAsDouble(),
+                    curr.getLatitudeAsDouble(), curr.getLongitudeAsDouble()
+            );
         }
 
         return totalDistance;
@@ -172,12 +184,10 @@ public class RouteGeometry extends ValueObject {
     }
 
 
-    public boolean containsPoint(Coordinates point, double toleranceMeters) {
+
+    public boolean containsPoint(Coordinates point, double toleranceMeters, DistanceCalculationService distanceService) {
         if (distanceService == null) {
-            throw new IllegalStateException(
-                "DistanceCalculationService not initialized. " +
-                "Ensure GeospatialServiceInitializer has been executed during application startup."
-            );
+            throw new IllegalArgumentException("DistanceCalculationService cannot be null");
         }
 
         return points.stream()
@@ -190,6 +200,6 @@ public class RouteGeometry extends ValueObject {
     @Override
     public String toString() {
         return String.format("RouteGeometry{points=%d, distance=%.1fm}",
-                points.size(), calculateDistanceMeters());
+                points.size(), calculateDistanceMetersSimple());
     }
 }

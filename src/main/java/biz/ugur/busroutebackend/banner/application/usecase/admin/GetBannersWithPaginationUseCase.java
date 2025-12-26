@@ -10,10 +10,9 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.shared.domain.specification.Specification;
+import biz.ugur.busroutebackend.shared.application.util.PaginationHelper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -93,13 +92,9 @@ public class GetBannersWithPaginationUseCase extends BaseUseCase<Mono<BannerPagi
     }
 
     private Pageable createPageable(BannerPaginationQuery query) {
-        Sort sort = Sort.by(
-                query.getSortOrder().equalsIgnoreCase("desc") ?
-                        Sort.Direction.DESC : Sort.Direction.ASC,
-                query.getSortField()
+        return PaginationHelper.createPageable(
+                query.getPage(), query.getSize(), query.getSortField(), query.getSortOrder()
         );
-
-        return PageRequest.of(query.getPage() - 1, query.getSize(), sort);
     }
 
 

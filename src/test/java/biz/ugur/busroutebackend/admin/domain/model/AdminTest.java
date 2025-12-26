@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.admin.domain.model;
 import biz.ugur.busroutebackend.admin.domain.events.AdminCreatedEvent;
 import biz.ugur.busroutebackend.admin.domain.events.AdminPasswordChangedEvent;
 import biz.ugur.busroutebackend.admin.domain.events.AdminProfileUpdatedEvent;
+import biz.ugur.busroutebackend.shared.domain.services.PasswordEncoder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -12,13 +13,27 @@ import static org.junit.jupiter.api.Assertions.*;
 class AdminTest {
 
     private Admin admin;
+    private PasswordEncoder passwordEncoder;
     private static final String USERNAME = "testadmin";
     private static final String PASSWORD = "password123";
     private static final String FULL_NAME = "Test Admin";
 
     @BeforeEach
     void setUp() {
-        admin = Admin.create(USERNAME, PASSWORD, FULL_NAME, null, false, true);
+        // Simple test password encoder that prefixes with "encoded:"
+        passwordEncoder = new PasswordEncoder() {
+            @Override
+            public String encode(String rawPassword) {
+                return "encoded:" + rawPassword;
+            }
+
+            @Override
+            public boolean matches(String rawPassword, String encodedPassword) {
+                return encodedPassword != null && encodedPassword.equals("encoded:" + rawPassword);
+            }
+        };
+        String encodedPassword = passwordEncoder.encode(PASSWORD);
+        admin = Admin.create(USERNAME, encodedPassword, FULL_NAME, null, false, true);
     }
 
     @Test
@@ -41,13 +56,13 @@ class AdminTest {
         String newPassword = "newPassword456";
         String originalPasswordHash = admin.getPasswordHash();
 
-        Admin updatedAdmin = admin.changePassword(newPassword);
+        Admin updatedAdmin = admin.changePassword(passwordEncoder.encode(newPassword));
 
         assertNotNull(updatedAdmin);
         assertNotSame(admin, updatedAdmin);
         assertEquals(admin.getId(), updatedAdmin.getId());
         assertNotEquals(originalPasswordHash, updatedAdmin.getPasswordHash());
-        assertTrue(updatedAdmin.checkPassword(newPassword));
+        assertTrue(updatedAdmin.checkPassword(newPassword, passwordEncoder));
 
         assertEquals(1, updatedAdmin.getDomainEvents().size());
         assertInstanceOf(AdminPasswordChangedEvent.class, updatedAdmin.getDomainEvents().getFirst());
@@ -55,8 +70,8 @@ class AdminTest {
 
     @Test
     void checkPassword_ShouldReturnTrueForCorrectPassword() {
-        assertTrue(admin.checkPassword(PASSWORD));
-        assertFalse(admin.checkPassword("wrongPassword"));
+        assertTrue(admin.checkPassword(PASSWORD, passwordEncoder));
+        assertFalse(admin.checkPassword("wrongPassword", passwordEncoder));
     }
 
     @Test

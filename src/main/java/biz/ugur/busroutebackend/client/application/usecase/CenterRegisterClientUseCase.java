@@ -58,19 +58,17 @@ public class CenterRegisterClientUseCase extends
         return Mono.zip(
                 clientJwtTokenService.generateAccessToken(client.getId().getValue()),
                 clientJwtTokenService.generateRefreshToken(client.getId().getValue())
-        ).map(tokens -> {
-            client.authenticate(tokens.getT1(), tokens.getT2());
-            return client;
-        });
+        ).map(tokens -> client.authenticate(tokens.getT1(), tokens.getT2()));
     }
 
     private Mono<Client> createNewClient(Command command) {
         Client client = Client.create("Center", command.phone, Platform.MOBILE_WEB);
-        client.generateOtpForCenter();
-        if(client.verifyOtpCenter(client.getOtpCode()))
-            return authenticateExistingClient(client);
-
-        return Mono.just(client);
+        Client clientWithOtp = client.generateOtpForCenter();
+        Client.VerificationResult verificationResult = clientWithOtp.verifyOtpCenter(clientWithOtp.getOtpCode());
+        if (verificationResult.verified()) {
+            return authenticateExistingClient(verificationResult.client());
+        }
+        return Mono.just(clientWithOtp);
     }
 
     private Result buildResult(Client savedClient) {

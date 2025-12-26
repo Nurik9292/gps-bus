@@ -49,10 +49,5 @@ public final class CityList implements PagedList<CityResult> {
     public PaginationInfo pagination() {
         return pagination;
     }
-
-    @Deprecated(since = "2025-11-02", forRemoval = true)
-    public Integer getTotalCount() {
-        return (int) pagination.getTotalItems();
-    }
 }
 

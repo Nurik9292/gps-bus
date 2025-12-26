@@ -34,11 +34,11 @@ public class VerifyOtpUseCase extends BaseUseCase<Mono<VerifyOtpUseCase.Command>
         return clientRepository.findByPhone(command.phone())
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Client not found")))
                 .flatMap(client -> {
-                    boolean verified = client.verifyOtp(command.otp());
-                    if (!verified) {
+                    var verificationResult = client.verifyOtp(command.otp());
+                    if (!verificationResult.verified()) {
                         return Mono.error(new IllegalArgumentException("Invalid OTP"));
                     }
-                    return clientRepository.save(client)
+                    return clientRepository.save(verificationResult.client())
                             .map(savedClient -> new Result(
                                     savedClient.getId().getValue(),
                                     savedClient.isOtpVerified(),

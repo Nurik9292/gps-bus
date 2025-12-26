@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.domain.repository.ImmediateRouteAssignmentRepository;
+import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -19,13 +20,16 @@ public class ClearAllImmediateAssignmentsUseCase extends BaseUseCase<Void, Clear
     public static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
 
     private final ImmediateRouteAssignmentRepository immediateAssignmentRepository;
+    private final VehicleRepository vehicleRepository;
 
     public ClearAllImmediateAssignmentsUseCase(
             CorrelationContextService correlationService,
             EventBus eventBus,
-            ImmediateRouteAssignmentRepository immediateAssignmentRepository) {
+            ImmediateRouteAssignmentRepository immediateAssignmentRepository,
+            VehicleRepository vehicleRepository) {
         super(correlationService, eventBus);
         this.immediateAssignmentRepository = immediateAssignmentRepository;
+        this.vehicleRepository = vehicleRepository;
     }
 
     @Override
@@ -33,12 +37,16 @@ public class ClearAllImmediateAssignmentsUseCase extends BaseUseCase<Void, Clear
         ZonedDateTime now = ZonedDateTime.now(ASHGABAT_ZONE);
 
         return immediateAssignmentRepository.deactivateAll()
-                .map(count -> new Result(count, now.toString(), true, null))
-                .doOnSuccess(result ->
-                    log.info("Cleared {} immediate assignments at {} (Ashgabat time)",
-                            result.clearedCount(), result.clearedAt()))
+                .flatMap(immediateCount ->
+                    vehicleRepository.clearAllRouteAssignments()
+                        .map(vehicleCount -> {
+                            log.info("Cleared {} immediate assignments and {} vehicle route assignments at {} (Ashgabat time)",
+                                    immediateCount, vehicleCount, now);
+                            return new Result(immediateCount + vehicleCount.intValue(), now.toString(), true, null);
+                        })
+                )
                 .onErrorResume(error -> {
-                    log.error("Failed to clear immediate assignments: {}", error.getMessage());
+                    log.error("Failed to clear assignments: {}", error.getMessage());
                     return Mono.just(new Result(0, now.toString(), false, error.getMessage()));
                 });
     }

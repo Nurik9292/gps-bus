@@ -3,9 +3,8 @@ package biz.ugur.busroutebackend.geospatial.domain.services;
 import biz.ugur.busroutebackend.geospatial.domain.constants.GeoConstants;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Distance;
-import org.springframework.stereotype.Service;
 
-@Service
+
 public class DistanceCalculationService {
 
     public Distance calculateDistance(Coordinates from, Coordinates to) {
@@ -28,7 +27,8 @@ public class DistanceCalculationService {
         return Distance.ofMeters(distance);
     }
 
-    private double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
+
+    public static double haversineDistanceMeters(double lat1, double lon1, double lat2, double lon2) {
         double lat1Rad = Math.toRadians(lat1);
         double lat2Rad = Math.toRadians(lat2);
         double deltaLatRad = Math.toRadians(lat2 - lat1);
@@ -41,6 +41,10 @@ public class DistanceCalculationService {
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
         return GeoConstants.EARTH_RADIUS_METERS * c;
+    }
+
+    private double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
+        return haversineDistanceMeters(lat1, lon1, lat2, lon2);
     }
 
     public boolean isWithinRadius(Coordinates from, Coordinates to, Distance radius) {
@@ -56,7 +60,6 @@ public class DistanceCalculationService {
         return isWithinRadius(from, to, GeoConstants.DEFAULT_SEARCH_RADIUS_METERS);
     }
 
-    // ========== Walking Time Calculations ==========
 
     public int calculateWalkingTimeMinutes(Distance distance) {
         double minutes = distance.getMeters() / GeoConstants.AVERAGE_WALKING_SPEED_M_PER_MIN;
@@ -163,7 +166,6 @@ public class DistanceCalculationService {
 
         double segmentLength = d12 * GeoConstants.EARTH_RADIUS_METERS;
         if (alongTrackDistance >= 0 && alongTrackDistance <= segmentLength) {
-            // Perpendicular point is on segment, return cross-track distance
             return Distance.ofMeters(Math.abs(crossTrackDistance));
         } else {
             return Distance.ofMeters(Math.min(

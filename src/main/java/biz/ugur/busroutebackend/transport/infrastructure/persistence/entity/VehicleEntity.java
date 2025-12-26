@@ -70,7 +70,6 @@ public class VehicleEntity {
     @Column("version")
     private Long version;
 
-    // Garage tracking fields
     @Column("last_garage_id")
     private String lastGarageId;
 
@@ -83,7 +82,6 @@ public class VehicleEntity {
     @Column("is_in_garage")
     private Boolean isInGarage;
 
-    // Route source fields
     @Column("route_source")
     private String routeSource;
 
@@ -93,10 +91,12 @@ public class VehicleEntity {
     @Column("gps_detection_enabled")
     private Boolean gpsDetectionEnabled;
 
-    // Manual assignment fields
     @Column("assigned_by")
     private String assignedBy;
 
     @Column("manual_assignment_reason")
     private String manualAssignmentReason;
+
+    @Column("gps_provider")
+    private String gpsProvider;
 }

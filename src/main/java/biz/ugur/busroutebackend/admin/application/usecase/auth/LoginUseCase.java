@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.admin.infrastructure.security.AdminPrincipal;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.shared.domain.services.PasswordEncoder;
 import biz.ugur.busroutebackend.admin.infrastructure.security.AdminJwtProperties;
 import biz.ugur.busroutebackend.admin.infrastructure.security.AdminJwtTokenService;
 import lombok.extern.slf4j.Slf4j;
@@ -20,16 +21,19 @@ public class LoginUseCase extends BaseUseCase<Mono<LoginUseCase.Request>, LoginU
     private final AdminRepository adminRepository;
     private final AdminJwtTokenService adminJwtTokenService;
     private final AdminJwtProperties adminJwtProperties;
+    private final PasswordEncoder passwordEncoder;
 
     public LoginUseCase(AdminRepository adminRepository,
                         AdminJwtTokenService adminJwtTokenService,
                         AdminJwtProperties adminJwtProperties,
                         CorrelationContextService correlationService,
-                        EventBus eventBus) {
+                        EventBus eventBus,
+                        PasswordEncoder passwordEncoder) {
         super(correlationService, eventBus);
         this.adminRepository = adminRepository;
         this.adminJwtTokenService = adminJwtTokenService;
         this.adminJwtProperties = adminJwtProperties;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -49,7 +53,7 @@ public class LoginUseCase extends BaseUseCase<Mono<LoginUseCase.Request>, LoginU
                             .filter(Admin::getIsActive)
                             .switchIfEmpty(Mono.error(new AdminAuthenticationException(
                                     AdminAuthenticationException.AuthErrorType.ACCOUNT_DISABLED, req.username(), correlationId)))
-                            .filter(admin -> admin.checkPassword(req.password()))
+                            .filter(admin -> admin.checkPassword(req.password(), passwordEncoder))
                             .switchIfEmpty(Mono.error(new AdminAuthenticationException(
                                     AdminAuthenticationException.AuthErrorType.INVALID_CREDENTIALS, req.username(), correlationId)))
                             .flatMap(admin -> {

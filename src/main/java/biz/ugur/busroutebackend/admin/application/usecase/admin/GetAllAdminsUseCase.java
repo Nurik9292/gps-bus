@@ -10,10 +10,9 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.shared.domain.specification.Specification;
+import biz.ugur.busroutebackend.shared.application.util.PaginationHelper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -108,12 +107,8 @@ public class GetAllAdminsUseCase extends BaseUseCase<Mono<AdminPaginationQuery>,
     }
 
     private Pageable createPageable(AdminPaginationQuery query) {
-        Sort sort = Sort.by(
-                query.sortOrder().equalsIgnoreCase("desc") ?
-                        Sort.Direction.DESC : Sort.Direction.ASC,
-                query.sortField()
+        return PaginationHelper.createPageable(
+                query.page(), query.size(), query.sortField(), query.sortOrder()
         );
-
-        return PageRequest.of(query.page() - 1, query.size(), sort);
     }
 }

@@ -5,7 +5,7 @@ import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
 import biz.ugur.busroutebackend.transport.application.services.VehicleDataEnrichmentService;
 import biz.ugur.busroutebackend.transport.domain.repository.DeviceRouteMappingRepository;
-import biz.ugur.busroutebackend.transport.domain.service.VehicleEnrichmentService;
+import biz.ugur.busroutebackend.transport.application.services.VehicleEnrichmentService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;

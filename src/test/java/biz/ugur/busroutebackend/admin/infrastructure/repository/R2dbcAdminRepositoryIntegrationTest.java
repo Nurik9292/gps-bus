@@ -3,7 +3,9 @@ package biz.ugur.busroutebackend.admin.infrastructure.repository;
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.admin.infrastructure.persistence.repository.R2dbcAdminRepository;
+import biz.ugur.busroutebackend.shared.domain.services.PasswordEncoder;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,9 +21,7 @@ import reactor.test.StepVerifier;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Integration tests for R2dbcAdminRepository using Testcontainers.
- */
+
 @DataR2dbcTest
 @Testcontainers
 @Import(R2dbcAdminRepository.class)
@@ -44,6 +44,18 @@ class R2dbcAdminRepositoryIntegrationTest {
     private DatabaseClient databaseClient;
 
     private R2dbcAdminRepository repository;
+
+    private final PasswordEncoder passwordEncoder = new PasswordEncoder() {
+        @Override
+        public String encode(String rawPassword) {
+            return "encoded:" + rawPassword;
+        }
+
+        @Override
+        public boolean matches(String rawPassword, String encodedPassword) {
+            return encodedPassword != null && encodedPassword.equals("encoded:" + rawPassword);
+        }
+    };
 
     @BeforeEach
     void setUp() {
@@ -81,7 +93,7 @@ class R2dbcAdminRepositoryIntegrationTest {
     @Test
     void save_ShouldPersistAdminSuccessfully() {
         // Given
-        Admin admin = Admin.create("testadmin", "password123", "Test Admin", null, false, true);
+        Admin admin = Admin.create("testadmin", passwordEncoder.encode("password123"), "Test Admin", null, false, true);
 
         // When & Then
         StepVerifier.create(repository.save(admin))
@@ -97,12 +109,10 @@ class R2dbcAdminRepositoryIntegrationTest {
 
     @Test
     void findById_ShouldRetrieveExistingAdmin() {
-        // Given
-        Admin admin = Admin.create("admin1", "password", "Admin One", null, false, true);
+        Admin admin = Admin.create("admin1", passwordEncoder.encode("password"), "Admin One", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
 
-        // When & Then
         StepVerifier.create(repository.findById(savedAdmin.getId()))
                 .assertNext(found -> {
                     assertEquals(savedAdmin.getId(), found.getId());
@@ -113,21 +123,17 @@ class R2dbcAdminRepositoryIntegrationTest {
 
     @Test
     void findById_ShouldReturnEmpty_ForNonExistentAdmin() {
-        // Given
         AdminId nonExistentId = AdminId.generate();
 
-        // When & Then
         StepVerifier.create(repository.findById(nonExistentId))
                 .verifyComplete();
     }
 
     @Test
     void findByUsername_ShouldRetrieveAdmin() {
-        // Given
-        Admin admin = Admin.create("uniqueuser", "password", "Unique User", null, false, true);
+        Admin admin = Admin.create("uniqueuser", passwordEncoder.encode("password"), "Unique User", null, false, true);
         repository.save(admin).block();
 
-        // When & Then
         StepVerifier.create(repository.findByUsername("uniqueuser"))
                 .assertNext(found -> {
                     assertEquals("uniqueuser", found.getUsername());
@@ -138,39 +144,33 @@ class R2dbcAdminRepositoryIntegrationTest {
 
     @Test
     void findByUsername_ShouldReturnEmpty_ForNonExistentUsername() {
-        // When & Then
         StepVerifier.create(repository.findByUsername("nonexistent"))
                 .verifyComplete();
     }
 
     @Test
     void existsByUsername_ShouldReturnTrue_WhenExists() {
-        // Given
-        Admin admin = Admin.create("existinguser", "password", "Existing User", null, false, true);
+        Admin admin = Admin.create("existinguser", passwordEncoder.encode("password"), "Existing User", null, false, true);
         repository.save(admin).block();
 
-        // When & Then
         StepVerifier.create(repository.existsByUsername("existinguser"))
-                .assertNext(exists -> assertTrue(exists))
+                .assertNext(Assertions::assertTrue)
                 .verifyComplete();
     }
 
     @Test
     void existsByUsername_ShouldReturnFalse_WhenNotExists() {
-        // When & Then
         StepVerifier.create(repository.existsByUsername("nonexistent"))
-                .assertNext(exists -> assertFalse(exists))
+                .assertNext(Assertions::assertFalse)
                 .verifyComplete();
     }
 
     @Test
     void update_ShouldUpdateAdminSuccessfully() {
-        // Given
-        Admin admin = Admin.create("updatetest", "password", "Original Name", null, false, true);
+        Admin admin = Admin.create("updatetest", passwordEncoder.encode("password"), "Original Name", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
 
-        // When - Update with immutable pattern
         Admin updatedAdmin = savedAdmin.updateProfile("updatetest", "Updated Name");
 
         StepVerifier.create(repository.save(updatedAdmin))
@@ -183,50 +183,42 @@ class R2dbcAdminRepositoryIntegrationTest {
 
     @Test
     void deleteById_ShouldRemoveAdmin() {
-        // Given
-        Admin admin = Admin.create("deleteme", "password", "Delete Me", null, false, true);
+        Admin admin = Admin.create("deleteme", passwordEncoder.encode("password"), "Delete Me", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
 
-        // When
         StepVerifier.create(repository.deleteById(savedAdmin.getId()))
                 .verifyComplete();
 
-        // Then - Verify deletion
         StepVerifier.create(repository.findById(savedAdmin.getId()))
                 .verifyComplete();
     }
 
     @Test
     void immutabilitySupport_ChangePassword() {
-        // Given
-        Admin admin = Admin.create("passtest", "oldpassword", "Password Test", null, false, true);
+        Admin admin = Admin.create("passtest", passwordEncoder.encode("oldpassword"), "Password Test", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
 
-        // When - Change password (immutable operation)
-        Admin adminWithNewPassword = savedAdmin.changePassword("newpassword");
+        Admin adminWithNewPassword = savedAdmin.changePassword(passwordEncoder.encode("newpassword"));
 
         StepVerifier.create(repository.save(adminWithNewPassword))
                 .assertNext(updated -> {
-                    assertTrue(updated.checkPassword("newpassword"));
-                    assertFalse(updated.checkPassword("oldpassword"));
+                    assertTrue(updated.checkPassword("newpassword", passwordEncoder));
+                    assertFalse(updated.checkPassword("oldpassword", passwordEncoder));
                 })
                 .verifyComplete();
 
-        // Original should be unchanged
-        assertTrue(savedAdmin.checkPassword("oldpassword"));
+        assertTrue(savedAdmin.checkPassword("oldpassword", passwordEncoder));
     }
 
     @Test
     void immutabilitySupport_ActivateDeactivate() {
-        // Given
-        Admin admin = Admin.create("activetest", "password", "Active Test", null, false, true);
+        Admin admin = Admin.create("activetest", passwordEncoder.encode("password"), "Active Test", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
         assertTrue(savedAdmin.getIsActive());
 
-        // When - Deactivate (immutable operation)
         Admin deactivatedAdmin = savedAdmin.deactivate();
 
         StepVerifier.create(repository.save(deactivatedAdmin))
@@ -235,10 +227,8 @@ class R2dbcAdminRepositoryIntegrationTest {
                 })
                 .verifyComplete();
 
-        // Original should be unchanged
         assertTrue(savedAdmin.getIsActive());
 
-        // Reactivate
         Admin reactivatedAdmin = deactivatedAdmin.activate();
 
         StepVerifier.create(repository.save(reactivatedAdmin))
@@ -250,13 +240,11 @@ class R2dbcAdminRepositoryIntegrationTest {
 
     @Test
     void immutabilitySupport_UpdateAvatar() {
-        // Given
-        Admin admin = Admin.create("avatartest", "password", "Avatar Test", null, false, true);
+        Admin admin = Admin.create("avatartest", passwordEncoder.encode("password"), "Avatar Test", null, false, true);
         Admin savedAdmin = repository.save(admin).block();
         assertNotNull(savedAdmin);
         assertNull(savedAdmin.getAvatar());
 
-        // When - Update avatar (immutable operation)
         Admin adminWithAvatar = savedAdmin.updateAvatar("avatar.jpg");
 
         StepVerifier.create(repository.save(adminWithAvatar))
@@ -265,10 +253,8 @@ class R2dbcAdminRepositoryIntegrationTest {
                 })
                 .verifyComplete();
 
-        // Original should be unchanged
         assertNull(savedAdmin.getAvatar());
 
-        // Remove avatar
         Admin adminWithoutAvatar = adminWithAvatar.removeAvatar();
 
         StepVerifier.create(repository.save(adminWithoutAvatar))
@@ -280,13 +266,11 @@ class R2dbcAdminRepositoryIntegrationTest {
 
     @Test
     void findAll_ShouldReturnAllAdmins() {
-        // Given
-        Admin admin1 = Admin.create("admin1", "pass1", "Admin One", null, false, true);
-        Admin admin2 = Admin.create("admin2", "pass2", "Admin Two", null, true, true);
+        Admin admin1 = Admin.create("admin1", passwordEncoder.encode("pass1"), "Admin One", null, false, true);
+        Admin admin2 = Admin.create("admin2", passwordEncoder.encode("pass2"), "Admin Two", null, true, true);
         repository.save(admin1).block();
         repository.save(admin2).block();
 
-        // When & Then
         StepVerifier.create(repository.findAll())
                 .expectNextCount(2)
                 .verifyComplete();
@@ -294,15 +278,12 @@ class R2dbcAdminRepositoryIntegrationTest {
 
     @Test
     void saveAndRetrieve_ShouldPreserveAllProperties() {
-        // Given
-        Admin admin = Admin.create("complete", "password", "Complete Admin", null, true, true);
+        Admin admin = Admin.create("complete", passwordEncoder.encode("password"), "Complete Admin", null, true, true);
         Admin adminWithAvatar = admin.updateAvatar("test-avatar.jpg");
 
-        // When
         Admin saved = repository.save(adminWithAvatar).block();
         assertNotNull(saved);
 
-        // Then
         StepVerifier.create(repository.findById(saved.getId()))
                 .assertNext(retrieved -> {
                     assertEquals("complete", retrieved.getUsername());

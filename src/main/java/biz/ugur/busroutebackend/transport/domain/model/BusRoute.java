@@ -42,10 +42,6 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
     private Long version;
 
 
-
-    /**
-     * Create NEW bus route.
-     */
     public static BusRoute create(
             String routeNumber,
             String routeName,
@@ -77,9 +73,7 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
                 .build();
     }
 
-    /**
-     * Restore from persistence.
-     */
+
     public static BusRoute restore(
             BusRouteId id,
             String routeNumber,
@@ -128,12 +122,12 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
 
         if (forwardGeometry != null) {
             forwardWKT = forwardGeometry.toWKT();
-            forwardDistance = (int) Math.round(forwardGeometry.calculateDistanceMeters());
+            forwardDistance = (int) Math.round(forwardGeometry.calculateDistanceMetersSimple());
         }
 
         if (backwardGeometry != null) {
             backwardWKT = backwardGeometry.toWKT();
-            backwardDistance = (int) Math.round(backwardGeometry.calculateDistanceMeters());
+            backwardDistance = (int) Math.round(backwardGeometry.calculateDistanceMetersSimple());
         }
 
         BusRoute updatedRoute = this.toBuilder()

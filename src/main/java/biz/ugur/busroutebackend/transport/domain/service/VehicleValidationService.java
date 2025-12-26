@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class VehicleValidationService {
 
+    private static final String LICENSE_PLATE_PATTERN = "\\d{4}\\s[A-Z]{3}";
 
     public boolean isValidGpsPosition(GpsPositionDTO gpsPosition) {
         if (gpsPosition == null) {
@@ -37,21 +38,52 @@ public class VehicleValidationService {
         return true;
     }
 
-
     public boolean isWithinServiceArea(Double latitude, Double longitude) {
-        if (latitude == null || longitude == null) {
-            return false;
-        }
-        return TurkmenistanBounds.isWithinStandardBounds(latitude, longitude);
+        return isValidCoordinates(latitude, longitude);
     }
-
 
     public boolean isValidLicensePlateFormat(String licensePlate) {
         if (licensePlate == null || licensePlate.trim().isEmpty()) {
             return false;
         }
-
         String normalized = licensePlate.trim().toUpperCase();
-        return normalized.matches("\\d{4}\\s[A-Z]{3}");
+        return normalized.matches(LICENSE_PLATE_PATTERN);
+    }
+
+
+    public static String validateDeviceId(String deviceId) {
+        if (deviceId == null || deviceId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Device ID cannot be null or empty");
+        }
+        return deviceId.trim();
+    }
+
+    public static String validateLicensePlate(String licensePlate) {
+        if (licensePlate == null || licensePlate.trim().isEmpty()) {
+            throw new IllegalArgumentException("License plate cannot be null or empty");
+        }
+        String plate = licensePlate.trim().toUpperCase();
+        if (!plate.matches(LICENSE_PLATE_PATTERN)) {
+            throw new IllegalArgumentException("Invalid Turkmen license plate format. Expected: '1992 AGH'");
+        }
+        return plate;
+    }
+
+    public static void validateCoordinates(Double latitude, Double longitude) {
+        if (latitude == null || longitude == null) {
+            throw new IllegalArgumentException("Coordinates cannot be null");
+        }
+        if (!TurkmenistanBounds.isWithinStandardBounds(latitude, longitude)) {
+            throw new IllegalArgumentException(
+                    String.format("Coordinates (%.6f, %.6f) are outside Turkmenistan bounds", latitude, longitude)
+            );
+        }
+    }
+
+    public static boolean isValidCoordinates(Double latitude, Double longitude) {
+        if (latitude == null || longitude == null) {
+            return false;
+        }
+        return TurkmenistanBounds.isWithinStandardBounds(latitude, longitude);
     }
 }

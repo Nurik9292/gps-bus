@@ -19,7 +19,7 @@ import lombok.ToString;
 
 import java.time.LocalDateTime;
 
-@Builder
+@Builder(toBuilder = true)
 @ToString
 @EqualsAndHashCode(callSuper = true)
 @Getter
@@ -157,45 +157,57 @@ public class Client extends AggregateRoot<Client, ClientId> {
         return client;
     }
 
-    public void generateOtp() {
+
+    public Client generateOtp() {
         Otp otp = Otp.generate();
-        this.otpCode = otp.getCode();
-        this.otpVerify = false;
+        return this.toBuilder()
+                .otpCode(otp.getCode())
+                .otpVerify(false)
+                .build();
     }
 
-    public void generateOtpForCenter() {
-        this.otpCode = TEST_CENTER_OTP;
-        this.otpVerify = true;
+
+    public Client generateOtpForCenter() {
+        return this.toBuilder()
+                .otpCode(TEST_CENTER_OTP)
+                .otpVerify(true)
+                .build();
     }
 
-    public boolean verifyOtpCenter(String inputOtp) {
+
+    public VerificationResult verifyOtpCenter(String inputOtp) {
         if (this.otpCode != null && this.otpCode.equals(inputOtp)) {
-            this.otpVerify = true;
-            this.status = ClientStatus.ACTIVE;
-            this.updatedAt = LocalDateTime.now();
-            updateActivity();
-            return true;
+            Client verified = this.toBuilder()
+                    .otpVerify(true)
+                    .status(ClientStatus.ACTIVE)
+                    .lastActivity(LocalDateTime.now())
+                    .build();
+            verified.setUpdatedAt(LocalDateTime.now());
+            return new VerificationResult(true, verified);
         }
-        return false;
+        return new VerificationResult(false, this);
     }
 
-    public boolean verifyOtp(String inputOtp) {
+    public VerificationResult verifyOtp(String inputOtp) {
         if (this.otpCode != null && this.otpCode.equals(inputOtp)) {
-            this.otpVerify = true;
-            this.status = ClientStatus.ACTIVE;
-            this.updatedAt = LocalDateTime.now();
-            updateActivity();
+            Client verified = this.toBuilder()
+                    .otpVerify(true)
+                    .status(ClientStatus.ACTIVE)
+                    .lastActivity(LocalDateTime.now())
+                    .build();
+            verified.setUpdatedAt(LocalDateTime.now());
 
-            registerEvent(new ClientOtpVerifiedEvent(
+            verified.registerEvent(new ClientOtpVerifiedEvent(
                     this.id.getValue(),
                     this.phoneNumber
             ));
-            return true;
+            return new VerificationResult(true, verified);
         }
-        return false;
+        return new VerificationResult(false, this);
     }
 
-    public void authenticate(String accessToken, String refreshToken) {
+
+    public Client authenticate(String accessToken, String refreshToken) {
         if (!status.canLogin()) {
             throw new ClientAuthenticationException(
                 ClientAuthenticationException.AuthErrorType.ACCOUNT_DISABLED,
@@ -203,30 +215,44 @@ public class Client extends AggregateRoot<Client, ClientId> {
             );
         }
 
-        this.accessToken = accessToken;
-        this.refreshToken = refreshToken;
-        updateActivity();
+        Client authenticated = this.toBuilder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .lastActivity(LocalDateTime.now())
+                .build();
 
-        registerEvent(new ClientAuthenticatedEvent(
+        authenticated.registerEvent(new ClientAuthenticatedEvent(
                 this.id.getValue(),
                 this.platform.name()
         ));
+
+        return authenticated;
     }
 
-    public void updateActivity() {
-        this.lastActivity = LocalDateTime.now();
+
+    public Client updateActivity() {
+        return this.toBuilder()
+                .lastActivity(LocalDateTime.now())
+                .build();
     }
 
-    public void updateTokens(String accessToken, String refreshToken) {
-        this.accessToken = accessToken;
-        this.refreshToken = refreshToken;
-        updateActivity();
+
+    public Client updateTokens(String accessToken, String refreshToken) {
+        return this.toBuilder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .lastActivity(LocalDateTime.now())
+                .build();
     }
 
-    public void logout() {
-        this.accessToken = null;
-        this.refreshToken = null;
-        this.updatedAt = LocalDateTime.now();
+
+    public Client logout() {
+        Client loggedOut = this.toBuilder()
+                .accessToken(null)
+                .refreshToken(null)
+                .build();
+        loggedOut.setUpdatedAt(LocalDateTime.now());
+        return loggedOut;
     }
 
     public boolean isRefreshTokenValid(String providedRefreshToken) {
@@ -235,21 +261,31 @@ public class Client extends AggregateRoot<Client, ClientId> {
             && this.status.canLogin();
     }
 
-    public void suspend() {
-        this.status = ClientStatus.SUSPENDED;
-        this.accessToken = null;
-        this.refreshToken = null;
+    public Client suspend() {
+        return this.toBuilder()
+                .status(ClientStatus.SUSPENDED)
+                .accessToken(null)
+                .refreshToken(null)
+                .build();
     }
 
-    public void block() {
-        this.status = ClientStatus.BLOCKED;
-        this.accessToken = null;
-        this.refreshToken = null;
+
+    public Client block() {
+        return this.toBuilder()
+                .status(ClientStatus.BLOCKED)
+                .accessToken(null)
+                .refreshToken(null)
+                .build();
     }
 
-    public void activate() {
-        this.status = ClientStatus.ACTIVE;
+    public Client activate() {
+        return this.toBuilder()
+                .status(ClientStatus.ACTIVE)
+                .build();
     }
+
+
+    public record VerificationResult(boolean verified, Client client) {}
 
 
     private static String validateName(String name) {

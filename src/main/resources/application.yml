@@ -149,6 +149,7 @@ app:
 external:
   api:
     gps:
+      enabled: ${GPS_API_ENABLED:true}
       base-url: ${GPS_API_BASE_URL:http://95.85.97.118/app-overseas-newenergy-core}
       token: ${GPS_API_TOKEN:YT2AE19C2B1A4FDD8F10B934DA1E6905}
       timeout: ${GPS_API_TIMEOUT:30s}
@@ -158,6 +159,23 @@ external:
       batch-size: ${GPS_API_BATCH_SIZE:50}
       max-concurrent-batches: ${GPS_API_MAX_CONCURRENT_BATCHES:3}
       time-window-minutes: ${GPS_API_TIME_WINDOW_MINUTES:60}
+      retry:
+        max-attempts: 3
+        initial-interval: 1s
+        multiplier: 2.0
+        max-interval: 10s
+      rate-limit:
+        requests-per-minute: 60
+
+    gps-tugdk:
+      enabled: ${GPS_TUGDK_ENABLED:false}
+      base-url: ${GPS_TUGDK_BASE_URL:https://gps.tugdk.gov.tm}
+      token: ${GPS_TUGDK_TOKEN:}
+      timeout: ${GPS_TUGDK_TIMEOUT:30s}
+      connect-timeout: ${GPS_TUGDK_CONNECT_TIMEOUT:10s}
+      read-timeout: ${GPS_TUGDK_READ_TIMEOUT:60s}
+      write-timeout: ${GPS_TUGDK_WRITE_TIMEOUT:10s}
+      cache-timeout: ${GPS_TUGDK_CACHE_TIMEOUT:5s}
       retry:
         max-attempts: 3
         initial-interval: 1s
@@ -218,7 +236,7 @@ business:
       min-speed-kmh: 5.0
 
   gps-route-detection:
-    enabled: true
+    enabled: false  # ОТКЛЮЧЕНО: маршруты пересекаются, GPS детекция работает некорректно
     check-interval-seconds: 30
     min-gps-points: 5
     deviation-threshold-meters: 500
@@ -269,6 +287,11 @@ resilience4j:
         sliding-window-size: 20
         failure-rate-threshold: 60
         wait-duration-in-open-state: 5m
+      gpsApiTugdk:
+        base-config: default
+        sliding-window-size: 20
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 5m
       busInfoApi:
         base-config: default
         sliding-window-size: 15
@@ -299,6 +322,9 @@ resilience4j:
       gpsApi:
         limit-for-period: 30
         limit-refresh-period: 1s
+      gpsApiTugdk:
+        limit-for-period: 30
+        limit-refresh-period: 1s
       busInfoApi:
         limit-for-period: 20
         limit-refresh-period: 1s
@@ -311,6 +337,8 @@ resilience4j:
     instances:
       gpsApi:
         max-concurrent-calls: 5
+      gpsApiTugdk:
+        max-concurrent-calls: 5
       busInfoApi:
         max-concurrent-calls: 3
 
@@ -320,6 +348,8 @@ resilience4j:
         timeout-duration: 60s
     instances:
       gpsApi:
+        timeout-duration: 60s
+      gpsApiTugdk:
         timeout-duration: 60s
       busInfoApi:
         timeout-duration: 30s

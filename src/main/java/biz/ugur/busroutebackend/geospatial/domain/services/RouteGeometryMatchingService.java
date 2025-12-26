@@ -3,42 +3,32 @@ package biz.ugur.busroutebackend.geospatial.domain.services;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteGeometry;
-import biz.ugur.busroutebackend.transport.infrastructure.redis.GpsPoint;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-/**
- * Service for matching GPS tracks to route geometries.
- *
- * This service calculates how well a sequence of GPS points matches
- * a route's geometry, returning a confidence score.
- */
-@Service
+
 @Slf4j
 public class RouteGeometryMatchingService {
 
     private final DistanceCalculationService distanceService;
+    private final double maxDistanceForMatch;
+    private final double deviationThreshold;
 
-    @Value("${business.gps-route-detection.max-distance-for-match-meters:100}")
-    private double maxDistanceForMatch;
-
-    @Value("${business.gps-route-detection.deviation-threshold-meters:500}")
-    private double deviationThreshold;
-
-    public RouteGeometryMatchingService(DistanceCalculationService distanceService) {
+    public RouteGeometryMatchingService(DistanceCalculationService distanceService,
+                                         double maxDistanceForMatch,
+                                         double deviationThreshold) {
         this.distanceService = distanceService;
+        this.maxDistanceForMatch = maxDistanceForMatch;
+        this.deviationThreshold = deviationThreshold;
     }
 
-    /**
-     * Calculate match score between GPS track and route geometry.
-     *
-     * @param gpsPoints GPS points (in chronological order)
-     * @param route Bus route with geometry
-     * @return Match result with confidence score
-     */
+
+    public record GpsPoint(double lat, double lon, Double speed, Long timestamp) {
+
+    }
+
+
     public RouteMatchResult calculateMatchScore(List<GpsPoint> gpsPoints, BusRoute route) {
         if (gpsPoints == null || gpsPoints.isEmpty() || route == null) {
             return RouteMatchResult.noMatch("Insufficient data");
@@ -93,7 +83,7 @@ public class RouteGeometryMatchingService {
         double totalDistance = 0.0;
 
         for (GpsPoint gpsPoint : gpsPoints) {
-            Coordinates gpsCoord = Coordinates.of(gpsPoint.getLat(), gpsPoint.getLon());
+            Coordinates gpsCoord = Coordinates.of(gpsPoint.lat, gpsPoint.lat);
             double minDistance = calculateMinDistanceToRoute(gpsCoord, routePoints);
 
             totalDistance += minDistance;
@@ -135,13 +125,7 @@ public class RouteGeometryMatchingService {
         return minDistance;
     }
 
-    /**
-     * Check if vehicle is deviating from assigned route.
-     *
-     * @param gpsPoints Recent GPS points
-     * @param route Assigned route
-     * @return true if deviation detected
-     */
+
     public boolean isDeviatingFromRoute(List<GpsPoint> gpsPoints, BusRoute route) {
         if (gpsPoints == null || gpsPoints.isEmpty() || route == null) {
             return false;
@@ -163,13 +147,7 @@ public class RouteGeometryMatchingService {
         return deviating;
     }
 
-    /**
-     * Calculate average distance from GPS points to route.
-     *
-     * @param gpsPoints GPS points
-     * @param route Bus route
-     * @return Average distance in meters
-     */
+
     public double calculateAverageDistanceFromRoute(List<GpsPoint> gpsPoints, BusRoute route) {
         if (gpsPoints == null || gpsPoints.isEmpty() || route == null || !route.hasGeometry()) {
             return Double.MAX_VALUE;
@@ -188,16 +166,14 @@ public class RouteGeometryMatchingService {
         double totalDistance = 0.0;
 
         for (GpsPoint gpsPoint : gpsPoints) {
-            Coordinates gpsCoord = Coordinates.of(gpsPoint.getLat(), gpsPoint.getLon());
+            Coordinates gpsCoord = Coordinates.of(gpsPoint.lat(), gpsPoint.lon);
             totalDistance += calculateMinDistanceToRoute(gpsCoord, routePoints);
         }
 
         return totalDistance / gpsPoints.size();
     }
 
-    /**
-     * Result of route matching.
-     */
+
     public record RouteMatchResult(
             String routeId,
             String routeNumber,

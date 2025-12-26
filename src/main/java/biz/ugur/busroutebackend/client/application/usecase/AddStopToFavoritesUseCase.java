@@ -1,5 +1,7 @@
 package biz.ugur.busroutebackend.client.application.usecase;
 
+import biz.ugur.busroutebackend.client.domain.event.StopFavoriteAddedEvent;
+import biz.ugur.busroutebackend.client.domain.event.StopFavoriteRemovedEvent;
 import biz.ugur.busroutebackend.client.domain.model.StopFavorite;
 import biz.ugur.busroutebackend.client.domain.repository.StopFavoriteRepository;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
@@ -40,17 +42,26 @@ public class AddStopToFavoritesUseCase extends BaseUseCase<Mono<AddStopToFavorit
         BusStopId stopId = BusStopId.of(command.stopId());
 
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-            log.info("Add stop to favorites CorrelationId: {} - CleintId: {} - StopId: {}",
+            log.info("Add stop to favorites CorrelationId: {} - ClientId: {} - StopId: {}",
                     correlationId, clientId, stopId);
 
             return stopFavoriteRepository.existsByClientIdAndStopId(clientId, stopId)
                     .flatMap(exists -> {
                         if (exists) {
                             return stopFavoriteRepository.deleteByClientIdAndStopId(clientId, stopId)
+                                    .doOnSuccess(v -> eventBus.publish(new StopFavoriteRemovedEvent(
+                                            command.clientId(),
+                                            command.stopId()
+                                    )))
                                     .thenReturn(false);
                         } else {
                             StopFavorite favorite = StopFavorite.create(clientId, stopId);
                             return stopFavoriteRepository.save(favorite)
+                                    .doOnSuccess(saved -> eventBus.publish(new StopFavoriteAddedEvent(
+                                            saved.getId().getValue(),
+                                            command.clientId(),
+                                            command.stopId()
+                                    )))
                                     .thenReturn(true);
                         }
                     });

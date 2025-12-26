@@ -5,14 +5,12 @@ import biz.ugur.busroutebackend.banner.domain.exceptions.BannerConflictException
 import biz.ugur.busroutebackend.banner.domain.model.Banner;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId;
 import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerPeriod;
-import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@Service
 public class BannerConflictDetector {
 
     private boolean periodsOverlap(LocalDateTime start1, LocalDateTime end1,

@@ -1,12 +1,14 @@
 package biz.ugur.busroutebackend.transport.domain.model;
 
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
-import biz.ugur.busroutebackend.geospatial.domain.constants.TurkmenistanBounds;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
+import biz.ugur.busroutebackend.transport.domain.constants.VehicleConstants;
+import biz.ugur.busroutebackend.transport.domain.service.VehicleValidationService;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleAssignedToRouteEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteSource;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehiclePosition;
@@ -44,20 +46,19 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
     private final Boolean isActive;
 
-    // Garage tracking fields
     private final String lastGarageId;
     private final LocalDateTime garageEntryTime;
     private final LocalDateTime garageExitTime;
     private final Boolean isInGarage;
 
-    // Route source tracking fields
     private final RouteSource routeSource;
     private final Integer routeConfidence;
     private final Boolean gpsDetectionEnabled;
 
-    // Manual assignment fields
     private final String assignedBy;
     private final String manualAssignmentReason;
+
+    private final GpsProviderType gpsProvider;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -65,8 +66,8 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
 
     public static Vehicle create(String deviceId, String licensePlate) {
-        String validatedDeviceId = validateDeviceId(deviceId);
-        String validatedLicensePlate = validateLicensePlate(licensePlate);
+        String validatedDeviceId = VehicleValidationService.validateDeviceId(deviceId);
+        String validatedLicensePlate = VehicleValidationService.validateLicensePlate(licensePlate);
 
         Vehicle vehicle = builder()
                 .id(VehicleId.generate())
@@ -79,18 +80,16 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .currentDirection(null)
                 .lastStopSequence(null)
                 .lastPositionUpdate(LocalDateTime.now())
-                // Garage tracking initialization
                 .lastGarageId(null)
                 .garageEntryTime(null)
                 .garageExitTime(null)
                 .isInGarage(false)
-                // Route source initialization
                 .routeSource(RouteSource.UNKNOWN)
                 .routeConfidence(0)
                 .gpsDetectionEnabled(true)
-                // Manual assignment initialization
                 .assignedBy(null)
                 .manualAssignmentReason(null)
+                .gpsProvider(GpsProviderType.defaultProvider())
                 .version(0L)
                 .build();
 
@@ -118,19 +117,16 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
             Double course,
             Integer currentDirection,
             Integer lastStopSequence,
-            // Garage tracking fields
             String lastGarageId,
             LocalDateTime garageEntryTime,
             LocalDateTime garageExitTime,
             Boolean isInGarage,
-            // Route source fields
             RouteSource routeSource,
             Integer routeConfidence,
             Boolean gpsDetectionEnabled,
-            // Manual assignment fields
             String assignedBy,
             String manualAssignmentReason,
-            // Metadata
+            GpsProviderType gpsProvider,
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
             Long version) {
@@ -150,19 +146,16 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .course(course != null ? course : 0.0)
                 .currentDirection(currentDirection)
                 .lastStopSequence(lastStopSequence)
-                // Garage tracking
                 .lastGarageId(lastGarageId)
                 .garageEntryTime(garageEntryTime)
                 .garageExitTime(garageExitTime)
                 .isInGarage(isInGarage != null ? isInGarage : false)
-                // Route source
                 .routeSource(routeSource != null ? routeSource : RouteSource.UNKNOWN)
                 .routeConfidence(routeConfidence != null ? routeConfidence : 0)
                 .gpsDetectionEnabled(gpsDetectionEnabled != null ? gpsDetectionEnabled : true)
-                // Manual assignment
                 .assignedBy(assignedBy)
                 .manualAssignmentReason(manualAssignmentReason)
-                // Metadata
+                .gpsProvider(gpsProvider != null ? gpsProvider : GpsProviderType.defaultProvider())
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
                 .version(version != null ? version : 0L)
@@ -171,10 +164,10 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
 
     public Vehicle updatePosition(Double latitude, Double longitude, Double speed, LocalDateTime fixTime, Double course) {
-        validateCoordinates(latitude, longitude);
+        VehicleValidationService.validateCoordinates(latitude, longitude);
 
         Double newSpeed = speed != null ? speed : 0.0;
-        Boolean newIsInMotion = newSpeed > 1.0;
+        Boolean newIsInMotion = newSpeed > VehicleConstants.MOTION_SPEED_THRESHOLD_KMH;
         LocalDateTime newFixTime = LocalDateTime.now();
         Double newCourse = course != null ? course : 0.0;
 
@@ -320,7 +313,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     }
 
     public Vehicle updateDeviceId(String deviceId) {
-        String validatedDeviceId = validateDeviceId(deviceId);
+        String validatedDeviceId = VehicleValidationService.validateDeviceId(deviceId);
         return this.toBuilder()
                 .deviceId(validatedDeviceId)
                 .build();
@@ -333,7 +326,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
 
     public boolean hasRecentPosition() {
-        return hasRecentPosition(600);
+        return hasRecentPosition((int) VehicleConstants.RECENT_POSITION_THRESHOLD_SECONDS);
     }
 
     public boolean hasRecentPosition(int maxAgeSeconds) {
@@ -357,7 +350,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     }
 
     public boolean isMoving() {
-        return Boolean.TRUE.equals(isInMotion) && speedKmh != null && speedKmh > 1.0;
+        return Boolean.TRUE.equals(isInMotion) && speedKmh != null && speedKmh > VehicleConstants.MOTION_SPEED_THRESHOLD_KMH;
     }
 
     public Coordinates toCoordinates() {
@@ -367,12 +360,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         return Coordinates.of(currentLatitude, currentLongitude);
     }
 
-    /**
-     * Mark vehicle as entered garage
-     *
-     * @param garageId ID of the garage
-     * @return Updated vehicle
-     */
+
     public Vehicle enterGarage(String garageId) {
         if (garageId == null || garageId.trim().isEmpty()) {
             throw new IllegalArgumentException("Garage ID cannot be null or empty");
@@ -388,11 +376,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .build();
     }
 
-    /**
-     * Mark vehicle as exited garage
-     *
-     * @return Updated vehicle
-     */
+
     public Vehicle exitGarage() {
         if (!Boolean.TRUE.equals(isInGarage)) {
             log.warn("Attempted to exit garage for vehicle {} that is not in garage", licensePlate);
@@ -407,54 +391,40 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .build();
     }
 
-    /**
-     * Check if vehicle is currently in garage
-     */
+
     public boolean isCurrentlyInGarage() {
         return Boolean.TRUE.equals(isInGarage);
     }
 
-    /**
-     * Get time since vehicle entered garage (in minutes)
-     * Returns null if vehicle is not in garage
-     */
+
+    public Vehicle changeGpsProvider(GpsProviderType newProvider) {
+        if (newProvider == null) {
+            throw new IllegalArgumentException("GPS provider cannot be null");
+        }
+
+        if (this.gpsProvider == newProvider) {
+            log.debug("Vehicle {} already uses GPS provider {}", licensePlate, newProvider);
+            return this;
+        }
+
+        log.info("Changing GPS provider for vehicle {} from {} to {}",
+                licensePlate, this.gpsProvider, newProvider);
+
+        return this.toBuilder()
+                .gpsProvider(newProvider)
+                .build();
+    }
+
+
+    public boolean usesGpsProvider(GpsProviderType provider) {
+        return this.gpsProvider == provider;
+    }
+
     public Long getMinutesSinceGarageEntry() {
         if (!Boolean.TRUE.equals(isInGarage) || garageEntryTime == null) {
             return null;
         }
         return java.time.Duration.between(garageEntryTime, LocalDateTime.now()).toMinutes();
-    }
-
-
-    private static String validateDeviceId(String deviceId) {
-        if (deviceId == null || deviceId.trim().isEmpty()) {
-            throw new IllegalArgumentException("Device ID cannot be null or empty");
-        }
-        return deviceId.trim();
-    }
-
-    private static String validateLicensePlate(String licensePlate) {
-        if (licensePlate == null || licensePlate.trim().isEmpty()) {
-            throw new IllegalArgumentException("License plate cannot be null or empty");
-        }
-
-        String plate = licensePlate.trim().toUpperCase();
-        if (!plate.matches("\\d{4}\\s[A-Z]{3}")) {
-            throw new IllegalArgumentException("Invalid Turkmen license plate format. Expected: '1992 AGH'");
-        }
-        return plate;
-    }
-
-    private static void validateCoordinates(Double latitude, Double longitude) {
-        if (latitude == null || longitude == null) {
-            throw new IllegalArgumentException("Coordinates cannot be null");
-        }
-
-        if (!TurkmenistanBounds.isWithinStandardBounds(latitude, longitude)) {
-            throw new IllegalArgumentException(
-                    String.format("Coordinates (%.6f, %.6f) are outside Turkmenistan bounds", latitude, longitude)
-            );
-        }
     }
 
 

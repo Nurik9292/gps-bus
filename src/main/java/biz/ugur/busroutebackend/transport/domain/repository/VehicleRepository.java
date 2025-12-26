@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.shared.base.BaseRepository;
 import biz.ugur.busroutebackend.shared.domain.specification.Specification;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import org.springframework.data.domain.Pageable;
 import reactor.core.publisher.Flux;
@@ -62,4 +63,10 @@ public interface VehicleRepository extends BaseRepository<Vehicle, VehicleId> {
     Mono<Integer> updateRouteAssignment(String licensePlate, BusRouteId routeId, String routeNumber);
 
     Mono<Integer> clearRouteAssignmentsByLicensePlates(List<String> licensePlates);
+
+    Mono<Map<GpsProviderType, List<String>>> findAllDeviceIdsGroupedByProvider();
+
+    Flux<String> findDeviceIdsByProvider(GpsProviderType providerType);
+
+    Mono<Integer> updateGpsProvider(VehicleId vehicleId, GpsProviderType providerType);
 }

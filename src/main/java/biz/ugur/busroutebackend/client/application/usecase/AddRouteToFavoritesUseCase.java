@@ -1,5 +1,7 @@
 package biz.ugur.busroutebackend.client.application.usecase;
 
+import biz.ugur.busroutebackend.client.domain.event.RouteFavoriteAddedEvent;
+import biz.ugur.busroutebackend.client.domain.event.RouteFavoriteRemovedEvent;
 import biz.ugur.busroutebackend.client.domain.model.RouteFavorite;
 import biz.ugur.busroutebackend.client.domain.repository.RouteFavoriteRepository;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
@@ -46,10 +48,20 @@ public class AddRouteToFavoritesUseCase extends BaseUseCase<Mono<AddRouteToFavor
                    .flatMap(exists -> {
                        if (exists) {
                            return routeFavoriteRepository.deleteByClientIdAndRouteId(clientId, routeId)
+                                   .doOnSuccess(v -> eventBus.publish(new RouteFavoriteRemovedEvent(
+                                           command.clientId(),
+                                           command.routeId()
+                                   )))
                                    .thenReturn(false);
                        } else {
                            RouteFavorite favorite = RouteFavorite.create(clientId, routeId);
-                           return routeFavoriteRepository.save(favorite).thenReturn(true);
+                           return routeFavoriteRepository.save(favorite)
+                                   .doOnSuccess(saved -> eventBus.publish(new RouteFavoriteAddedEvent(
+                                           saved.getId().getValue(),
+                                           command.clientId(),
+                                           command.routeId()
+                                   )))
+                                   .thenReturn(true);
                        }
                    });
        });

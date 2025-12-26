@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.geospatial.domain.model;
 
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.geospatial.domain.valueobject.GarageId;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
@@ -8,9 +9,7 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
-/**
- * Garage aggregate root representing a vehicle depot with geofence zone
- */
+
 @Getter
 public class Garage extends AggregateRoot<Garage, GarageId> {
 
@@ -38,9 +37,6 @@ public class Garage extends AggregateRoot<Garage, GarageId> {
         this.isActive = builder.isActive;
     }
 
-    /**
-     * Create a new Garage
-     */
     public static Garage create(
             String name,
             String nameTm,
@@ -69,16 +65,11 @@ public class Garage extends AggregateRoot<Garage, GarageId> {
                 .build();
     }
 
-    /**
-     * Check if a vehicle position is inside the garage geofence zone
-     *
-     * @param vehiclePosition the current position of the vehicle
-     * @return true if vehicle is inside the garage zone
-     */
+
     public boolean isVehicleInside(Coordinates vehiclePosition) {
         Objects.requireNonNull(vehiclePosition, "vehiclePosition must not be null");
 
-        double distanceMeters = calculateHaversineDistance(
+        double distanceMeters = DistanceCalculationService.haversineDistanceMeters(
                 this.location.getLatitudeAsDouble(),
                 this.location.getLongitudeAsDouble(),
                 vehiclePosition.getLatitudeAsDouble(),
@@ -88,17 +79,11 @@ public class Garage extends AggregateRoot<Garage, GarageId> {
         return distanceMeters <= this.radiusMeters;
     }
 
-    /**
-     * Check if vehicle has exited the garage zone (with additional buffer)
-     *
-     * @param vehiclePosition current position
-     * @param bufferMeters additional buffer distance in meters
-     * @return true if vehicle is outside garage zone + buffer
-     */
+
     public boolean hasVehicleExited(Coordinates vehiclePosition, int bufferMeters) {
         Objects.requireNonNull(vehiclePosition, "vehiclePosition must not be null");
 
-        double distanceMeters = calculateHaversineDistance(
+        double distanceMeters = DistanceCalculationService.haversineDistanceMeters(
                 this.location.getLatitudeAsDouble(),
                 this.location.getLongitudeAsDouble(),
                 vehiclePosition.getLatitudeAsDouble(),
@@ -108,46 +93,15 @@ public class Garage extends AggregateRoot<Garage, GarageId> {
         return distanceMeters > (this.radiusMeters + bufferMeters);
     }
 
-    /**
-     * Calculate distance from garage center to a position
-     *
-     * @param position the position to measure distance to
-     * @return distance in meters
-     */
+
     public double calculateDistanceMeters(Coordinates position) {
         Objects.requireNonNull(position, "position must not be null");
-        return calculateHaversineDistance(
+        return DistanceCalculationService.haversineDistanceMeters(
                 this.location.getLatitudeAsDouble(),
                 this.location.getLongitudeAsDouble(),
                 position.getLatitudeAsDouble(),
                 position.getLongitudeAsDouble()
         );
-    }
-
-    /**
-     * Calculate Haversine distance between two points
-     *
-     * @param lat1 Latitude of first point
-     * @param lon1 Longitude of first point
-     * @param lat2 Latitude of second point
-     * @param lon2 Longitude of second point
-     * @return Distance in meters
-     */
-    private static double calculateHaversineDistance(double lat1, double lon1, double lat2, double lon2) {
-        final double EARTH_RADIUS_METERS = 6371000.0;
-
-        double lat1Rad = Math.toRadians(lat1);
-        double lat2Rad = Math.toRadians(lat2);
-        double deltaLatRad = Math.toRadians(lat2 - lat1);
-        double deltaLonRad = Math.toRadians(lon2 - lon1);
-
-        double a = Math.sin(deltaLatRad / 2) * Math.sin(deltaLatRad / 2) +
-                   Math.cos(lat1Rad) * Math.cos(lat2Rad) *
-                   Math.sin(deltaLonRad / 2) * Math.sin(deltaLonRad / 2);
-
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-        return EARTH_RADIUS_METERS * c;
     }
 
     @Override

@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepos
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import biz.ugur.busroutebackend.transport.infrastructure.persistence.entity.VehicleEntity;
 import biz.ugur.busroutebackend.transport.infrastructure.mapper.VehicleEntityMapper;
@@ -82,6 +83,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         // Manual assignment
         columns.put("assigned_by", persistenceEntity.getAssignedBy());
         columns.put("manual_assignment_reason", persistenceEntity.getManualAssignmentReason());
+        // GPS provider
+        columns.put("gps_provider", persistenceEntity.getGpsProvider());
         return columns;
     }
 
@@ -100,7 +103,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 current_direction, last_stop_sequence, version,
                 last_garage_id, garage_entry_time, garage_exit_time, is_in_garage,
                 route_source, route_confidence, gps_detection_enabled,
-                assigned_by, manual_assignment_reason
+                assigned_by, manual_assignment_reason, gps_provider
             ) VALUES (
                 :id, :device_id, :license_plate, :current_latitude, :current_longitude,
                 :speed_kmh, :is_in_motion, :last_position_update, :assigned_route_id,
@@ -108,7 +111,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 :current_direction, :last_stop_sequence, :version,
                 :last_garage_id, :garage_entry_time, :garage_exit_time, :is_in_garage,
                 :route_source, :route_confidence, :gps_detection_enabled,
-                :assigned_by, :manual_assignment_reason
+                :assigned_by, :manual_assignment_reason, :gps_provider
             ) RETURNING *
             """;
 
@@ -159,6 +162,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 gps_detection_enabled = :gps_detection_enabled,
                 assigned_by = :assigned_by,
                 manual_assignment_reason = :manual_assignment_reason,
+                gps_provider = :gps_provider,
                 version = :version
             WHERE id = :id AND version = :old_version
             RETURNING *
@@ -395,6 +399,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 // Manual assignment fields
                 .assignedBy(safeGet(row, "assigned_by", String.class, null))
                 .manualAssignmentReason(safeGet(row, "manual_assignment_reason", String.class, null))
+                // GPS provider
+                .gpsProvider(safeGet(row, "gps_provider", String.class, "CHINA"))
                 // Metadata
                 .createdAt(safeGet(row, "created_at", LocalDateTime.class, null))
                 .updatedAt(safeGet(row, "updated_at", LocalDateTime.class, null))
@@ -733,5 +739,74 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .map(Long::intValue)
                 .doOnSuccess(count -> log.info("Cleared route assignments for {} vehicles (requested: {})",
                         count, licensePlates.size()));
+    }
+
+    @Override
+    public Mono<Map<GpsProviderType, List<String>>> findAllDeviceIdsGroupedByProvider() {
+        String sql = """
+            SELECT device_id, gps_provider
+            FROM vehicles
+            WHERE device_id IS NOT NULL AND is_active = true
+            """;
+
+        return databaseClient.sql(sql)
+                .map((row, metadata) -> Map.entry(
+                        GpsProviderType.fromCodeOrDefault(row.get("gps_provider", String.class)),
+                        row.get("device_id", String.class)
+                ))
+                .all()
+                .collectMultimap(Map.Entry::getKey, Map.Entry::getValue)
+                .map(multimap -> {
+                    Map<GpsProviderType, List<String>> result = new HashMap<>();
+                    multimap.forEach((key, values) -> result.put(key, new ArrayList<>(values)));
+                    return result;
+                })
+                .doOnSuccess(map -> log.debug("Found device IDs grouped by provider: {}",
+                        map.entrySet().stream()
+                                .map(e -> e.getKey() + "=" + e.getValue().size())
+                                .collect(java.util.stream.Collectors.joining(", "))));
+    }
+
+    @Override
+    public Flux<String> findDeviceIdsByProvider(GpsProviderType providerType) {
+        String sql = """
+            SELECT device_id
+            FROM vehicles
+            WHERE device_id IS NOT NULL
+            AND is_active = true
+            AND gps_provider = :provider
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("provider", providerType.getCode())
+                .map(row -> row.get("device_id", String.class))
+                .all()
+                .doOnComplete(() -> log.debug("Found device IDs for provider {}", providerType));
+    }
+
+    @Override
+    @Transactional
+    public Mono<Integer> updateGpsProvider(VehicleId vehicleId, GpsProviderType providerType) {
+        String sql = """
+            UPDATE vehicles
+            SET gps_provider = :provider,
+                updated_at = :updatedAt
+            WHERE id = :id
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("id", vehicleId.getValue())
+                .bind("provider", providerType.getCode())
+                .bind("updatedAt", LocalDateTime.now())
+                .fetch()
+                .rowsUpdated()
+                .map(Long::intValue)
+                .doOnSuccess(count -> {
+                    if (count > 0) {
+                        log.info("Updated GPS provider for vehicle {} to {}", vehicleId, providerType);
+                    } else {
+                        log.warn("Vehicle not found for GPS provider update: {}", vehicleId);
+                    }
+                });
     }
 }
