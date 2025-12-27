@@ -39,6 +39,9 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("dir")
     private final Double course;
 
+    @JsonProperty("line")
+    private final Boolean line;
+
     @JsonCreator
     public VehiclePositionWebSocketMessage(
             @JsonProperty("vehicle_id") String vehicleId,
@@ -49,7 +52,8 @@ public class VehiclePositionWebSocketMessage {
             @JsonProperty("speed_kmh") Double speedKmh,
             @JsonProperty("is_in_motion") Boolean isInMotion,
             @JsonProperty("timestamp") LocalDateTime timestamp,
-            @JsonProperty("dir") Double course) {
+            @JsonProperty("dir") Double course,
+            @JsonProperty("line") Boolean line) {
         this.vehicleId = vehicleId;
         this.licensePlate = licensePlate;
         this.routeNumber = routeNumber;
@@ -59,5 +63,6 @@ public class VehiclePositionWebSocketMessage {
         this.isInMotion = isInMotion;
         this.timestamp = timestamp;
         this.course = course;
+        this.line = line;
     }
 }

@@ -25,12 +25,9 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.Optional;
+import java.util.*;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 @Service
 @Slf4j
@@ -170,7 +167,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 updatedVehicle.getSpeedKmh(),
                                 updatedVehicle.getIsInMotion(),
                                 updatedVehicle.getLastPositionUpdate(),
-                                updatedVehicle.getCourse()
+                                updatedVehicle.getCourse(),
+                                updatedVehicle.getCurrentDirection()
                         );
                         eventBus.publish(event);
                     }
@@ -302,7 +300,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                     savedVehicle.getSpeedKmh(),
                                     savedVehicle.getIsInMotion(),
                                     savedVehicle.getLastPositionUpdate(),
-                                    savedVehicle.getCourse()
+                                    savedVehicle.getCourse(),
+                                    savedVehicle.getCurrentDirection()
                             );
 
                             eventBus.publish(event);
@@ -359,39 +358,25 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         );
     }
 
-    /**
-     * Detect and handle garage entry/exit transitions
-     *
-     * Business Logic:
-     * - Entry: Vehicle is inside garage geofence AND speed < threshold
-     * - Exit: Vehicle is beyond garage geofence + buffer AND speed > threshold
-     *
-     * @param vehicle Vehicle to check
-     * @return Mono with updated vehicle (may have garage status changed)
-     */
+
     private Mono<Vehicle> detectAndHandleGarageTransition(Vehicle vehicle) {
         if (vehicle == null || !vehicle.hasPosition()) {
-            return Mono.just(vehicle);
+            return Mono.just(Objects.requireNonNull(vehicle));
         }
 
         Coordinates position = vehicle.toCoordinates();
         Double speed = vehicle.getSpeedKmh();
 
-        // Check if vehicle is currently marked as "in garage"
         boolean wasInGarage = vehicle.isCurrentlyInGarage();
 
         if (wasInGarage) {
-            // Vehicle was in garage - check if it has exited
             return checkGarageExit(vehicle, position, speed);
         } else {
-            // Vehicle was not in garage - check if it has entered
             return checkGarageEntry(vehicle, position, speed);
         }
     }
 
-    /**
-     * Check if vehicle has entered a garage
-     */
+
     private Mono<Vehicle> checkGarageEntry(Vehicle vehicle, Coordinates position, Double speed) {
         return garageTransitionsUseCase.isVehicleEntryCandidate(position, speed)
                 .flatMap(isCandidate -> {
@@ -399,7 +384,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         return Mono.just(vehicle);
                     }
 
-                    // Vehicle meets entry criteria - find which garage and process entry
                     return garageTransitionsUseCase.findGarageAtPosition(position)
                             .flatMap(garageOpt -> {
                                 if (garageOpt.isPresent()) {
@@ -408,7 +392,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                             vehicle.getLicensePlate(),
                                             garage.getName(),
                                             speed);
-                                    // Use ProcessGarageEntryUseCase to handle entry with events
                                     return processGarageEntryUseCase.execute(
                                             new ProcessGarageEntryUseCase.Request(vehicle, garage.getId().getValue().toString())
                                     );
@@ -418,9 +401,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 });
     }
 
-    /**
-     * Check if vehicle has exited garage
-     */
+
     private Mono<Vehicle> checkGarageExit(Vehicle vehicle, Coordinates position, Double speed) {
         String lastGarageId = vehicle.getLastGarageId();
         if (lastGarageId == null) {
@@ -438,7 +419,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 garage.getName(),
                                 speed,
                                 garage.calculateDistanceMeters(position));
-                        // Use ProcessGarageExitUseCase to handle exit with events and route assignment
                         return processGarageExitUseCase.execute(
                                 new ProcessGarageExitUseCase.Request(vehicle)
                         );

@@ -239,6 +239,19 @@ public class R2dbcVehicleShiftAssignmentRepository
     }
 
     @Override
+    @Transactional
+    public Mono<Integer> deleteByVehicleId(VehicleId vehicleId) {
+        String sql = "DELETE FROM vehicle_shift_assignments WHERE vehicle_id = :vehicleId";
+
+        return databaseClient.sql(sql)
+                .bind("vehicleId", vehicleId.getValue())
+                .fetch()
+                .rowsUpdated()
+                .map(Long::intValue)
+                .doOnSuccess(count -> log.info("Deleted {} shift assignments for vehicle {}", count, vehicleId));
+    }
+
+    @Override
     public Mono<Long> countByRouteId(BusRouteId routeId) {
         String sql = "SELECT COUNT(*) FROM vehicle_shift_assignments WHERE route_id = :routeId AND is_active = true";
 

@@ -27,6 +27,8 @@ public interface VehicleShiftAssignmentRepository extends BaseRepository<Vehicle
 
     Mono<Void> deleteByVehicleIdAndShiftType(VehicleId vehicleId, ShiftType shiftType);
 
+    Mono<Integer> deleteByVehicleId(VehicleId vehicleId);
+
     Mono<Long> countByRouteId(BusRouteId routeId);
 
     Mono<Long> countByShiftType(ShiftType shiftType);

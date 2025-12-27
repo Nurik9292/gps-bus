@@ -11,7 +11,6 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteSource;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
-import biz.ugur.busroutebackend.transport.domain.valueobject.VehiclePosition;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -190,25 +189,12 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 newSpeed,
                 newIsInMotion,
                 newFixTime,
-                newCourse
+                newCourse,
+                this.currentDirection
         ));
 
         return updatedVehicle;
     }
-
-    public Vehicle updatePositionFromCoordinates(Coordinates coordinates, Double speed, LocalDateTime fixTime, Double course) {
-        if (coordinates == null) {
-            throw new IllegalArgumentException("Coordinates cannot be null");
-        }
-        return updatePosition(
-                coordinates.getLatitudeAsDouble(),
-                coordinates.getLongitudeAsDouble(),
-                speed,
-                fixTime,
-                course
-        );
-    }
-
 
     public Vehicle updateDirection(Integer newStopSequence) {
         if (newStopSequence == null) {
@@ -231,15 +217,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .currentDirection(newDirection)
                 .lastStopSequence(newStopSequence)
                 .build();
-    }
-
-
-    public boolean isTravelingInDirection(int direction) {
-        return this.currentDirection != null && this.currentDirection == direction;
-    }
-
-    public boolean hasKnownDirection() {
-        return this.currentDirection != null;
     }
 
     public Vehicle assignToRoute(BusRouteId routeId) {
@@ -283,6 +260,34 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         return this;
     }
 
+    public Vehicle clearRouteAssignment() {
+        if (this.assignedRouteId == null && this.routeNumber == null) {
+            return this;
+        }
+
+        String previousRouteId = this.assignedRouteId != null ? this.assignedRouteId.getValue() : null;
+
+        Vehicle updatedVehicle = this.toBuilder()
+                .assignedRouteId(null)
+                .routeNumber(null)
+                .routeSource(RouteSource.UNKNOWN)
+                .routeConfidence(0)
+                .assignedBy(null)
+                .manualAssignmentReason(null)
+                .build();
+
+        if (previousRouteId != null) {
+            updatedVehicle.registerEvent(new VehicleAssignedToRouteEvent(
+                    this.id.getValue(),
+                    this.licensePlate,
+                    previousRouteId,
+                    null
+            ));
+        }
+
+        return updatedVehicle;
+    }
+
     public Vehicle deactivate() {
         if (Boolean.FALSE.equals(this.isActive)) {
             return this;
@@ -319,12 +324,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .build();
     }
 
-
-    public String getDisplayRouteNumber() {
-        return this.routeNumber != null ? this.routeNumber : "UNASSIGNED";
-    }
-
-
     public boolean hasRecentPosition() {
         return hasRecentPosition((int) VehicleConstants.RECENT_POSITION_THRESHOLD_SECONDS);
     }
@@ -334,23 +333,12 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         return lastPositionUpdate.isAfter(LocalDateTime.now().minusSeconds(maxAgeSeconds));
     }
 
-    public VehiclePosition getCurrentPosition() {
-        if (currentLatitude == null || currentLongitude == null) {
-            return null;
-        }
-        return new VehiclePosition(currentLatitude, currentLongitude, speedKmh, isInMotion);
-    }
-
     public boolean hasAssignedRoute() {
         return assignedRouteId != null && this.routeNumber != null && !this.routeNumber.isEmpty();
     }
 
     public boolean hasPosition() {
         return currentLatitude != null && currentLongitude != null;
-    }
-
-    public boolean isMoving() {
-        return Boolean.TRUE.equals(isInMotion) && speedKmh != null && speedKmh > VehicleConstants.MOTION_SPEED_THRESHOLD_KMH;
     }
 
     public Coordinates toCoordinates() {
@@ -371,7 +359,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         return this.toBuilder()
                 .lastGarageId(garageId)
                 .garageEntryTime(now)
-                .garageExitTime(null)  // Clear exit time
+                .garageExitTime(null)
                 .isInGarage(true)
                 .build();
     }
@@ -395,38 +383,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     public boolean isCurrentlyInGarage() {
         return Boolean.TRUE.equals(isInGarage);
     }
-
-
-    public Vehicle changeGpsProvider(GpsProviderType newProvider) {
-        if (newProvider == null) {
-            throw new IllegalArgumentException("GPS provider cannot be null");
-        }
-
-        if (this.gpsProvider == newProvider) {
-            log.debug("Vehicle {} already uses GPS provider {}", licensePlate, newProvider);
-            return this;
-        }
-
-        log.info("Changing GPS provider for vehicle {} from {} to {}",
-                licensePlate, this.gpsProvider, newProvider);
-
-        return this.toBuilder()
-                .gpsProvider(newProvider)
-                .build();
-    }
-
-
-    public boolean usesGpsProvider(GpsProviderType provider) {
-        return this.gpsProvider == provider;
-    }
-
-    public Long getMinutesSinceGarageEntry() {
-        if (!Boolean.TRUE.equals(isInGarage) || garageEntryTime == null) {
-            return null;
-        }
-        return java.time.Duration.between(garageEntryTime, LocalDateTime.now()).toMinutes();
-    }
-
 
     @Override
     public VehicleId getId() {
@@ -469,7 +425,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 "id=" + id +
                 ", licensePlate='" + licensePlate + '\'' +
                 ", deviceId='" + deviceId + '\'' +
-                ", routeNumber='" + getDisplayRouteNumber() + '\'' +
+                ", routeNumber='" + (routeNumber != null ? routeNumber : "UNASSIGNED") + '\'' +
                 ", isActive=" + isActive +
                 ", isInMotion=" + isInMotion +
                 ", hasPosition=" + hasPosition() +

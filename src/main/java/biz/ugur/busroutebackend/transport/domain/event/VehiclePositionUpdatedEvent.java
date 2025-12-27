@@ -23,11 +23,13 @@ public class VehiclePositionUpdatedEvent implements DomainEvent{
     private final LocalDateTime positionTimestamp;
     private final Instant eventOccurredAt;
     private final Double course;
+    private final Integer currentDirection;
 
     public VehiclePositionUpdatedEvent(String vehicleId, String deviceId, String licensePlate,
                                        String routeNumber,
                                        Double latitude, Double longitude, Double speedKmh,
-                                       Boolean isInMotion, LocalDateTime positionTimestamp, Double course) {
+                                       Boolean isInMotion, LocalDateTime positionTimestamp, Double course,
+                                       Integer currentDirection) {
         this.vehicleId = vehicleId;
         this.deviceId = deviceId;
         this.licensePlate = licensePlate;
@@ -39,24 +41,30 @@ public class VehiclePositionUpdatedEvent implements DomainEvent{
         this.eventOccurredAt = Instant.now();
         this.routeNumber = routeNumber;
         this.course = course;
+        this.currentDirection = currentDirection;
     }
 
-    /**
-     * Convenience constructor using Coordinates value object
-     */
+
     public VehiclePositionUpdatedEvent(String vehicleId, String deviceId, String licensePlate,
                                        String routeNumber, Coordinates coordinates, Double speedKmh,
-                                       Boolean isInMotion, LocalDateTime positionTimestamp, Double course) {
+                                       Boolean isInMotion, LocalDateTime positionTimestamp, Double course,
+                                       Integer currentDirection) {
         this(vehicleId, deviceId, licensePlate, routeNumber,
                 coordinates.getLatitudeAsDouble(), coordinates.getLongitudeAsDouble(),
-                speedKmh, isInMotion, positionTimestamp, course);
+                speedKmh, isInMotion, positionTimestamp, course, currentDirection);
     }
 
-    /**
-     * Get coordinates as value object
-     */
+
     public Coordinates getCoordinates() {
         return Coordinates.of(latitude, longitude);
+    }
+
+
+    public Boolean getLine() {
+        if (currentDirection == null) {
+            return null;
+        }
+        return currentDirection == 0;
     }
 
     @Override

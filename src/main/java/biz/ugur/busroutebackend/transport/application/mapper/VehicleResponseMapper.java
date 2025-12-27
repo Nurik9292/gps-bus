@@ -23,6 +23,7 @@ public class VehicleResponseMapper {
         dto.setCurrentLongitude(vehicle.getCurrentLongitude());
         dto.setSpeedKmh(vehicle.getSpeedKmh());
         dto.setCourse(vehicle.getCourse());
+        dto.setCurrentDirection(vehicle.getCurrentDirection());
         dto.setIsInMotion(vehicle.getIsInMotion());
         dto.setIsActive(vehicle.getIsActive());
 
@@ -57,6 +58,7 @@ public class VehicleResponseMapper {
         dto.setCurrentLongitude(vehicle.getCurrentLongitude());
         dto.setSpeedKmh(vehicle.getSpeedKmh());
         dto.setCourse(vehicle.getCourse());
+        dto.setCurrentDirection(vehicle.getCurrentDirection());
         dto.setIsInMotion(vehicle.getIsInMotion());
         dto.setIsActive(vehicle.getIsActive());
 

@@ -47,79 +47,20 @@ public class VehiclePositionDTO {
     @JsonProperty("course")
     private Double course;
 
+    @JsonProperty("current_direction")
+    private Integer currentDirection;
+
     @JsonProperty("created_at")
     private LocalDateTime createdAt;
 
     public VehiclePositionDTO() {}
 
-    public VehiclePositionDTO(String vehicleId,
-                              String deviceId,
-                              String licensePlate,
-                              String routeNumber,
-                              String routeName,
-                              Double currentLatitude,
-                              Double currentLongitude,
-                              Double speedKmh,
-                              Boolean isInMotion,
-                              Boolean isActive,
-                              Double course,
-                              LocalDateTime lastPositionUpdate,
-                              LocalDateTime createdAt) {
-        this.vehicleId = vehicleId;
-        this.deviceId = deviceId;
-        this.licensePlate = licensePlate;
-        this.routeNumber = routeNumber;
-        this.routeName = routeName;
-        this.currentLatitude = currentLatitude;
-        this.currentLongitude = currentLongitude;
-        this.speedKmh = speedKmh;
-        this.isInMotion = isInMotion;
-        this.isActive = isActive;
-        this.course = course;
-        this.lastPositionUpdate = lastPositionUpdate;
-        this.createdAt = createdAt;
-    }
-
-    public VehiclePositionDTO(String vehicleId, String licensePlate,
-                              Double latitude, Double longitude,
-                              Double speed, Boolean inMotion) {
-        this.vehicleId = vehicleId;
-        this.licensePlate = licensePlate;
-        this.currentLatitude = latitude;
-        this.currentLongitude = longitude;
-        this.speedKmh = speed;
-        this.isInMotion = inMotion;
-        this.isActive = true;
-        this.lastPositionUpdate = LocalDateTime.now();
-    }
-
-    public boolean hasValidPosition() {
-        return currentLatitude != null && currentLongitude != null
-                && isValidCoordinate(currentLatitude, currentLongitude);
-    }
-
     @JsonIgnore
-    public boolean isMovingFast() {
-        return speedKmh != null && speedKmh > 50.0;
-    }
-
-    public boolean isRecentUpdate() {
-        if (lastPositionUpdate == null) return false;
-        return lastPositionUpdate.isAfter(LocalDateTime.now().minusMinutes(5));
-    }
-
-    public String getDisplayText() {
-        if (licensePlate == null) return "Unknown Vehicle";
-
-        StringBuilder sb = new StringBuilder(licensePlate);
-        if (routeNumber != null) {
-            sb.append(" (Route ").append(routeNumber).append(")");
+    public Boolean getLine() {
+        if (currentDirection == null) {
+            return null;
         }
-        return sb.toString();
-    }
-
-    private boolean isValidCoordinate(Double lat, Double lon) {
-        return lat >= 35.0 && lat <= 43.0 && lon >= 52.0 && lon <= 67.0;
+        return currentDirection == 0;
     }
 
     @Override

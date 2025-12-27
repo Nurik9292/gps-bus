@@ -5,6 +5,7 @@ import java.time.Instant;
 public record ImmediateAssignmentData(
         String id,
         String vehicleId,
+        String vehicleLicensePlate,
         String routeId,
         String routeNumber,
         String routeName,

@@ -660,6 +660,50 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
     }
 
     @Override
+    @Transactional
+    public Mono<Long> clearRouteAssignmentsExcluding(List<VehicleId> excludeVehicleIds) {
+        if (excludeVehicleIds == null || excludeVehicleIds.isEmpty()) {
+            return clearAllRouteAssignments();
+        }
+
+        List<String> excludeIds = excludeVehicleIds.stream()
+                .map(VehicleId::getValue)
+                .toList();
+
+        List<String> namedParams = new ArrayList<>();
+        for (int i = 0; i < excludeIds.size(); i++) {
+            namedParams.add(":excludeId" + i);
+        }
+        String placeholders = String.join(",", namedParams);
+
+        String sql = String.format("""
+            UPDATE vehicles
+            SET route_number = NULL,
+                assigned_route_id = NULL,
+                route_source = NULL,
+                route_confidence = 0,
+                assigned_by = NULL,
+                manual_assignment_reason = NULL,
+                updated_at = :updatedAt
+            WHERE is_active = true
+            AND (route_number IS NOT NULL OR assigned_route_id IS NOT NULL)
+            AND id NOT IN (%s)
+            """, placeholders);
+
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
+                .bind("updatedAt", LocalDateTime.now());
+
+        for (int i = 0; i < excludeIds.size(); i++) {
+            spec = spec.bind("excludeId" + i, excludeIds.get(i));
+        }
+
+        return spec.fetch()
+                .rowsUpdated()
+                .doOnSuccess(count -> log.info("Cleared route assignments for {} vehicles (excluded {} with immediate assignments)",
+                        count, excludeIds.size()));
+    }
+
+    @Override
     public Mono<Map<String, Vehicle>> findAllWithRouteAssignment() {
         String sql = """
             SELECT * FROM vehicles

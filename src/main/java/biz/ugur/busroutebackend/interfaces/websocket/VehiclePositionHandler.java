@@ -536,7 +536,8 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 vehicle.getLastPositionUpdate() != null ?
                         vehicle.getLastPositionUpdate() :
                         LocalDateTime.now(),
-                vehicle.getCourse()
+                vehicle.getCourse(),
+                vehicle.getLine()
         );
     }
 }

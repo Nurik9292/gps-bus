@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.vehicle.VehicleCreateRequest;
+import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.vehicle.VehicleDeactivateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.vehicle.VehicleUpdateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.vehicle.VehicleListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.vehicle.VehicleResponse;
@@ -28,6 +29,7 @@ public class AdminVehicleController extends BasePaginatedController {
     private final CreateVehicleUseCase createVehicleUseCase;
     private final UpdateVehicleUseCase updateVehicleUseCase;
     private final DeleteVehicleUseCase deleteVehicleUseCase;
+    private final DeactivateVehicleUseCase deactivateVehicleUseCase;
     private final GetVehicleByIdUseCase getVehicleByIdUseCase;
     private final GetAllVehiclesWithPaginationUseCase getAllVehiclesUseCase;
     private final VehicleRepository vehicleRepository;
@@ -36,6 +38,7 @@ public class AdminVehicleController extends BasePaginatedController {
             CreateVehicleUseCase createVehicleUseCase,
             UpdateVehicleUseCase updateVehicleUseCase,
             DeleteVehicleUseCase deleteVehicleUseCase,
+            DeactivateVehicleUseCase deactivateVehicleUseCase,
             GetVehicleByIdUseCase getVehicleByIdUseCase,
             GetAllVehiclesWithPaginationUseCase getAllVehiclesUseCase,
             VehicleRepository vehicleRepository,
@@ -44,6 +47,7 @@ public class AdminVehicleController extends BasePaginatedController {
         this.createVehicleUseCase = createVehicleUseCase;
         this.updateVehicleUseCase = updateVehicleUseCase;
         this.deleteVehicleUseCase = deleteVehicleUseCase;
+        this.deactivateVehicleUseCase = deactivateVehicleUseCase;
         this.getVehicleByIdUseCase = getVehicleByIdUseCase;
         this.getAllVehiclesUseCase = getAllVehiclesUseCase;
         this.vehicleRepository = vehicleRepository;
@@ -111,5 +115,13 @@ public class AdminVehicleController extends BasePaginatedController {
     public Mono<ResponseEntity<Void>> deleteVehicle(@PathVariable String id) {
         return deleteVehicleUseCase.execute(Mono.just(id))
                 .then(noContent());
+    }
+
+    @PostMapping("/{id:[a-f0-9\\-]{36}}/deactivate")
+    public Mono<ResponseEntity<ApiResponse<DeactivateVehicleUseCase.Result>>> deactivateVehicle(
+            @PathVariable String id,
+            @Valid @RequestBody(required = false) VehicleDeactivateRequest request) {
+        String reason = request != null ? request.reason() : "No reason provided";
+        return ok(deactivateVehicleUseCase.execute(new DeactivateVehicleUseCase.Command(id, reason)));
     }
 }

@@ -58,6 +58,8 @@ public interface VehicleRepository extends BaseRepository<Vehicle, VehicleId> {
 
     Mono<Long> clearAllRouteAssignments();
 
+    Mono<Long> clearRouteAssignmentsExcluding(List<VehicleId> excludeVehicleIds);
+
     Mono<Map<String, Vehicle>> findAllWithRouteAssignment();
 
     Mono<Integer> updateRouteAssignment(String licensePlate, BusRouteId routeId, String routeNumber);

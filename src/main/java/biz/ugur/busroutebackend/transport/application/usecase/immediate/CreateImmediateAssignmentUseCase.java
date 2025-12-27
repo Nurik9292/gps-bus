@@ -20,11 +20,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 
-/**
- * Use case for creating immediate route assignments.
- *
- * Immediate assignments have highest priority and are applied instantly.
- */
+
 @Service
 @Slf4j
 public class CreateImmediateAssignmentUseCase extends BaseUseCase<CreateImmediateAssignmentUseCase.Command, ImmediateAssignmentData> {
@@ -60,10 +56,8 @@ public class CreateImmediateAssignmentUseCase extends BaseUseCase<CreateImmediat
                     Vehicle vehicle = tuple.getT1();
                     BusRoute route = tuple.getT2();
 
-                    // Deactivate existing immediate assignments for this vehicle
                     return immediateAssignmentRepository.deactivateByVehicleId(vehicleId)
                             .then(Mono.defer(() -> {
-                                // Create new immediate assignment
                                 ImmediateRouteAssignment assignment = ImmediateRouteAssignment.create(
                                         vehicleId,
                                         routeId,
@@ -77,8 +71,15 @@ public class CreateImmediateAssignmentUseCase extends BaseUseCase<CreateImmediat
                                                 .thenReturn(saved));
                             }));
                 })
-                .flatMap(saved -> busRouteRepository.findById(saved.getRouteId())
-                        .map(route -> toData(saved, route.getRouteNumber(), route.getRouteName())));
+                .flatMap(saved -> Mono.zip(
+                        busRouteRepository.findById(saved.getRouteId()),
+                        vehicleRepository.findById(saved.getVehicleId())
+                ).map(routeAndVehicle -> toData(
+                        saved,
+                        routeAndVehicle.getT2().getLicensePlate(),
+                        routeAndVehicle.getT1().getRouteNumber(),
+                        routeAndVehicle.getT1().getRouteName()
+                )));
     }
 
     private Mono<Vehicle> updateVehicle(Vehicle vehicle, BusRoute route, String assignedBy, String reason) {
@@ -115,10 +116,11 @@ public class CreateImmediateAssignmentUseCase extends BaseUseCase<CreateImmediat
                 });
     }
 
-    private ImmediateAssignmentData toData(ImmediateRouteAssignment assignment, String routeNumber, String routeName) {
+    private ImmediateAssignmentData toData(ImmediateRouteAssignment assignment, String vehicleLicensePlate, String routeNumber, String routeName) {
         return new ImmediateAssignmentData(
                 assignment.getId().getValue(),
                 assignment.getVehicleId().getValue(),
+                vehicleLicensePlate,
                 assignment.getRouteId().getValue(),
                 routeNumber,
                 routeName,
