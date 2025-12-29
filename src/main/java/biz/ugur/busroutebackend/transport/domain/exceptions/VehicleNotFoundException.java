@@ -18,4 +18,8 @@ public class VehicleNotFoundException extends TransportDomainException {
         super("VEHICLE_NOT_FOUND", String.format("Vehicle not found with id: %s", vehicleId), Severity.WARNING, correlationId);
         this.vehicleId = vehicleId;
     }
+
+    public static VehicleNotFoundException byId(String vehicleId) {
+        return new VehicleNotFoundException(vehicleId);
+    }
 }

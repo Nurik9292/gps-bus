@@ -1,36 +1,36 @@
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_route_stops_route_direction
+CREATE INDEX IF NOT EXISTS idx_route_stops_route_direction
     ON route_stops (route_id, direction);
 
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_route_stops_route_dir_seq
+CREATE INDEX IF NOT EXISTS idx_route_stops_route_dir_seq
     ON route_stops (route_id, direction, stop_sequence);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_route_stops_stop_id
+CREATE INDEX IF NOT EXISTS idx_route_stops_stop_id
     ON route_stops (stop_id) WHERE stop_id IS NOT NULL;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_route_stops_stop_route_dir
+CREATE INDEX IF NOT EXISTS idx_route_stops_stop_route_dir
     ON route_stops (stop_id, route_id, direction);
 
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_vehicles_active_route
+CREATE INDEX IF NOT EXISTS idx_vehicles_active_route
     ON vehicles (assigned_route_id, is_active) WHERE is_active = true;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_vehicles_position_update
+CREATE INDEX IF NOT EXISTS idx_vehicles_position_update
     ON vehicles (last_position_update) WHERE is_active = true
     AND current_latitude IS NOT NULL AND current_longitude IS NOT NULL;
 
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_bus_routes_active
+CREATE INDEX IF NOT EXISTS idx_bus_routes_active
     ON bus_routes (is_active) WHERE is_active = true;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_bus_routes_number_active
+CREATE INDEX IF NOT EXISTS idx_bus_routes_number_active
     ON bus_routes (route_number, is_active);
 
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_bus_stops_active
+CREATE INDEX IF NOT EXISTS idx_bus_stops_active
     ON bus_stops (is_active) WHERE is_active = true;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_bus_stops_major_active
+CREATE INDEX IF NOT EXISTS idx_bus_stops_major_active
     ON bus_stops (is_major_stop, is_active) WHERE is_major_stop = true AND is_active = true;
 
 COMMENT ON INDEX idx_route_stops_route_direction IS

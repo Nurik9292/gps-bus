@@ -46,12 +46,10 @@ public class UpdateVehicleUseCase implements UseCase<Mono<UpdateVehicleUseCase.C
     private Mono<VehicleData> updateVehicle(Vehicle vehicle, Command command) {
         Vehicle updatedVehicle = vehicle;
 
-        // Update device ID if provided
         if (command.deviceId() != null && !command.deviceId().equals(vehicle.getDeviceId())) {
             updatedVehicle = updatedVehicle.updateDeviceId(command.deviceId());
         }
 
-        // Update active status
         if (command.isActive() != null) {
             if (command.isActive() && !Boolean.TRUE.equals(vehicle.getIsActive())) {
                 updatedVehicle = updatedVehicle.activate();
@@ -60,24 +58,23 @@ public class UpdateVehicleUseCase implements UseCase<Mono<UpdateVehicleUseCase.C
             }
         }
 
-        // Handle route assignment
         if (command.assignedRouteId() != null && !command.assignedRouteId().isEmpty()) {
             BusRouteId routeId = BusRouteId.of(command.assignedRouteId());
             Vehicle finalUpdatedVehicle = updatedVehicle;
 
             return busRouteRepository.findById(routeId)
                     .flatMap(route -> {
-                        Vehicle vehicleWithRoute = finalUpdatedVehicle
-                                .assignToRoute(routeId)
-                                .updateCachedRouteNumber(route.getRouteNumber());
+                        Vehicle vehicleWithRoute = finalUpdatedVehicle.toBuilder()
+                                .assignedRouteId(routeId)
+                                .routeNumber(route.getRouteNumber())
+                                .build();
                         return vehicleRepository.save(vehicleWithRoute);
                     })
                     .switchIfEmpty(vehicleRepository.save(finalUpdatedVehicle))
                     .map(VehicleData::fromDomain)
                     .doOnSuccess(v -> log.info("Vehicle updated successfully: {}", v.id()));
         } else if (command.assignedRouteId() != null && command.assignedRouteId().isEmpty()) {
-            // Unassign from route if empty string provided
-            updatedVehicle = updatedVehicle.unassignFromRoute();
+            updatedVehicle = updatedVehicle.clearRouteAssignment();
         }
 
         return vehicleRepository.save(updatedVehicle)

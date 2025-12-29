@@ -26,6 +26,14 @@ INSERT INTO bus_stops (id, stop_name, stop_code, latitude, longitude, is_active,
 ('stop-babatag', 'Бабатаг', 'BT013', 37.8500, 58.2800, true, 'city-001'),
 ('stop-airport-road', 'Дорога в аэропорт', 'AR014', 37.9735, 58.3607,  true, 'city-001');
 
+-- ===== 1.5. СОЗДАНИЕ МАРШРУТОВ =====
+
+INSERT INTO bus_routes (id, route_number, route_name, name_tm, name_en, route_color, is_active) VALUES
+(gen_random_uuid()::text, '29', 'Автовокзал - Арчабил', 'Awtowokzal - Arçabil', 'Bus Station - Archabil', '#1976D2', true),
+(gen_random_uuid()::text, '12', 'Центр - Беркарарлык', 'Merkez - Berkararlyk', 'Center - Berkararlyk', '#1976D2', true),
+(gen_random_uuid()::text, '7A', 'Кольцевой', 'Tegelek', 'Circular', '#1976D2', true),
+(gen_random_uuid()::text, '15', 'Азади - Бабатаг', 'Azady - Babatag', 'Azadi - Babatag', '#1976D2', true);
+
 -- ===== 2. СОЗДАНИЕ ГЕОМЕТРИИ МАРШРУТОВ =====
 
 -- Маршрут 29: Автовокзал - Арчабил (прямое направление)
@@ -129,8 +137,7 @@ INSERT INTO route_stops (id, route_id, stop_id, direction, stop_sequence, estima
 INSERT INTO route_stops (id, route_id, stop_id, direction, stop_sequence, estimated_travel_time_minutes, distance_from_start_meters) VALUES
                                                                                                                                          (gen_random_uuid()::text, (SELECT id FROM bus_routes WHERE route_number = '7A'), 'stop-hippodrome', 0, 1, 0, 0),
                                                                                                                                          (gen_random_uuid()::text, (SELECT id FROM bus_routes WHERE route_number = '7A'), 'stop-sports-complex', 0, 2, 5, 1600),
-                                                                                                                                         (gen_random_uuid()::text, (SELECT id FROM bus_routes WHERE route_number = '7A'), 'stop-ministry-district', 0, 3, 10, 3200),
-                                                                                                                                         (gen_random_uuid()::text, (SELECT id FROM bus_routes WHERE route_number = '7A'), 'stop-hippodrome', 0, 4, 15, 4800);
+                                                                                                                                         (gen_random_uuid()::text, (SELECT id FROM bus_routes WHERE route_number = '7A'), 'stop-ministry-district', 0, 3, 10, 3200);
 
 -- Маршрут 15 остановки
 INSERT INTO route_stops (id, route_id, stop_id, direction, stop_sequence, estimated_travel_time_minutes, distance_from_start_meters) VALUES

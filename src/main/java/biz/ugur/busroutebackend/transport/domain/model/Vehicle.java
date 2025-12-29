@@ -219,47 +219,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .build();
     }
 
-    public Vehicle assignToRoute(BusRouteId routeId) {
-        if (routeId == null) {
-            throw new IllegalArgumentException("Route ID cannot be null");
-        }
-
-        BusRouteId previousRoute = this.assignedRouteId;
-
-        Vehicle updatedVehicle = this.toBuilder()
-                .assignedRouteId(routeId)
-                .build();
-
-        updatedVehicle.registerEvent(new VehicleAssignedToRouteEvent(
-                this.id.getValue(),
-                this.licensePlate,
-                previousRoute != null ? previousRoute.getValue() : null,
-                routeId.getValue()
-        ));
-
-        return updatedVehicle;
-    }
-
-    public Vehicle unassignFromRoute() {
-        if (this.assignedRouteId != null) {
-
-            Vehicle updatedVehicle = this.toBuilder()
-                    .assignedRouteId(null)
-                    .routeNumber(null)
-                    .build();
-
-            updatedVehicle.registerEvent(new VehicleAssignedToRouteEvent(
-                    this.id.getValue(),
-                    this.licensePlate,
-                    this.assignedRouteId.getValue(),
-                    null
-            ));
-
-            return updatedVehicle;
-        }
-        return this;
-    }
-
     public Vehicle clearRouteAssignment() {
         if (this.assignedRouteId == null && this.routeNumber == null) {
             return this;

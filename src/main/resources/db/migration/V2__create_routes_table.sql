@@ -32,9 +32,6 @@ CREATE INDEX idx_bus_routes_geometry_backward ON bus_routes USING GIST (geometry
 ALTER TABLE bus_routes ADD CONSTRAINT chk_bus_routes_number_format
     CHECK (route_number ~ '^\d+[A-Z]?$');
 
-ALTER TABLE bus_routes ADD CONSTRAINT chk_bus_routes_fare_positive
-    CHECK (fare_price > 0);
-
 CREATE TRIGGER update_bus_routes_updated_at
     BEFORE UPDATE ON bus_routes
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

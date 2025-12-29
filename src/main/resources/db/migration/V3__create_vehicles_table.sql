@@ -13,7 +13,7 @@ CREATE TABLE vehicles (
                           created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                           updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                           version BIGINT DEFAULT 0,
-                          course DOUBLE PRECISION,
+                          course DOUBLE PRECISION
 );
 
 CREATE INDEX idx_vehicles_device_id ON vehicles(device_id);
@@ -24,7 +24,6 @@ CREATE INDEX idx_vehicles_in_motion ON vehicles(is_in_motion, is_active);
 CREATE INDEX idx_vehicles_last_update ON vehicles(last_position_update);
 CREATE INDEX idx_vehicles_route_number ON vehicles(route_number);
 
--- Геопространственный индекс для поиска автобусов
 CREATE INDEX idx_vehicles_location ON vehicles USING GIST (
     ST_Point(current_longitude, current_latitude)
     ) WHERE current_latitude IS NOT NULL AND current_longitude IS NOT NULL AND is_active = true;

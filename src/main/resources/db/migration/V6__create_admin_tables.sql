@@ -45,14 +45,14 @@ CREATE INDEX idx_admins_username ON admins(username);
 CREATE INDEX idx_admins_active ON admins(is_active);
 CREATE INDEX idx_banners_active ON banners(is_active);
 CREATE INDEX idx_banners_display_order ON banners(display_order);
-CREATE INDEX CONCURRENTLY idx_admins_has_avatar ON admins (id, username) WHERE avatar IS NOT NULL;
+CREATE INDEX idx_admins_has_avatar ON admins (id, username) WHERE avatar IS NOT NULL;
 CREATE INDEX idx_banners_type ON banners(type);
 CREATE INDEX idx_banners_type_active ON banners(type, is_active);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cities_active_name ON cities (is_active, name);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cities_display_order ON cities (display_order, name);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cities_created_at ON cities (created_at DESC);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cities_active_display_order_name ON cities (is_active, display_order, name);
+CREATE INDEX IF NOT EXISTS idx_cities_active_name ON cities (is_active, name);
+CREATE INDEX IF NOT EXISTS idx_cities_display_order ON cities (display_order, name);
+CREATE INDEX IF NOT EXISTS idx_cities_created_at ON cities (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cities_active_display_order_name ON cities (is_active, display_order, name);
 
 
 COMMENT ON COLUMN admins.avatar IS 'Base64 encoded avatar image or file path';

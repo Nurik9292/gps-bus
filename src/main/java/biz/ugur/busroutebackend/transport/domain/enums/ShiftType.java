@@ -9,7 +9,7 @@ import java.time.ZonedDateTime;
 @Getter
 public enum ShiftType {
     FIRST(LocalTime.of(7, 0), LocalTime.of(14, 0)),
-    SECOND(LocalTime.of(14, 0), LocalTime.of(21, 0));
+    SECOND(LocalTime.of(14, 0), LocalTime.of(23, 0));
 
     public static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
 
@@ -20,6 +20,7 @@ public enum ShiftType {
         this.startTime = startTime;
         this.endTime = endTime;
     }
+
 
     public static ShiftType getCurrentShift() {
         LocalTime now = ZonedDateTime.now(ASHGABAT_ZONE).toLocalTime();

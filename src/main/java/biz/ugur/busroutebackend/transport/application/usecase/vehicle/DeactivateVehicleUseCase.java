@@ -4,9 +4,8 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
-import biz.ugur.busroutebackend.transport.domain.repository.ImmediateRouteAssignmentRepository;
+import biz.ugur.busroutebackend.transport.domain.repository.RouteAssignmentRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
-import biz.ugur.busroutebackend.transport.domain.repository.VehicleShiftAssignmentRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,19 +16,16 @@ import reactor.core.publisher.Mono;
 public class DeactivateVehicleUseCase extends BaseUseCase<DeactivateVehicleUseCase.Command, DeactivateVehicleUseCase.Result> {
 
     private final VehicleRepository vehicleRepository;
-    private final VehicleShiftAssignmentRepository shiftAssignmentRepository;
-    private final ImmediateRouteAssignmentRepository immediateAssignmentRepository;
+    private final RouteAssignmentRepository routeAssignmentRepository;
 
     public DeactivateVehicleUseCase(
             CorrelationContextService correlationService,
             EventBus eventBus,
             VehicleRepository vehicleRepository,
-            VehicleShiftAssignmentRepository shiftAssignmentRepository,
-            ImmediateRouteAssignmentRepository immediateAssignmentRepository) {
+            RouteAssignmentRepository routeAssignmentRepository) {
         super(correlationService, eventBus);
         this.vehicleRepository = vehicleRepository;
-        this.shiftAssignmentRepository = shiftAssignmentRepository;
-        this.immediateAssignmentRepository = immediateAssignmentRepository;
+        this.routeAssignmentRepository = routeAssignmentRepository;
     }
 
     @Override
@@ -56,42 +52,36 @@ public class DeactivateVehicleUseCase extends BaseUseCase<DeactivateVehicleUseCa
     private Mono<Result> cleanupAndDeactivate(Vehicle vehicle, String reason) {
         VehicleId vehicleId = vehicle.getId();
 
-        return Mono.zip(
-                shiftAssignmentRepository.deleteByVehicleId(vehicleId)
-                        .doOnSuccess(count -> log.info("Deleted {} shift assignments for vehicle {}",
-                                count, vehicle.getLicensePlate())),
-                immediateAssignmentRepository.deactivateByVehicleId(vehicleId)
-                        .doOnSuccess(count -> log.info("Deactivated {} immediate assignments for vehicle {}",
-                                count, vehicle.getLicensePlate()))
-        ).flatMap(counts -> {
-            int shiftDeleted = counts.getT1();
-            int immediateDeactivated = counts.getT2();
+        return routeAssignmentRepository.deactivateAllByVehicleId(vehicleId)
+                .doOnSuccess(count -> log.info("Deactivated {} route assignments for vehicle {}",
+                        count, vehicle.getLicensePlate()))
+                .flatMap(deactivatedCount -> {
+                    Vehicle deactivatedVehicle = vehicle.deactivate();
 
-            Vehicle deactivatedVehicle = vehicle.deactivate();
+                    return vehicleRepository.save(deactivatedVehicle)
+                            .map(saved -> {
+                                log.info("Vehicle {} deactivated. Reason: {}. Cleaned up {} route assignments",
+                                        saved.getLicensePlate(), reason, deactivatedCount);
 
-            return vehicleRepository.save(deactivatedVehicle)
-                    .map(saved -> {
-                        log.info("Vehicle {} deactivated. Reason: {}. Cleaned up {} shift and {} immediate assignments",
-                                saved.getLicensePlate(), reason, shiftDeleted, immediateDeactivated);
-
-                        return new Result(
-                                saved.getId().getValue(),
-                                saved.getLicensePlate(),
-                                shiftDeleted,
-                                immediateDeactivated,
-                                true,
-                                null
-                        );
-                    });
-        }).onErrorResume(error -> {
-            log.error("Failed to deactivate vehicle {}: {}", vehicle.getLicensePlate(), error.getMessage());
-            return Mono.just(new Result(
-                    vehicle.getId().getValue(),
-                    vehicle.getLicensePlate(),
-                    0, 0, false,
-                    error.getMessage()
-            ));
-        });
+                                return new Result(
+                                        saved.getId().getValue(),
+                                        saved.getLicensePlate(),
+                                        deactivatedCount,
+                                        0, // deprecated field - no longer tracking immediate separately
+                                        true,
+                                        null
+                                );
+                            });
+                })
+                .onErrorResume(error -> {
+                    log.error("Failed to deactivate vehicle {}: {}", vehicle.getLicensePlate(), error.getMessage());
+                    return Mono.just(new Result(
+                            vehicle.getId().getValue(),
+                            vehicle.getLicensePlate(),
+                            0, 0, false,
+                            error.getMessage()
+                    ));
+                });
     }
 
     @Override

@@ -600,35 +600,6 @@ public class GlobalExceptionHandler {
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
-    @ExceptionHandler(ShiftAssignmentNotFoundException.class)
-    public Mono<ResponseEntity<ErrorResponse>> handleShiftAssignmentNotFoundException(
-            ShiftAssignmentNotFoundException ex,
-            ServerWebExchange exchange
-    ) {
-        log.warn("Shift assignment not found - CorrelationId: {} - Identifier: {}",
-                ex.getCorrelationId().value(), ex.getIdentifier());
-
-        HttpStatus status = HttpStatus.NOT_FOUND;
-        Map<String, Object> metadata = errorResponseFactory.createMetadata("identifier", ex.getIdentifier());
-
-        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
-        return Mono.just(ResponseEntity.status(status).body(errorResponse));
-    }
-
-    @ExceptionHandler(ShiftAssignmentValidationException.class)
-    public Mono<ResponseEntity<ErrorResponse>> handleShiftAssignmentValidationException(
-            ShiftAssignmentValidationException ex,
-            ServerWebExchange exchange
-    ) {
-        log.warn("Shift assignment validation error - CorrelationId: {} - Message: {}",
-                ex.getCorrelationId().value(), ex.getMessage());
-
-        HttpStatus status = HttpStatus.BAD_REQUEST;
-        Map<String, Object> metadata = errorResponseFactory.createMetadata();
-
-        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
-        return Mono.just(ResponseEntity.status(status).body(errorResponse));
-    }
 
     @ExceptionHandler(RealTimeDataException.class)
     public Mono<ResponseEntity<ErrorResponse>> handleRealTimeDataException(

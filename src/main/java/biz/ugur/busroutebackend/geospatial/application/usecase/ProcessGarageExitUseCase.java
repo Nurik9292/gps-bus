@@ -10,12 +10,14 @@ import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleLeftGarageEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleRouteAutoChangedEvent;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
+import biz.ugur.busroutebackend.transport.domain.model.RouteAssignment;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
-import biz.ugur.busroutebackend.transport.domain.model.VehicleShiftAssignment;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
+import biz.ugur.busroutebackend.transport.domain.repository.RouteAssignmentRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
-import biz.ugur.busroutebackend.transport.domain.repository.VehicleShiftAssignmentRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteSource;
+
+import java.time.LocalDate;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -23,23 +25,14 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Use case for processing vehicle exit from a garage.
- *
- * This use case:
- * 1. Updates the vehicle's garage tracking fields
- * 2. Looks up shift assignment for current shift
- * 3. Assigns the route from shift assignment if available
- * 4. Publishes VehicleLeftGarageEvent
- * 5. Publishes VehicleRouteAutoChangedEvent if route was assigned
- */
+
 @Service
 @Slf4j
 public class ProcessGarageExitUseCase extends BaseUseCase<ProcessGarageExitUseCase.Request, Vehicle> {
 
     private final VehicleRepository vehicleRepository;
     private final GarageRepository garageRepository;
-    private final VehicleShiftAssignmentRepository shiftAssignmentRepository;
+    private final RouteAssignmentRepository routeAssignmentRepository;
     private final BusRouteRepository busRouteRepository;
 
     public ProcessGarageExitUseCase(
@@ -47,12 +40,12 @@ public class ProcessGarageExitUseCase extends BaseUseCase<ProcessGarageExitUseCa
             EventBus eventBus,
             VehicleRepository vehicleRepository,
             GarageRepository garageRepository,
-            VehicleShiftAssignmentRepository shiftAssignmentRepository,
+            RouteAssignmentRepository routeAssignmentRepository,
             BusRouteRepository busRouteRepository) {
         super(correlationService, eventBus);
         this.vehicleRepository = vehicleRepository;
         this.garageRepository = garageRepository;
-        this.shiftAssignmentRepository = shiftAssignmentRepository;
+        this.routeAssignmentRepository = routeAssignmentRepository;
         this.busRouteRepository = busRouteRepository;
     }
 
@@ -117,9 +110,10 @@ public class ProcessGarageExitUseCase extends BaseUseCase<ProcessGarageExitUseCa
 
     private Mono<Vehicle> findAndApplyShiftAssignment(Vehicle vehicle) {
         ShiftType currentShift = ShiftType.getCurrentShift();
+        LocalDate today = LocalDate.now();
 
-        return shiftAssignmentRepository.findByVehicleIdAndShiftType(vehicle.getId(), currentShift)
-                .filter(VehicleShiftAssignment::isCurrentlyActive)
+        return routeAssignmentRepository.findActiveByVehicleAndDateAndShift(vehicle.getId(), today, currentShift)
+                .filter(RouteAssignment::isCurrentlyValid)
                 .flatMap(assignment -> applyShiftAssignment(vehicle, assignment))
                 .defaultIfEmpty(vehicle)
                 .doOnNext(v -> {
@@ -133,7 +127,7 @@ public class ProcessGarageExitUseCase extends BaseUseCase<ProcessGarageExitUseCa
                 });
     }
 
-    private Mono<Vehicle> applyShiftAssignment(Vehicle vehicle, VehicleShiftAssignment assignment) {
+    private Mono<Vehicle> applyShiftAssignment(Vehicle vehicle, RouteAssignment assignment) {
         return busRouteRepository.findById(assignment.getRouteId())
                 .map(route -> {
                     String previousRouteId = vehicle.getAssignedRouteId() != null

@@ -66,9 +66,10 @@ public class CreateVehicleUseCase implements UseCase<Mono<CreateVehicleUseCase.C
 
             return busRouteRepository.findById(routeId)
                     .flatMap(route -> {
-                        Vehicle vehicleWithRoute = finalVehicle
-                                .assignToRoute(routeId)
-                                .updateCachedRouteNumber(route.getRouteNumber());
+                        Vehicle vehicleWithRoute = finalVehicle.toBuilder()
+                                .assignedRouteId(routeId)
+                                .routeNumber(route.getRouteNumber())
+                                .build();
                         return vehicleRepository.save(vehicleWithRoute);
                     })
                     .switchIfEmpty(vehicleRepository.save(finalVehicle))
