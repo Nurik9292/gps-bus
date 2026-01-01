@@ -8,12 +8,14 @@ import java.time.LocalDate;
 
 public record RouteAssignmentUpdateRequest(
         String vehicleId,
+
         String routeId,
 
         @JsonFormat(pattern = "yyyy-MM-dd")
         LocalDate effectiveDate,
 
         String shiftType,
+
         String reason,
 
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "UTC")

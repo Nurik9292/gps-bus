@@ -77,8 +77,9 @@ public class CreateRouteAssignmentUseCase extends BaseUseCase<Mono<CreateRouteAs
                 .flatMap(dataMapper::toRouteAssignmentData)
                 .doOnSuccess(data -> {
                     if (data != null) {
-                        log.info("Created route assignment: id={}, isImmediate={}",
-                                data.id(), data.isForCurrentShift());
+                        log.info("Created route assignment: id={}, isImmediate={}, time={}-{}",
+                                data.id(), data.isForCurrentShift(),
+                                data.startTime(), data.endTime());
                     }
                 })
                 .doOnError(error -> log.error("Failed to create route assignment", error));
@@ -146,7 +147,6 @@ public class CreateRouteAssignmentUseCase extends BaseUseCase<Mono<CreateRouteAs
 
             return assignmentRepository.save(assignment);
         } catch (IllegalArgumentException e) {
-            // Domain validation failed (e.g., past date/shift)
             return Mono.error(new AssignmentValidationException(e.getMessage()));
         }
     }

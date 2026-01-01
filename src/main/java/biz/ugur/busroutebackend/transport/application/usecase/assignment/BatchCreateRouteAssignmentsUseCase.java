@@ -5,7 +5,6 @@ import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.assignment.BatchCreateResult;
 import biz.ugur.busroutebackend.transport.application.dto.assignment.BatchCreateRouteAssignmentCommand;
-import biz.ugur.busroutebackend.transport.application.dto.assignment.CreateRouteAssignmentCommand;
 import biz.ugur.busroutebackend.transport.application.dto.assignment.RouteAssignmentData;
 import biz.ugur.busroutebackend.transport.application.mapper.RouteAssignmentDataMapper;
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;

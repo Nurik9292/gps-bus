@@ -21,7 +21,7 @@ public class RouteAssignmentEntityMapper {
                 new VehicleId(entity.getVehicleId()),
                 new BusRouteId(entity.getRouteId()),
                 entity.getEffectiveDate(),
-                ShiftType.valueOf(entity.getShiftType()), // Convert string to enum
+                ShiftType.valueOf(entity.getShiftType()),
                 entity.getAssignedBy(),
                 entity.getReason(),
                 entity.getExpiresAt(),
@@ -42,7 +42,7 @@ public class RouteAssignmentEntityMapper {
                 .vehicleId(domain.getVehicleId().getValue())
                 .routeId(domain.getRouteId().getValue())
                 .effectiveDate(domain.getEffectiveDate())
-                .shiftType(domain.getShiftType().name()) // Convert enum to string
+                .shiftType(domain.getShiftType().name())
                 .assignedBy(domain.getAssignedBy())
                 .reason(domain.getReason())
                 .expiresAt(domain.getExpiresAt())

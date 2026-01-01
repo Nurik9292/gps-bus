@@ -34,6 +34,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class VehicleShiftScheduler {
 
     public static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
+    private static final Duration TASK_TIMEOUT = Duration.ofMinutes(5);
+    private static final String SHIFT_CHANGE_STATS_KEY = "shift:change:stats";
 
     private final RouteAssignmentRepository assignmentRepository;
     private final VehicleRepository vehicleRepository;
@@ -42,8 +44,6 @@ public class VehicleShiftScheduler {
     private final ProcessExpiredAssignmentsUseCase processExpiredAssignmentsUseCase;
 
     private final AtomicBoolean shiftChangeInProgress = new AtomicBoolean(false);
-
-    private static final String SHIFT_CHANGE_STATS_KEY = "shift:change:stats";
 
     public VehicleShiftScheduler(
             RouteAssignmentRepository assignmentRepository,
@@ -58,18 +58,17 @@ public class VehicleShiftScheduler {
         this.processExpiredAssignmentsUseCase = processExpiredAssignmentsUseCase;
     }
 
-    @Scheduled(cron = "0 0 7 * * *", zone = "Asia/Ashgabat")
+    @Scheduled(cron = "0 0 5 * * *", zone = "Asia/Ashgabat")
     public void applyFirstShift() {
-        log.info("First shift starting at 07:00 (Ashgabat) - applying FIRST shift assignments");
-        clearAndApplyShiftAssignments(ShiftType.FIRST);
+        log.info("First shift starting at 05:00 (Ashgabat) - applying FIRST shift assignments");
+        executeShiftChangeReactive(ShiftType.FIRST, true);
     }
 
     @Scheduled(cron = "0 0 14 * * *", zone = "Asia/Ashgabat")
     public void applySecondShift() {
         log.info("Second shift starting at 14:00 (Ashgabat) - applying SECOND shift assignments");
-        clearAndApplyShiftAssignments(ShiftType.SECOND);
+        executeShiftChangeReactive(ShiftType.SECOND, true);
     }
-
 
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Ashgabat")
     public void midnightCleanup() {
@@ -78,128 +77,112 @@ public class VehicleShiftScheduler {
 
         log.info("Midnight cleanup starting at {} (Ashgabat) - deleting old assignments", now);
 
-        assignmentRepository.deleteByEffectiveDateBefore(today)
-                .subscribeOn(Schedulers.boundedElastic())
-                .doOnSuccess(deletedCount ->
-                    log.info("Midnight cleanup completed: deleted {} old assignments (effective_date < {})",
-                            deletedCount, today))
-                .subscribe(
-                        deletedCount -> {},
-                        error -> log.error("Midnight cleanup failed: {}", error.getMessage())
-                );
+        executeMidnightCleanup(today);
     }
-
 
     @Scheduled(cron = "0 0,30 * * * *", zone = "Asia/Ashgabat")
     public void cleanupExpiredAssignments() {
         log.debug("Backup cleanup: checking for expired assignments...");
+        executeExpiredAssignmentsCleanup();
+    }
 
+    private void executeMidnightCleanup(LocalDate today) {
+        assignmentRepository.deleteByEffectiveDateBefore(today)
+                .timeout(TASK_TIMEOUT)
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnSuccess(deletedCount ->
+                        log.info("Midnight cleanup completed: deleted {} old assignments (effective_date < {})",
+                                deletedCount, today))
+                .doOnError(error ->
+                        log.error("Midnight cleanup failed: {}", error.getMessage(), error))
+                .onErrorComplete()
+                .subscribe();
+    }
+
+    private void executeExpiredAssignmentsCleanup() {
         Instant startTime = Instant.now();
 
         processExpiredAssignmentsUseCase.execute(Mono.empty())
+                .timeout(TASK_TIMEOUT)
                 .subscribeOn(Schedulers.boundedElastic())
                 .doOnSuccess(result -> {
-                    if (result.hasProcessed()) {
+                    if (result != null && result.hasProcessed()) {
                         Duration duration = Duration.between(startTime, Instant.now());
                         log.info("Backup cleanup completed: processed={}, errors={}, duration={}ms",
                                 result.processedCount(), result.errorCount(), duration.toMillis());
                     }
                 })
-                .subscribe(
-                        result -> {},
-                        error -> log.error("Backup cleanup failed: {}", error.getMessage())
-                );
+                .doOnError(error ->
+                        log.error("Backup cleanup failed: {}", error.getMessage(), error))
+                .onErrorComplete()
+                .subscribe();
     }
 
-    public void clearAndApplyShiftAssignments(ShiftType shiftType) {
+    private void executeShiftChangeReactive(ShiftType shiftType, boolean clearFirst) {
         if (!shiftChangeInProgress.compareAndSet(false, true)) {
             log.warn("Shift change already in progress, skipping");
+            Mono.<Void>empty().subscribe();
             return;
         }
 
         Instant startTime = Instant.now();
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failCount = new AtomicInteger(0);
-
         LocalDate today = LocalDate.now(ASHGABAT_ZONE);
 
-        log.info("Clearing route assignments before applying {} shift (preserving vehicles with active assignments)",
-                shiftType);
+        Mono<Void> operation = clearFirst
+                ? clearAndApplyAssignmentsReactive(today, shiftType, successCount, failCount)
+                : applyAssignmentsReactive(today, shiftType, successCount, failCount);
 
-        getActiveAssignmentVehicleIds(today, shiftType)
-                .flatMap(excludeVehicleIds -> {
-                    log.info("Found {} vehicles with active assignments to exclude from clearing",
-                            excludeVehicleIds.size());
-                    return vehicleRepository.clearRouteAssignmentsExcluding(excludeVehicleIds);
-                })
-                .doOnSuccess(clearedCount -> log.info("Cleared {} vehicle route assignments", clearedCount))
-                .thenMany(assignmentRepository.findActiveByDateAndShift(today, shiftType))
-                .flatMap(assignment -> applyAssignmentIfActive(assignment, successCount, failCount))
+        operation
+                .timeout(TASK_TIMEOUT)
                 .subscribeOn(Schedulers.boundedElastic())
-                .doOnComplete(() -> {
+                .doOnSuccess(unused -> {
                     Duration duration = Duration.between(startTime, Instant.now());
                     log.info("Shift change completed: shift={}, duration={}ms, success={}, failed={}",
                             shiftType, duration.toMillis(), successCount.get(), failCount.get());
-                    saveShiftChangeStats(shiftType, successCount.get(), failCount.get(), duration).subscribe(
-                            unused -> {},
-                            err -> log.warn("Failed to save shift change stats: {}", err.getMessage())
-                    );
                 })
-                .doFinally(signal -> shiftChangeInProgress.set(false))
-                .subscribe(
-                        vehicle -> {},
-                        error -> {
-                            Duration duration = Duration.between(startTime, Instant.now());
-                            log.error("Shift change failed: shift={}, duration={}ms, error={}",
-                                    shiftType, duration.toMillis(), error.getMessage());
-                        }
-                );
+                .doOnError(error -> {
+                    Duration duration = Duration.between(startTime, Instant.now());
+                    log.error("Shift change failed: shift={}, duration={}ms, error={}",
+                            shiftType, duration.toMillis(), error.getMessage(), error);
+                })
+                .onErrorComplete()
+                .doFinally(signal -> {
+                    shiftChangeInProgress.set(false);
+                    Duration duration = Duration.between(startTime, Instant.now());
+                    saveShiftChangeStats(shiftType, successCount.get(), failCount.get(), duration)
+                            .onErrorComplete()
+                            .subscribe();
+                })
+                .subscribe();
     }
 
+    private Mono<Void> clearAndApplyAssignmentsReactive(LocalDate today, ShiftType shiftType,
+                                                         AtomicInteger successCount, AtomicInteger failCount) {
+        return getActiveAssignmentVehicleIds(today, shiftType)
+                .doOnNext(excludeIds ->
+                        log.info("Found {} vehicles with active assignments to exclude from clearing", excludeIds.size()))
+                .flatMap(vehicleRepository::clearRouteAssignmentsExcluding)
+                .doOnNext(clearedCount ->
+                        log.info("Cleared {} vehicle route assignments", clearedCount))
+                .then(applyAssignmentsReactive(today, shiftType, successCount, failCount));
+    }
+
+    private Mono<Void> applyAssignmentsReactive(LocalDate today, ShiftType shiftType,
+                                                 AtomicInteger successCount, AtomicInteger failCount) {
+        log.info("Applying {} shift assignments", shiftType);
+
+        return assignmentRepository.findActiveByDateAndShift(today, shiftType)
+                .flatMap(assignment -> applyAssignmentIfActive(assignment, successCount, failCount))
+                .then();
+    }
 
     private Mono<List<VehicleId>> getActiveAssignmentVehicleIds(LocalDate date, ShiftType shiftType) {
         return assignmentRepository.findActiveByDateAndShift(date, shiftType)
                 .filter(RouteAssignment::isCurrentlyValid)
                 .map(RouteAssignment::getVehicleId)
                 .collectList();
-    }
-
-
-    public void applyShiftAssignments(ShiftType shiftType) {
-        if (!shiftChangeInProgress.compareAndSet(false, true)) {
-            log.warn("Shift change already in progress, skipping");
-            return;
-        }
-
-        Instant startTime = Instant.now();
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failCount = new AtomicInteger(0);
-
-        LocalDate today = LocalDate.now(ASHGABAT_ZONE);
-
-        log.info("Applying {} shift assignments (without clearing)", shiftType);
-
-        assignmentRepository.findActiveByDateAndShift(today, shiftType)
-                .flatMap(assignment -> applyAssignmentIfActive(assignment, successCount, failCount))
-                .subscribeOn(Schedulers.boundedElastic())
-                .doOnComplete(() -> {
-                    Duration duration = Duration.between(startTime, Instant.now());
-                    log.info("Shift application completed: shift={}, duration={}ms, success={}, failed={}",
-                            shiftType, duration.toMillis(), successCount.get(), failCount.get());
-                    saveShiftChangeStats(shiftType, successCount.get(), failCount.get(), duration).subscribe(
-                            unused -> {},
-                            err -> log.warn("Failed to save shift change stats: {}", err.getMessage())
-                    );
-                })
-                .doFinally(signal -> shiftChangeInProgress.set(false))
-                .subscribe(
-                        vehicle -> {},
-                        error -> {
-                            Duration duration = Duration.between(startTime, Instant.now());
-                            log.error("Shift application failed: shift={}, duration={}ms, error={}",
-                                    shiftType, duration.toMillis(), error.getMessage());
-                        }
-                );
     }
 
     private Mono<Vehicle> applyAssignmentIfActive(RouteAssignment assignment,
@@ -273,51 +256,6 @@ public class VehicleShiftScheduler {
                     log.warn("Failed to save shift change stats to Redis: {}", error.getMessage());
                     return Mono.empty();
                 });
-    }
-
-
-    public Mono<ShiftChangeResult> applyCurrentShift() {
-        ShiftType currentShift = ShiftType.getCurrentShift();
-        log.info("Manually applying current shift: {} (with clear, preserving active assignments)", currentShift);
-
-        if (!shiftChangeInProgress.compareAndSet(false, true)) {
-            return Mono.just(new ShiftChangeResult(
-                    currentShift.name(), 0, 0, 0, false,
-                    "Shift change already in progress"));
-        }
-
-        Instant startTime = Instant.now();
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failCount = new AtomicInteger(0);
-
-        LocalDate today = LocalDate.now(ASHGABAT_ZONE);
-
-        return getActiveAssignmentVehicleIds(today, currentShift)
-                .flatMap(excludeVehicleIds -> {
-                    log.info("Found {} vehicles with active assignments to exclude from clearing",
-                            excludeVehicleIds.size());
-                    return vehicleRepository.clearRouteAssignmentsExcluding(excludeVehicleIds);
-                })
-                .doOnSuccess(clearedCount ->
-                    log.info("Cleared {} vehicle route assignments before manual shift apply", clearedCount))
-                .thenMany(assignmentRepository.findActiveByDateAndShift(today, currentShift))
-                .flatMap(assignment -> applyAssignmentIfActive(assignment, successCount, failCount))
-                .then(Mono.fromSupplier(() -> {
-                    Duration duration = Duration.between(startTime, Instant.now());
-                    return new ShiftChangeResult(
-                            currentShift.name(),
-                            successCount.get(),
-                            failCount.get(),
-                            duration.toMillis(),
-                            true,
-                            null
-                    );
-                }))
-                .doOnError(error -> log.error("Manual shift change failed", error))
-                .onErrorReturn(new ShiftChangeResult(
-                        currentShift.name(), successCount.get(), failCount.get(),
-                        0, false, "Error occurred"))
-                .doFinally(signal -> shiftChangeInProgress.set(false));
     }
 
 

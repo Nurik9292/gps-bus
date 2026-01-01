@@ -49,6 +49,8 @@ public class RouteAssignmentDataMapper {
                             routeInfo.routeName(),
                             assignment.getEffectiveDate(),
                             assignment.getShiftType().name(),
+                            assignment.getStartTime(),
+                            assignment.getEndTime(),
                             assignment.getAssignedBy(),
                             assignment.getReason(),
                             assignment.getExpiresAt(),

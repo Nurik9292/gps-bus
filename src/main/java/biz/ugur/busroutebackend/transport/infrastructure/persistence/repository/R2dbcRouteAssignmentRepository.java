@@ -42,9 +42,11 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
 
         String sql = """
             INSERT INTO route_assignments
-                (id, vehicle_id, route_id, effective_date, shift_type, assigned_by, reason, expires_at, is_active, created_at, updated_at, version)
+                (id, vehicle_id, route_id, effective_date, shift_type,
+                 assigned_by, reason, expires_at, is_active, created_at, updated_at, version)
             VALUES
-                (:id, :vehicleId, :routeId, :effectiveDate, :shiftType, :assignedBy, :reason, :expiresAt, :isActive, :createdAt, :updatedAt, :version)
+                (:id, :vehicleId, :routeId, :effectiveDate, :shiftType,
+                 :assignedBy, :reason, :expiresAt, :isActive, :createdAt, :updatedAt, :version)
             ON CONFLICT (id) DO UPDATE SET
                 vehicle_id = EXCLUDED.vehicle_id,
                 route_id = EXCLUDED.route_id,
@@ -67,18 +69,8 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
                 .bind("shiftType", entity.getShiftType())
                 .bind("assignedBy", entity.getAssignedBy());
 
-        // Bind nullable fields
-        if (entity.getReason() != null && !entity.getReason().trim().isEmpty()) {
-            spec = spec.bind("reason", entity.getReason());
-        } else {
-            spec = spec.bindNull("reason", String.class);
-        }
-
-        if (entity.getExpiresAt() != null) {
-            spec = spec.bind("expiresAt", entity.getExpiresAt());
-        } else {
-            spec = spec.bindNull("expiresAt", Instant.class);
-        }
+        spec = bindNullable(spec, "reason", entity.getReason(), String.class);
+        spec = bindNullable(spec, "expiresAt", entity.getExpiresAt(), Instant.class);
 
         return spec
                 .bind("isActive", entity.getIsActive())
@@ -89,6 +81,17 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
                 .one()
                 .map(mapper::toDomain)
                 .doOnSuccess(saved -> log.debug("Saved route assignment: {}", saved.getId()));
+    }
+
+    private <T> DatabaseClient.GenericExecuteSpec bindNullable(
+            DatabaseClient.GenericExecuteSpec spec,
+            String name,
+            T value,
+            Class<T> type) {
+        if (value != null && !(value instanceof String s && s.trim().isEmpty())) {
+            return spec.bind(name, value);
+        }
+        return spec.bindNull(name, type);
     }
 
     @Override

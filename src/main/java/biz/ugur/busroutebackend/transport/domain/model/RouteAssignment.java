@@ -14,34 +14,32 @@ import lombok.Getter;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 @Builder(toBuilder = true)
 @Getter
 @EqualsAndHashCode(callSuper = false)
 public class RouteAssignment extends AggregateRoot<RouteAssignment, RouteAssignmentId> {
 
+    private static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
+
     private final RouteAssignmentId id;
     private final VehicleId vehicleId;
     private final BusRouteId routeId;
 
     private final LocalDate effectiveDate;
-
     private final ShiftType shiftType;
 
     private final String assignedBy;
-
     private final String reason;
-
     private final Instant expiresAt;
-
     private final Boolean isActive;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long version;
-
-    private static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
 
     public static RouteAssignment create(
             VehicleId vehicleId,
@@ -69,7 +67,6 @@ public class RouteAssignment extends AggregateRoot<RouteAssignment, RouteAssignm
                 .version(0L)
                 .build();
 
-        // Emit domain event
         assignment.registerEvent(new RouteAssignedEvent(
                 assignment.id.getValue(),
                 vehicleId.getValue(),
@@ -82,11 +79,32 @@ public class RouteAssignment extends AggregateRoot<RouteAssignment, RouteAssignm
         return assignment;
     }
 
+    public LocalTime getStartTime() {
+        return shiftType.getStartTime();
+    }
+
+    public LocalTime getEndTime() {
+        return shiftType.getEndTime();
+    }
+
     public boolean isForCurrentShift() {
         LocalDate today = LocalDate.now(ASHGABAT_ZONE);
-        ShiftType currentShift = ShiftType.getCurrentShift();
+        if (!this.effectiveDate.equals(today)) {
+            return false;
+        }
 
-        return this.effectiveDate.equals(today) && this.shiftType == currentShift;
+        LocalTime now = ZonedDateTime.now(ASHGABAT_ZONE).toLocalTime();
+        LocalTime startTime = getStartTime();
+        LocalTime endTime = getEndTime();
+
+        return !now.isBefore(startTime) && now.isBefore(endTime);
+    }
+
+    public boolean shouldBeActiveAt(LocalTime time) {
+        LocalTime startTime = getStartTime();
+        LocalTime endTime = getEndTime();
+
+        return !time.isBefore(startTime) && time.isBefore(endTime);
     }
 
     public boolean isScheduled() {
@@ -152,8 +170,6 @@ public class RouteAssignment extends AggregateRoot<RouteAssignment, RouteAssignm
         return id;
     }
 
-
-
     private static void validateNotPastDate(LocalDate effectiveDate, ShiftType shiftType) {
         LocalDate today = LocalDate.now(ASHGABAT_ZONE);
 
@@ -171,7 +187,7 @@ public class RouteAssignment extends AggregateRoot<RouteAssignment, RouteAssignm
                 throw new IllegalArgumentException(
                         "Cannot create FIRST shift assignment after 14:00. " +
                         "SECOND shift is already active. " +
-                        "To assign immediately, use SECOND shift or wait until tomorrow."
+                        "To assign immediately, use SECOND shift or FULL_DAY, or wait until tomorrow."
                 );
             }
         }
@@ -192,8 +208,6 @@ public class RouteAssignment extends AggregateRoot<RouteAssignment, RouteAssignm
             );
         }
     }
-
-
 
     @Override
     public void setCreatedAt(LocalDateTime createdAt) {
