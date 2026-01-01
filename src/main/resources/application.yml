@@ -165,7 +165,7 @@ external:
         requests-per-minute: 60
 
     gps-tugdk:
-      enabled: ${GPS_TUGDK_ENABLED:false}
+      enabled: ${GPS_TUGDK_ENABLED:true}
       base-url: ${GPS_TUGDK_BASE_URL:https://gps.tugdk.gov.tm}
       token: ${GPS_TUGDK_TOKEN:}
       timeout: ${GPS_TUGDK_TIMEOUT:30s}
