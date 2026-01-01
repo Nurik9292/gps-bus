@@ -37,6 +37,13 @@ public class GpsPositionDTO {
     @JsonProperty("utcTime")
     private String utcTime;
 
+    @JsonProperty("onlineState")
+    private String onlineState;
+
+    public boolean isOnline() {
+        return "Online".equalsIgnoreCase(onlineState);
+    }
+
     public String getVehicleName() {
         return attributes != null ? attributes.getName() : null;
     }

@@ -54,7 +54,7 @@ SET
     estimated_duration_minutes = 25
 WHERE route_number = '29';
 
--- Маршрут 12: Центр - Беркарарлык
+
 UPDATE bus_routes
 SET
     geometry_forward = ST_GeomFromText(

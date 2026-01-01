@@ -23,6 +23,10 @@ public record VehiclePositionUpdateResult(
         return failedCount == 0 && invalidCount == 0 && conflictCount == 0;
     }
 
+    public static VehiclePositionUpdateResult empty() {
+        return new VehiclePositionUpdateResult(0, 0, 0, 0, 0, LocalDateTime.now(), List.of());
+    }
+
     public static VehiclePositionUpdateResult failed(int batchSize) {
         return new VehiclePositionUpdateResult(0, 0, batchSize, 0, 0, LocalDateTime.now(), List.of());
     }

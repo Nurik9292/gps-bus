@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 
@@ -63,11 +64,13 @@ class CreateRouteAssignmentUseCaseTest {
     private BusRouteId routeId;
     private Vehicle mockVehicle;
     private BusRoute mockRoute;
+    private Instant defaultExpiresAt;
 
     @BeforeEach
     void setUp() {
         vehicleId = VehicleId.generate();
         routeId = BusRouteId.generate();
+        defaultExpiresAt = Instant.now().plusSeconds(28800); // 8 hours from now
 
         mockVehicle = Vehicle.builder()
                 .id(vehicleId)
@@ -97,7 +100,11 @@ class CreateRouteAssignmentUseCaseTest {
                     RouteAssignmentData mockData = new RouteAssignmentData(
                             assignment.getId().getValue(),
                             assignment.getVehicleId().getValue(),
+                            "1234 ABC",
+                            "TEST-001",
                             assignment.getRouteId().getValue(),
+                            "5",
+                            "Test Route",
                             assignment.getEffectiveDate(),
                             assignment.getShiftType().toString(),
                             assignment.getAssignedBy(),
@@ -125,22 +132,26 @@ class CreateRouteAssignmentUseCaseTest {
                 "FIRST",
                 "admin",
                 "Test reason",
-                null
+                defaultExpiresAt
         );
 
         RouteAssignment mockAssignment = RouteAssignment.create(
-                vehicleId, routeId, tomorrow, ShiftType.FIRST, "admin", "Test reason", null
+                vehicleId, routeId, tomorrow, ShiftType.FIRST, "admin", "Test reason", defaultExpiresAt
         );
 
         RouteAssignmentData mockData = new RouteAssignmentData(
                 mockAssignment.getId().getValue(),
                 vehicleId.getValue(),
+                "1234 ABC",
+                "TEST-001",
                 routeId.getValue(),
+                "5",
+                "Test Route",
                 tomorrow,
                 "FIRST",
                 "admin",
                 "Test reason",
-                null,
+                defaultExpiresAt,
                 true,
                 false,
                 false,
@@ -186,7 +197,7 @@ class CreateRouteAssignmentUseCaseTest {
                 "FIRST",
                 "admin",
                 null,
-                null
+                defaultExpiresAt
         );
 
         when(vehicleRepository.findById(any(VehicleId.class))).thenReturn(Mono.empty());
@@ -212,7 +223,7 @@ class CreateRouteAssignmentUseCaseTest {
                 "FIRST",
                 "admin",
                 null,
-                null
+                defaultExpiresAt
         );
 
         Vehicle inactiveVehicle = mockVehicle.toBuilder()
@@ -241,7 +252,7 @@ class CreateRouteAssignmentUseCaseTest {
                 "FIRST",
                 "admin",
                 null,
-                null
+                defaultExpiresAt
         );
 
         when(vehicleRepository.findById(any(VehicleId.class))).thenReturn(Mono.just(mockVehicle));
@@ -268,7 +279,7 @@ class CreateRouteAssignmentUseCaseTest {
                 "FIRST",
                 "admin",
                 null,
-                null
+                defaultExpiresAt
         );
 
         when(vehicleRepository.findById(any(VehicleId.class))).thenReturn(Mono.just(mockVehicle));
@@ -298,7 +309,7 @@ class CreateRouteAssignmentUseCaseTest {
                 "FIRST",
                 "admin",
                 null,
-                null
+                defaultExpiresAt
         );
 
         when(vehicleRepository.findById(any(VehicleId.class))).thenReturn(Mono.just(mockVehicle));

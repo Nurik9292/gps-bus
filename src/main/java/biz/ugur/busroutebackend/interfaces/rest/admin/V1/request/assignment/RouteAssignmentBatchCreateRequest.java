@@ -1,16 +1,18 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.assignment;
 
-import biz.ugur.busroutebackend.transport.application.dto.assignment.CreateRouteAssignmentCommand;
+import biz.ugur.busroutebackend.transport.application.dto.assignment.BatchCreateRouteAssignmentCommand;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
-public record RouteAssignmentCreateRequest(
-        @NotBlank(message = "Vehicle ID is required")
-        String vehicleId,
+public record RouteAssignmentBatchCreateRequest(
+        @NotEmpty(message = "Vehicle IDs list cannot be empty")
+        List<String> vehicleIds,
 
         @NotBlank(message = "Route ID is required")
         String routeId,
@@ -31,9 +33,9 @@ public record RouteAssignmentCreateRequest(
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "UTC")
         Instant expiresAt
 ) {
-    public CreateRouteAssignmentCommand toCommand() {
-        return new CreateRouteAssignmentCommand(
-                vehicleId,
+    public BatchCreateRouteAssignmentCommand toCommand() {
+        return new BatchCreateRouteAssignmentCommand(
+                vehicleIds,
                 routeId,
                 effectiveDate,
                 shiftType,

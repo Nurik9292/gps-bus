@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.transport.domain.model;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
 import biz.ugur.busroutebackend.transport.domain.event.RouteAssignedEvent;
+import biz.ugur.busroutebackend.transport.domain.exceptions.AssignmentValidationException;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteAssignmentId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
@@ -53,6 +54,7 @@ public class RouteAssignment extends AggregateRoot<RouteAssignment, RouteAssignm
 
         validateNotPastDate(effectiveDate, shiftType);
         validateAssignedByNotEmpty(assignedBy);
+        validateExpiresAtNotNull(expiresAt);
 
         RouteAssignment assignment = RouteAssignment.builder()
                 .id(RouteAssignmentId.generate())
@@ -92,9 +94,6 @@ public class RouteAssignment extends AggregateRoot<RouteAssignment, RouteAssignm
     }
 
     public boolean isExpired() {
-        if (expiresAt == null) {
-            return false;
-        }
         return Instant.now().isAfter(expiresAt);
     }
 
@@ -182,6 +181,14 @@ public class RouteAssignment extends AggregateRoot<RouteAssignment, RouteAssignm
         if (assignedBy == null || assignedBy.trim().isEmpty()) {
             throw new IllegalArgumentException(
                     "assignedBy cannot be null or empty. All assignments must have an accountable admin."
+            );
+        }
+    }
+
+    private static void validateExpiresAtNotNull(Instant expiresAt) {
+        if (expiresAt == null) {
+            throw new AssignmentValidationException(
+                    "expiresAt cannot be null. Each assignment must have an expiration time."
             );
         }
     }

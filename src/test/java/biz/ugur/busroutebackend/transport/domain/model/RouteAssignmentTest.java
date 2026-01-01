@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.transport.domain.model;
 
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
 import biz.ugur.busroutebackend.transport.domain.event.RouteAssignedEvent;
+import biz.ugur.busroutebackend.transport.domain.exceptions.AssignmentValidationException;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,12 +21,14 @@ class RouteAssignmentTest {
     private VehicleId vehicleId;
     private BusRouteId routeId;
     private String assignedBy;
+    private Instant defaultExpiresAt;
 
     @BeforeEach
     void setUp() {
         vehicleId = VehicleId.generate();
         routeId = BusRouteId.generate();
         assignedBy = "admin";
+        defaultExpiresAt = Instant.now().plusSeconds(28800); // 8 hours from now
     }
 
     @Test
@@ -37,7 +40,7 @@ class RouteAssignmentTest {
 
         // Act
         RouteAssignment assignment = RouteAssignment.create(
-                vehicleId, routeId, tomorrow, shiftType, assignedBy, reason, null
+                vehicleId, routeId, tomorrow, shiftType, assignedBy, reason, defaultExpiresAt
         );
 
         // Assert
@@ -49,7 +52,7 @@ class RouteAssignmentTest {
         assertEquals(shiftType, assignment.getShiftType());
         assertEquals(assignedBy, assignment.getAssignedBy());
         assertEquals(reason, assignment.getReason());
-        assertNull(assignment.getExpiresAt());
+        assertEquals(defaultExpiresAt, assignment.getExpiresAt());
         assertTrue(assignment.getIsActive());
         assertEquals(0L, assignment.getVersion());
 
@@ -66,7 +69,7 @@ class RouteAssignmentTest {
 
         // Act & Assert
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                RouteAssignment.create(vehicleId, routeId, yesterday, shiftType, assignedBy, null, null)
+                RouteAssignment.create(vehicleId, routeId, yesterday, shiftType, assignedBy, null, defaultExpiresAt)
         );
 
         assertTrue(exception.getMessage().contains("Cannot create assignment for past date"));
@@ -80,7 +83,7 @@ class RouteAssignmentTest {
 
         // Act & Assert
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                RouteAssignment.create(vehicleId, routeId, tomorrow, shiftType, "", null, null)
+                RouteAssignment.create(vehicleId, routeId, tomorrow, shiftType, "", null, defaultExpiresAt)
         );
 
         assertTrue(exception.getMessage().contains("assignedBy"));
@@ -94,10 +97,24 @@ class RouteAssignmentTest {
 
         // Act & Assert
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                RouteAssignment.create(vehicleId, routeId, tomorrow, shiftType, null, null, null)
+                RouteAssignment.create(vehicleId, routeId, tomorrow, shiftType, null, null, defaultExpiresAt)
         );
 
         assertTrue(exception.getMessage().contains("assignedBy"));
+    }
+
+    @Test
+    void create_WithNullExpiresAt_ShouldThrowException() {
+        // Arrange
+        LocalDate tomorrow = LocalDate.now(ASHGABAT_ZONE).plusDays(1);
+        ShiftType shiftType = ShiftType.FIRST;
+
+        // Act & Assert
+        AssignmentValidationException exception = assertThrows(AssignmentValidationException.class, () ->
+                RouteAssignment.create(vehicleId, routeId, tomorrow, shiftType, assignedBy, null, null)
+        );
+
+        assertTrue(exception.getMessage().contains("expiresAt"));
     }
 
     @Test
@@ -107,7 +124,7 @@ class RouteAssignmentTest {
         ShiftType currentShift = ShiftType.getCurrentShift();
 
         RouteAssignment assignment = RouteAssignment.create(
-                vehicleId, routeId, today, currentShift, assignedBy, null, null
+                vehicleId, routeId, today, currentShift, assignedBy, null, defaultExpiresAt
         );
 
         // Act & Assert
@@ -122,24 +139,12 @@ class RouteAssignmentTest {
         ShiftType shiftType = ShiftType.FIRST;
 
         RouteAssignment assignment = RouteAssignment.create(
-                vehicleId, routeId, tomorrow, shiftType, assignedBy, null, null
+                vehicleId, routeId, tomorrow, shiftType, assignedBy, null, defaultExpiresAt
         );
 
         // Act & Assert
         assertFalse(assignment.isForCurrentShift());
         assertTrue(assignment.isScheduled());
-    }
-
-    @Test
-    void isExpired_WithNullExpiresAt_ShouldReturnFalse() {
-        // Arrange
-        LocalDate tomorrow = LocalDate.now(ASHGABAT_ZONE).plusDays(1);
-        RouteAssignment assignment = RouteAssignment.create(
-                vehicleId, routeId, tomorrow, ShiftType.FIRST, assignedBy, null, null
-        );
-
-        // Act & Assert
-        assertFalse(assignment.isExpired());
     }
 
     @Test
@@ -177,7 +182,7 @@ class RouteAssignmentTest {
         // Arrange
         LocalDate tomorrow = LocalDate.now(ASHGABAT_ZONE).plusDays(1);
         RouteAssignment assignment = RouteAssignment.create(
-                vehicleId, routeId, tomorrow, ShiftType.FIRST, assignedBy, null, null
+                vehicleId, routeId, tomorrow, ShiftType.FIRST, assignedBy, null, defaultExpiresAt
         );
 
         // Act
@@ -195,7 +200,7 @@ class RouteAssignmentTest {
         // Arrange
         LocalDate tomorrow = LocalDate.now(ASHGABAT_ZONE).plusDays(1);
         RouteAssignment assignment = RouteAssignment.create(
-                vehicleId, routeId, tomorrow, ShiftType.FIRST, assignedBy, null, null
+                vehicleId, routeId, tomorrow, ShiftType.FIRST, assignedBy, null, defaultExpiresAt
         );
         RouteAssignment deactivated = assignment.deactivate();
 
@@ -210,17 +215,18 @@ class RouteAssignmentTest {
     void updateExpiration_ShouldReturnNewInstanceWithUpdatedExpiresAt() {
         // Arrange
         LocalDate tomorrow = LocalDate.now(ASHGABAT_ZONE).plusDays(1);
+        Instant initialExpiresAt = Instant.now().plusSeconds(3600); // 1 hour from now
         RouteAssignment assignment = RouteAssignment.create(
-                vehicleId, routeId, tomorrow, ShiftType.FIRST, assignedBy, null, null
+                vehicleId, routeId, tomorrow, ShiftType.FIRST, assignedBy, null, initialExpiresAt
         );
-        Instant newExpiresAt = Instant.now().plusSeconds(7200);
+        Instant newExpiresAt = Instant.now().plusSeconds(7200); // 2 hours from now
 
         // Act
         RouteAssignment updated = assignment.updateExpiration(newExpiresAt);
 
         // Assert
         assertNotSame(assignment, updated);
-        assertNull(assignment.getExpiresAt());
+        assertEquals(initialExpiresAt, assignment.getExpiresAt());
         assertEquals(newExpiresAt, updated.getExpiresAt());
     }
 
@@ -243,7 +249,7 @@ class RouteAssignmentTest {
         // Arrange
         LocalDate tomorrow = LocalDate.now(ASHGABAT_ZONE).plusDays(1);
         RouteAssignment assignment = RouteAssignment.create(
-                vehicleId, routeId, tomorrow, ShiftType.FIRST, assignedBy, null, null
+                vehicleId, routeId, tomorrow, ShiftType.FIRST, assignedBy, null, defaultExpiresAt
         );
         RouteAssignment deactivated = assignment.deactivate();
 
@@ -256,7 +262,7 @@ class RouteAssignmentTest {
         // Arrange
         LocalDate tomorrow = LocalDate.now(ASHGABAT_ZONE).plusDays(1);
         RouteAssignment original = RouteAssignment.create(
-                vehicleId, routeId, tomorrow, ShiftType.FIRST, assignedBy, "reason", null
+                vehicleId, routeId, tomorrow, ShiftType.FIRST, assignedBy, "reason", defaultExpiresAt
         );
 
         // Act
@@ -283,6 +289,7 @@ class RouteAssignmentTest {
         assertEquals(original.getShiftType(), restored.getShiftType());
         assertEquals(original.getAssignedBy(), restored.getAssignedBy());
         assertEquals(original.getReason(), restored.getReason());
+        assertEquals(original.getExpiresAt(), restored.getExpiresAt());
         // Restored instances don't have domain events
         assertEquals(0, restored.getDomainEvents().size());
     }

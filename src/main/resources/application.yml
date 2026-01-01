@@ -156,9 +156,6 @@ external:
       connect-timeout: ${GPS_API_CONNECT_TIMEOUT:10s}
       read-timeout: ${GPS_API_READ_TIMEOUT:60s}
       write-timeout: ${GPS_API_WRITE_TIMEOUT:10s}
-      batch-size: ${GPS_API_BATCH_SIZE:50}
-      max-concurrent-batches: ${GPS_API_MAX_CONCURRENT_BATCHES:3}
-      time-window-minutes: ${GPS_API_TIME_WINDOW_MINUTES:60}
       retry:
         max-attempts: 3
         initial-interval: 1s

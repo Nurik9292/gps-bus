@@ -18,6 +18,7 @@ import biz.ugur.busroutebackend.transport.domain.service.LicensePlateExtractor;
 import biz.ugur.busroutebackend.transport.domain.service.PositionChangeDetector;
 import biz.ugur.busroutebackend.transport.domain.service.VehicleDirectionDetectionService;
 import biz.ugur.busroutebackend.transport.domain.service.VehicleValidationService;
+import biz.ugur.busroutebackend.transport.application.usecase.assignment.ProcessExpiredAssignmentsUseCase;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistoryService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private final ProcessGarageEntryUseCase processGarageEntryUseCase;
     private final ProcessGarageExitUseCase processGarageExitUseCase;
     private final VehicleGpsHistoryService gpsHistoryService;
+    private final ProcessExpiredAssignmentsUseCase processExpiredAssignmentsUseCase;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
                                          VehicleFactory vehicleFactory,
@@ -54,6 +56,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                          ProcessGarageEntryUseCase processGarageEntryUseCase,
                                          ProcessGarageExitUseCase processGarageExitUseCase,
                                          VehicleGpsHistoryService gpsHistoryService,
+                                         ProcessExpiredAssignmentsUseCase processExpiredAssignmentsUseCase,
                                          EventBus eventBus,
                                          CorrelationContextService correlationContextService) {
         super(correlationContextService, eventBus);
@@ -67,6 +70,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         this.processGarageEntryUseCase = processGarageEntryUseCase;
         this.processGarageExitUseCase = processGarageExitUseCase;
         this.gpsHistoryService = gpsHistoryService;
+        this.processExpiredAssignmentsUseCase = processExpiredAssignmentsUseCase;
     }
 
     @Override
@@ -247,8 +251,13 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     ))
                     .then();
 
+            // Process expired assignments reactively during GPS update
+            Mono<ProcessExpiredAssignmentsUseCase.Result> expiredMono =
+                    processExpiredAssignmentsUseCase.execute(Mono.empty());
+
             return Mono.zip(updateMono, insertMono)
                     .flatMap(tuple -> saveHistoryMono.thenReturn(tuple))
+                    .flatMap(tuple -> expiredMono.thenReturn(tuple))
                     .map(tuple -> {
                         log.info("Batch operations: {} updated, {} created", tuple.getT1(), tuple.getT2().size());
                         return createResult(statuses);

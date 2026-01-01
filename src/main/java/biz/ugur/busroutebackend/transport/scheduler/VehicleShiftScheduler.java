@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.scheduler;
 
+import biz.ugur.busroutebackend.transport.application.usecase.assignment.ProcessExpiredAssignmentsUseCase;
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
 import biz.ugur.busroutebackend.transport.domain.model.RouteAssignment;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
@@ -38,6 +39,7 @@ public class VehicleShiftScheduler {
     private final VehicleRepository vehicleRepository;
     private final BusRouteRepository busRouteRepository;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
+    private final ProcessExpiredAssignmentsUseCase processExpiredAssignmentsUseCase;
 
     private final AtomicBoolean shiftChangeInProgress = new AtomicBoolean(false);
 
@@ -47,11 +49,13 @@ public class VehicleShiftScheduler {
             RouteAssignmentRepository assignmentRepository,
             VehicleRepository vehicleRepository,
             BusRouteRepository busRouteRepository,
-            ReactiveRedisTemplate<String, Object> redisTemplate) {
+            ReactiveRedisTemplate<String, Object> redisTemplate,
+            ProcessExpiredAssignmentsUseCase processExpiredAssignmentsUseCase) {
         this.assignmentRepository = assignmentRepository;
         this.vehicleRepository = vehicleRepository;
         this.busRouteRepository = busRouteRepository;
         this.redisTemplate = redisTemplate;
+        this.processExpiredAssignmentsUseCase = processExpiredAssignmentsUseCase;
     }
 
     @Scheduled(cron = "0 0 7 * * *", zone = "Asia/Ashgabat")
@@ -86,72 +90,24 @@ public class VehicleShiftScheduler {
     }
 
 
-    @Scheduled(cron = "0 */5 * * * *", zone = "Asia/Ashgabat")
+    @Scheduled(cron = "0 0,30 * * * *", zone = "Asia/Ashgabat")
     public void cleanupExpiredAssignments() {
-        log.debug("Checking for expired assignments...");
+        log.debug("Backup cleanup: checking for expired assignments...");
 
         Instant startTime = Instant.now();
-        AtomicInteger cleanedCount = new AtomicInteger(0);
-        AtomicInteger errorCount = new AtomicInteger(0);
 
-        assignmentRepository.findExpiredAssignments()
-                .flatMap(assignment -> {
-                    log.info("Found expired assignment: vehicleId={}, routeId={}, expiresAt={}",
-                            assignment.getVehicleId(),
-                            assignment.getRouteId(),
-                            assignment.getExpiresAt());
-
-                    return assignmentRepository.deactivateById(assignment.getId())
-                            .flatMap(deactivated -> {
-                                cleanedCount.incrementAndGet();
-                                return revertToShiftAssignmentOrClear(assignment.getVehicleId());
-                            })
-                            .doOnError(error -> {
-                                errorCount.incrementAndGet();
-                                log.error("Failed to cleanup expired assignment for vehicle {}: {}",
-                                        assignment.getVehicleId(), error.getMessage());
-                            })
-                            .onErrorResume(error -> Mono.empty());
-                })
+        processExpiredAssignmentsUseCase.execute(Mono.empty())
                 .subscribeOn(Schedulers.boundedElastic())
-                .doOnComplete(() -> {
-                    if (cleanedCount.get() > 0 || errorCount.get() > 0) {
+                .doOnSuccess(result -> {
+                    if (result.hasProcessed()) {
                         Duration duration = Duration.between(startTime, Instant.now());
-                        log.info("Expired assignments cleanup completed: cleaned={}, errors={}, duration={}ms",
-                                cleanedCount.get(), errorCount.get(), duration.toMillis());
+                        log.info("Backup cleanup completed: processed={}, errors={}, duration={}ms",
+                                result.processedCount(), result.errorCount(), duration.toMillis());
                     }
                 })
                 .subscribe(
-                        vehicle -> {},
-                        error -> log.error("Expired assignments cleanup failed: {}", error.getMessage())
-                );
-    }
-
-    private Mono<Vehicle> revertToShiftAssignmentOrClear(VehicleId vehicleId) {
-        LocalDate today = LocalDate.now(ASHGABAT_ZONE);
-        ShiftType currentShift = ShiftType.getCurrentShift();
-
-        return vehicleRepository.findById(vehicleId)
-                .flatMap(vehicle ->
-                        assignmentRepository.findActiveByVehicleAndDateAndShift(vehicleId, today, currentShift)
-                                .filter(RouteAssignment::isCurrentlyValid)
-                                .flatMap(assignment -> busRouteRepository.findById(assignment.getRouteId())
-                                        .map(route -> vehicle.toBuilder()
-                                                .assignedRouteId(route.getId())
-                                                .routeNumber(route.getRouteNumber())
-                                                .routeSource(RouteSource.SHIFT_ASSIGNMENT)
-                                                .routeConfidence(100)
-                                                .build())
-                                )
-                                .flatMap(vehicleRepository::save)
-                                .doOnSuccess(v -> log.info("Reverted vehicle {} to shift assignment: route={}",
-                                        v.getLicensePlate(), v.getRouteNumber()))
-                                .switchIfEmpty(Mono.defer(() -> {
-                                    Vehicle clearedVehicle = vehicle.clearRouteAssignment();
-                                    return vehicleRepository.save(clearedVehicle)
-                                            .doOnSuccess(v -> log.info("Cleared route assignment for vehicle {} (no active assignment)",
-                                                    v.getLicensePlate()));
-                                }))
+                        result -> {},
+                        error -> log.error("Backup cleanup failed: {}", error.getMessage())
                 );
     }
 

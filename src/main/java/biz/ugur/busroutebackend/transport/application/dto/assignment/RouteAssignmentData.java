@@ -8,7 +8,11 @@ import java.time.LocalDateTime;
 public record RouteAssignmentData(
         String id,
         String vehicleId,
+        String vehicleLicensePlate,
+        String vehicleDeviceId,
         String routeId,
+        String routeNumber,
+        String routeName,
         LocalDate effectiveDate,
         String shiftType,
         String assignedBy,
