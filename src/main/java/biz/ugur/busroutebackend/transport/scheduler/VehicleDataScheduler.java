@@ -6,11 +6,9 @@ import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateR
 import biz.ugur.busroutebackend.transport.application.service.GpsDataAggregatorService;
 import biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
-import biz.ugur.busroutebackend.transport.scheduler.dto.GpsUpdateStats;
-import biz.ugur.busroutebackend.transport.scheduler.dto.HealthStatus;
+import biz.ugur.busroutebackend.transport.scheduler.service.GpsUpdateStatisticsService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -28,14 +26,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @ConditionalOnProperty(prefix = "app.scheduling", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class VehicleDataScheduler {
 
-    private static final String GPS_UPDATE_STATS_KEY = "gps:update:stats";
-    private static final String GPS_HEALTH_KEY = "gps:health";
     private static final Duration STUCK_THRESHOLD = Duration.ofSeconds(150);
 
     private final GpsDataAggregatorService gpsDataAggregator;
     private final UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase;
     private final VehicleRepository vehicleRepository;
-    private final ReactiveRedisTemplate<String, Object> redisTemplate;
+    private final GpsUpdateStatisticsService statisticsService;
     private final SchedulerProperties schedulerProperties;
 
     private final AtomicBoolean gpsUpdateInProgress = new AtomicBoolean(false);
@@ -44,12 +40,12 @@ public class VehicleDataScheduler {
     public VehicleDataScheduler(GpsDataAggregatorService gpsDataAggregator,
                                 UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase,
                                 VehicleRepository vehicleRepository,
-                                ReactiveRedisTemplate<String, Object> redisTemplate,
+                                GpsUpdateStatisticsService statisticsService,
                                 SchedulerProperties schedulerProperties) {
         this.gpsDataAggregator = gpsDataAggregator;
         this.updateVehiclePositionsUseCase = updateVehiclePositionsUseCase;
         this.vehicleRepository = vehicleRepository;
-        this.redisTemplate = redisTemplate;
+        this.statisticsService = statisticsService;
         this.schedulerProperties = schedulerProperties;
 
         log.info("VehicleDataScheduler initialized with {} GPS providers",
@@ -138,7 +134,7 @@ public class VehicleDataScheduler {
                 result.invalidCount(),
                 result.conflictCount());
 
-        return saveGpsUpdateStats(result, duration)
+        return statisticsService.saveUpdateStats(result, duration)
                 .thenReturn(result);
     }
 
@@ -146,7 +142,7 @@ public class VehicleDataScheduler {
         Duration duration = Duration.between(startTime, Instant.now());
         log.error("GPS update failed after {}ms: {}", duration.toMillis(), error.getMessage());
 
-        return saveGpsUpdateError(error, duration)
+        return statisticsService.saveUpdateError(error, duration)
                 .thenReturn(VehiclePositionUpdateResult.empty());
     }
 
@@ -171,7 +167,7 @@ public class VehicleDataScheduler {
                             log.info("GPS provider {} health: {}", provider, healthy ? "OK" : "FAILED"));
 
                     boolean anyHealthy = results.values().stream().anyMatch(Boolean::booleanValue);
-                    return saveHealthStatus(GPS_HEALTH_KEY, anyHealthy)
+                    return statisticsService.saveHealthStatus(anyHealthy)
                             .thenReturn(results);
                 })
                 .doOnSuccess(results -> log.debug("Health check completed for {} providers", results.size()))
@@ -184,76 +180,7 @@ public class VehicleDataScheduler {
     public void cleanupOldData() {
         log.info("Starting cleanup of old cached data");
 
-        String pattern = "gps:update:stats:*";
-        redisTemplate.keys(pattern)
-                .filter(key -> isOlderThanDays(key, 7))
-                .flatMap(redisTemplate::delete)
-                .collectList()
-                .doOnSuccess(deleted -> log.info("Cleaned up {} old GPS stats entries", deleted.size()))
-                .doOnError(error -> log.warn("Failed to cleanup old GPS stats: {}", error.getMessage()))
-                .onErrorResume(error -> Mono.just(List.of()))
+        statisticsService.cleanupOldStats()
                 .subscribe();
-    }
-
-    private Mono<Void> saveGpsUpdateStats(VehiclePositionUpdateResult result, Duration duration) {
-        GpsUpdateStats stats = new GpsUpdateStats(
-                result.updatedCount(),
-                result.createdCount(),
-                result.failedCount(),
-                result.invalidCount(),
-                result.conflictCount(),
-                duration.toMillis(),
-                Instant.now(),
-                true
-        );
-
-        return saveStats(stats);
-    }
-
-    private Mono<Void> saveGpsUpdateError(Throwable error, Duration duration) {
-        GpsUpdateStats stats = new GpsUpdateStats(
-                0, 0, 0, 0, 0,
-                duration.toMillis(),
-                Instant.now(),
-                false,
-                error.getMessage()
-        );
-
-        return saveStats(stats);
-    }
-
-    private Mono<Void> saveStats(GpsUpdateStats stats) {
-        String key = GPS_UPDATE_STATS_KEY + ":" + Instant.now().getEpochSecond();
-
-        return redisTemplate.opsForValue()
-                .set(key, stats, Duration.ofDays(7))
-                .then()
-                .onErrorResume(error -> {
-                    log.warn("Failed to save GPS stats to Redis: {}", error.getMessage());
-                    return Mono.empty();
-                });
-    }
-
-    private Mono<Void> saveHealthStatus(String key, boolean healthy) {
-        HealthStatus status = new HealthStatus(healthy, Instant.now());
-
-        return redisTemplate.opsForValue()
-                .set(key, status, Duration.ofMinutes(10))
-                .then()
-                .onErrorResume(error -> {
-                    log.warn("Failed to save health status to Redis: {}", error.getMessage());
-                    return Mono.empty();
-                });
-    }
-
-    private boolean isOlderThanDays(String key, int days) {
-        try {
-            String[] parts = key.split(":");
-            long timestamp = Long.parseLong(parts[parts.length - 1]);
-            long cutoff = Instant.now().minus(Duration.ofDays(days)).getEpochSecond();
-            return timestamp < cutoff;
-        } catch (Exception e) {
-            return false;
-        }
     }
 }

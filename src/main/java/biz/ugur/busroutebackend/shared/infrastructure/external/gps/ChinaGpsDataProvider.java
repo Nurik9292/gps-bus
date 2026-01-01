@@ -1,10 +1,11 @@
 package biz.ugur.busroutebackend.shared.infrastructure.external.gps;
 
+import biz.ugur.busroutebackend.shared.infrastructure.external.gps.config.GpsProviderProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.dto.ChinaGpsRequestDTO;
 import biz.ugur.busroutebackend.transport.application.dto.GpsApiResponseDTO;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
-import biz.ugur.busroutebackend.transport.domain.service.GpsDataProvider;
 import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,11 +14,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
-import reactor.util.retry.Retry;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -29,23 +27,21 @@ import java.util.stream.Collectors;
 @Component
 @Slf4j
 @ConditionalOnProperty(prefix = "external.api.gps", name = "enabled", havingValue = "true", matchIfMissing = true)
-public class ChinaGpsDataProvider implements GpsDataProvider {
+public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
 
     private static final String API_PATH = "/api/vehicleinfo/v1/tkm/getVehicleRealTimeData";
     private static final DateTimeFormatter REPORT_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private final WebClient webClient;
     private final String token;
-    private final boolean enabled;
 
     public ChinaGpsDataProvider(
             @Qualifier("gpsApiClient") WebClient webClient,
+            GpsProviderProperties properties,
             @Value("${external.api.gps.token}") String token,
             @Value("${external.api.gps.enabled:true}") boolean enabled) {
-        this.webClient = webClient;
+        super(webClient, properties, enabled);
         this.token = token;
-        this.enabled = enabled;
 
         log.info("ChinaGpsDataProvider initialized: enabled={}", enabled);
     }
@@ -56,27 +52,22 @@ public class ChinaGpsDataProvider implements GpsDataProvider {
     }
 
     @Override
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    @Override
     public int getPriority() {
         return 10;
     }
 
     @Override
+    @CircuitBreaker(name = "gpsApi", fallbackMethod = "fetchPositionsFallback")
     public Mono<List<GpsPositionDTO>> fetchPositionsByDeviceIds(List<String> deviceIds) {
         if (!enabled) {
-            log.debug("[CHINA] GPS provider is disabled, returning empty list");
-            return Mono.just(List.of());
+            return handleDisabled();
         }
 
         if (deviceIds == null || deviceIds.isEmpty()) {
-            return Mono.just(List.of());
+            return handleEmptyRequest();
         }
 
-        log.debug("[CHINA] Fetching real-time positions for {} devices", deviceIds.size());
+        logFetch(deviceIds.size());
 
         ChinaGpsRequestDTO request = ChinaGpsRequestDTO.fromDeviceIds(deviceIds);
 
@@ -89,21 +80,17 @@ public class ChinaGpsDataProvider implements GpsDataProvider {
                 .retrieve()
                 .bodyToMono(GpsApiResponseDTO.class)
                 .map(response -> processResponse(response, deviceIds.size()))
-                .timeout(Duration.ofSeconds(30))
-                .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
-                        .maxBackoff(Duration.ofSeconds(5))
-                        .filter(this::isRetryableException)
-                        .doBeforeRetry(retrySignal ->
-                                log.warn("[CHINA] Retrying API request, attempt {}/3",
-                                        retrySignal.totalRetries() + 1)))
-                .doOnSuccess(positions ->
-                        log.info("[CHINA] Successfully fetched {} GPS positions for {} requested devices",
-                                positions.size(), deviceIds.size()))
-                .onErrorResume(error -> {
-                    log.error("[CHINA] Failed to fetch GPS positions for {} devices: {}",
-                            deviceIds.size(), error.getMessage());
-                    return Mono.just(List.of());
-                });
+                .timeout(properties.getTimeout().getRequest())
+                .retryWhen(createRetrySpec())
+                .doOnSuccess(positions -> logSuccess(positions.size(), deviceIds.size()))
+                .onErrorResume(error -> handleError(error, deviceIds.size()));
+    }
+
+    @SuppressWarnings("unused")
+    private Mono<List<GpsPositionDTO>> fetchPositionsFallback(List<String> deviceIds, Throwable throwable) {
+        log.warn("[CHINA] Circuit breaker fallback triggered for {} devices: {}",
+                deviceIds != null ? deviceIds.size() : 0, throwable.getMessage());
+        return Mono.just(List.of());
     }
 
     @Override
@@ -113,6 +100,7 @@ public class ChinaGpsDataProvider implements GpsDataProvider {
     }
 
     @Override
+    @CircuitBreaker(name = "gpsApi", fallbackMethod = "healthCheckFallback")
     public Mono<Boolean> healthCheck() {
         if (!enabled) {
             return Mono.just(false);
@@ -130,10 +118,16 @@ public class ChinaGpsDataProvider implements GpsDataProvider {
                 .bodyValue(request)
                 .retrieve()
                 .toBodilessEntity()
-                .timeout(Duration.ofSeconds(10))
+                .timeout(properties.getTimeout().getHealthCheck())
                 .map(response -> response.getStatusCode().is2xxSuccessful())
                 .doOnNext(healthy -> log.info("[CHINA] Health check: {}", healthy ? "OK" : "FAILED"))
                 .onErrorReturn(false);
+    }
+
+    @SuppressWarnings("unused")
+    private Mono<Boolean> healthCheckFallback(Throwable throwable) {
+        log.warn("[CHINA] Health check circuit breaker fallback: {}", throwable.getMessage());
+        return Mono.just(false);
     }
 
     private List<GpsPositionDTO> processResponse(GpsApiResponseDTO response, int requestedCount) {
@@ -205,12 +199,5 @@ public class ChinaGpsDataProvider implements GpsDataProvider {
                 position.getAttributes().getUniqueId() != null) {
             position.setDeviceId(position.getAttributes().getUniqueId());
         }
-    }
-
-    private boolean isRetryableException(Throwable throwable) {
-        if (throwable instanceof WebClientResponseException ex) {
-            return !ex.getStatusCode().is4xxClientError();
-        }
-        return true;
     }
 }

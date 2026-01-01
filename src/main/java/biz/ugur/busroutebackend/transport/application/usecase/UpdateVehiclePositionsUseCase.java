@@ -8,6 +8,7 @@ import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.shared.domain.event.DomainEventPublisher;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
 import biz.ugur.busroutebackend.transport.application.factory.VehicleFactory;
@@ -45,6 +46,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private final ProcessGarageExitUseCase processGarageExitUseCase;
     private final VehicleGpsHistoryService gpsHistoryService;
     private final ProcessExpiredAssignmentsUseCase processExpiredAssignmentsUseCase;
+    private final DomainEventPublisher domainEventPublisher;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
                                          VehicleFactory vehicleFactory,
@@ -58,6 +60,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                          VehicleGpsHistoryService gpsHistoryService,
                                          ProcessExpiredAssignmentsUseCase processExpiredAssignmentsUseCase,
                                          EventBus eventBus,
+                                         DomainEventPublisher domainEventPublisher,
                                          CorrelationContextService correlationContextService) {
         super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
@@ -71,6 +74,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         this.processGarageExitUseCase = processGarageExitUseCase;
         this.gpsHistoryService = gpsHistoryService;
         this.processExpiredAssignmentsUseCase = processExpiredAssignmentsUseCase;
+        this.domainEventPublisher = domainEventPublisher;
     }
 
     @Override
@@ -114,7 +118,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     }
 
     private Mono<VehiclePositionUpdateResult> processBatch(List<GpsPositionDTO> validPositions, Map<String, Vehicle> existingVehicles) {
-        // Deduplicate GPS positions by device ID, keeping the latest timestamp
         Map<String, GpsPositionDTO> latestPositionsByDevice = new java.util.LinkedHashMap<>();
         for (GpsPositionDTO position : validPositions) {
             String deviceId = position.getDeviceId();
@@ -149,8 +152,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             gpsPosition.getCourse()
                     );
 
-                    // Note: Garage detection will be done in batch after all positions are updated
-                    // to avoid blocking each update with async calls
                     vehiclesToUpdate.add(updatedVehicle);
 
                     boolean shouldPublish = positionChangeDetector.hasSignificantChange(
@@ -174,7 +175,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 updatedVehicle.getCourse(),
                                 updatedVehicle.getCurrentDirection()
                         );
-                        eventBus.publish(event);
+                        domainEventPublisher.publish(event);
                     }
 
                     statuses.add(VehicleUpdateStatus.updated(
@@ -214,13 +215,11 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             }
         }
 
-        // Update directions for vehicles with assigned routes before saving
         Mono<List<Vehicle>> vehiclesWithDirections = vehiclesToUpdate.isEmpty() ?
                 Mono.just(List.of()) :
                 directionDetectionService.updateVehicleDirectionsBatch(vehiclesToUpdate)
                         .doOnNext(updated -> log.debug("Direction detection completed for {} vehicles", updated.size()));
 
-        // Detect garage entry/exit for all vehicles
         Mono<List<Vehicle>> vehiclesWithGarageDetection = vehiclesWithDirections.flatMap(vehicles -> {
             if (vehicles.isEmpty()) {
                 return Mono.just(List.of());
@@ -239,7 +238,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             Mono<List<Vehicle>> insertMono = vehiclesToCreate.isEmpty() ?
                     Mono.just(List.of()) : vehicleRepository.batchInsert(vehiclesToCreate).collectList();
 
-            // Save GPS history for route detection
             Mono<Void> saveHistoryMono = Flux.fromIterable(updatedVehicles)
                     .filter(Vehicle::hasPosition)
                     .flatMap(v -> gpsHistoryService.addPoint(
@@ -251,108 +249,18 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     ))
                     .then();
 
-            // Process expired assignments reactively during GPS update
             Mono<ProcessExpiredAssignmentsUseCase.Result> expiredMono =
                     processExpiredAssignmentsUseCase.execute(Mono.empty());
 
             return Mono.zip(updateMono, insertMono)
-                    .flatMap(tuple -> saveHistoryMono.thenReturn(tuple))
-                    .flatMap(tuple -> expiredMono.thenReturn(tuple))
+                    .flatMap(saveHistoryMono::thenReturn)
+                    .flatMap(expiredMono::thenReturn)
                     .map(tuple -> {
                         log.info("Batch operations: {} updated, {} created", tuple.getT1(), tuple.getT2().size());
                         return createResult(statuses);
                     });
         });
     }
-
-    private Mono<VehicleUpdateStatus> updateVehiclePosition(GpsPositionDTO gpsPosition) {
-        return vehicleRepository.findByDeviceId(gpsPosition.getDeviceId())
-                .flatMap(vehicle -> updateExistingVehicle(vehicle, gpsPosition))
-                .switchIfEmpty(createNewVehicle(gpsPosition))
-                .onErrorResume(error -> {
-                    log.error("Failed to update vehicle with device ID: {}", gpsPosition.getDeviceId(), error);
-                    return Mono.just(VehicleUpdateStatus.failed(gpsPosition.getDeviceId(), error.getMessage()));
-                });
-    }
-
-
-    private Mono<VehicleUpdateStatus> updateExistingVehicle(Vehicle vehicle, GpsPositionDTO gpsPosition) {
-        try {
-            Double oldLatitude = vehicle.getCurrentLatitude();
-            Double oldLongitude = vehicle.getCurrentLongitude();
-            Double oldSpeed = vehicle.getSpeedKmh();
-
-            Vehicle updatedVehicle = vehicle.updatePosition(
-                    gpsPosition.getLatitude(),
-                    gpsPosition.getLongitude(),
-                    gpsPosition.getSpeed(),
-                    gpsPosition.getFixTime(),
-                    gpsPosition.getCourse()
-            );
-
-            return vehicleRepository.save(updatedVehicle)
-                    .doOnSuccess(savedVehicle -> {
-                        boolean shouldPublishEvent = positionChangeDetector.hasSignificantChange(
-                                oldLatitude, oldLongitude, oldSpeed,
-                                savedVehicle.getCurrentLatitude(),
-                                savedVehicle.getCurrentLongitude(),
-                                savedVehicle.getSpeedKmh()
-                        );
-
-                            VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
-                                    savedVehicle.getId().getValue(),
-                                    savedVehicle.getDeviceId(),
-                                    savedVehicle.getLicensePlate(),
-                                    savedVehicle.getRouteNumber(),
-                                    savedVehicle.getCurrentLatitude(),
-                                    savedVehicle.getCurrentLongitude(),
-                                    savedVehicle.getSpeedKmh(),
-                                    savedVehicle.getIsInMotion(),
-                                    savedVehicle.getLastPositionUpdate(),
-                                    savedVehicle.getCourse(),
-                                    savedVehicle.getCurrentDirection()
-                            );
-
-                            eventBus.publish(event);
-
-
-                    })
-                    .map(savedVehicle -> VehicleUpdateStatus.updated(
-                            savedVehicle.getId().getValue(),
-                            savedVehicle.getDeviceId(),
-                            savedVehicle.getLicensePlate()
-                    ))
-                    .doOnSuccess(status -> log.debug("✅ Vehicle position updated: {}", status));
-
-        } catch (IllegalArgumentException e) {
-            log.warn("❌ Invalid GPS data for vehicle {}: {}", vehicle.getLicensePlate(), e.getMessage());
-            return Mono.just(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), e.getMessage()));
-        }
-    }
-
-
-
-
-    private Mono<VehicleUpdateStatus> createNewVehicle(GpsPositionDTO gpsPosition) {
-        return vehicleFactory.createOrFindFromGpsData(gpsPosition)
-                .flatMap(vehicle -> {
-                    Vehicle positionedVehicle = vehicleFactory.updateVehiclePosition(vehicle, gpsPosition);
-
-                    return vehicleRepository.save(positionedVehicle)
-                            .as(this::persistAndPublish)
-                            .map(savedVehicle -> VehicleUpdateStatus.created(
-                                    savedVehicle.getId().getValue(),
-                                    savedVehicle.getDeviceId(),
-                                    savedVehicle.getLicensePlate()
-                            ))
-                            .doOnSuccess(status -> log.info("Created new vehicle: {}", status));
-                })
-                .onErrorResume(IllegalArgumentException.class, e -> {
-                    log.warn("Cannot create vehicle for device {}: {}", gpsPosition.getDeviceId(), e.getMessage());
-                    return Mono.just(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), e.getMessage()));
-                });
-    }
-
 
     private VehiclePositionUpdateResult createResult(List<VehicleUpdateStatus> statuses) {
         long updated = statuses.stream().mapToLong(s -> s.getType() == UpdateType.UPDATED ? 1 : 0).sum();

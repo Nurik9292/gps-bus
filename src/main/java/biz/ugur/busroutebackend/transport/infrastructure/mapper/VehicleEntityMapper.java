@@ -39,9 +39,6 @@ public class VehicleEntityMapper {
                 .routeSource(domain.getRouteSource() != null ? domain.getRouteSource().name() : null)
                 .routeConfidence(domain.getRouteConfidence())
                 .gpsDetectionEnabled(domain.getGpsDetectionEnabled())
-                .assignedBy(domain.getAssignedBy())
-                .manualAssignmentReason(domain.getManualAssignmentReason())
-                // GPS provider
                 .gpsProvider(domain.getGpsProvider() != null ? domain.getGpsProvider().getCode() : null)
                 .createdAt(domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt())
@@ -76,8 +73,6 @@ public class VehicleEntityMapper {
                 entity.getRouteSource() != null ? RouteSource.valueOf(entity.getRouteSource()) : null,
                 entity.getRouteConfidence(),
                 entity.getGpsDetectionEnabled(),
-                entity.getAssignedBy(),
-                entity.getManualAssignmentReason(),
                 entity.getGpsProvider() != null ? GpsProviderType.fromCodeOrDefault(entity.getGpsProvider()) : null,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),

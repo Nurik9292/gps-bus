@@ -91,12 +91,6 @@ public class VehicleEntity {
     @Column("gps_detection_enabled")
     private Boolean gpsDetectionEnabled;
 
-    @Column("assigned_by")
-    private String assignedBy;
-
-    @Column("manual_assignment_reason")
-    private String manualAssignmentReason;
-
     @Column("gps_provider")
     private String gpsProvider;
 }

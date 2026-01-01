@@ -54,9 +54,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     private final Integer routeConfidence;
     private final Boolean gpsDetectionEnabled;
 
-    private final String assignedBy;
-    private final String manualAssignmentReason;
-
     private final GpsProviderType gpsProvider;
 
     private LocalDateTime createdAt;
@@ -86,8 +83,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .routeSource(RouteSource.UNKNOWN)
                 .routeConfidence(0)
                 .gpsDetectionEnabled(true)
-                .assignedBy(null)
-                .manualAssignmentReason(null)
                 .gpsProvider(GpsProviderType.defaultProvider())
                 .version(0L)
                 .build();
@@ -123,8 +118,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
             RouteSource routeSource,
             Integer routeConfidence,
             Boolean gpsDetectionEnabled,
-            String assignedBy,
-            String manualAssignmentReason,
             GpsProviderType gpsProvider,
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
@@ -152,8 +145,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .routeSource(routeSource != null ? routeSource : RouteSource.UNKNOWN)
                 .routeConfidence(routeConfidence != null ? routeConfidence : 0)
                 .gpsDetectionEnabled(gpsDetectionEnabled != null ? gpsDetectionEnabled : true)
-                .assignedBy(assignedBy)
-                .manualAssignmentReason(manualAssignmentReason)
                 .gpsProvider(gpsProvider != null ? gpsProvider : GpsProviderType.defaultProvider())
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
@@ -231,8 +222,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .routeNumber(null)
                 .routeSource(RouteSource.UNKNOWN)
                 .routeConfidence(0)
-                .assignedBy(null)
-                .manualAssignmentReason(null)
                 .build();
 
         if (previousRouteId != null) {
@@ -327,7 +316,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     public Vehicle exitGarage() {
         if (!Boolean.TRUE.equals(isInGarage)) {
             log.warn("Attempted to exit garage for vehicle {} that is not in garage", licensePlate);
-            return this;  // No change
+            return this;
         }
 
         LocalDateTime now = LocalDateTime.now();

@@ -164,10 +164,20 @@ external:
       rate-limit:
         requests-per-minute: 60
 
+    gps-common:
+      retry:
+        max-attempts: ${GPS_RETRY_MAX_ATTEMPTS:3}
+        initial-interval: ${GPS_RETRY_INITIAL_INTERVAL:1s}
+        max-interval: ${GPS_RETRY_MAX_INTERVAL:5s}
+        multiplier: ${GPS_RETRY_MULTIPLIER:2.0}
+      timeout:
+        request: ${GPS_REQUEST_TIMEOUT:30s}
+        health-check: ${GPS_HEALTH_CHECK_TIMEOUT:10s}
+
     gps-tugdk:
       enabled: ${GPS_TUGDK_ENABLED:true}
       base-url: ${GPS_TUGDK_BASE_URL:https://gps.tugdk.gov.tm}
-      token: ${GPS_TUGDK_TOKEN:}
+      token: ${GPS_TUGDK_TOKEN:RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0'}
       timeout: ${GPS_TUGDK_TIMEOUT:30s}
       connect-timeout: ${GPS_TUGDK_CONNECT_TIMEOUT:10s}
       read-timeout: ${GPS_TUGDK_READ_TIMEOUT:60s}

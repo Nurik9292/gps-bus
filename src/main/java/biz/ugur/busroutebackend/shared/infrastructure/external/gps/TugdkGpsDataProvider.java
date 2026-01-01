@@ -1,10 +1,11 @@
 package biz.ugur.busroutebackend.shared.infrastructure.external.gps;
 
+import biz.ugur.busroutebackend.shared.infrastructure.external.gps.config.GpsProviderProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.dto.TugdkGpsResponseDTO;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.mapper.TugdkGpsPositionMapper;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
-import biz.ugur.busroutebackend.transport.domain.service.GpsDataProvider;
 import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,38 +15,34 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
-import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 
 @Component
 @Slf4j
 @ConditionalOnProperty(prefix = "external.api.gps-tugdk", name = "enabled", havingValue = "true")
-public class TugdkGpsDataProvider implements GpsDataProvider {
+public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
 
-    private final WebClient webClient;
     private final String token;
     private final TugdkGpsPositionMapper mapper;
-    private final boolean enabled;
     private final Duration cacheTimeout;
 
-    private volatile List<GpsPositionDTO> cachedPositions = List.of();
-    private volatile long cacheTimestamp = 0;
+    private final AtomicReference<CachedPositions> cache = new AtomicReference<>(CachedPositions.empty());
 
     public TugdkGpsDataProvider(
             @Qualifier("tugdkGpsWebClient") WebClient webClient,
+            GpsProviderProperties properties,
             @Value("${external.api.gps-tugdk.token}") String token,
             @Value("${external.api.gps-tugdk.enabled:false}") boolean enabled,
             @Value("${external.api.gps-tugdk.cache-timeout:5s}") Duration cacheTimeout,
             TugdkGpsPositionMapper mapper) {
-        this.webClient = webClient;
+        super(webClient, properties, enabled);
         this.token = token;
-        this.enabled = enabled;
         this.cacheTimeout = cacheTimeout;
         this.mapper = mapper;
 
@@ -59,53 +56,69 @@ public class TugdkGpsDataProvider implements GpsDataProvider {
     }
 
     @Override
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    @Override
     public int getPriority() {
         return 20;
     }
 
     @Override
+    @CircuitBreaker(name = "gpsApiTugdk", fallbackMethod = "fetchPositionsByDeviceIdsFallback")
     public Mono<List<GpsPositionDTO>> fetchPositionsByDeviceIds(List<String> deviceIds) {
         if (!enabled) {
-            log.debug("[TUGDK] Provider is disabled, returning empty list");
-            return Mono.just(List.of());
+            return handleDisabled();
         }
 
         if (deviceIds == null || deviceIds.isEmpty()) {
-            return Mono.just(List.of());
+            return handleEmptyRequest();
         }
 
         Set<String> deviceIdSet = Set.copyOf(deviceIds);
 
-        log.debug("[TUGDK] Fetching positions for {} devices", deviceIds.size());
+        logFetch(deviceIds.size());
 
         return fetchAllPositions()
-                .map(allPositions -> {
-                    List<GpsPositionDTO> filtered = allPositions.stream()
-                            .filter(pos -> pos.getDeviceId() != null && deviceIdSet.contains(pos.getDeviceId()))
-                            .toList();
+                .map(allPositions -> filterPositions(allPositions, deviceIdSet, deviceIds.size()));
+    }
 
-                    log.debug("[TUGDK] Filtered {} positions from {} total for {} requested devices",
-                            filtered.size(), allPositions.size(), deviceIds.size());
+    @SuppressWarnings("unused")
+    private Mono<List<GpsPositionDTO>> fetchPositionsByDeviceIdsFallback(List<String> deviceIds, Throwable throwable) {
+        log.warn("[TUGDK] Circuit breaker fallback for {} devices: {}",
+                deviceIds != null ? deviceIds.size() : 0, throwable.getMessage());
 
-                    return filtered;
-                });
+        CachedPositions cached = cache.get();
+        if (cached.hasData()) {
+            Set<String> deviceIdSet = Set.copyOf(deviceIds);
+            List<GpsPositionDTO> filtered = filterPositions(cached.positions(), deviceIdSet, deviceIds.size());
+            log.info("[TUGDK] Returning {} stale cached positions from fallback", filtered.size());
+            return Mono.just(filtered);
+        }
+
+        return Mono.just(List.of());
+    }
+
+    private List<GpsPositionDTO> filterPositions(List<GpsPositionDTO> allPositions,
+                                                  Set<String> deviceIdSet,
+                                                  int requestedCount) {
+        List<GpsPositionDTO> filtered = allPositions.stream()
+                .filter(pos -> pos.getDeviceId() != null && deviceIdSet.contains(pos.getDeviceId()))
+                .toList();
+
+        log.debug("[TUGDK] Filtered {} positions from {} total for {} requested devices",
+                filtered.size(), allPositions.size(), requestedCount);
+
+        return filtered;
     }
 
     @Override
+    @CircuitBreaker(name = "gpsApiTugdk", fallbackMethod = "fetchAllPositionsFallback")
     public Mono<List<GpsPositionDTO>> fetchAllPositions() {
         if (!enabled) {
-            log.debug("[TUGDK] Provider is disabled, returning empty list");
-            return Mono.just(List.of());
+            return handleDisabled();
         }
 
-        if (isCacheValid()) {
-            log.debug("[TUGDK] Returning {} cached positions", cachedPositions.size());
-            return Mono.just(cachedPositions);
+        CachedPositions cached = cache.get();
+        if (cached.isValid(cacheTimeout)) {
+            log.debug("[TUGDK] Returning {} cached positions", cached.positions().size());
+            return Mono.just(cached.positions());
         }
 
         log.debug("[TUGDK] Fetching all positions from API");
@@ -116,38 +129,51 @@ public class TugdkGpsDataProvider implements GpsDataProvider {
                 .header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<List<TugdkGpsResponseDTO>>() {})
-                .map(responses -> {
-                    List<GpsPositionDTO> positions = mapper.mapAll(responses);
+                .map(this::processAndCacheResponse)
+                .timeout(properties.getTimeout().getRequest())
+                .retryWhen(createRetrySpec())
+                .onErrorResume(this::handleFetchError);
+    }
 
-                    cachedPositions = positions;
-                    cacheTimestamp = System.currentTimeMillis();
+    @SuppressWarnings("unused")
+    private Mono<List<GpsPositionDTO>> fetchAllPositionsFallback(Throwable throwable) {
+        log.warn("[TUGDK] Circuit breaker fallback for fetchAllPositions: {}", throwable.getMessage());
 
-                    log.info("[TUGDK] Fetched {} positions ({} valid) from API",
-                            responses.size(), positions.size());
+        CachedPositions cached = cache.get();
+        if (cached.hasData()) {
+            log.info("[TUGDK] Returning {} stale cached positions from fallback", cached.positions().size());
+            return Mono.just(cached.positions());
+        }
 
-                    return positions;
-                })
-                .timeout(Duration.ofSeconds(30))
-                .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
-                        .maxBackoff(Duration.ofSeconds(5))
-                        .filter(this::isRetryableException)
-                        .doBeforeRetry(retrySignal ->
-                                log.warn("[TUGDK] Retrying API request, attempt {}/3",
-                                        retrySignal.totalRetries() + 1)))
-                .onErrorResume(error -> {
-                    log.error("[TUGDK] Failed to fetch positions: {} - {}",
-                            error.getClass().getSimpleName(), error.getMessage());
+        return Mono.just(List.of());
+    }
 
-                    if (!cachedPositions.isEmpty()) {
-                        log.info("[TUGDK] Returning {} stale cached positions due to error", cachedPositions.size());
-                        return Mono.just(cachedPositions);
-                    }
+    private List<GpsPositionDTO> processAndCacheResponse(List<TugdkGpsResponseDTO> responses) {
+        List<GpsPositionDTO> positions = mapper.mapAll(responses);
 
-                    return Mono.just(List.of());
-                });
+        cache.set(CachedPositions.of(positions));
+
+        log.info("[TUGDK] Fetched {} positions ({} valid) from API",
+                responses.size(), positions.size());
+
+        return positions;
+    }
+
+    private Mono<List<GpsPositionDTO>> handleFetchError(Throwable error) {
+        log.error("[TUGDK] Failed to fetch positions: {} - {}",
+                error.getClass().getSimpleName(), error.getMessage());
+
+        CachedPositions cached = cache.get();
+        if (cached.hasData()) {
+            log.info("[TUGDK] Returning {} stale cached positions due to error", cached.positions().size());
+            return Mono.just(cached.positions());
+        }
+
+        return Mono.just(List.of());
     }
 
     @Override
+    @CircuitBreaker(name = "gpsApiTugdk", fallbackMethod = "healthCheckFallback")
     public Mono<Boolean> healthCheck() {
         if (!enabled) {
             return Mono.just(false);
@@ -161,26 +187,38 @@ public class TugdkGpsDataProvider implements GpsDataProvider {
                 .header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
                 .retrieve()
                 .toBodilessEntity()
-                .timeout(Duration.ofSeconds(10))
+                .timeout(properties.getTimeout().getHealthCheck())
                 .map(response -> response.getStatusCode().is2xxSuccessful())
                 .doOnNext(healthy -> log.info("[TUGDK] Health check: {}", healthy ? "OK" : "FAILED"))
                 .onErrorReturn(false);
     }
 
-    private boolean isCacheValid() {
-        if (cachedPositions.isEmpty()) {
-            return false;
-        }
-        long age = System.currentTimeMillis() - cacheTimestamp;
-        return age < cacheTimeout.toMillis();
+    @SuppressWarnings("unused")
+    private Mono<Boolean> healthCheckFallback(Throwable throwable) {
+        log.warn("[TUGDK] Health check circuit breaker fallback: {}", throwable.getMessage());
+        return Mono.just(false);
     }
 
-    private boolean isRetryableException(Throwable throwable) {
-        if (throwable instanceof WebClientResponseException ex) {
-            if (ex.getStatusCode().is4xxClientError() && ex.getStatusCode().value() != 429) {
+    private record CachedPositions(List<GpsPositionDTO> positions, long timestamp) {
+
+        static CachedPositions empty() {
+            return new CachedPositions(List.of(), 0);
+        }
+
+        static CachedPositions of(List<GpsPositionDTO> positions) {
+            return new CachedPositions(positions, System.currentTimeMillis());
+        }
+
+        boolean hasData() {
+            return !positions.isEmpty();
+        }
+
+        boolean isValid(Duration timeout) {
+            if (positions.isEmpty()) {
                 return false;
             }
+            long age = System.currentTimeMillis() - timestamp;
+            return age < timeout.toMillis();
         }
-        return true;
     }
 }

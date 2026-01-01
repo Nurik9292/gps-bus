@@ -1,47 +1,106 @@
 package biz.ugur.busroutebackend.transport.infrastructure.messaging;
 
+import biz.ugur.busroutebackend.shared.infrastructure.cache.RedisKeyRegistry;
+import biz.ugur.busroutebackend.shared.infrastructure.messaging.ReactiveEventBus;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleAssignedToRouteEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 
 @Component
 @Slf4j
 public class VehicleEventHandler {
 
-    private static final Duration POSITION_CACHE_TTL = Duration.ofMinutes(10);
-    private static final Duration ROUTE_CACHE_TTL = Duration.ofHours(24);
-    private static final Duration UNASSIGN_ROUTE_TTL = Duration.ofMinutes(5);
-    private static final Duration VEHICLE_INFO_TTL = Duration.ofDays(30);
-
     private static final Duration OPERATION_TIMEOUT = Duration.ofSeconds(5);
     private static final int MAX_RETRY_ATTEMPTS = 2;
     private static final Duration RETRY_DELAY = Duration.ofMillis(100);
 
+    private static final int POSITION_CONCURRENCY = 64;
+    private static final int ROUTE_ASSIGNMENT_CONCURRENCY = 16;
+    private static final int REGISTRATION_CONCURRENCY = 8;
+
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final VehiclePositionWebSocketPublisher webSocketPublisher;
+    private final ReactiveEventBus reactiveEventBus;
+
+    private Disposable positionSubscription;
+    private Disposable routeAssignmentSubscription;
+    private Disposable registrationSubscription;
 
     public VehicleEventHandler(ReactiveRedisTemplate<String, Object> redisTemplate,
-                               VehiclePositionWebSocketPublisher webSocketPublisher) {
+                               VehiclePositionWebSocketPublisher webSocketPublisher,
+                               ReactiveEventBus reactiveEventBus) {
         this.redisTemplate = redisTemplate;
         this.webSocketPublisher = webSocketPublisher;
+        this.reactiveEventBus = reactiveEventBus;
     }
 
-    @Async
-    @EventListener
-    public CompletableFuture<Void> handleVehiclePositionUpdated(VehiclePositionUpdatedEvent event) {
+    @PostConstruct
+    public void init() {
+        subscribeToPositionUpdates();
+        subscribeToRouteAssignments();
+        subscribeToRegistrations();
+        log.info("VehicleEventHandler initialized with reactive subscriptions");
+    }
+
+    @PreDestroy
+    public void destroy() {
+        disposeIfActive(positionSubscription);
+        disposeIfActive(routeAssignmentSubscription);
+        disposeIfActive(registrationSubscription);
+        log.info("VehicleEventHandler subscriptions disposed");
+    }
+
+    private void disposeIfActive(Disposable disposable) {
+        if (disposable != null && !disposable.isDisposed()) {
+            disposable.dispose();
+        }
+    }
+
+
+    private void subscribeToPositionUpdates() {
+        positionSubscription = reactiveEventBus.on(VehiclePositionUpdatedEvent.class)
+                .flatMap(this::handleVehiclePositionUpdated, POSITION_CONCURRENCY)
+                .subscribe(
+                        v -> {},
+                        error -> log.error("Position subscription error", error),
+                        () -> log.info("Position subscription completed")
+                );
+    }
+
+    private void subscribeToRouteAssignments() {
+        routeAssignmentSubscription = reactiveEventBus.on(VehicleAssignedToRouteEvent.class)
+                .flatMap(this::handleVehicleAssignedToRoute, ROUTE_ASSIGNMENT_CONCURRENCY)
+                .subscribe(
+                        v -> {},
+                        error -> log.error("Route assignment subscription error", error),
+                        () -> log.info("Route assignment subscription completed")
+                );
+    }
+
+    private void subscribeToRegistrations() {
+        registrationSubscription = reactiveEventBus.on(VehicleRegisteredEvent.class)
+                .flatMap(this::handleVehicleRegistered, REGISTRATION_CONCURRENCY)
+                .subscribe(
+                        v -> {},
+                        error -> log.error("Registration subscription error", error),
+                        () -> log.info("Registration subscription completed")
+                );
+    }
+
+    private Mono<Void> handleVehiclePositionUpdated(VehiclePositionUpdatedEvent event) {
         log.debug("Processing vehicle position update: vehicleId={}, plate={}",
                 event.getVehicleId(), event.getLicensePlate());
 
@@ -52,13 +111,10 @@ public class VehicleEventHandler {
                 .doOnSuccess(v -> log.trace("Vehicle position processed: {}", event.getVehicleId()))
                 .doOnError(error -> log.error("Failed to process vehicle position: vehicleId={}, error={}",
                         event.getVehicleId(), error.getMessage()))
-                .onErrorComplete()
-                .toFuture();
+                .onErrorComplete();
     }
 
-    @Async
-    @EventListener
-    public CompletableFuture<Void> handleVehicleAssignedToRoute(VehicleAssignedToRouteEvent event) {
+    private Mono<Void> handleVehicleAssignedToRoute(VehicleAssignedToRouteEvent event) {
         log.debug("Processing route assignment: vehicleId={}, newRouteId={}",
                 event.getVehicleId(), event.getNewRouteId());
 
@@ -69,13 +125,10 @@ public class VehicleEventHandler {
                 .doOnSuccess(v -> log.trace("Route assignment processed: {}", event.getVehicleId()))
                 .doOnError(error -> log.error("Failed to process route assignment: vehicleId={}, error={}",
                         event.getVehicleId(), error.getMessage()))
-                .onErrorComplete()
-                .toFuture();
+                .onErrorComplete();
     }
 
-    @Async
-    @EventListener
-    public CompletableFuture<Void> handleVehicleRegistered(VehicleRegisteredEvent event) {
+    private Mono<Void> handleVehicleRegistered(VehicleRegisteredEvent event) {
         log.info("New vehicle registered: deviceId={}, plate={}",
                 event.getDeviceId(), event.getLicensePlate());
 
@@ -86,12 +139,11 @@ public class VehicleEventHandler {
                 .doOnSuccess(v -> log.debug("Vehicle cache initialized: {}", event.getVehicleId()))
                 .doOnError(error -> log.error("Failed to initialize vehicle cache: vehicleId={}, error={}",
                         event.getVehicleId(), error.getMessage()))
-                .onErrorComplete()
-                .toFuture();
+                .onErrorComplete();
     }
 
     private Mono<Boolean> cacheVehiclePosition(VehiclePositionUpdatedEvent event) {
-        String key = "vehicle:position:" + event.getVehicleId();
+        String key = RedisKeyRegistry.Vehicle.position(event.getVehicleId());
 
         Map<String, Object> data = Map.of(
                 "vehicleId", event.getVehicleId(),
@@ -106,7 +158,7 @@ public class VehicleEventHandler {
         );
 
         return redisTemplate.opsForValue()
-                .set(key, data, POSITION_CACHE_TTL)
+                .set(key, data, RedisKeyRegistry.Vehicle.POSITION_TTL)
                 .doOnSuccess(success -> {
                     if (Boolean.TRUE.equals(success)) {
                         log.trace("Cached vehicle position: {}", event.getVehicleId());
@@ -133,7 +185,7 @@ public class VehicleEventHandler {
     }
 
     private Mono<Boolean> updateRouteAssignmentCache(VehicleAssignedToRouteEvent event) {
-        String key = "vehicle:route:" + event.getVehicleId();
+        String key = RedisKeyRegistry.Vehicle.route(event.getVehicleId());
 
         Map<String, Object> data = Map.of(
                 "vehicleId", event.getVehicleId(),
@@ -143,7 +195,9 @@ public class VehicleEventHandler {
                 "assignmentTime", String.valueOf(event.getOccurredAt())
         );
 
-        Duration ttl = event.isUnassignment() ? UNASSIGN_ROUTE_TTL : ROUTE_CACHE_TTL;
+        Duration ttl = event.isUnassignment()
+                ? RedisKeyRegistry.Vehicle.UNASSIGN_ROUTE_TTL
+                : RedisKeyRegistry.Vehicle.ROUTE_TTL;
 
         return redisTemplate.opsForValue()
                 .set(key, data, ttl)
@@ -168,7 +222,7 @@ public class VehicleEventHandler {
     }
 
     private Mono<Boolean> initializeVehicleCache(VehicleRegisteredEvent event) {
-        String key = "vehicle:info:" + event.getVehicleId();
+        String key = RedisKeyRegistry.Vehicle.info(event.getVehicleId());
 
         Map<String, Object> info = Map.of(
                 "vehicleId", event.getVehicleId(),
@@ -179,7 +233,7 @@ public class VehicleEventHandler {
         );
 
         return redisTemplate.opsForValue()
-                .set(key, info, VEHICLE_INFO_TTL)
+                .set(key, info, RedisKeyRegistry.Vehicle.INFO_TTL)
                 .doOnSuccess(success -> {
                     if (Boolean.TRUE.equals(success)) {
                         log.trace("Vehicle info cached: {}", event.getVehicleId());
