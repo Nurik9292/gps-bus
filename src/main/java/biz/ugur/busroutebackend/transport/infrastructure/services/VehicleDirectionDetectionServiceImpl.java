@@ -30,7 +30,8 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
         return routeStopRepository.findNearestStopSequence(
                 vehicle.getAssignedRouteId().getValue(),
                 vehicle.getCurrentLatitude(),
-                vehicle.getCurrentLongitude()
+                vehicle.getCurrentLongitude(),
+                vehicle.getCurrentDirection()
         );
     }
 
@@ -46,7 +47,8 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
                         v.getId().getValue(),
                         v.getAssignedRouteId().getValue(),
                         v.getCurrentLatitude(),
-                        v.getCurrentLongitude()
+                        v.getCurrentLongitude(),
+                        v.getCurrentDirection()
                 ))
                 .toList();
 

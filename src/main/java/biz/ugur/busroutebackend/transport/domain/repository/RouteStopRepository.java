@@ -28,10 +28,10 @@ public interface RouteStopRepository {
 
     Mono<RouteStopsStatistics> getRouteStopsStatistics(String routeId);
 
-    Mono<Integer> findNearestStopSequence(String routeId, Double latitude, Double longitude);
+    Mono<Integer> findNearestStopSequence(String routeId, Double latitude, Double longitude, Integer currentDirection);
 
     Mono<Map<String, Integer>> findNearestStopSequencesBatch(
             java.util.List<VehiclePositionKey> vehiclePositions);
 
-    record VehiclePositionKey(String vehicleId, String routeId, Double latitude, Double longitude) {}
+    record VehiclePositionKey(String vehicleId, String routeId, Double latitude, Double longitude, Integer currentDirection) {}
 }
