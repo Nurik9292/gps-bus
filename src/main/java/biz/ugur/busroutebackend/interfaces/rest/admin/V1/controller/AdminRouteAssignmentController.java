@@ -5,15 +5,20 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.assignment.Rout
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.assignment.RouteAssignmentUpdateRequest;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.assignment.BatchCreateResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.assignment.ClearImmediateResponse;
+import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.assignment.ExcelImportResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.assignment.RouteAssignmentListResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.assignment.RouteAssignmentResponse;
 import biz.ugur.busroutebackend.shared.application.SecurityContextService;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
+import biz.ugur.busroutebackend.transport.application.dto.assignment.ImportFromExcelCommand;
 import biz.ugur.busroutebackend.transport.application.usecase.assignment.*;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
+import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -35,6 +40,7 @@ public class AdminRouteAssignmentController extends BaseController {
     private final BatchCreateRouteAssignmentsUseCase batchCreateUseCase;
     private final ClearImmediateAssignmentUseCase clearImmediateUseCase;
     private final ClearAllImmediateAssignmentsUseCase clearAllImmediateUseCase;
+    private final ImportRouteAssignmentsFromExcelUseCase importFromExcelUseCase;
     private final SecurityContextService securityContextService;
 
     public AdminRouteAssignmentController(
@@ -48,6 +54,7 @@ public class AdminRouteAssignmentController extends BaseController {
             BatchCreateRouteAssignmentsUseCase batchCreateUseCase,
             ClearImmediateAssignmentUseCase clearImmediateUseCase,
             ClearAllImmediateAssignmentsUseCase clearAllImmediateUseCase,
+            ImportRouteAssignmentsFromExcelUseCase importFromExcelUseCase,
             SecurityContextService securityContextService,
             MessageSource messageSource) {
         super(messageSource);
@@ -61,6 +68,7 @@ public class AdminRouteAssignmentController extends BaseController {
         this.batchCreateUseCase = batchCreateUseCase;
         this.clearImmediateUseCase = clearImmediateUseCase;
         this.clearAllImmediateUseCase = clearAllImmediateUseCase;
+        this.importFromExcelUseCase = importFromExcelUseCase;
         this.securityContextService = securityContextService;
     }
 
@@ -165,5 +173,24 @@ public class AdminRouteAssignmentController extends BaseController {
         return ok(Mono.<Void>empty()
                 .as(clearAllImmediateUseCase::execute)
                 .map(ClearImmediateResponse::fromResult));
+    }
+
+    @PostMapping(value = "/import/excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Mono<ResponseEntity<ApiResponse<ExcelImportResponse>>> importFromExcel(
+            @RequestPart("file") FilePart file) {
+        log.info("Importing route assignments from Excel file: {}", file.filename());
+
+        return ok(securityContextService.getCurrentUsername()
+                .flatMap(username -> DataBufferUtils.join(file.content())
+                        .map(dataBuffer -> {
+                            byte[] bytes = new byte[dataBuffer.readableByteCount()];
+                            dataBuffer.read(bytes);
+                            DataBufferUtils.release(dataBuffer);
+                            return bytes;
+                        })
+                        .map(bytes -> new ImportFromExcelCommand(bytes, username))
+                        .flatMap(command -> Mono.just(command)
+                                .as(importFromExcelUseCase::execute))
+                        .map(ExcelImportResponse::fromResult)));
     }
 }
