@@ -357,10 +357,17 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 rs.route_id,
                 rs.direction,
                 rs.stop_sequence as target_sequence,
-                rs.distance_from_start_meters as target_distance,
                 br.route_number,
                 br.route_name,
-                br.route_color
+                br.route_color,
+                CASE WHEN rs.direction = 0
+                    THEN br.route_geometry_forward
+                    ELSE br.route_geometry_backward
+                END as route_geometry,
+                CASE WHEN rs.direction = 0
+                    THEN COALESCE(br.total_distance_forward_meters, 10000)
+                    ELSE COALESCE(br.total_distance_backward_meters, 10000)
+                END as total_route_distance
             FROM route_stops rs
             JOIN bus_routes br ON rs.route_id = br.id
             WHERE rs.stop_id = :stopId
@@ -375,24 +382,34 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 v.current_longitude,
                 v.speed_kmh,
                 v.is_in_motion,
-                v.last_position_update,
                 v.course,
-                v.current_direction as vehicle_direction,
                 tsr.route_id,
                 tsr.direction,
                 tsr.target_sequence,
-                tsr.target_distance,
                 tsr.route_number,
                 tsr.route_name,
                 tsr.route_color,
+                tsr.total_route_distance,
                 ST_Distance(
                     ST_Point(v.current_longitude, v.current_latitude)::geography,
                     ST_Point(:stopLon, :stopLat)::geography
-                ) as distance_to_stop,
-                degrees(ST_Azimuth(
-                    ST_Point(v.current_longitude, v.current_latitude)::geography,
-                    ST_Point(:stopLon, :stopLat)::geography
-                )) as bearing_to_stop
+                ) as distance_to_stop_direct,
+                CASE
+                    WHEN tsr.route_geometry IS NOT NULL THEN
+                        ST_LineLocatePoint(
+                            ST_GeomFromText(tsr.route_geometry, 4326),
+                            ST_Point(v.current_longitude, v.current_latitude)
+                        )
+                    ELSE NULL
+                END as vehicle_position_on_route,
+                CASE
+                    WHEN tsr.route_geometry IS NOT NULL THEN
+                        ST_LineLocatePoint(
+                            ST_GeomFromText(tsr.route_geometry, 4326),
+                            ST_Point(:stopLon, :stopLat)
+                        )
+                    ELSE NULL
+                END as stop_position_on_route
             FROM vehicles v
             JOIN target_stop_routes tsr ON v.assigned_route_id = tsr.route_id
                 AND (v.current_direction IS NULL OR v.current_direction = tsr.direction)
@@ -402,130 +419,95 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
             AND v.current_longitude IS NOT NULL
         ),
 
+        vehicles_with_distance AS (
+            SELECT
+                rv.*,
+                CASE
+                    WHEN rv.vehicle_position_on_route IS NOT NULL
+                         AND rv.stop_position_on_route IS NOT NULL
+                         AND rv.stop_position_on_route > rv.vehicle_position_on_route
+                    THEN (rv.stop_position_on_route - rv.vehicle_position_on_route) * rv.total_route_distance
+                    ELSE NULL
+                END as distance_on_route,
+                CASE
+                    WHEN rv.vehicle_position_on_route IS NOT NULL
+                         AND rv.stop_position_on_route IS NOT NULL
+                    THEN rv.vehicle_position_on_route < rv.stop_position_on_route
+                    ELSE rv.distance_to_stop_direct < 5000
+                END as is_before_stop
+            FROM route_vehicles rv
+        ),
+
         route_stops_with_coords AS (
             SELECT
                 rs.route_id,
                 rs.direction,
-                rs.stop_id,
                 rs.stop_sequence,
-                rs.distance_from_start_meters,
-                bs.stop_name,
-                bs.latitude,
-                bs.longitude
+                bs.stop_name
             FROM route_stops rs
             JOIN bus_stops bs ON rs.stop_id = bs.id
+            JOIN vehicles_with_distance vwd ON rs.route_id = vwd.route_id AND rs.direction = vwd.direction
             WHERE bs.latitude IS NOT NULL
-            AND bs.longitude IS NOT NULL
         ),
 
-        vehicle_stops_ranked AS (
-            SELECT
-                rv.vehicle_id,
-                rv.license_plate,
-                rv.current_latitude,
-                rv.current_longitude,
-                rv.speed_kmh,
-                rv.is_in_motion,
-                rv.course,
-                rv.bearing_to_stop,
-                rv.route_id,
-                rv.direction,
-                rv.target_sequence,
-                rv.target_distance,
-                rv.route_number,
-                rv.route_name,
-                rv.route_color,
-                rv.distance_to_stop,
-                rsc.stop_sequence,
-                rsc.distance_from_start_meters,
-                rsc.stop_name,
-                rsc.latitude as stop_latitude,
-                rsc.longitude as stop_longitude,
-                ST_Distance(
-                    ST_Point(rv.current_longitude, rv.current_latitude)::geography,
-                    ST_Point(rsc.longitude, rsc.latitude)::geography
-                ) as distance_to_current_stop,
-                ROW_NUMBER() OVER (
-                    PARTITION BY rv.vehicle_id
-                    ORDER BY ST_Point(rsc.longitude, rsc.latitude)::geography <->
-                             ST_Point(rv.current_longitude, rv.current_latitude)::geography
-                ) as stop_rank
-            FROM route_vehicles rv
-            JOIN route_stops_with_coords rsc
-                ON rv.route_id = rsc.route_id
-                AND rv.direction = rsc.direction
-        ),
-
-        vehicle_current_stops AS (
-            SELECT
-                vehicle_id,
-                license_plate,
-                current_latitude,
-                current_longitude,
-                speed_kmh,
-                is_in_motion,
-                course,
-                bearing_to_stop,
-                route_id,
-                direction,
-                target_sequence,
-                target_distance,
-                route_number,
-                route_name,
-                route_color,
-                distance_to_stop,
-                stop_sequence as current_sequence,
-                distance_from_start_meters as current_distance,
-                stop_name as current_stop_name,
-                distance_to_current_stop
-            FROM vehicle_stops_ranked
-            WHERE stop_rank = 1
+        vehicle_current_stop AS (
+            SELECT DISTINCT ON (vwd.vehicle_id)
+                vwd.vehicle_id,
+                rsc.stop_name as current_stop_name,
+                rsc.stop_sequence as current_sequence
+            FROM vehicles_with_distance vwd
+            JOIN route_stops_with_coords rsc ON vwd.route_id = rsc.route_id AND vwd.direction = rsc.direction
+            WHERE vwd.vehicle_position_on_route IS NOT NULL
+            ORDER BY vwd.vehicle_id, ABS(rsc.stop_sequence - (vwd.vehicle_position_on_route * 100))
         ),
 
         vehicles_with_eta AS (
             SELECT
-                vcs.*,
+                vwd.vehicle_id,
+                vwd.license_plate,
+                vwd.current_latitude,
+                vwd.current_longitude,
+                vwd.speed_kmh,
+                vwd.is_in_motion,
+                vwd.course,
+                vwd.route_id,
+                vwd.direction,
+                vwd.route_number,
+                vwd.route_name,
+                vwd.route_color,
+                vwd.distance_on_route,
+                vwd.distance_to_stop_direct,
+                vwd.is_before_stop,
+                COALESCE(vcs.current_stop_name, 'В пути') as current_stop_name,
                 tm.multiplier as traffic_multiplier,
                 CASE
-                    WHEN vcs.course IS NULL THEN true
-                    WHEN vcs.speed_kmh < :movingThreshold THEN true
-                    WHEN ABS(vcs.course - vcs.bearing_to_stop) < 90 THEN true
-                    WHEN ABS(vcs.course - vcs.bearing_to_stop) > 270 THEN true
-                    ELSE false
-                END as is_moving_towards_stop,
-                CASE
-                    WHEN vcs.current_sequence < vcs.target_sequence THEN
+                    WHEN vwd.is_before_stop = false THEN NULL
+                    WHEN COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct) < 300 THEN 1
+                    ELSE GREATEST(2, ROUND(
                         CASE
-                            WHEN vcs.distance_to_stop < 300 THEN 1
-                            ELSE GREATEST(2, ROUND(
-                                CASE
-                                    WHEN vcs.speed_kmh > :movingThreshold THEN
-                                        vcs.distance_to_stop / (vcs.speed_kmh * 1000.0 / 60.0)
-                                    WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 7 AND 9 THEN
-                                        vcs.distance_to_stop / (:morningRushSpeed * 1000.0 / 60.0)
-                                    WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 17 AND 19 THEN
-                                        vcs.distance_to_stop / (:eveningRushSpeed * 1000.0 / 60.0)
-                                    WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 12 AND 14 THEN
-                                        vcs.distance_to_stop / (:lunchSpeed * 1000.0 / 60.0)
-                                    ELSE
-                                        vcs.distance_to_stop / (:normalSpeed * 1000.0 / 60.0)
-                                END
-                                * tm.multiplier
-                            )::integer)
+                            WHEN vwd.speed_kmh > :movingThreshold THEN
+                                COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.3) / (vwd.speed_kmh * 1000.0 / 60.0)
+                            WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 7 AND 9 THEN
+                                COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.3) / (:morningRushSpeed * 1000.0 / 60.0)
+                            WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 17 AND 19 THEN
+                                COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.3) / (:eveningRushSpeed * 1000.0 / 60.0)
+                            WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 12 AND 14 THEN
+                                COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.3) / (:lunchSpeed * 1000.0 / 60.0)
+                            ELSE
+                                COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.3) / (:normalSpeed * 1000.0 / 60.0)
                         END
-
-                    WHEN vcs.current_sequence = vcs.target_sequence AND vcs.distance_to_current_stop < :atStopDistance THEN 1
-
-                    ELSE NULL
+                        * tm.multiplier
+                    )::integer)
                 END as calculated_eta,
-
                 CASE
-                    WHEN vcs.current_sequence < vcs.target_sequence THEN 'approaching'
-                    WHEN vcs.current_sequence = vcs.target_sequence AND vcs.distance_to_current_stop < :atStopDistance THEN 'at_stop'
-                    ELSE 'passed'
+                    WHEN vwd.is_before_stop = false THEN 'passed'
+                    WHEN COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct) < :atStopDistance THEN 'at_stop'
+                    ELSE 'approaching'
                 END as calculated_status
-            FROM vehicle_current_stops vcs
+            FROM vehicles_with_distance vwd
+            LEFT JOIN vehicle_current_stop vcs ON vwd.vehicle_id = vcs.vehicle_id
             CROSS JOIN traffic_multiplier tm
+            WHERE vwd.is_before_stop = true
         )
 
         SELECT DISTINCT ON (route_number)
@@ -547,7 +529,6 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         WHERE vwe.calculated_eta IS NOT NULL
         AND vwe.calculated_eta > 0
         AND vwe.calculated_eta < :maxEtaMinutes
-        AND vwe.is_moving_towards_stop = true
         ORDER BY vwe.route_number, vwe.calculated_eta
         """;
 
