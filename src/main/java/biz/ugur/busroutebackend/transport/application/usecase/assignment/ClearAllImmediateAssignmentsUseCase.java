@@ -15,7 +15,6 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @Slf4j
@@ -52,34 +51,26 @@ public class ClearAllImmediateAssignmentsUseCase extends BaseUseCase<Mono<Void>,
 
         log.info("Clearing all immediate assignments for date={}, shift={}", today, currentShift);
 
-        AtomicInteger clearedCount = new AtomicInteger(0);
-
         return assignmentRepository.findActiveByDateAndShift(today, currentShift)
-                .flatMap(assignment -> deactivateAndClearVehicle(assignment, clearedCount))
+                .flatMap(this::clearVehicleRoute)
                 .collectList()
-                .map(results -> new ClearImmediateResult(
-                        clearedCount.get(),
+                .flatMap(cleared -> assignmentRepository.deleteByEffectiveDateAndShift(today, currentShift))
+                .map(deletedCount -> new ClearImmediateResult(
+                        deletedCount,
                         Instant.now(),
                         true,
                         null
                 ))
-                .doOnSuccess(result -> log.info("Cleared {} immediate assignments", result.clearedCount()))
+                .doOnSuccess(result -> log.info("Deleted {} immediate assignments", result.clearedCount()))
                 .onErrorResume(error -> {
                     log.error("Failed to clear all immediate assignments", error);
                     return Mono.just(new ClearImmediateResult(
-                            clearedCount.get(),
+                            0,
                             Instant.now(),
                             false,
                             error.getMessage()
                     ));
                 });
-    }
-
-    private Mono<RouteAssignment> deactivateAndClearVehicle(RouteAssignment assignment, AtomicInteger counter) {
-        return assignmentRepository.deactivateById(assignment.getId())
-                .then(clearVehicleRoute(assignment))
-                .doOnSuccess(v -> counter.incrementAndGet())
-                .thenReturn(assignment);
     }
 
     private Mono<Void> clearVehicleRoute(RouteAssignment assignment) {

@@ -493,35 +493,29 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                     WHEN ABS(vcs.course - vcs.bearing_to_stop) > 270 THEN true
                     ELSE false
                 END as is_moving_towards_stop,
-                -- Calculate base ETA then apply traffic multiplier
                 CASE
-                    -- Vehicle approaching target stop
                     WHEN vcs.current_sequence < vcs.target_sequence THEN
-                        GREATEST(1, ROUND(
-                            CASE
-                                -- Vehicle moving at normal speed - use actual speed
-                                WHEN vcs.speed_kmh > :movingThreshold THEN
-                                    (vcs.target_distance - vcs.current_distance) / (vcs.speed_kmh * 1000.0 / 60.0)
-
-                                -- Vehicle stopped/slow - use time-based average speeds
-                                WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 7 AND 9 THEN
-                                    (vcs.target_distance - vcs.current_distance) / (:morningRushSpeed * 1000.0 / 60.0)
-
-                                WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 17 AND 19 THEN
-                                    (vcs.target_distance - vcs.current_distance) / (:eveningRushSpeed * 1000.0 / 60.0)
-
-                                WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 12 AND 14 THEN
-                                    (vcs.target_distance - vcs.current_distance) / (:lunchSpeed * 1000.0 / 60.0)
-
-                                ELSE
-                                    (vcs.target_distance - vcs.current_distance) / (:normalSpeed * 1000.0 / 60.0)
-                            END
-                            * tm.multiplier 
-                        )::integer)
+                        CASE
+                            WHEN vcs.distance_to_stop < 300 THEN 1
+                            ELSE GREATEST(2, ROUND(
+                                CASE
+                                    WHEN vcs.speed_kmh > :movingThreshold THEN
+                                        vcs.distance_to_stop / (vcs.speed_kmh * 1000.0 / 60.0)
+                                    WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 7 AND 9 THEN
+                                        vcs.distance_to_stop / (:morningRushSpeed * 1000.0 / 60.0)
+                                    WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 17 AND 19 THEN
+                                        vcs.distance_to_stop / (:eveningRushSpeed * 1000.0 / 60.0)
+                                    WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 12 AND 14 THEN
+                                        vcs.distance_to_stop / (:lunchSpeed * 1000.0 / 60.0)
+                                    ELSE
+                                        vcs.distance_to_stop / (:normalSpeed * 1000.0 / 60.0)
+                                END
+                                * tm.multiplier
+                            )::integer)
+                        END
 
                     WHEN vcs.current_sequence = vcs.target_sequence AND vcs.distance_to_current_stop < :atStopDistance THEN 1
 
-                    -- Vehicle passed the stop
                     ELSE NULL
                 END as calculated_eta,
 

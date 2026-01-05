@@ -80,6 +80,16 @@ public class VehicleShiftScheduler {
         executeMidnightCleanup(today);
     }
 
+    @Scheduled(cron = "0 0 23 * * *", zone = "Asia/Ashgabat")
+    public void endOfDayCleanup() {
+        ZonedDateTime now = ZonedDateTime.now(ASHGABAT_ZONE);
+        LocalDate today = now.toLocalDate();
+
+        log.info("End of day cleanup starting at {} (Ashgabat) - deleting today's assignments", now);
+
+        executeEndOfDayCleanup(today);
+    }
+
     @Scheduled(cron = "0 0,30 * * * *", zone = "Asia/Ashgabat")
     public void cleanupExpiredAssignments() {
         log.debug("Backup cleanup: checking for expired assignments...");
@@ -95,6 +105,20 @@ public class VehicleShiftScheduler {
                                 deletedCount, today))
                 .doOnError(error ->
                         log.error("Midnight cleanup failed: {}", error.getMessage(), error))
+                .onErrorComplete()
+                .subscribe();
+    }
+
+    private void executeEndOfDayCleanup(LocalDate today) {
+        vehicleRepository.clearAllRouteAssignments()
+                .then(assignmentRepository.deleteByEffectiveDate(today))
+                .timeout(TASK_TIMEOUT)
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnSuccess(deletedCount ->
+                        log.info("End of day cleanup completed: deleted {} assignments for date {}",
+                                deletedCount, today))
+                .doOnError(error ->
+                        log.error("End of day cleanup failed: {}", error.getMessage(), error))
                 .onErrorComplete()
                 .subscribe();
     }

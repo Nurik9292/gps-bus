@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.services;
 
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteStopRepository;
+import biz.ugur.busroutebackend.transport.domain.repository.RouteStopRepository.NearestStopResult;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteStopRepository.VehiclePositionKey;
 import biz.ugur.busroutebackend.transport.domain.service.VehicleDirectionDetectionService;
 import lombok.RequiredArgsConstructor;
@@ -22,11 +23,28 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
     private final RouteStopRepository routeStopRepository;
 
     @Override
-    public Mono<Integer> findNearestStopSequence(Vehicle vehicle) {
+    public Mono<NearestStopResult> findNearestStopSequence(Vehicle vehicle) {
         if (vehicle == null || !vehicle.hasAssignedRoute() || !vehicle.hasPosition()) {
             return Mono.empty();
         }
 
+        if (vehicle.getCourse() != null && vehicle.getCourse() > 0) {
+            return routeStopRepository.findDirectionByCourse(
+                    vehicle.getAssignedRouteId().getValue(),
+                    vehicle.getCurrentLatitude(),
+                    vehicle.getCurrentLongitude(),
+                    vehicle.getCourse()
+            ).switchIfEmpty(
+                    routeStopRepository.findNearestStopSequence(
+                            vehicle.getAssignedRouteId().getValue(),
+                            vehicle.getCurrentLatitude(),
+                            vehicle.getCurrentLongitude(),
+                            vehicle.getCurrentDirection()
+                    )
+            );
+        }
+
+        // No course data, use nearest stop based detection
         return routeStopRepository.findNearestStopSequence(
                 vehicle.getAssignedRouteId().getValue(),
                 vehicle.getCurrentLatitude(),
@@ -36,7 +54,7 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
     }
 
     @Override
-    public Mono<Map<String, Integer>> findNearestStopSequencesBatch(List<Vehicle> vehicles) {
+    public Mono<Map<String, NearestStopResult>> findNearestStopSequencesBatch(List<Vehicle> vehicles) {
         if (vehicles == null || vehicles.isEmpty()) {
             return Mono.just(Map.of());
         }
@@ -48,7 +66,8 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
                         v.getAssignedRouteId().getValue(),
                         v.getCurrentLatitude(),
                         v.getCurrentLongitude(),
-                        v.getCurrentDirection()
+                        v.getCurrentDirection(),
+                        v.getCourse()
                 ))
                 .toList();
 
@@ -56,7 +75,29 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
             return Mono.just(Map.of());
         }
 
-        return routeStopRepository.findNearestStopSequencesBatch(positionKeys);
+        // Separate vehicles with course data from those without
+        List<VehiclePositionKey> withCourse = positionKeys.stream()
+                .filter(p -> p.course() != null && p.course() > 0)
+                .toList();
+
+        List<VehiclePositionKey> withoutCourse = positionKeys.stream()
+                .filter(p -> p.course() == null || p.course() <= 0)
+                .toList();
+
+        Mono<Map<String, NearestStopResult>> courseResults = withCourse.isEmpty()
+                ? Mono.just(Map.of())
+                : routeStopRepository.findDirectionByCoursesBatch(withCourse);
+
+        Mono<Map<String, NearestStopResult>> nearestResults = withoutCourse.isEmpty()
+                ? Mono.just(Map.of())
+                : routeStopRepository.findNearestStopSequencesBatch(withoutCourse);
+
+        return Mono.zip(courseResults, nearestResults)
+                .map(tuple -> {
+                    Map<String, NearestStopResult> combined = new java.util.HashMap<>(tuple.getT1());
+                    combined.putAll(tuple.getT2());
+                    return combined;
+                });
     }
 
     @Override
@@ -65,16 +106,20 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
             return Mono.justOrEmpty(vehicle);
         }
 
+        boolean hasCourse = vehicle.getCourse() != null && vehicle.getCourse() > 0;
+
         return findNearestStopSequence(vehicle)
-                .map(stopSequence -> {
-                    Vehicle updatedVehicle = vehicle.updateDirection(stopSequence);
+                .map(result -> {
+                    Vehicle updatedVehicle = vehicle.updateDirection(result.sequence(), result.direction());
                     if (updatedVehicle.getCurrentDirection() != null &&
                             !updatedVehicle.getCurrentDirection().equals(vehicle.getCurrentDirection())) {
-                        log.debug("Vehicle {} direction updated: {} (seq: {} -> {})",
+                        log.debug("Vehicle {} direction updated: {} (seq: {} -> {}, method: {}, course: {}°)",
                                 vehicle.getLicensePlate(),
                                 updatedVehicle.getCurrentDirection() == 0 ? "forward" : "backward",
                                 vehicle.getLastStopSequence(),
-                                stopSequence);
+                                result.sequence(),
+                                hasCourse ? "course-based" : "nearest-stop",
+                                hasCourse ? vehicle.getCourse() : "N/A");
                     }
                     return updatedVehicle;
                 })
@@ -103,26 +148,46 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
         }
 
         return findNearestStopSequencesBatch(vehiclesWithRoutes)
-                .map(stopSequenceMap -> {
+                .map(stopResultMap -> {
                     List<Vehicle> result = new ArrayList<>(vehiclesWithoutRoutes);
+                    int updated = 0;
+                    int skipped = 0;
+                    int courseBasedCount = 0;
 
                     for (Vehicle vehicle : vehiclesWithRoutes) {
-                        Integer stopSequence = stopSequenceMap.get(vehicle.getId().getValue());
-                        if (stopSequence != null) {
-                            Vehicle updatedVehicle = vehicle.updateDirection(stopSequence);
+                        NearestStopResult stopResult = stopResultMap.get(vehicle.getId().getValue());
+                        if (stopResult != null) {
+                            Vehicle updatedVehicle = vehicle.updateDirection(stopResult.sequence(), stopResult.direction());
                             result.add(updatedVehicle);
+                            updated++;
+
+                            boolean hasCourse = vehicle.getCourse() != null && vehicle.getCourse() > 0;
+                            if (hasCourse) courseBasedCount++;
 
                             if (updatedVehicle.getCurrentDirection() != null &&
                                     !updatedVehicle.getCurrentDirection().equals(vehicle.getCurrentDirection())) {
-                                log.debug("Vehicle {} direction: {} (seq: {} -> {})",
+                                log.debug("Vehicle {} direction: {} (seq: {} -> {}, method: {}, course: {}°)",
                                         vehicle.getLicensePlate(),
                                         updatedVehicle.getCurrentDirection() == 0 ? "forward" : "backward",
                                         vehicle.getLastStopSequence(),
-                                        stopSequence);
+                                        stopResult.sequence(),
+                                        hasCourse ? "course" : "nearest",
+                                        hasCourse ? String.format("%.1f", vehicle.getCourse()) : "N/A");
                             }
                         } else {
                             result.add(vehicle);
+                            skipped++;
+                            log.warn("Vehicle {} no stop result found (route={}, pos={},{})",
+                                    vehicle.getLicensePlate(),
+                                    vehicle.getAssignedRouteId().getValue(),
+                                    vehicle.getCurrentLatitude(),
+                                    vehicle.getCurrentLongitude());
                         }
+                    }
+
+                    if (log.isDebugEnabled()) {
+                        log.debug("Direction batch: {} updated ({} course-based), {} skipped",
+                                updated, courseBasedCount, skipped);
                     }
 
                     return result;

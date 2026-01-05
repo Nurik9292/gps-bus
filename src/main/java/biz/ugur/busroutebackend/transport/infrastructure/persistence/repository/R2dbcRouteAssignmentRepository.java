@@ -325,6 +325,31 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
     }
 
     @Override
+    public Mono<Integer> deleteByEffectiveDate(LocalDate date) {
+        String sql = "DELETE FROM route_assignments WHERE effective_date = :date";
+
+        return databaseClient.sql(sql)
+                .bind("date", date)
+                .fetch()
+                .rowsUpdated()
+                .map(Long::intValue)
+                .doOnSuccess(count -> log.info("Deleted {} assignments for date {}", count, date));
+    }
+
+    @Override
+    public Mono<Integer> deleteByEffectiveDateAndShift(LocalDate date, ShiftType shiftType) {
+        String sql = "DELETE FROM route_assignments WHERE effective_date = :date AND shift_type = :shiftType";
+
+        return databaseClient.sql(sql)
+                .bind("date", date)
+                .bind("shiftType", shiftType.name())
+                .fetch()
+                .rowsUpdated()
+                .map(Long::intValue)
+                .doOnSuccess(count -> log.info("Deleted {} assignments for date {} shift {}", count, date, shiftType));
+    }
+
+    @Override
     public Mono<Long> count() {
         String sql = "SELECT COUNT(*) FROM route_assignments WHERE is_active = true";
 

@@ -187,25 +187,28 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
         return updatedVehicle;
     }
 
-    public Vehicle updateDirection(Integer newStopSequence) {
-        if (newStopSequence == null) {
+    public Vehicle updateDirection(Integer newStopSequence, Integer stopDirection) {
+        if (newStopSequence == null || stopDirection == null) {
             return this;
         }
 
-        Integer newDirection = this.currentDirection;
-
-        if (this.lastStopSequence != null && !this.lastStopSequence.equals(newStopSequence)) {
-            if (newStopSequence > this.lastStopSequence) {
-                newDirection = 0;
-            } else {
-                newDirection = 1;
-            }
-            log.debug("Vehicle {} direction detected: {} -> {} (seq: {} -> {})",
-                    licensePlate, this.currentDirection, newDirection, this.lastStopSequence, newStopSequence);
+        if (this.currentDirection == null) {
+            log.debug("Vehicle {} direction initialized: {} (stop seq: {})",
+                    licensePlate, stopDirection == 0 ? "forward" : "backward", newStopSequence);
+        } else if (!this.currentDirection.equals(stopDirection)) {
+            log.debug("Vehicle {} direction changed: {} -> {} (stop seq: {})",
+                    licensePlate,
+                    this.currentDirection == 0 ? "forward" : "backward",
+                    stopDirection == 0 ? "forward" : "backward",
+                    newStopSequence);
+        } else if (this.lastStopSequence != null && !this.lastStopSequence.equals(newStopSequence)) {
+            log.debug("Vehicle {} moving {} (seq: {} -> {})",
+                    licensePlate, stopDirection == 0 ? "forward" : "backward",
+                    this.lastStopSequence, newStopSequence);
         }
 
         return this.toBuilder()
-                .currentDirection(newDirection)
+                .currentDirection(stopDirection)
                 .lastStopSequence(newStopSequence)
                 .build();
     }

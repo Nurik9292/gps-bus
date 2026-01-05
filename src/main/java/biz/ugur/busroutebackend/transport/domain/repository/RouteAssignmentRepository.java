@@ -161,4 +161,8 @@ public interface RouteAssignmentRepository extends BaseRepository<RouteAssignmen
      * @return Mono of Integer (number of assignments deleted)
      */
     Mono<Integer> deleteByEffectiveDateBefore(LocalDate date);
+
+    Mono<Integer> deleteByEffectiveDate(LocalDate date);
+
+    Mono<Integer> deleteByEffectiveDateAndShift(LocalDate date, ShiftType shiftType);
 }
