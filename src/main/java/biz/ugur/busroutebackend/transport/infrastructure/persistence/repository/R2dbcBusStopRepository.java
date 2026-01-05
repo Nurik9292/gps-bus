@@ -395,7 +395,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 )) as bearing_to_stop
             FROM vehicles v
             JOIN target_stop_routes tsr ON v.assigned_route_id = tsr.route_id
-                AND (v.last_stop_sequence IS NULL OR v.last_stop_sequence < tsr.target_sequence)
+                AND (v.current_direction IS NULL OR v.current_direction = tsr.direction)
             WHERE v.is_active = true
             AND v.last_position_update > CURRENT_TIMESTAMP - (INTERVAL '1 minute' * :maxAgeMinutes)
             AND v.current_latitude IS NOT NULL
@@ -547,6 +547,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         WHERE vwe.calculated_eta IS NOT NULL
         AND vwe.calculated_eta > 0
         AND vwe.calculated_eta < :maxEtaMinutes
+        AND vwe.is_moving_towards_stop = true
         ORDER BY vwe.route_number, vwe.calculated_eta
         """;
 
