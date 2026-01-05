@@ -383,6 +383,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 v.speed_kmh,
                 v.is_in_motion,
                 v.course,
+                v.last_stop_sequence,
                 tsr.route_id,
                 tsr.direction,
                 tsr.target_sequence,
@@ -417,6 +418,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
             AND v.last_position_update > CURRENT_TIMESTAMP - (INTERVAL '1 minute' * :maxAgeMinutes)
             AND v.current_latitude IS NOT NULL
             AND v.current_longitude IS NOT NULL
+            AND (v.last_stop_sequence IS NULL OR v.last_stop_sequence < tsr.target_sequence)
         ),
 
         vehicles_with_distance AS (
@@ -430,10 +432,12 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                     ELSE NULL
                 END as distance_on_route,
                 CASE
+                    WHEN rv.last_stop_sequence IS NOT NULL AND rv.last_stop_sequence >= rv.target_sequence
+                    THEN false
                     WHEN rv.vehicle_position_on_route IS NOT NULL
                          AND rv.stop_position_on_route IS NOT NULL
                     THEN rv.vehicle_position_on_route < rv.stop_position_on_route
-                    ELSE rv.distance_to_stop_direct < 5000
+                    ELSE true
                 END as is_before_stop
             FROM route_vehicles rv
         ),
