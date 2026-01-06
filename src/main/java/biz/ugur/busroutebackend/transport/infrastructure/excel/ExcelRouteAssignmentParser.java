@@ -88,8 +88,8 @@ public class ExcelRouteAssignmentParser {
 
         return new ExcelImportRow(
                 rowNumber,
-                licensePlate.trim(),
-                routeNumber.trim(),
+                licensePlate,
+                routeNumber,
                 effectiveDate,
                 expiresTime,
                 shiftType
@@ -116,7 +116,7 @@ public class ExcelRouteAssignmentParser {
             return null;
         }
 
-        return switch (cell.getCellType()) {
+        String result = switch (cell.getCellType()) {
             case STRING -> cell.getStringCellValue();
             case NUMERIC -> {
                 double value = cell.getNumericCellValue();
@@ -135,6 +135,8 @@ public class ExcelRouteAssignmentParser {
             }
             default -> null;
         };
+
+        return result != null ? result.trim() : null;
     }
 
     private LocalDate parseDate(Cell cell) {
@@ -152,10 +154,10 @@ public class ExcelRouteAssignmentParser {
         }
 
         try {
-            return LocalDate.parse(dateStr.trim(), DATE_FORMATTER);
+            return LocalDate.parse(dateStr, DATE_FORMATTER);
         } catch (DateTimeParseException e) {
             try {
-                return LocalDate.parse(dateStr.trim(), DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+                return LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("dd.MM.yyyy"));
             } catch (DateTimeParseException e2) {
                 throw new IllegalArgumentException("Invalid date format: " + dateStr + ". Expected MM.dd.yyyy or dd.MM.yyyy");
             }
@@ -184,7 +186,7 @@ public class ExcelRouteAssignmentParser {
         }
 
         try {
-            return LocalTime.parse(timeStr.trim(), TIME_FORMATTER);
+            return LocalTime.parse(timeStr, TIME_FORMATTER);
         } catch (DateTimeParseException e) {
             throw new IllegalArgumentException("Invalid time format: " + timeStr + ". Expected HH:mm");
         }
@@ -196,7 +198,7 @@ public class ExcelRouteAssignmentParser {
             return null;
         }
 
-        return switch (value.trim()) {
+        return switch (value) {
             case "1", "FIRST", "first" -> "FIRST";
             case "2", "SECOND", "second" -> "SECOND";
             case "3", "FULL_DAY", "full_day", "FULLDAY", "fullday" -> "FULL_DAY";
