@@ -339,17 +339,26 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         double trafficEvening = etaProperties.getTraffic().getEvening();
         double trafficNight = etaProperties.getTraffic().getNight();
 
+        int dwellTimeSeconds = etaProperties.getStop().getDwellTimeSeconds();
+        int stoppedPenaltySeconds = etaProperties.getStop().getStoppedPenaltySeconds();
+        int terminalWaitSeconds = etaProperties.getStop().getTerminalWaitSeconds();
+
         String sql = """
         WITH
+        -- Use Turkmenistan local time (Asia/Ashgabat, UTC+5) for traffic multiplier calculation
         traffic_multiplier AS (
             SELECT
                 CASE
-                    WHEN EXTRACT(HOUR FROM CURRENT_TIMESTAMP) BETWEEN 7 AND 9 THEN :trafficMorningRush
-                    WHEN EXTRACT(HOUR FROM CURRENT_TIMESTAMP) BETWEEN 17 AND 19 THEN :trafficEveningRush
-                    WHEN EXTRACT(HOUR FROM CURRENT_TIMESTAMP) BETWEEN 10 AND 16 THEN :trafficDaytime
-                    WHEN EXTRACT(HOUR FROM CURRENT_TIMESTAMP) BETWEEN 20 AND 22 THEN :trafficEvening
+                    WHEN EXTRACT(HOUR FROM (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ashgabat')) BETWEEN 7 AND 9 THEN :trafficMorningRush
+                    WHEN EXTRACT(HOUR FROM (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ashgabat')) BETWEEN 17 AND 19 THEN :trafficEveningRush
+                    WHEN EXTRACT(HOUR FROM (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ashgabat')) BETWEEN 10 AND 16 THEN :trafficDaytime
+                    WHEN EXTRACT(HOUR FROM (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ashgabat')) BETWEEN 20 AND 22 THEN :trafficEvening
                     ELSE :trafficNight
-                END as multiplier
+                END as multiplier,
+                :dwellTimeSeconds as dwell_time_sec,
+                :stoppedPenaltySeconds as stopped_penalty_sec,
+                :terminalWaitSeconds as terminal_wait_sec,
+                :movingThreshold as moving_threshold
         ),
 
         target_stop_routes AS (
@@ -396,18 +405,20 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                     ST_Point(:stopLon, :stopLat)::geography
                 ) as distance_to_stop_direct,
                 CASE
-                    WHEN tsr.route_geometry IS NOT NULL THEN
+                    WHEN tsr.route_geometry IS NOT NULL
+                         AND tsr.route_geometry LIKE 'LINESTRING%' THEN
                         ST_LineLocatePoint(
                             ST_GeomFromText(tsr.route_geometry, 4326),
-                            ST_Point(v.current_longitude, v.current_latitude)
+                            ST_SetSRID(ST_Point(v.current_longitude, v.current_latitude), 4326)
                         )
                     ELSE NULL
                 END as vehicle_position_on_route,
                 CASE
-                    WHEN tsr.route_geometry IS NOT NULL THEN
+                    WHEN tsr.route_geometry IS NOT NULL
+                         AND tsr.route_geometry LIKE 'LINESTRING%' THEN
                         ST_LineLocatePoint(
                             ST_GeomFromText(tsr.route_geometry, 4326),
-                            ST_Point(:stopLon, :stopLat)
+                            ST_SetSRID(ST_Point(:stopLon, :stopLat), 4326)
                         )
                     ELSE NULL
                 END as stop_position_on_route
@@ -432,12 +443,18 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                     ELSE NULL
                 END as distance_on_route,
                 CASE
+                    -- Если last_stop_sequence >= target - точно проехал
                     WHEN rv.last_stop_sequence IS NOT NULL AND rv.last_stop_sequence >= rv.target_sequence
                     THEN false
+                    -- Если позиция на маршруте известна - используем её (более точно)
                     WHEN rv.vehicle_position_on_route IS NOT NULL
                          AND rv.stop_position_on_route IS NOT NULL
                     THEN rv.vehicle_position_on_route < rv.stop_position_on_route
-                    ELSE true
+                    -- Если позиция неизвестна но есть last_stop_sequence - используем его
+                    WHEN rv.last_stop_sequence IS NOT NULL
+                    THEN rv.last_stop_sequence < rv.target_sequence
+                    -- Если ничего не известно - не показываем (безопаснее)
+                    ELSE false
                 END as is_before_stop
             FROM route_vehicles rv
         ),
@@ -447,7 +464,8 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 rs.route_id,
                 rs.direction,
                 rs.stop_sequence,
-                bs.stop_name
+                bs.stop_name,
+                MAX(rs.stop_sequence) OVER (PARTITION BY rs.route_id, rs.direction) as max_stop_sequence
             FROM route_stops rs
             JOIN bus_stops bs ON rs.stop_id = bs.id
             JOIN vehicles_with_distance vwd ON rs.route_id = vwd.route_id AND rs.direction = vwd.direction
@@ -462,7 +480,23 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
             FROM vehicles_with_distance vwd
             JOIN route_stops_with_coords rsc ON vwd.route_id = rsc.route_id AND vwd.direction = rsc.direction
             WHERE vwd.vehicle_position_on_route IS NOT NULL
-            ORDER BY vwd.vehicle_id, ABS(rsc.stop_sequence - (vwd.vehicle_position_on_route * 100))
+            ORDER BY vwd.vehicle_id,
+                     ABS((rsc.stop_sequence::float / NULLIF(rsc.max_stop_sequence, 0)) - vwd.vehicle_position_on_route)
+        ),
+
+        -- Count intermediate stops between vehicle position and target stop
+        intermediate_stops AS (
+            SELECT
+                vwd.vehicle_id,
+                vwd.route_id,
+                vwd.direction,
+                vwd.target_sequence,
+                COALESCE(vwd.last_stop_sequence, vcs.current_sequence, 1) as vehicle_sequence,
+                -- Count stops between current position and target (excluding current, including target)
+                GREATEST(0, vwd.target_sequence - COALESCE(vwd.last_stop_sequence, vcs.current_sequence, 1) - 1) as stops_count
+            FROM vehicles_with_distance vwd
+            LEFT JOIN vehicle_current_stop vcs ON vwd.vehicle_id = vcs.vehicle_id
+            WHERE vwd.is_before_stop = true
         ),
 
         vehicles_with_eta AS (
@@ -482,34 +516,51 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 vwd.distance_on_route,
                 vwd.distance_to_stop_direct,
                 vwd.is_before_stop,
+                vwd.last_stop_sequence,
+                COALESCE(istops.stops_count, 0) as intermediate_stops,
                 COALESCE(vcs.current_stop_name, 'В пути') as current_stop_name,
                 tm.multiplier as traffic_multiplier,
                 CASE
                     WHEN vwd.is_before_stop = false THEN NULL
-                    WHEN COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct) < 300 THEN 1
-                    ELSE GREATEST(2, ROUND(
-                        CASE
-                            WHEN vwd.speed_kmh > :movingThreshold THEN
-                                COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.3) / (vwd.speed_kmh * 1000.0 / 60.0)
-                            WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 7 AND 9 THEN
-                                COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.3) / (:morningRushSpeed * 1000.0 / 60.0)
-                            WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 17 AND 19 THEN
-                                COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.3) / (:eveningRushSpeed * 1000.0 / 60.0)
-                            WHEN EXTRACT(hour FROM CURRENT_TIMESTAMP) BETWEEN 12 AND 14 THEN
-                                COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.3) / (:lunchSpeed * 1000.0 / 60.0)
-                            ELSE
-                                COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.3) / (:normalSpeed * 1000.0 / 60.0)
-                        END
-                        * tm.multiplier
+                    -- Show 1 min only if BOTH direct distance AND route distance are small AND no intermediate stops
+                    WHEN vwd.distance_to_stop_direct < 300
+                         AND (vwd.distance_on_route IS NULL OR vwd.distance_on_route < 500)
+                         AND COALESCE(istops.stops_count, 0) <= 1 THEN 1
+                    -- Calculate ETA with stop dwell times and penalties
+                    ELSE GREATEST(1, ROUND(
+                        (
+                            -- Base travel time calculation
+                            CASE
+                                WHEN vwd.speed_kmh > tm.moving_threshold THEN
+                                    GREATEST(COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.5), vwd.distance_to_stop_direct) / (vwd.speed_kmh * 1000.0 / 60.0)
+                                WHEN EXTRACT(hour FROM (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ashgabat')) BETWEEN 7 AND 9 THEN
+                                    GREATEST(COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.5), vwd.distance_to_stop_direct) / (:morningRushSpeed * 1000.0 / 60.0)
+                                WHEN EXTRACT(hour FROM (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ashgabat')) BETWEEN 17 AND 19 THEN
+                                    GREATEST(COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.5), vwd.distance_to_stop_direct) / (:eveningRushSpeed * 1000.0 / 60.0)
+                                WHEN EXTRACT(hour FROM (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ashgabat')) BETWEEN 12 AND 14 THEN
+                                    GREATEST(COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.5), vwd.distance_to_stop_direct) / (:lunchSpeed * 1000.0 / 60.0)
+                                ELSE
+                                    GREATEST(COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct * 1.5), vwd.distance_to_stop_direct) / (:normalSpeed * 1000.0 / 60.0)
+                            END
+                            * tm.multiplier
+                            -- Add dwell time for intermediate stops (stops_count * dwell_time_sec / 60.0)
+                            + (COALESCE(istops.stops_count, 0) * tm.dwell_time_sec / 60.0)
+                            -- Add penalty for stopped buses (not moving)
+                            + CASE WHEN vwd.speed_kmh < tm.moving_threshold AND NOT COALESCE(vwd.is_in_motion, false)
+                                   THEN tm.stopped_penalty_sec / 60.0 ELSE 0 END
+                            -- Add terminal wait if bus is at first stop
+                            + CASE WHEN vwd.last_stop_sequence = 1 THEN tm.terminal_wait_sec / 60.0 ELSE 0 END
+                        )
                     )::integer)
                 END as calculated_eta,
                 CASE
                     WHEN vwd.is_before_stop = false THEN 'passed'
-                    WHEN COALESCE(vwd.distance_on_route, vwd.distance_to_stop_direct) < :atStopDistance THEN 'at_stop'
+                    WHEN vwd.distance_to_stop_direct < :atStopDistance THEN 'at_stop'
                     ELSE 'approaching'
                 END as calculated_status
             FROM vehicles_with_distance vwd
             LEFT JOIN vehicle_current_stop vcs ON vwd.vehicle_id = vcs.vehicle_id
+            LEFT JOIN intermediate_stops istops ON vwd.vehicle_id = istops.vehicle_id
             CROSS JOIN traffic_multiplier tm
             WHERE vwd.is_before_stop = true
         )
@@ -553,6 +604,9 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 .bind("trafficDaytime", trafficDaytime)
                 .bind("trafficEvening", trafficEvening)
                 .bind("trafficNight", trafficNight)
+                .bind("dwellTimeSeconds", dwellTimeSeconds)
+                .bind("stoppedPenaltySeconds", stoppedPenaltySeconds)
+                .bind("terminalWaitSeconds", terminalWaitSeconds)
                 .map(this::mapToBusArrivalInfo)
                 .all()
                 .doOnNext(arrival -> log.trace("Route {} closest bus: {} ETA {} min (traffic adjusted)",

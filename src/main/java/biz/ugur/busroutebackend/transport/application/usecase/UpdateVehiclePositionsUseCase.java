@@ -238,23 +238,34 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             Mono<List<Vehicle>> insertMono = vehiclesToCreate.isEmpty() ?
                     Mono.just(List.of()) : vehicleRepository.batchInsert(vehiclesToCreate).collectList();
 
-            Mono<Void> saveHistoryMono = Flux.fromIterable(updatedVehicles)
-                    .filter(Vehicle::hasPosition)
-                    .flatMap(v -> gpsHistoryService.addPoint(
-                            v.getId().getValue(),
-                            v.getCurrentLatitude(),
-                            v.getCurrentLongitude(),
-                            v.getSpeedKmh(),
-                            v.getLastPositionUpdate()
-                    ))
-                    .then();
-
             Mono<ProcessExpiredAssignmentsUseCase.Result> expiredMono =
                     processExpiredAssignmentsUseCase.execute(Mono.empty());
 
             return Mono.zip(updateMono, insertMono)
-                    .flatMap(saveHistoryMono::thenReturn)
-                    .flatMap(expiredMono::thenReturn)
+                    .flatMap(tuple -> {
+                        long vehiclesWithPosition = updatedVehicles.stream()
+                                .filter(Vehicle::hasPosition)
+                                .count();
+
+                        if (vehiclesWithPosition == 0) {
+                            return Mono.just(tuple);
+                        }
+
+                        return Flux.fromIterable(updatedVehicles)
+                                .filter(Vehicle::hasPosition)
+                                .flatMap(v -> gpsHistoryService.addPoint(
+                                        v.getId().getValue(),
+                                        v.getCurrentLatitude(),
+                                        v.getCurrentLongitude(),
+                                        v.getSpeedKmh(),
+                                        v.getLastPositionUpdate()
+                                ), 10)
+                                .then(Mono.defer(() -> {
+                                    log.debug("Saved GPS history for {} vehicles", vehiclesWithPosition);
+                                    return Mono.just(tuple);
+                                }));
+                    })
+                    .flatMap(tuple -> expiredMono.thenReturn(tuple))
                     .map(tuple -> {
                         log.info("Batch operations: {} updated, {} created", tuple.getT1(), tuple.getT2().size());
                         return createResult(statuses);

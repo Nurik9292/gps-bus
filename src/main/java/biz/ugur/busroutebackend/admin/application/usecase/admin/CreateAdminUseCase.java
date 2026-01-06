@@ -9,6 +9,7 @@ import biz.ugur.busroutebackend.admin.infrastructure.storage.AvatarStorageServic
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.shared.domain.services.PasswordEncoder;
 import biz.ugur.busroutebackend.shared.infrastructure.storage.BaseImageStorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,14 +21,17 @@ public class CreateAdminUseCase extends BaseUseCase<Mono<CreateCommand>, AdminRe
 
     private final AdminRepository adminRepository;
     private final AvatarStorageService avatarStorageService;
+    private final PasswordEncoder passwordEncoder;
 
     public CreateAdminUseCase(AdminRepository adminRepository,
                               AvatarStorageService avatarStorageService,
+                              PasswordEncoder passwordEncoder,
                               EventBus eventBus,
                               CorrelationContextService correlationService) {
         super(correlationService, eventBus);
         this.adminRepository = adminRepository;
         this.avatarStorageService = avatarStorageService;
+        this.passwordEncoder = passwordEncoder;
     }
 
 
@@ -75,7 +79,15 @@ public class CreateAdminUseCase extends BaseUseCase<Mono<CreateCommand>, AdminRe
                                         }))
                                         .doOnNext(cmd -> log.info("Command before save - avatar: {}", cmd.avatar()))
                                         .flatMap(cmd -> {
-                                            Admin admin = cmd.toDomain();
+                                            String encodedPassword = passwordEncoder.encode(cmd.password());
+                                            Admin admin = Admin.create(
+                                                    cmd.username(),
+                                                    encodedPassword,
+                                                    cmd.fullName(),
+                                                    cmd.avatar(),
+                                                    cmd.isSuperAdmin(),
+                                                    cmd.isActive()
+                                            );
                                             log.info("Admin domain before save - avatar: {}", admin.getAvatar());
                                             return adminRepository.save(admin);
                                         })

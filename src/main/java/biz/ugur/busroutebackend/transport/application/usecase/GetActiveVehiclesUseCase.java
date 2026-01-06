@@ -185,10 +185,6 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
 
 
     private boolean isVehicleOnLine(Vehicle vehicle) {
-        if (!vehicle.hasAssignedRoute()) {
-            return false;
-        }
-
         if (!vehicle.hasPosition()) {
             return false;
         }

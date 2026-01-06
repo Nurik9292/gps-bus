@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.excel;
 
 import biz.ugur.busroutebackend.transport.application.dto.assignment.ExcelImportRow;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
@@ -39,6 +40,8 @@ public class ExcelRouteAssignmentParser {
 
     private List<ExcelImportRow> parseBlocking(byte[] fileContent) throws IOException {
         List<ExcelImportRow> rows = new ArrayList<>();
+
+        ZipSecureFile.setMinInflateRatio(0.001);
 
         try (ByteArrayInputStream bis = new ByteArrayInputStream(fileContent);
              Workbook workbook = new XSSFWorkbook(bis)) {

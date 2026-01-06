@@ -83,6 +83,10 @@ public class PublicSecurityConfig {
                         .pathMatchers("/actuator/health").permitAll()
                         .pathMatchers("/actuator/info").permitAll()
 
+                        .pathMatchers("/*.html").permitAll()
+                        .pathMatchers("/static/**").permitAll()
+                        .pathMatchers("/api/v1/routing/**").permitAll()
+
                         .anyExchange().denyAll()
                 )
                 .build();

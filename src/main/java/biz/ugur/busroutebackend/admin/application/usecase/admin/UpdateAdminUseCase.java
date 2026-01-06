@@ -11,6 +11,7 @@ import biz.ugur.busroutebackend.admin.infrastructure.storage.AvatarStorageServic
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.shared.domain.services.PasswordEncoder;
 import biz.ugur.busroutebackend.shared.infrastructure.storage.BaseImageStorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,14 +23,17 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
 
     private final AdminRepository adminRepository;
     private final AvatarStorageService avatarStorageService;
+    private final PasswordEncoder passwordEncoder;
 
     public UpdateAdminUseCase(AdminRepository adminRepository,
                               AvatarStorageService avatarStorageService,
+                              PasswordEncoder passwordEncoder,
                               EventBus eventBus,
                               CorrelationContextService correlationService) {
         super(correlationService, eventBus);
         this.adminRepository = adminRepository;
         this.avatarStorageService = avatarStorageService;
+        this.passwordEncoder = passwordEncoder;
     }
 
 
@@ -80,7 +84,8 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
         Admin updatedAdmin = admin.updateProfile(command.username(), command.fullName());
 
         if (command.newPassword() != null && !command.newPassword().trim().isEmpty()) {
-            updatedAdmin = updatedAdmin.changePassword(command.newPassword());
+            String encodedPassword = passwordEncoder.encode(command.newPassword());
+            updatedAdmin = updatedAdmin.changePassword(encodedPassword);
         }
 
         if (command.isActive() != null) {

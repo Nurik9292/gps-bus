@@ -15,6 +15,7 @@ public class ETAProperties {
     private SpeedConfig speed = new SpeedConfig();
     private CacheConfig cache = new CacheConfig();
     private TrafficMultiplierConfig traffic = new TrafficMultiplierConfig();
+    private StopConfig stop = new StopConfig();
 
     @Getter
     @Setter
@@ -87,5 +88,16 @@ public class ETAProperties {
             double baseMultiplier = getMultiplierForHour(hour);
             return isWeekend ? baseMultiplier * weekendFactor : baseMultiplier;
         }
+    }
+
+    @Getter
+    @Setter
+    public static class StopConfig {
+
+        private int dwellTimeSeconds = 30;
+
+        private int stoppedPenaltySeconds = 60;
+
+        private int terminalWaitSeconds = 120;
     }
 }

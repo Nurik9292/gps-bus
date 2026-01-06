@@ -30,6 +30,11 @@ public class WebFluxConfig implements WebFluxConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/*.html")
+                .addResourceLocations("classpath:/static/");
+        registry.addResourceHandler("/static/**")
+                .addResourceLocations("classpath:/static/");
+
         registry.addResourceHandler("/avatars/**")
                 .addResourceLocations("file:" + avatarsBasePath + "/");
         registry.addResourceHandler("/api/v1/avatars/**")
