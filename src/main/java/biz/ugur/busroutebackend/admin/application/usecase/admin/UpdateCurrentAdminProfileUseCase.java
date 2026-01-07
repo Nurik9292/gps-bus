@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.shared.domain.services.PasswordEncoder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -16,12 +17,15 @@ import reactor.core.publisher.Mono;
 public class UpdateCurrentAdminProfileUseCase extends BaseUseCase<Mono<UpdateCurrentAdminProfileUseCase.Request>, Admin> {
 
     private final AdminRepository adminRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public UpdateCurrentAdminProfileUseCase(AdminRepository adminRepository,
+                                            PasswordEncoder passwordEncoder,
                                             EventBus eventBus,
                                             CorrelationContextService correlationService) {
         super(correlationService, eventBus);
         this.adminRepository = adminRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
 
@@ -45,6 +49,14 @@ public class UpdateCurrentAdminProfileUseCase extends BaseUseCase<Mono<UpdateCur
                             .switchIfEmpty(Mono.error(new AdminNotFoundException(adminId, "id", correlationId)))
                             .flatMap(admin -> {
                                 Admin updatedAdmin = admin.updateProfile(request.username(), request.fullName());
+
+                                // Update password if provided
+                                if (request.newPassword() != null && !request.newPassword().trim().isEmpty()) {
+                                    log.info("Updating password for admin: {}", adminId);
+                                    String encodedPassword = passwordEncoder.encode(request.newPassword());
+                                    updatedAdmin = updatedAdmin.changePassword(encodedPassword);
+                                }
+
                                 return adminRepository.save(updatedAdmin);
                             })
                             .doOnSuccess(admin -> log.info("Profile updated successfully for admin: {}", admin.getUsername()))
@@ -53,5 +65,5 @@ public class UpdateCurrentAdminProfileUseCase extends BaseUseCase<Mono<UpdateCur
                 });
     }
 
-    public record Request(AdminId adminId, String username, String fullName) {}
+    public record Request(AdminId adminId, String username, String fullName, String newPassword) {}
 }

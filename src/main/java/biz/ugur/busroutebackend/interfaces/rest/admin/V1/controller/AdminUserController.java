@@ -144,7 +144,8 @@ public class AdminUserController extends BasePaginatedController {
             UpdateCurrentAdminProfileUseCase.Request req = new UpdateCurrentAdminProfileUseCase.Request(
                     principal.getId(),
                     request.getUsername(),
-                    request.getFullName()
+                    request.getFullName(),
+                    request.getNewPassword()
             );
 
             return updateCurrentAdminProfileUseCase.execute(Mono.just(req))

@@ -102,6 +102,10 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 .passwordHash(encodedNewPassword)
                 .build();
 
+        updatedAdmin.createdAt = this.createdAt;
+        updatedAdmin.updatedAt = this.updatedAt;
+        updatedAdmin.version = this.version;
+
         updatedAdmin.registerEvent(new AdminPasswordChangedEvent(
                 this.id.getValue(),
                 this.username
@@ -115,9 +119,15 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     }
 
     public Admin updateLastLogin() {
-        return this.toBuilder()
+        Admin updatedAdmin = this.toBuilder()
                 .lastLoginAt(LocalDateTime.now())
                 .build();
+
+        updatedAdmin.createdAt = this.createdAt;
+        updatedAdmin.updatedAt = this.updatedAt;
+        updatedAdmin.version = this.version;
+
+        return updatedAdmin;
     }
 
     public Admin deactivate() {
@@ -125,9 +135,15 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
             return this;
         }
 
-        return this.toBuilder()
+        Admin updatedAdmin = this.toBuilder()
                 .isActive(false)
                 .build();
+
+        updatedAdmin.createdAt = this.createdAt;
+        updatedAdmin.updatedAt = this.updatedAt;
+        updatedAdmin.version = this.version;
+
+        return updatedAdmin;
     }
 
     public Admin activate() {
@@ -135,9 +151,15 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
             return this;
         }
 
-        return this.toBuilder()
+        Admin updatedAdmin = this.toBuilder()
                 .isActive(true)
                 .build();
+
+        updatedAdmin.createdAt = this.createdAt;
+        updatedAdmin.updatedAt = this.updatedAt;
+        updatedAdmin.version = this.version;
+
+        return updatedAdmin;
     }
 
     public Admin updateAvatar(String avatar) {
@@ -148,6 +170,10 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         Admin updatedAdmin = this.toBuilder()
                 .avatar(avatar)
                 .build();
+
+        updatedAdmin.createdAt = this.createdAt;
+        updatedAdmin.updatedAt = this.updatedAt;
+        updatedAdmin.version = this.version;
 
         updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
                 this.id.getValue(),
@@ -169,6 +195,10 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         Admin updatedAdmin = this.toBuilder()
                 .avatar(null)
                 .build();
+
+        updatedAdmin.createdAt = this.createdAt;
+        updatedAdmin.updatedAt = this.updatedAt;
+        updatedAdmin.version = this.version;
 
         updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
                 this.id.getValue(),
@@ -205,6 +235,10 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 .username(newUsername)
                 .fullName(newFullName)
                 .build();
+
+        updatedAdmin.createdAt = this.createdAt;
+        updatedAdmin.updatedAt = this.updatedAt;
+        updatedAdmin.version = this.version;
 
         updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
                 updatedAdmin.id.getValue(),
@@ -250,6 +284,10 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 .fullName(newFullName)
                 .avatar(newAvatar)
                 .build();
+
+        updatedAdmin.createdAt = this.createdAt;
+        updatedAdmin.updatedAt = this.updatedAt;
+        updatedAdmin.version = this.version;
 
         updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
                 updatedAdmin.id.getValue(),

@@ -81,11 +81,22 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
     }
 
     private Mono<Admin> applyUpdates(Admin admin, UpdateCommand command, String adminId) {
+        log.info("Applying updates for admin: {} - Current password hash: {}", adminId,
+            admin.getPasswordHash() != null ? admin.getPasswordHash().substring(0, Math.min(20, admin.getPasswordHash().length())) + "..." : "null");
+
         Admin updatedAdmin = admin.updateProfile(command.username(), command.fullName());
 
         if (command.newPassword() != null && !command.newPassword().trim().isEmpty()) {
+            log.info("New password provided for admin: {} - Encoding password", adminId);
             String encodedPassword = passwordEncoder.encode(command.newPassword());
+            log.info("Password encoded for admin: {} - New hash: {}", adminId,
+                encodedPassword.substring(0, Math.min(20, encodedPassword.length())) + "...");
             updatedAdmin = updatedAdmin.changePassword(encodedPassword);
+            log.info("Password changed for admin: {} - Updated hash: {}", adminId,
+                updatedAdmin.getPasswordHash() != null ? updatedAdmin.getPasswordHash().substring(0, Math.min(20, updatedAdmin.getPasswordHash().length())) + "..." : "null");
+        } else {
+            log.info("No password update for admin: {} - newPassword is {}",  adminId,
+                command.newPassword() == null ? "null" : "empty string");
         }
 
         if (command.isActive() != null) {
