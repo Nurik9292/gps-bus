@@ -42,6 +42,9 @@ public class GarageEntity {
     @Column("radius_meters")
     private Integer radiusMeters;
 
+    @Column("boundary")
+    private String boundaryWkt;
+
     @Column("city_id")
     private String cityId;
 

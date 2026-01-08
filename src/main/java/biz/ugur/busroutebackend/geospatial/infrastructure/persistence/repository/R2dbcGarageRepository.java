@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.geospatial.infrastructure.persistence.repositor
 import biz.ugur.busroutebackend.geospatial.domain.model.Garage;
 import biz.ugur.busroutebackend.geospatial.domain.repository.GarageRepository;
 import biz.ugur.busroutebackend.geospatial.domain.valueobject.GarageId;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.geospatial.infrastructure.mapper.GarageEntityMapper;
 import biz.ugur.busroutebackend.geospatial.infrastructure.persistence.entity.GarageEntity;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
@@ -18,11 +19,10 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.BiFunction;
 
-/**
- * R2DBC implementation of GarageRepository
- */
+
 @Repository
 @Slf4j
 @Transactional(readOnly = true)
@@ -56,6 +56,7 @@ public class R2dbcGarageRepository extends BaseR2dbcRepository<Garage, GarageId>
         columns.put("latitude", persistenceEntity.getLatitude());
         columns.put("longitude", persistenceEntity.getLongitude());
         columns.put("radius_meters", persistenceEntity.getRadiusMeters());
+        columns.put("boundary_wkt", persistenceEntity.getBoundaryWkt());
         columns.put("city_id", persistenceEntity.getCityId());
         columns.put("is_active", persistenceEntity.getIsActive());
         return columns;
@@ -71,11 +72,13 @@ public class R2dbcGarageRepository extends BaseR2dbcRepository<Garage, GarageId>
         String sql = """
             INSERT INTO garages (
                 id, name, name_tm, name_en, latitude, longitude,
-                radius_meters, city_id, is_active, created_at, updated_at, version
+                radius_meters, boundary, city_id, is_active, created_at, updated_at, version
             ) VALUES (
                 :id, :name, :name_tm, :name_en, :latitude, :longitude,
-                :radius_meters, :city_id, :is_active, :created_at, :updated_at, :version
-            ) RETURNING *
+                :radius_meters,
+                CASE WHEN :boundary_wkt IS NOT NULL THEN ST_GeogFromText(:boundary_wkt) ELSE NULL END,
+                :city_id, :is_active, :created_at, :updated_at, :version
+            ) RETURNING *, ST_AsText(boundary) as boundary_wkt
             """;
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
@@ -108,12 +111,13 @@ public class R2dbcGarageRepository extends BaseR2dbcRepository<Garage, GarageId>
                 latitude = :latitude,
                 longitude = :longitude,
                 radius_meters = :radius_meters,
+                boundary = CASE WHEN :boundary_wkt IS NOT NULL THEN ST_GeogFromText(:boundary_wkt) ELSE NULL END,
                 city_id = :city_id,
                 is_active = :is_active,
                 updated_at = :updated_at,
                 version = :version
             WHERE id = :id AND version = :old_version
-            RETURNING *
+            RETURNING *, ST_AsText(boundary) as boundary_wkt
             """;
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
@@ -144,7 +148,7 @@ public class R2dbcGarageRepository extends BaseR2dbcRepository<Garage, GarageId>
 
     @Override
     public Flux<Garage> findAllActive() {
-        String sql = "SELECT * FROM garages WHERE is_active = true ORDER BY name";
+        String sql = "SELECT *, ST_AsText(boundary) as boundary_wkt FROM garages WHERE is_active = true ORDER BY name";
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -154,13 +158,113 @@ public class R2dbcGarageRepository extends BaseR2dbcRepository<Garage, GarageId>
 
     @Override
     public Flux<Garage> findByCityId(String cityId) {
-        String sql = "SELECT * FROM garages WHERE city_id = :cityId AND is_active = true ORDER BY name";
+        String sql = "SELECT *, ST_AsText(boundary) as boundary_wkt FROM garages WHERE city_id = :cityId AND is_active = true ORDER BY name";
 
         return databaseClient.sql(sql)
                 .bind("cityId", cityId)
                 .map(getRowMapper())
                 .all()
                 .doOnNext(g -> log.debug("Found garage in city {}: {}", cityId, g.getName()));
+    }
+
+    @Override
+    public Mono<Optional<Garage>> findGarageContainingPosition(Coordinates position) {
+        String sql = """
+            SELECT *, ST_AsText(boundary) as boundary_wkt
+            FROM garages
+            WHERE is_active = true
+            AND (
+                CASE
+                    WHEN boundary IS NOT NULL THEN ST_Contains(boundary::geometry, ST_SetSRID(ST_Point(:lon, :lat), 4326))
+                    ELSE ST_DWithin(
+                        ST_SetSRID(ST_Point(longitude, latitude), 4326)::geography,
+                        ST_SetSRID(ST_Point(:lon, :lat), 4326)::geography,
+                        radius_meters
+                    )
+                END
+            )
+            LIMIT 1
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("lon", position.getLongitudeAsDouble())
+                .bind("lat", position.getLatitudeAsDouble())
+                .map(getRowMapper())
+                .one()
+                .map(Optional::of)
+                .defaultIfEmpty(Optional.empty())
+                .doOnNext(result -> {
+                    if (result.isPresent()) {
+                        log.debug("Found garage containing position ({}, {}): {}",
+                                position.getLatitudeAsDouble(),
+                                position.getLongitudeAsDouble(),
+                                result.get().getName());
+                    }
+                });
+    }
+
+    @Override
+    public Mono<Boolean> isPositionInsideGarage(GarageId garageId, Coordinates position) {
+        String sql = """
+            SELECT CASE
+                WHEN boundary IS NOT NULL THEN ST_Contains(boundary::geometry, ST_SetSRID(ST_Point(:lon, :lat), 4326))
+                ELSE ST_DWithin(
+                    ST_SetSRID(ST_Point(longitude, latitude), 4326)::geography,
+                    ST_SetSRID(ST_Point(:lon, :lat), 4326)::geography,
+                    radius_meters
+                )
+            END as is_inside
+            FROM garages
+            WHERE id = :garageId AND is_active = true
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("garageId", garageId.getValue().toString())
+                .bind("lon", position.getLongitudeAsDouble())
+                .bind("lat", position.getLatitudeAsDouble())
+                .map(row -> row.get("is_inside", Boolean.class))
+                .one()
+                .defaultIfEmpty(false)
+                .doOnNext(result -> log.debug("Position ({}, {}) inside garage {}: {}",
+                        position.getLatitudeAsDouble(),
+                        position.getLongitudeAsDouble(),
+                        garageId.getValue(),
+                        result));
+    }
+
+    @Override
+    public Mono<Boolean> hasPositionExitedGarage(GarageId garageId, Coordinates position, int bufferMeters) {
+        String sql = """
+            SELECT CASE
+                WHEN boundary IS NOT NULL THEN NOT ST_DWithin(
+                    boundary,
+                    ST_SetSRID(ST_Point(:lon, :lat), 4326)::geography,
+                    :buffer
+                )
+                ELSE NOT ST_DWithin(
+                    ST_SetSRID(ST_Point(longitude, latitude), 4326)::geography,
+                    ST_SetSRID(ST_Point(:lon, :lat), 4326)::geography,
+                    radius_meters + :buffer
+                )
+            END as has_exited
+            FROM garages
+            WHERE id = :garageId AND is_active = true
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("garageId", garageId.getValue().toString())
+                .bind("lon", position.getLongitudeAsDouble())
+                .bind("lat", position.getLatitudeAsDouble())
+                .bind("buffer", bufferMeters)
+                .map(row -> row.get("has_exited", Boolean.class))
+                .one()
+                .defaultIfEmpty(true)
+                .doOnNext(result -> log.debug("Position ({}, {}) exited garage {} (buffer {}m): {}",
+                        position.getLatitudeAsDouble(),
+                        position.getLongitudeAsDouble(),
+                        garageId.getValue(),
+                        bufferMeters,
+                        result));
     }
 
     private Garage mapRowToGarage(Row row, RowMetadata metadata) {
@@ -172,6 +276,7 @@ public class R2dbcGarageRepository extends BaseR2dbcRepository<Garage, GarageId>
                 .latitude(row.get("latitude", Double.class))
                 .longitude(row.get("longitude", Double.class))
                 .radiusMeters(row.get("radius_meters", Integer.class))
+                .boundaryWkt(safeGet(row, "boundary_wkt", String.class, null))
                 .cityId(row.get("city_id", String.class))
                 .isActive(row.get("is_active", Boolean.class))
                 .createdAt(safeGet(row, "created_at", LocalDateTime.class, null))

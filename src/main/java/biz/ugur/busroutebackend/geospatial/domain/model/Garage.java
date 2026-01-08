@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.geospatial.domain.model;
 
-import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.GarageBoundary;
 import biz.ugur.busroutebackend.geospatial.domain.valueobject.GarageId;
 import biz.ugur.busroutebackend.shared.domain.entity.AggregateRoot;
 import lombok.Getter;
@@ -19,6 +19,7 @@ public class Garage extends AggregateRoot<Garage, GarageId> {
     private final String nameEn;
     private final Coordinates location;
     private final Integer radiusMeters;
+    private final GarageBoundary boundary;
     private final String cityId;
     private final Boolean isActive;
 
@@ -33,6 +34,7 @@ public class Garage extends AggregateRoot<Garage, GarageId> {
         this.nameEn = builder.nameEn;
         this.location = builder.location;
         this.radiusMeters = builder.radiusMeters;
+        this.boundary = builder.boundary;
         this.cityId = builder.cityId;
         this.isActive = builder.isActive;
     }
@@ -65,43 +67,8 @@ public class Garage extends AggregateRoot<Garage, GarageId> {
                 .build();
     }
 
-
-    public boolean isVehicleInside(Coordinates vehiclePosition) {
-        Objects.requireNonNull(vehiclePosition, "vehiclePosition must not be null");
-
-        double distanceMeters = DistanceCalculationService.haversineDistanceMeters(
-                this.location.getLatitudeAsDouble(),
-                this.location.getLongitudeAsDouble(),
-                vehiclePosition.getLatitudeAsDouble(),
-                vehiclePosition.getLongitudeAsDouble()
-        );
-
-        return distanceMeters <= this.radiusMeters;
-    }
-
-
-    public boolean hasVehicleExited(Coordinates vehiclePosition, int bufferMeters) {
-        Objects.requireNonNull(vehiclePosition, "vehiclePosition must not be null");
-
-        double distanceMeters = DistanceCalculationService.haversineDistanceMeters(
-                this.location.getLatitudeAsDouble(),
-                this.location.getLongitudeAsDouble(),
-                vehiclePosition.getLatitudeAsDouble(),
-                vehiclePosition.getLongitudeAsDouble()
-        );
-
-        return distanceMeters > (this.radiusMeters + bufferMeters);
-    }
-
-
-    public double calculateDistanceMeters(Coordinates position) {
-        Objects.requireNonNull(position, "position must not be null");
-        return DistanceCalculationService.haversineDistanceMeters(
-                this.location.getLatitudeAsDouble(),
-                this.location.getLongitudeAsDouble(),
-                position.getLatitudeAsDouble(),
-                position.getLongitudeAsDouble()
-        );
+    public boolean hasBoundary() {
+        return boundary != null && boundary.isValid();
     }
 
     @Override
@@ -146,6 +113,7 @@ public class Garage extends AggregateRoot<Garage, GarageId> {
         private String nameEn;
         private Coordinates location;
         private Integer radiusMeters;
+        private GarageBoundary boundary;
         private String cityId;
         private Boolean isActive;
 
@@ -176,6 +144,11 @@ public class Garage extends AggregateRoot<Garage, GarageId> {
 
         public Builder radiusMeters(Integer radiusMeters) {
             this.radiusMeters = radiusMeters;
+            return this;
+        }
+
+        public Builder boundary(GarageBoundary boundary) {
+            this.boundary = boundary;
             return this;
         }
 

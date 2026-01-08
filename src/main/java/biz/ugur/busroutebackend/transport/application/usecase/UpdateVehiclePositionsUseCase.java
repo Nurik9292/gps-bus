@@ -339,20 +339,19 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         return garageTransitionsUseCase.getAllActiveGarages()
                 .filter(garage -> garage.getId().getValue().toString().equals(lastGarageId))
                 .next()
-                .flatMap(garage -> {
-                    boolean hasExited = garageTransitionsUseCase.hasVehicleExitedGarage(garage, position, speed);
-                    if (hasExited) {
-                        log.info("Vehicle {} exiting garage {} at speed {} km/h (distance: {} meters)",
-                                vehicle.getLicensePlate(),
-                                garage.getName(),
-                                speed,
-                                garage.calculateDistanceMeters(position));
-                        return processGarageExitUseCase.execute(
-                                new ProcessGarageExitUseCase.Request(vehicle)
-                        );
-                    }
-                    return Mono.just(vehicle);
-                })
+                .flatMap(garage -> garageTransitionsUseCase.hasVehicleExitedGarage(garage, position, speed)
+                        .flatMap(hasExited -> {
+                            if (hasExited) {
+                                log.info("Vehicle {} exiting garage {} at speed {} km/h",
+                                        vehicle.getLicensePlate(),
+                                        garage.getName(),
+                                        speed);
+                                return processGarageExitUseCase.execute(
+                                        new ProcessGarageExitUseCase.Request(vehicle)
+                                );
+                            }
+                            return Mono.just(vehicle);
+                        }))
                 .defaultIfEmpty(vehicle);
     }
 
