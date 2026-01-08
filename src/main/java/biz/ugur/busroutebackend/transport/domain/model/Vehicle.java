@@ -312,6 +312,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .garageEntryTime(now)
                 .garageExitTime(null)
                 .isInGarage(true)
+                .isInMotion(false)
                 .build();
     }
 
