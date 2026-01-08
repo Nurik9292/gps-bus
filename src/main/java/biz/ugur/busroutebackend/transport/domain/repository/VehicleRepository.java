@@ -39,6 +39,8 @@ public interface VehicleRepository extends BaseRepository<Vehicle, VehicleId> {
 
     Mono<Long> countActiveVehicles();
 
+    Mono<Long> countOnlineVehicles();
+
     Mono<Long> countActiveVehiclesRouteNumber(String routeNumber);
 
 

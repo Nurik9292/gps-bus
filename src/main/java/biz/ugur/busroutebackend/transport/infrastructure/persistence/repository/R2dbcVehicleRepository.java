@@ -341,6 +341,20 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
     }
 
     @Override
+    public Mono<Long> countOnlineVehicles() {
+        String sql = """
+            SELECT COUNT(*) FROM vehicles
+            WHERE is_active = true
+            AND last_position_update > NOW() - INTERVAL '5 minutes'
+            """;
+
+        return databaseClient.sql(sql)
+                .map(row -> row.get(0, Long.class))
+                .one()
+                .doOnNext(count -> log.debug("Online vehicles count: {}", count));
+    }
+
+    @Override
     public Mono<Long> countActiveVehiclesRouteNumber(String routeNumber) {
         String sql = "SELECT COUNT(*) FROM vehicles WHERE is_active = true AND route_number = :routeNumber";
 
