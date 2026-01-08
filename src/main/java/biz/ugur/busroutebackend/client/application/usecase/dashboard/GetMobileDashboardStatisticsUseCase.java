@@ -25,13 +25,13 @@ public class GetMobileDashboardStatisticsUseCase {
     private Mono<MobileDashboardStatisticsResult> fetchStatistics() {
         return Mono.zip(
                 clientRepository.countActiveClients().onErrorReturn(0L),
-                vehicleRepository.countOnlineVehicles().onErrorReturn(0L)
+                vehicleRepository.findVehiclesInMotion().count().onErrorReturn(0L)
         ).map(tuple -> {
             MobileDashboardStatistics statistics = new MobileDashboardStatistics(
                     tuple.getT1(),
                     tuple.getT2()
             );
-            log.info("Mobile dashboard statistics: activeClients={}, onlineVehicles={}",
+            log.info("Mobile dashboard statistics: activeClients={}, vehiclesInMotion={}",
                     statistics.activeClients(), statistics.activeVehicles());
             return MobileDashboardStatisticsResult.fromStatistics(statistics);
         }).doOnError(error -> log.error("Error fetching mobile dashboard statistics", error));
