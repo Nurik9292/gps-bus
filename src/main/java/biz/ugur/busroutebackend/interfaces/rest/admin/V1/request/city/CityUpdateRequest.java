@@ -16,8 +16,10 @@ public record CityUpdateRequest(
         @JsonProperty("name_tm")
         String nameTm,
 
+        @JsonProperty("is_active")
         Boolean isActive,
 
+        @JsonProperty("display_order")
         Integer displayOrder
 
 ) {

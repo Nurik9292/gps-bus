@@ -18,10 +18,13 @@ public class CityCreateRequest {
     @JsonProperty("name_tm")
     private String nameTm;
 
+    @JsonProperty("is_active")
+    private Boolean isActive = true;
+
     @JsonProperty("display_order")
     private Integer displayOrder = 0;
 
     public CreateCity toCommand() {
-        return new CreateCity(this.name, this.nameTm, this.displayOrder);
+        return new CreateCity(this.name, this.nameTm, this.isActive, this.displayOrder);
     }
 }

@@ -202,13 +202,14 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 .doOnNext(positionMsg -> {
                     boolean inScope = isPositionInScope(positionMsg, config);
                     if ("routes".equals(config.getSubscriptionType())) {
-                        log.info("Live update filter: sessionId={}, vehicle={}, vehicleRoute={}, subscribedRoutes={}, inScope={}",
+                        log.debug("Live update filter: sessionId={}, vehicle={}, vehicleRoute={}, subscribedRoutes={}, inScope={}",
                                 session.getId(), positionMsg.getVehicleId(), positionMsg.getRouteNumber(),
                                 config.getRouteFilter(), inScope);
                     }
                 })
                 .filter(positionMsg -> isPositionInScope(positionMsg, config))
-                .buffer(Duration.ofMillis(500))
+                .onBackpressureLatest()
+                .bufferTimeout(100, Duration.ofMillis(500))
                 .filter(updates -> !updates.isEmpty())
                 .map(updates -> {
                     try {

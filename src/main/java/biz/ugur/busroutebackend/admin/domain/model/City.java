@@ -25,6 +25,10 @@ public class City extends AggregateRoot<City, CityId> {
     private Long version;
 
     public static City create(String name, String nameTm, Integer displayOrder) {
+        return create(name, nameTm, true, displayOrder);
+    }
+
+    public static City create(String name, String nameTm, Boolean isActive, Integer displayOrder) {
         String validatedName = validateNameStatic(name);
 
         return builder()
@@ -32,7 +36,7 @@ public class City extends AggregateRoot<City, CityId> {
                 .name(validatedName)
                 .nameTm(nameTm != null ? nameTm.trim() : null)
                 .displayOrder(displayOrder != null ? displayOrder : 0)
-                .isActive(true)
+                .isActive(isActive != null ? isActive : true)
                 .build();
     }
 
