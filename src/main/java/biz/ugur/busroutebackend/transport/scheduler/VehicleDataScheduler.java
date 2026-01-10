@@ -52,7 +52,7 @@ public class VehicleDataScheduler {
                 gpsDataAggregator.getEnabledProviderCount());
     }
 
-    @Scheduled(cron = "0/10 * * * * *")
+    @Scheduled(cron = "0/10 * 6-23 * * *", zone = "Asia/Ashgabat")
     public void updateVehiclePositions() {
         log.debug("GPS scheduler triggered. inProgress={}, lastStartTime={}, providers={}",
                 gpsUpdateInProgress.get(), lastGpsUpdateStartTime,

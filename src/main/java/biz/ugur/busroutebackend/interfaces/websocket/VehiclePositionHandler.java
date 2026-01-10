@@ -64,8 +64,14 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
         Mono<Void> inbound = session.receive()
                 .flatMap(message -> handleIncomingMessage(session, sessionId, sessionConfig, message))
-                .doOnError(error -> log.error("Error in inbound stream for session {}: {}",
-                        sessionId, error.getMessage()))
+                .doOnError(error -> {
+                    String msg = error.getMessage();
+                    if (msg != null && msg.contains("Connection has been closed")) {
+                        log.debug("Client disconnected for session {}: {}", sessionId, msg);
+                    } else {
+                        log.warn("Error in inbound stream for session {}: {}", sessionId, msg);
+                    }
+                })
                 .then();
 
         return session.send(outbound)
@@ -106,10 +112,9 @@ public class VehiclePositionHandler implements WebSocketHandler {
     }
 
     private Flux<WebSocketMessage> getInitialPositions(WebSocketSession session, SessionConfig config) {
-        return getActiveVehiclesUseCase.execute(null)
-                .doOnNext(vehicle -> log.debug("Checking vehicle for initial positions: plate={}, route={}, inScope={}",
-                        vehicle.getLicensePlate(), vehicle.getRouteNumber(), isVehicleInScope(vehicle, config)))
-                .filter(vehicle -> isVehicleInScope(vehicle, config))
+        Flux<VehiclePositionDTO> vehiclesFlux = getVehiclesForConfig(config);
+
+        return vehiclesFlux
                 .take(100)
                 .map(this::convertToWebSocketMessage)
                 .collectList()
@@ -133,10 +138,38 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 .doOnNext(msg -> log.debug("Sent initial positions to session"));
     }
 
+    private Flux<VehiclePositionDTO> getVehiclesForConfig(SessionConfig config) {
+        String subscriptionType = config.getSubscriptionType();
+
+        if ("routes".equals(subscriptionType)) {
+            Set<String> routes = config.getRouteFilter();
+            if (routes == null || routes.isEmpty()) {
+                return Flux.empty();
+            }
+            // Запрашиваем автобусы только для указанных маршрутов
+            return Flux.fromIterable(routes)
+                    .flatMap(routeNumber ->
+                            getActiveVehiclesUseCase.execute(GetActiveVehiclesUseCase.Query.byRoute(routeNumber)))
+                    .distinct(VehiclePositionDTO::getVehicleId);
+        } else if ("bounds".equals(subscriptionType)) {
+            // Для bounds фильтруем все активные по координатам
+            return getActiveVehiclesUseCase.execute(null)
+                    .filter(vehicle -> {
+                        Double lat = vehicle.getCurrentLatitude();
+                        Double lon = vehicle.getCurrentLongitude();
+                        if (lat == null || lon == null) {
+                            return false;
+                        }
+                        return config.isInBounds(lat, lon);
+                    });
+        } else {
+            // subscriptionType = "all" - все активные автобусы
+            return getActiveVehiclesUseCase.execute(null);
+        }
+    }
 
     private Mono<Void> sendCurrentPositionsForConfig(WebSocketSession session, SessionConfig config) {
-        return getActiveVehiclesUseCase.execute(null)
-                .filter(vehicle -> isVehicleInScope(vehicle, config))
+        return getVehiclesForConfig(config)
                 .take(100)
                 .map(this::convertToWebSocketMessage)
                 .collectList()
@@ -180,6 +213,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 .map(updates -> {
                     try {
                         Map<String, VehiclePositionWebSocketMessage> latestUpdates = updates.stream()
+                                .filter(msg -> msg != null && msg.getVehicleId() != null)
                                 .collect(Collectors.toMap(
                                         VehiclePositionWebSocketMessage::getVehicleId,
                                         Function.identity(),
@@ -317,6 +351,14 @@ public class VehiclePositionHandler implements WebSocketHandler {
                     }
                 })
                 .filter(Objects::nonNull)
+                .filter(msg -> {
+                    if (msg.getVehicleId() == null || msg.getVehicleId().isBlank()) {
+                        log.warn("Filtered out WebSocket message with null/blank vehicleId: plate={}, route={}",
+                                msg.getLicensePlate(), msg.getRouteNumber());
+                        return false;
+                    }
+                    return true;
+                })
                 .subscribe(
                         positionMessage -> {
                             broadcastSink.emitNext(positionMessage, (signalType, emitResult) -> {
@@ -440,8 +482,14 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
     private boolean isVehicleInScope(VehiclePositionDTO vehicle, SessionConfig config) {
         return switch (config.getSubscriptionType()) {
-            case "routes" -> config.getRouteFilter() != null &&
-                    config.getRouteFilter().contains(vehicle.getRouteNumber());
+            case "routes" -> {
+                String routeNumber = vehicle.getRouteNumber();
+                if (routeNumber == null || routeNumber.isBlank()) {
+                    yield false;
+                }
+                yield config.getRouteFilter() != null &&
+                        config.getRouteFilter().contains(routeNumber);
+            }
             case "bounds" -> config.isInBounds(
                     vehicle.getCurrentLatitude(),
                     vehicle.getCurrentLongitude()

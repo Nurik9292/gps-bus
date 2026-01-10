@@ -522,9 +522,10 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 tm.multiplier as traffic_multiplier,
                 CASE
                     WHEN vwd.is_before_stop = false THEN NULL
-                    -- Show 1 min only if BOTH direct distance AND route distance are small AND no intermediate stops
+                    -- Show 1 min only if BOTH direct distance AND route distance are KNOWN and small AND no intermediate stops
                     WHEN vwd.distance_to_stop_direct < 300
-                         AND (vwd.distance_on_route IS NULL OR vwd.distance_on_route < 500)
+                         AND vwd.distance_on_route IS NOT NULL
+                         AND vwd.distance_on_route < 500
                          AND COALESCE(istops.stops_count, 0) <= 1 THEN 1
                     -- Calculate ETA with stop dwell times and penalties
                     ELSE GREATEST(1, ROUND(
