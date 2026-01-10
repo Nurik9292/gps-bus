@@ -38,6 +38,7 @@ public class ApiVersionConfig {
     public static final String V1_STOPS = API_V1 + STOPS;
 
     public static final String V1_MOBILE_BANNERS = V1_MOBILE + BANNERS;
+    public static final String V1_MOBILE_CITIES = V1_MOBILE + CITIES;
     public static final String V1_MOBILE_NOTIFICATIONS = V1_MOBILE + NOTIFICATIONS;
     public static final String V1_MOBILE_ROUTES = V1_MOBILE + ROUTES;
     public static final String V1_MOBILE_STOPS = V1_MOBILE + STOPS;
