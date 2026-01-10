@@ -96,7 +96,7 @@ public class GpsDataAggregatorService {
                 .flatMapIterable(list -> list)
                 .collectList()
                 .doOnSuccess(positions ->
-                        log.info("Aggregated {} GPS positions from {} providers",
+                        log.debug("Aggregated {} GPS positions from {} providers",
                                 positions.size(), devicesByProvider.size()));
     }
 
@@ -118,7 +118,7 @@ public class GpsDataAggregatorService {
                 .flatMapIterable(list -> list)
                 .collectList()
                 .doOnSuccess(positions ->
-                        log.info("Fetched {} total positions from all providers", positions.size()));
+                        log.debug("Fetched {} total positions from all providers", positions.size()));
     }
 
 
@@ -145,7 +145,7 @@ public class GpsDataAggregatorService {
                         }))
                 .collectMap(Map.Entry::getKey, Map.Entry::getValue)
                 .doOnSuccess(results ->
-                        log.info("Health check results: {}", results));
+                        log.debug("Health check results: {}", results));
     }
 
 

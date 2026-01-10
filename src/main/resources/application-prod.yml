@@ -31,11 +31,26 @@ spring:
 
 logging:
   level:
-    tm.gov.busroute: INFO
+    biz.ugur.busroutebackend: WARN
+    biz.ugur.busroutebackend.transport.scheduler: WARN
+    biz.ugur.busroutebackend.shared.application.MaterializedViewRefreshService: WARN
+    biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase: WARN
+    biz.ugur.busroutebackend.transport.application.service.GpsDataAggregatorService: WARN
+    biz.ugur.busroutebackend.transport.infrastructure.messaging: WARN
+    biz.ugur.busroutebackend.shared.infrastructure.security: INFO
+    biz.ugur.busroutebackend.admin.infrastructure.security: INFO
+    biz.ugur.busroutebackend.interfaces.websocket: WARN
     org.springframework: WARN
     org.hibernate: WARN
+    io.r2dbc: WARN
+    io.netty: WARN
   file:
     name: logs/bus-route-backend.log
+  logback:
+    rollingpolicy:
+      max-history: 7
+      max-file-size: 50MB
+      total-size-cap: 500MB
 
 websocket:
   max-connections: 50000

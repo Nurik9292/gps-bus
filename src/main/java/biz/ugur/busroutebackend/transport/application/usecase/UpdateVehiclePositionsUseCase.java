@@ -89,7 +89,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
     private Mono<VehiclePositionUpdateResult> processInternal(List<GpsPositionDTO> gpsPositions) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-            log.info("Processing {} GPS positions (batch mode) - CorrelationId: {}", gpsPositions.size(), correlationId);
+            log.debug("Processing {} GPS positions (batch mode) - CorrelationId: {}", gpsPositions.size(), correlationId);
 
             List<GpsPositionDTO> validPositions = gpsPositions.stream()
                     .filter(validationService::isValidGpsPosition)
@@ -112,7 +112,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
             return vehicleRepository.findByDeviceIds(deviceIds)
                     .flatMap(existingVehiclesMap -> processBatch(validPositions, existingVehiclesMap))
-                    .doOnSuccess(result -> log.info("GPS batch update completed: {}", result.updatedCount()))
+                    .doOnSuccess(result -> log.debug("GPS batch update completed: {}", result.updatedCount()))
                     .doOnError(error -> log.error("GPS batch update failed", error));
         });
     }
@@ -267,7 +267,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     })
                     .flatMap(tuple -> expiredMono.thenReturn(tuple))
                     .map(tuple -> {
-                        log.info("Batch operations: {} updated, {} created", tuple.getT1(), tuple.getT2().size());
+                        log.debug("Batch operations: {} updated, {} created", tuple.getT1(), tuple.getT2().size());
                         return createResult(statuses);
                     });
         });

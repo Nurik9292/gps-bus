@@ -107,7 +107,7 @@ public class VehicleDataScheduler {
         }
 
         int totalDevices = devicesByProvider.values().stream().mapToInt(List::size).sum();
-        log.info("Found {} device IDs across {} providers, fetching GPS positions",
+        log.debug("Found {} device IDs across {} providers, fetching GPS positions",
                 totalDevices, devicesByProvider.size());
 
         return gpsDataAggregator.fetchPositionsGroupedByProvider(devicesByProvider);
@@ -126,7 +126,7 @@ public class VehicleDataScheduler {
     private Mono<VehiclePositionUpdateResult> handleSuccess(VehiclePositionUpdateResult result, Instant startTime) {
         Duration duration = Duration.between(startTime, Instant.now());
 
-        log.info("GPS update completed: duration={}ms, updated={}, created={}, failed={}, invalid={}, conflict={}",
+        log.debug("GPS update completed: duration={}ms, updated={}, created={}, failed={}, invalid={}, conflict={}",
                 duration.toMillis(),
                 result.updatedCount(),
                 result.createdCount(),

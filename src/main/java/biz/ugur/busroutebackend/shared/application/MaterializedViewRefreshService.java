@@ -21,7 +21,7 @@ public class MaterializedViewRefreshService {
     public void refreshActiveRoutesSummary() {
         refreshView("mv_active_routes_summary", "Active Routes Summary")
                 .subscribe(
-                        duration -> log.info("[MaterializedView] mv_active_routes_summary refreshed in {}ms", duration),
+                        duration -> log.debug("[MaterializedView] mv_active_routes_summary refreshed in {}ms", duration),
                         error -> log.error("[MaterializedView] Failed to refresh mv_active_routes_summary", error)
                 );
     }
@@ -30,7 +30,7 @@ public class MaterializedViewRefreshService {
     public void refreshPopularDirectRoutes() {
         refreshView("mv_popular_direct_routes", "Popular Direct Routes")
                 .subscribe(
-                        duration -> log.info("[MaterializedView] mv_popular_direct_routes refreshed in {}ms", duration),
+                        duration -> log.debug("[MaterializedView] mv_popular_direct_routes refreshed in {}ms", duration),
                         error -> log.error("[MaterializedView] Failed to refresh mv_popular_direct_routes", error)
                 );
     }
@@ -39,7 +39,7 @@ public class MaterializedViewRefreshService {
     public void refreshStopConnections() {
         refreshView("mv_stop_connections", "Stop Connections")
                 .subscribe(
-                        duration -> log.info("[MaterializedView] mv_stop_connections refreshed in {}ms", duration),
+                        duration -> log.debug("[MaterializedView] mv_stop_connections refreshed in {}ms", duration),
                         error -> log.error("[MaterializedView] Failed to refresh mv_stop_connections", error)
                 );
     }
@@ -48,13 +48,13 @@ public class MaterializedViewRefreshService {
     public void refreshRouteStatistics() {
         refreshView("mv_route_statistics", "Route Statistics")
                 .subscribe(
-                        duration -> log.info("[MaterializedView] mv_route_statistics refreshed in {}ms", duration),
+                        duration -> log.debug("[MaterializedView] mv_route_statistics refreshed in {}ms", duration),
                         error -> log.error("[MaterializedView] Failed to refresh mv_route_statistics", error)
                 );
     }
 
     public Mono<Void> refreshAllViews() {
-        log.info("[MaterializedView] Starting refresh of all materialized views");
+        log.debug("[MaterializedView] Starting refresh of all materialized views");
         LocalDateTime startTime = LocalDateTime.now();
 
         return databaseClient.sql("SELECT refresh_all_materialized_views()")
@@ -62,7 +62,7 @@ public class MaterializedViewRefreshService {
                 .rowsUpdated()
                 .doOnSuccess(count -> {
                     Duration duration = Duration.between(startTime, LocalDateTime.now());
-                    log.info("[MaterializedView] All views refreshed successfully in {}ms", duration.toMillis());
+                    log.debug("[MaterializedView] All views refreshed successfully in {}ms", duration.toMillis());
                 })
                 .doOnError(error ->
                         log.error("[MaterializedView] Failed to refresh all views", error))
