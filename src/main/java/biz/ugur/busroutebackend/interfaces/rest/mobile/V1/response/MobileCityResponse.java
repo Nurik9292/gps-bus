@@ -9,16 +9,9 @@ import lombok.Data;
 @Builder
 public class MobileCityResponse {
 
-    @JsonProperty("id")
     private String id;
-
-    @JsonProperty("name")
     private String name;
-
-    @JsonProperty("name_tm")
     private String nameTm;
-
-    @JsonProperty("display_order")
     private Integer displayOrder;
 
     public static MobileCityResponse from(MobileCityResult result) {

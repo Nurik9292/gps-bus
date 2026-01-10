@@ -11,6 +11,7 @@ import biz.ugur.busroutebackend.transport.domain.model.RouteAlternative;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteAlternativeRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
+import biz.ugur.busroutebackend.transport.domain.specification.BusRouteSpecifications;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,10 +62,22 @@ public class RouteResolutionServiceImpl implements RouteResolutionService {
 
     @Override
     public Flux<ResolvedRouteData> resolveAllRoutes() {
-        return busRouteRepository.findAll()
+        return resolveAllRoutes(null);
+    }
+
+    @Override
+    public Flux<ResolvedRouteData> resolveAllRoutes(String cityId) {
+        Flux<BusRoute> routesFlux;
+        if (cityId != null && !cityId.isBlank()) {
+            routesFlux = busRouteRepository.findBySpecification(BusRouteSpecifications.servesCity(cityId));
+        } else {
+            routesFlux = busRouteRepository.findAll();
+        }
+
+        return routesFlux
                 .flatMap(route -> resolveRoute(route, route.getId().getValue()))
                 .filter(resolved -> resolved != null && resolved.hasActiveRoute())
-                .doOnComplete(() -> log.debug("Completed resolving all routes with alternatives"));
+                .doOnComplete(() -> log.debug("Completed resolving all routes with alternatives, cityId={}", cityId));
     }
 
     private Mono<ResolvedRouteData> resolveRoute(BusRoute route, String originalRouteId) {

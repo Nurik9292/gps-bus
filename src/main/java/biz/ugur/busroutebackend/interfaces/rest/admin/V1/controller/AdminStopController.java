@@ -59,7 +59,7 @@ public class AdminStopController extends BasePaginatedController {
             @RequestParam(defaultValue = "desc") String order,
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) String search,
-            @RequestParam(required = false, name = "city_id") String cityId) {
+            @RequestParam(required = false, name = "cityId") String cityId) {
 
         validatePagination(page, size);
 

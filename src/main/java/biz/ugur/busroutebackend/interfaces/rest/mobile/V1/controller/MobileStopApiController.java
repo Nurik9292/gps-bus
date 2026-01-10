@@ -58,7 +58,7 @@ public class MobileStopApiController extends BaseMobileController {
 
     @GetMapping()
     public Mono<ResponseEntity<ApiResponse<MobileStopListResponse>>> getAllStops(
-            @RequestParam(required = false, name = "city_id") String cityId) {
+            @RequestParam(required = false, name = "cityId") String cityId) {
 
         return ok(getCurrentPrincipal()
                 .flatMap(principal -> {

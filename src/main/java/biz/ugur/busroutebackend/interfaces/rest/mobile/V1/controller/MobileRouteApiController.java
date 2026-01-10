@@ -62,11 +62,12 @@ public class MobileRouteApiController extends BaseMobileController {
     }
 
     @GetMapping()
-    public Mono<ResponseEntity<ApiResponse<MobileRouteListResponse>>> getAllRoutes() {
+    public Mono<ResponseEntity<ApiResponse<MobileRouteListResponse>>> getAllRoutes(
+            @RequestParam(required = false, name = "cityId") String cityId) {
 
         return ok(getCurrentPrincipal()
                 .flatMap(principal ->
-                        routeResolutionService.resolveAllRoutes()
+                        routeResolutionService.resolveAllRoutes(cityId)
                                 .flatMap(resolvedRoute ->
                                         routeIsFavoriteUseCase
                                                 .execute(new RouteIsFavoriteUseCase.Request(
@@ -91,7 +92,7 @@ public class MobileRouteApiController extends BaseMobileController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "routeNumber") String sortField,
             @RequestParam(defaultValue = "asc") String sortOrder,
-            @RequestParam(required = false, name = "city_id") String cityId) {
+            @RequestParam(required = false, name = "cityId") String cityId) {
 
 
         GetAllRoutePaginationQuery paginationQuery = new GetAllRoutePaginationQuery(
