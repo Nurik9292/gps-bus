@@ -57,11 +57,12 @@ public class MobileStopApiController extends BaseMobileController {
 
 
     @GetMapping()
-    public Mono<ResponseEntity<ApiResponse<MobileStopListResponse>>> getAllStops() {
+    public Mono<ResponseEntity<ApiResponse<MobileStopListResponse>>> getAllStops(
+            @RequestParam(required = false, name = "city_id") String cityId) {
 
         return ok(getCurrentPrincipal()
                 .flatMap(principal -> {
-                    return getAllStopsUseCase.execute(Mono.just(createDefaultStopPaginationQuery()))
+                    return getAllStopsUseCase.execute(Mono.just(createDefaultStopPaginationQuery(cityId)))
                             .flatMap(stopList ->
                                     Flux.fromIterable(stopList.getStops())
                                             .flatMap(stopData -> {
@@ -107,7 +108,8 @@ public class MobileStopApiController extends BaseMobileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "stopName") String sortField,
-            @RequestParam(defaultValue = "asc") String sortOrder) {
+            @RequestParam(defaultValue = "asc") String sortOrder,
+            @RequestParam(required = false, name = "city_id") String cityId) {
 
         GetAllStopPaginationQuery query = new GetAllStopPaginationQuery(
                 page + 1,
@@ -115,7 +117,8 @@ public class MobileStopApiController extends BaseMobileController {
                 sortField,
                 sortOrder,
                 true,
-                null
+                null,
+                cityId
         );
 
         return ok(getAllStopsUseCase.execute(Mono.just(query)));
@@ -160,14 +163,15 @@ public class MobileStopApiController extends BaseMobileController {
     }
 
 
-    private GetAllStopPaginationQuery createDefaultStopPaginationQuery() {
+    private GetAllStopPaginationQuery createDefaultStopPaginationQuery(String cityId) {
         return new GetAllStopPaginationQuery(
                 1,
                 1500,
                 "stop_name",
                 "asc",
                 true,
-                null
+                null,
+                cityId
         );
     }
 }

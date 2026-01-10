@@ -58,11 +58,12 @@ public class AdminStopController extends BasePaginatedController {
             @RequestParam(defaultValue = "do") String sort,
             @RequestParam(defaultValue = "desc") String order,
             @RequestParam(required = false) Boolean active,
-            @RequestParam(required = false) String search) {
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, name = "city_id") String cityId) {
 
         validatePagination(page, size);
 
-        return ok(Mono.just(GetAllStopPaginationQuery.fromParams(page, size, sort, order, active, search))
+        return ok(Mono.just(GetAllStopPaginationQuery.fromParams(page, size, sort, order, active, search, cityId))
                 .as(getAllBusStopsUseCase::execute)
                 .map(BusStopListResponse::fromResult));
     }

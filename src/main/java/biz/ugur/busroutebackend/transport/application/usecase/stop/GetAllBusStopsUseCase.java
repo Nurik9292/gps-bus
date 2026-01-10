@@ -103,6 +103,11 @@ public class GetAllBusStopsUseCase extends BaseUseCase<Mono<GetAllStopPagination
             spec = (spec == null) ? activeSpec : spec.and(activeSpec);
         }
 
+        if (query.cityId() != null && !query.cityId().isBlank()) {
+            Specification<BusStop> citySpec = BusStopSpecifications.servesCity(query.cityId());
+            spec = (spec == null) ? citySpec : spec.and(citySpec);
+        }
+
         return spec;
     }
 

@@ -68,11 +68,12 @@ public class AdminRouteController extends BasePaginatedController {
             @RequestParam(defaultValue = "createdAt") String sort,
             @RequestParam(defaultValue = "desc") String order,
             @RequestParam(required = false) Boolean active,
-            @RequestParam(required = false) String query) {
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false, name = "city_id") String cityId) {
 
         validatePagination(page, size);
 
-        return ok(Mono.just(GetAllRoutePaginationQuery.fromParams(page, size, camelToSnake(sort), order, active, query))
+        return ok(Mono.just(GetAllRoutePaginationQuery.fromParams(page, size, camelToSnake(sort), order, active, query, cityId))
                 .as(getAllBusRoutesUseCase::execute)
                 .map(BusRouteListResponse::fromResult));
     }

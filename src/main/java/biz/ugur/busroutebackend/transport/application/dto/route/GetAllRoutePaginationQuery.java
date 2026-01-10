@@ -6,7 +6,8 @@ public record GetAllRoutePaginationQuery(
         String sortField,
         String sortOrder,
         Boolean isActivate,
-        String query
+        String query,
+        String cityId
 ) {
     public static GetAllRoutePaginationQuery fromParams(
             Integer page,
@@ -14,14 +15,16 @@ public record GetAllRoutePaginationQuery(
             String sortField,
             String sortOrder,
             Boolean isActivate,
-            String query) {
+            String query,
+            String cityId) {
         return new GetAllRoutePaginationQuery(
                 page != null ? page : 1,
                 size != null ? size : 20,
                 sortField != null ? sortField : "routeNumber",
                 sortOrder != null ? sortOrder : "asc",
                 isActivate,
-                query
+                query,
+                cityId != null && !cityId.isBlank() ? cityId.trim() : null
         );
     }
 }

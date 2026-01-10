@@ -90,7 +90,8 @@ public class MobileRouteApiController extends BaseMobileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "routeNumber") String sortField,
-            @RequestParam(defaultValue = "asc") String sortOrder) {
+            @RequestParam(defaultValue = "asc") String sortOrder,
+            @RequestParam(required = false, name = "city_id") String cityId) {
 
 
         GetAllRoutePaginationQuery paginationQuery = new GetAllRoutePaginationQuery(
@@ -99,7 +100,8 @@ public class MobileRouteApiController extends BaseMobileController {
                 sortField,
                 sortOrder,
                 true,
-                null
+                null,
+                cityId
         );
 
         return ok(getCurrentPrincipal().flatMap(principal ->

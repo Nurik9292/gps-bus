@@ -150,12 +150,20 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
 
 
     private Specification<BusRoute> buildSpecificationWithoutQuery(GetAllRoutePaginationQuery query) {
+        Specification<BusRoute> spec = null;
+
         if (query.isActivate() != null) {
-            return query.isActivate()
+            spec = query.isActivate()
                     ? BusRouteSpecifications.isActive()
                     : BusRouteSpecifications.isInactive();
         }
-        return null;
+
+        if (query.cityId() != null && !query.cityId().isBlank()) {
+            Specification<BusRoute> citySpec = BusRouteSpecifications.servesCity(query.cityId());
+            spec = (spec == null) ? citySpec : spec.and(citySpec);
+        }
+
+        return spec;
     }
 
     private Pageable createPageable(GetAllRoutePaginationQuery query) {
