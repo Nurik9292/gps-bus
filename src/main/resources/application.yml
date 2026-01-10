@@ -388,11 +388,24 @@ management:
 
 logging:
   level:
-    biz.ugur.busroutebackend: ${LOG_LEVEL:INFO}
-    org.springframework.web.reactive: ${SPRING_LOG_LEVEL:WARN}
-    org.springframework.data: ${DATA_LOG_LEVEL:WARN}
-    org.springframework.r2dbc: ${R2DBC_LOG_LEVEL:WARN}
-    org.flywaydb: ${FLYWAY_LOG_LEVEL:INFO}
+    level:
+      biz.ugur.busroutebackend: WARN
+      biz.ugur.busroutebackend.transport.scheduler: WARN
+      biz.ugur.busroutebackend.shared.application.MaterializedViewRefreshService: WARN
+      biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase: WARN
+      biz.ugur.busroutebackend.transport.application.service.GpsDataAggregatorService: WARN
+      biz.ugur.busroutebackend.transport.infrastructure.messaging: WARN
+      biz.ugur.busroutebackend.shared.infrastructure.security: INFO
+      biz.ugur.busroutebackend.admin.infrastructure.security: INFO
+      biz.ugur.busroutebackend.interfaces.websocket: WARN
+      org.springframework: WARN
+      org.hibernate: WARN
+      io.r2dbc: WARN
+      io.netty: WARN
+      org.springframework.web.reactive: ${SPRING_LOG_LEVEL:WARN}
+      org.springframework.data: ${DATA_LOG_LEVEL:WARN}
+      org.springframework.r2dbc: ${R2DBC_LOG_LEVEL:WARN}
+      org.flywaydb: ${FLYWAY_LOG_LEVEL:INFO}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
