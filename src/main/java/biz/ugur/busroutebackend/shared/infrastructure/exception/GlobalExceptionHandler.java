@@ -600,6 +600,23 @@ public class GlobalExceptionHandler {
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
+    @ExceptionHandler(AssignmentValidationException.class)
+    public Mono<ResponseEntity<ErrorResponse>> handleAssignmentValidationException(
+            AssignmentValidationException ex,
+            ServerWebExchange exchange
+    ) {
+        log.warn("Assignment validation error - Path: {} - Message: {}",
+                exchange.getRequest().getPath().value(), ex.getMessage());
+
+        ErrorResponse errorResponse = errorResponseFactory.fromGenericError(
+                HttpStatus.CONFLICT,
+                "ASSIGNMENT_CONFLICT",
+                ex.getMessage(),
+                exchange
+        );
+
+        return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse));
+    }
 
     @ExceptionHandler(RealTimeDataException.class)
     public Mono<ResponseEntity<ErrorResponse>> handleRealTimeDataException(

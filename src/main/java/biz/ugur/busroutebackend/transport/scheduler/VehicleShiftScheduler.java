@@ -11,11 +11,13 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.RouteSource;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -36,6 +38,9 @@ public class VehicleShiftScheduler {
     public static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
     private static final Duration TASK_TIMEOUT = Duration.ofMinutes(5);
     private static final String SHIFT_CHANGE_STATS_KEY = "shift:change:stats";
+    private static final int MAX_RETRY_ATTEMPTS = 5;
+    private static final Duration RETRY_MIN_BACKOFF = Duration.ofMillis(50);
+    private static final Duration RETRY_MAX_BACKOFF = Duration.ofMillis(500);
 
     private final RouteAssignmentRepository assignmentRepository;
     private final VehicleRepository vehicleRepository;
@@ -239,25 +244,37 @@ public class VehicleShiftScheduler {
                                                     RouteAssignment assignment,
                                                     AtomicInteger successCount,
                                                     AtomicInteger failCount) {
-        return busRouteRepository.findById(assignment.getRouteId())
-                .map(route -> vehicle.toBuilder()
-                        .assignedRouteId(assignment.getRouteId())
-                        .routeNumber(route.getRouteNumber())
-                        .routeSource(RouteSource.SHIFT_ASSIGNMENT)
-                        .routeConfidence(100)
-                        .build())
-                .defaultIfEmpty(vehicle.toBuilder()
-                        .assignedRouteId(assignment.getRouteId())
-                        .routeSource(RouteSource.SHIFT_ASSIGNMENT)
-                        .routeConfidence(100)
-                        .build())
-                .flatMap(vehicleRepository::save)
+        return Mono.defer(() -> fetchAndAssignVehicle(vehicle.getId(), assignment))
+                .retryWhen(Retry.backoff(MAX_RETRY_ATTEMPTS, RETRY_MIN_BACKOFF)
+                        .maxBackoff(RETRY_MAX_BACKOFF)
+                        .jitter(0.5)
+                        .filter(throwable -> throwable instanceof OptimisticLockingFailureException)
+                        .doBeforeRetry(signal -> log.debug(
+                                "Retrying route assignment for vehicle {} (attempt {}/{})",
+                                vehicle.getLicensePlate(), signal.totalRetries() + 1, MAX_RETRY_ATTEMPTS)))
                 .doOnSuccess(v -> {
                     successCount.incrementAndGet();
                     log.debug("Assigned vehicle {} to route {} for {} shift on {}",
                             v.getLicensePlate(), v.getRouteNumber(),
                             assignment.getShiftType(), assignment.getEffectiveDate());
                 });
+    }
+
+    private Mono<Vehicle> fetchAndAssignVehicle(VehicleId vehicleId, RouteAssignment assignment) {
+        return vehicleRepository.findById(vehicleId)
+                .flatMap(freshVehicle -> busRouteRepository.findById(assignment.getRouteId())
+                        .map(route -> freshVehicle.toBuilder()
+                                .assignedRouteId(assignment.getRouteId())
+                                .routeNumber(route.getRouteNumber())
+                                .routeSource(RouteSource.SHIFT_ASSIGNMENT)
+                                .routeConfidence(100)
+                                .build())
+                        .defaultIfEmpty(freshVehicle.toBuilder()
+                                .assignedRouteId(assignment.getRouteId())
+                                .routeSource(RouteSource.SHIFT_ASSIGNMENT)
+                                .routeConfidence(100)
+                                .build())
+                        .flatMap(vehicleRepository::save));
     }
 
     private Mono<Void> saveShiftChangeStats(ShiftType shiftType, int success, int failed, Duration duration) {

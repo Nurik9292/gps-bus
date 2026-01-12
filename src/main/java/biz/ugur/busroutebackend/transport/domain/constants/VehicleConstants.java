@@ -8,7 +8,7 @@ public final class VehicleConstants {
 
     public static final long RECENT_POSITION_THRESHOLD_SECONDS = 600;
 
-    public static final double MOVING_FAST_THRESHOLD_KMH = 50.0;
+    public static final double MIN_SPEED_KMH = 0.0;
 
-    public static final long RECENT_UPDATE_MINUTES = 5;
+    public static final double MAX_SPEED_KMH = 200.0;
 }

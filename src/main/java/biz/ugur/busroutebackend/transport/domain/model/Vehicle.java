@@ -156,7 +156,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     public Vehicle updatePosition(Double latitude, Double longitude, Double speed, LocalDateTime fixTime, Double course) {
         VehicleValidationService.validateCoordinates(latitude, longitude);
 
-        Double newSpeed = speed != null ? speed : 0.0;
+        Double newSpeed = sanitizeSpeed(speed);
         Boolean newIsInMotion = newSpeed > VehicleConstants.MOTION_SPEED_THRESHOLD_KMH;
         LocalDateTime newFixTime = LocalDateTime.now();
         Double newCourse = course != null ? course : 0.0;
@@ -369,6 +369,17 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
     @Override
     public void setVersion(Long version) {
         this.version = version;
+    }
+
+    private static Double sanitizeSpeed(Double speed) {
+        if (speed == null) {
+            return 0.0;
+        }
+        if (speed < VehicleConstants.MIN_SPEED_KMH || speed > VehicleConstants.MAX_SPEED_KMH) {
+            log.warn("GPS anomaly: speed {} km/h out of valid range [{}-{}], clamping",
+                    speed, VehicleConstants.MIN_SPEED_KMH, VehicleConstants.MAX_SPEED_KMH);
+        }
+        return Math.max(VehicleConstants.MIN_SPEED_KMH, Math.min(speed, VehicleConstants.MAX_SPEED_KMH));
     }
 
     @Override
