@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.geospatial.infrastructure.postgis.PostGISQueryBu
 import biz.ugur.busroutebackend.shared.domain.specification.Specification;
 import biz.ugur.busroutebackend.shared.domain.specification.SqlCriteria;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
+import biz.ugur.busroutebackend.shared.infrastructure.persistence.OptimisticLockMetricsRecorder;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
@@ -36,11 +37,19 @@ import java.util.function.BiFunction;
 @Transactional(readOnly = true)
 public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, VehicleId> implements VehicleRepository {
 
-    private final VehicleEntityMapper entityMapper;
+    private static final String ENTITY_TYPE = "vehicle";
+    private static final int MAX_RETRIES = 3;
+    private static final int BATCH_UPDATE_CONCURRENCY = 16;
 
-    public R2dbcVehicleRepository(DatabaseClient databaseClient, VehicleEntityMapper entityMapper) {
+    private final VehicleEntityMapper entityMapper;
+    private final OptimisticLockMetricsRecorder metricsRecorder;
+
+    public R2dbcVehicleRepository(DatabaseClient databaseClient,
+                                   VehicleEntityMapper entityMapper,
+                                   OptimisticLockMetricsRecorder metricsRecorder) {
         super(databaseClient, "vehicles", Vehicle.class);
         this.entityMapper = entityMapper;
+        this.metricsRecorder = metricsRecorder;
     }
 
     @Override
@@ -260,8 +269,6 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Flux<Vehicle> findVehiclesWithinRadius(Double centerLat, Double centerLon, Integer radiusMeters) {
-        // Generate PostGIS query fragments using centralized utility
-        // NOTE: Migrated from Web Mercator (EPSG:3857) to geography for better accuracy
         PostGISQueryBuilder.QueryFragment query = PostGISQueryBuilder.nearbyPointsQuery(
                 "current_longitude", "current_latitude",
                 ":centerLon", ":centerLat",
@@ -466,28 +473,71 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         }
 
         return Flux.fromIterable(vehicles)
-                .flatMap(vehicle -> updateWithRetry(vehicle, 3))
-                .reduce(0, Integer::sum)
-                .doOnSuccess(count -> log.info("Batch updated {} vehicles", count));
+                .flatMap(this::updateWithRetry, BATCH_UPDATE_CONCURRENCY)
+                .reduce(BatchUpdateResult.empty(), BatchUpdateResult::merge)
+                .doOnSuccess(result -> {
+                    if (result.conflictCount() > 0) {
+                        log.warn("Batch update completed: updated={}, conflicts={} (data may be stale for {} vehicles)",
+                                result.successCount(), result.conflictCount(), result.conflictCount());
+                    } else {
+                        log.info("Batch updated {} vehicles successfully", result.successCount());
+                    }
+                })
+                .map(BatchUpdateResult::successCount);
     }
 
-    private Mono<Integer> updateWithRetry(Vehicle vehicle, int maxRetries) {
+    private Mono<BatchUpdateResult> updateWithRetry(Vehicle vehicle) {
         return updateSingleVehicle(vehicle)
-                .retryWhen(Retry.backoff(maxRetries, Duration.ofMillis(10))
+                .map(rowsUpdated -> BatchUpdateResult.success())
+                .retryWhen(Retry.backoff(MAX_RETRIES, Duration.ofMillis(10))
                         .maxBackoff(Duration.ofMillis(100))
                         .jitter(0.5)
                         .filter(throwable -> throwable instanceof org.springframework.dao.OptimisticLockingFailureException)
-                        .doBeforeRetry(signal -> log.debug("Retrying vehicle update for {} (attempt {}/{})",
-                                vehicle.getId(), signal.totalRetries() + 1, maxRetries))
+                        .doBeforeRetry(signal -> {
+                            int attempt = (int) signal.totalRetries() + 1;
+                            metricsRecorder.recordRetry(ENTITY_TYPE, vehicle.getId().getValue(), attempt, MAX_RETRIES);
+                        })
+                        .doAfterRetry(signal -> {
+                            if (signal.failure() == null) {
+                                metricsRecorder.recordSuccessAfterRetry(
+                                        ENTITY_TYPE,
+                                        vehicle.getId().getValue(),
+                                        (int) signal.totalRetries() + 1
+                                );
+                            }
+                        })
                 )
-                .doOnError(org.springframework.dao.OptimisticLockingFailureException.class,
-                        error -> log.warn("Failed to update vehicle {} after {} retries due to optimistic locking",
-                                vehicle.getId(), maxRetries))
                 .onErrorResume(org.springframework.dao.OptimisticLockingFailureException.class,
                         error -> {
-                            log.debug("Skipping vehicle {} due to concurrent modification", vehicle.getId());
-                            return Mono.just(0);
+                            metricsRecorder.recordFailureAfterRetries(ENTITY_TYPE, vehicle.getId().getValue(), MAX_RETRIES);
+                            return Mono.just(BatchUpdateResult.conflict());
                         });
+    }
+
+    /**
+     * Internal result for batch update operations.
+     * Tracks both successful updates and optimistic lock conflicts.
+     */
+    private record BatchUpdateResult(int successCount, int conflictCount) {
+
+        static BatchUpdateResult empty() {
+            return new BatchUpdateResult(0, 0);
+        }
+
+        static BatchUpdateResult success() {
+            return new BatchUpdateResult(1, 0);
+        }
+
+        static BatchUpdateResult conflict() {
+            return new BatchUpdateResult(0, 1);
+        }
+
+        static BatchUpdateResult merge(BatchUpdateResult r1, BatchUpdateResult r2) {
+            return new BatchUpdateResult(
+                    r1.successCount() + r2.successCount(),
+                    r1.conflictCount() + r2.conflictCount()
+            );
+        }
     }
 
     private Mono<Integer> updateSingleVehicle(Vehicle vehicle) {
@@ -508,7 +558,6 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
 
-        // Use bindValue to properly handle null values
         spec = bindValue(spec, "latitude", vehicle.getCurrentLatitude());
         spec = bindValue(spec, "longitude", vehicle.getCurrentLongitude());
         spec = bindValue(spec, "speed", vehicle.getSpeedKmh());
@@ -572,7 +621,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                     }
 
                     return spec.map(getRowMapper()).one();
-                })
+                }, BATCH_UPDATE_CONCURRENCY)
                 .doOnComplete(() -> log.info("Batch inserted {} vehicles", vehicles.size()));
     }
 

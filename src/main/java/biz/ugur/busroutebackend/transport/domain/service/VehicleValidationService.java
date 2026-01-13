@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.transport.domain.service;
 
 import biz.ugur.busroutebackend.geospatial.domain.constants.TurkmenistanBounds;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
+import biz.ugur.busroutebackend.transport.domain.valueobject.GpsValidationResult;
 import lombok.extern.slf4j.Slf4j;
 
 
@@ -10,20 +11,20 @@ public class VehicleValidationService {
 
     private static final String LICENSE_PLATE_PATTERN = "\\d{4}\\s[A-Z]{3}";
 
-    public boolean isValidGpsPosition(GpsPositionDTO gpsPosition) {
+    public GpsValidationResult validateGpsPosition(GpsPositionDTO gpsPosition) {
         if (gpsPosition == null) {
             log.trace("GPS position is null");
-            return false;
+            return GpsValidationResult.NULL_POSITION;
         }
 
         if (gpsPosition.getDeviceId() == null || gpsPosition.getDeviceId().isBlank()) {
             log.debug("GPS position has invalid device ID: {}", gpsPosition.getDeviceId());
-            return false;
+            return GpsValidationResult.INVALID_DEVICE_ID;
         }
 
         if (gpsPosition.getLatitude() == null || gpsPosition.getLongitude() == null) {
             log.trace("GPS position has null coordinates");
-            return false;
+            return GpsValidationResult.NULL_COORDINATES;
         }
 
         double lat = gpsPosition.getLatitude();
@@ -32,10 +33,15 @@ public class VehicleValidationService {
         if (!TurkmenistanBounds.isWithinStandardBounds(lat, lon)) {
             log.warn("Coordinates ({}, {}) outside Turkmenistan bounds for device {}",
                     lat, lon, gpsPosition.getDeviceId());
-            return false;
+            return GpsValidationResult.OUT_OF_BOUNDS;
         }
 
-        return true;
+        return GpsValidationResult.VALID;
+    }
+
+
+    public boolean isValidGpsPosition(GpsPositionDTO gpsPosition) {
+        return validateGpsPosition(gpsPosition).isValid();
     }
 
     public boolean isWithinServiceArea(Double latitude, Double longitude) {

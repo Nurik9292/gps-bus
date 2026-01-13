@@ -1,8 +1,10 @@
 package biz.ugur.busroutebackend.shared.infrastructure.external.gps;
 
+import biz.ugur.busroutebackend.shared.infrastructure.external.gps.config.GpsFetchOptimizationProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.config.GpsProviderProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.dto.TugdkGpsResponseDTO;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.mapper.TugdkGpsPositionMapper;
+import biz.ugur.busroutebackend.shared.infrastructure.external.gps.metrics.GpsFetchStrategyMetricsRecorder;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -15,10 +17,12 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -31,6 +35,8 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
     private final String token;
     private final TugdkGpsPositionMapper mapper;
     private final Duration cacheTimeout;
+    private final GpsFetchOptimizationProperties optimizationProperties;
+    private final GpsFetchStrategyMetricsRecorder metricsRecorder;
 
     private final AtomicReference<CachedPositions> cache = new AtomicReference<>(CachedPositions.empty());
 
@@ -40,14 +46,22 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
             @Value("${external.api.gps-tugdk.token}") String token,
             @Value("${external.api.gps-tugdk.enabled:false}") boolean enabled,
             @Value("${external.api.gps-tugdk.cache-timeout:5s}") Duration cacheTimeout,
-            TugdkGpsPositionMapper mapper) {
+            TugdkGpsPositionMapper mapper,
+            GpsFetchOptimizationProperties optimizationProperties,
+            GpsFetchStrategyMetricsRecorder metricsRecorder) {
         super(webClient, properties, enabled);
         this.token = token;
         this.cacheTimeout = cacheTimeout;
         this.mapper = mapper;
+        this.optimizationProperties = optimizationProperties;
+        this.metricsRecorder = metricsRecorder;
 
-        log.info("TugdkGpsDataProvider initialized: enabled={}, cacheTimeout={}s",
-                enabled, cacheTimeout.toSeconds());
+        log.info("TugdkGpsDataProvider initialized: enabled={}, cacheTimeout={}s, " +
+                 "selectiveFetch={}, threshold={}, concurrency={}",
+                enabled, cacheTimeout.toSeconds(),
+                optimizationProperties.isSelectiveFetchEnabled(),
+                optimizationProperties.getSelectiveFetchThreshold(),
+                optimizationProperties.getParallelFetchConcurrency());
     }
 
     @Override
@@ -72,11 +86,78 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
         }
 
         Set<String> deviceIdSet = Set.copyOf(deviceIds);
+        int deviceCount = deviceIds.size();
 
-        logFetch(deviceIds.size());
+        logFetch(deviceCount);
+
+        CachedPositions cached = cache.get();
+        if (cached.isValid(cacheTimeout)) {
+            metricsRecorder.recordCacheHit(deviceCount, "TUGDK");
+            return Mono.just(filterPositions(cached.positions(), deviceIdSet, deviceCount));
+        }
+
+        if (shouldUseSelectiveFetch(deviceCount)) {
+            return fetchPositionsSelectively(deviceIds, deviceIdSet);
+        }
+
+        return fetchAllAndFilter(deviceIdSet, deviceCount);
+    }
+
+    private boolean shouldUseSelectiveFetch(int deviceCount) {
+        if (!optimizationProperties.isSelectiveFetchEnabled()) {
+            return false;
+        }
+
+        boolean useSelective = deviceCount <= optimizationProperties.getSelectiveFetchThreshold();
+
+        if (optimizationProperties.isLogStrategyDecisions()) {
+            log.info("[TUGDK] Fetch strategy decision: deviceCount={}, threshold={}, useSelective={}",
+                    deviceCount, optimizationProperties.getSelectiveFetchThreshold(), useSelective);
+        }
+
+        return useSelective;
+    }
+
+    private Mono<List<GpsPositionDTO>> fetchPositionsSelectively(List<String> deviceIds, Set<String> deviceIdSet) {
+        int deviceCount = deviceIds.size();
+
+        log.debug("[TUGDK] Using selective fetch for {} devices", deviceCount);
+        metricsRecorder.recordSelectiveFetch(deviceCount, "TUGDK");
+
+        return Flux.fromIterable(deviceIds)
+                .flatMap(
+                        this::fetchSingleDevicePosition,
+                        optimizationProperties.getParallelFetchConcurrency()
+                )
+                .collectList()
+                .doOnNext(positions ->
+                        log.debug("[TUGDK] Selective fetch completed: {} positions for {} devices",
+                                positions.size(), deviceCount)
+                );
+    }
+
+    private Mono<GpsPositionDTO> fetchSingleDevicePosition(String deviceId) {
+        return webClient.get()
+                .uri("/api/positions/{deviceId}", deviceId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+                .retrieve()
+                .bodyToMono(TugdkGpsResponseDTO.class)
+                .map(mapper::map)
+                .timeout(properties.getTimeout().getRequest())
+                .onErrorResume(error -> {
+                    log.debug("[TUGDK] Failed to fetch position for device {}: {}",
+                            deviceId, error.getMessage());
+                    return Mono.empty();
+                });
+    }
+
+    private Mono<List<GpsPositionDTO>> fetchAllAndFilter(Set<String> deviceIdSet, int deviceCount) {
+        log.debug("[TUGDK] Using bulk fetch for {} devices", deviceCount);
+        metricsRecorder.recordBulkFetch(deviceCount, "TUGDK");
 
         return fetchAllPositions()
-                .map(allPositions -> filterPositions(allPositions, deviceIdSet, deviceIds.size()));
+                .map(allPositions -> filterPositions(allPositions, deviceIdSet, deviceCount));
     }
 
     @SuppressWarnings("unused")
@@ -86,7 +167,7 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
 
         CachedPositions cached = cache.get();
         if (cached.hasData()) {
-            Set<String> deviceIdSet = Set.copyOf(deviceIds);
+            Set<String> deviceIdSet = Set.copyOf(Objects.requireNonNull(deviceIds));
             List<GpsPositionDTO> filtered = filterPositions(cached.positions(), deviceIdSet, deviceIds.size());
             log.info("[TUGDK] Returning {} stale cached positions from fallback", filtered.size());
             return Mono.just(filtered);

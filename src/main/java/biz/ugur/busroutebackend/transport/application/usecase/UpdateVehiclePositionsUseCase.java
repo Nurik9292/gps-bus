@@ -15,11 +15,19 @@ import biz.ugur.busroutebackend.transport.application.factory.VehicleFactory;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
+import biz.ugur.busroutebackend.transport.domain.service.GpsOutlierDetector;
 import biz.ugur.busroutebackend.transport.domain.service.LicensePlateExtractor;
 import biz.ugur.busroutebackend.transport.domain.service.PositionChangeDetector;
 import biz.ugur.busroutebackend.transport.domain.service.VehicleDirectionDetectionService;
 import biz.ugur.busroutebackend.transport.domain.service.VehicleValidationService;
-import biz.ugur.busroutebackend.transport.application.usecase.assignment.ProcessExpiredAssignmentsUseCase;
+import biz.ugur.busroutebackend.transport.domain.valueobject.FailedGpsUpdate;
+import biz.ugur.busroutebackend.transport.domain.valueobject.GpsValidationResult;
+import biz.ugur.busroutebackend.transport.domain.valueobject.OutlierDetectionResult;
+import biz.ugur.busroutebackend.transport.infrastructure.config.GpsOutlierDetectionProperties;
+import biz.ugur.busroutebackend.transport.infrastructure.metrics.GpsOutlierMetricsRecorder;
+import biz.ugur.busroutebackend.transport.infrastructure.metrics.GpsValidationMetricsRecorder;
+import biz.ugur.busroutebackend.transport.infrastructure.redis.GpsPoint;
+import biz.ugur.busroutebackend.transport.infrastructure.redis.GpsUpdateDeadLetterQueue;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistoryService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +35,11 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 import java.time.LocalDateTime;
 
@@ -45,8 +57,12 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private final ProcessGarageEntryUseCase processGarageEntryUseCase;
     private final ProcessGarageExitUseCase processGarageExitUseCase;
     private final VehicleGpsHistoryService gpsHistoryService;
-    private final ProcessExpiredAssignmentsUseCase processExpiredAssignmentsUseCase;
     private final DomainEventPublisher domainEventPublisher;
+    private final GpsValidationMetricsRecorder validationMetricsRecorder;
+    private final GpsUpdateDeadLetterQueue deadLetterQueue;
+    private final GpsOutlierDetector outlierDetector;
+    private final GpsOutlierMetricsRecorder outlierMetricsRecorder;
+    private final GpsOutlierDetectionProperties outlierDetectionProperties;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
                                          VehicleFactory vehicleFactory,
@@ -58,10 +74,14 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                          ProcessGarageEntryUseCase processGarageEntryUseCase,
                                          ProcessGarageExitUseCase processGarageExitUseCase,
                                          VehicleGpsHistoryService gpsHistoryService,
-                                         ProcessExpiredAssignmentsUseCase processExpiredAssignmentsUseCase,
                                          EventBus eventBus,
                                          DomainEventPublisher domainEventPublisher,
-                                         CorrelationContextService correlationContextService) {
+                                         CorrelationContextService correlationContextService,
+                                         GpsValidationMetricsRecorder validationMetricsRecorder,
+                                         GpsUpdateDeadLetterQueue deadLetterQueue,
+                                         GpsOutlierDetector outlierDetector,
+                                         GpsOutlierMetricsRecorder outlierMetricsRecorder,
+                                         GpsOutlierDetectionProperties outlierDetectionProperties) {
         super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
         this.vehicleFactory = vehicleFactory;
@@ -73,8 +93,12 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         this.processGarageEntryUseCase = processGarageEntryUseCase;
         this.processGarageExitUseCase = processGarageExitUseCase;
         this.gpsHistoryService = gpsHistoryService;
-        this.processExpiredAssignmentsUseCase = processExpiredAssignmentsUseCase;
         this.domainEventPublisher = domainEventPublisher;
+        this.validationMetricsRecorder = validationMetricsRecorder;
+        this.deadLetterQueue = deadLetterQueue;
+        this.outlierDetector = outlierDetector;
+        this.outlierMetricsRecorder = outlierMetricsRecorder;
+        this.outlierDetectionProperties = outlierDetectionProperties;
     }
 
     @Override
@@ -91,9 +115,21 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.debug("Processing {} GPS positions (batch mode) - CorrelationId: {}", gpsPositions.size(), correlationId);
 
-            List<GpsPositionDTO> validPositions = gpsPositions.stream()
-                    .filter(validationService::isValidGpsPosition)
-                    .toList();
+            List<GpsPositionDTO> validPositions = new ArrayList<>();
+            Map<GpsValidationResult, Long> validationCounts = new EnumMap<>(GpsValidationResult.class);
+            for (GpsValidationResult r : GpsValidationResult.values()) {
+                validationCounts.put(r, 0L);
+            }
+
+            for (GpsPositionDTO position : gpsPositions) {
+                GpsValidationResult result = validationService.validateGpsPosition(position);
+                validationCounts.merge(result, 1L, Long::sum);
+                if (result.isValid()) {
+                    validPositions.add(position);
+                }
+            }
+
+            validationMetricsRecorder.recordBatch(validationCounts);
 
             if (validPositions.isEmpty()) {
                 return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, gpsPositions.size() - validPositions.size(), 0, LocalDateTime.now(), List.of()));
@@ -110,12 +146,94 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validPositions.size(), 0, LocalDateTime.now(), List.of()));
             }
 
-            return vehicleRepository.findByDeviceIds(deviceIds)
-                    .flatMap(existingVehiclesMap -> processBatch(validPositions, existingVehiclesMap))
+            return filterOutliers(validPositions)
+                    .flatMap(filteredPositions -> {
+                        if (filteredPositions.isEmpty()) {
+                            log.warn("All {} positions were filtered as outliers", validPositions.size());
+                            return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validPositions.size(), 0, LocalDateTime.now(), List.of()));
+                        }
+
+                        List<String> filteredDeviceIds = filteredPositions.stream()
+                                .map(GpsPositionDTO::getDeviceId)
+                                .filter(deviceId -> deviceId != null && !deviceId.isBlank())
+                                .distinct()
+                                .toList();
+
+                        return vehicleRepository.findByDeviceIds(filteredDeviceIds)
+                                .flatMap(existingVehiclesMap -> processBatch(filteredPositions, existingVehiclesMap));
+                    })
                     .doOnSuccess(result -> log.debug("GPS batch update completed: {}", result.updatedCount()))
-                    .doOnError(error -> log.error("GPS batch update failed", error));
+                    .onErrorResume(error -> {
+                        log.error("GPS batch update failed, sending {} positions to DLQ", validPositions.size(), error);
+                        return Flux.fromIterable(validPositions)
+                                .flatMap(pos -> sendToDeadLetterQueue(pos, error))
+                                .then(Mono.just(new VehiclePositionUpdateResult(
+                                        0, 0, validPositions.size(), 0, 0,
+                                        LocalDateTime.now(), List.of()
+                                )));
+                    });
         });
     }
+
+    private static final int OUTLIER_DETECTION_CONCURRENCY = 16;
+    private static final int GARAGE_DETECTION_CONCURRENCY = 8;
+
+    private Mono<List<GpsPositionDTO>> filterOutliers(List<GpsPositionDTO> positions) {
+        if (!outlierDetectionProperties.isEnabled()) {
+            return Mono.just(positions);
+        }
+
+        int historyLimit = outlierDetectionProperties.getHistoryPointsToCheck();
+        boolean rejectOutliers = outlierDetectionProperties.isRejectOutliers();
+
+        return Flux.fromIterable(positions)
+                .flatMap(position -> detectOutlierForPosition(position, historyLimit)
+                        .map(result -> new PositionWithOutlierResult(position, result)),
+                        OUTLIER_DETECTION_CONCURRENCY)
+                .collectList()
+                .map(results -> {
+                    List<GpsPositionDTO> nonOutliers = new ArrayList<>();
+                    List<OutlierDetectionResult> allResults = new ArrayList<>();
+
+                    for (PositionWithOutlierResult result : results) {
+                        allResults.add(result.detectionResult());
+
+                        if (!result.detectionResult().isOutlier() || !rejectOutliers) {
+                            nonOutliers.add(result.position());
+                        }
+                    }
+
+                    outlierMetricsRecorder.recordBatch(allResults);
+
+                    int outliersDetected = (int) allResults.stream().filter(OutlierDetectionResult::isOutlier).count();
+                    if (outliersDetected > 0) {
+                        log.info("Outlier detection: {} outliers detected out of {} positions, {} rejected",
+                                outliersDetected, positions.size(), rejectOutliers ? outliersDetected : 0);
+                    }
+
+                    return nonOutliers;
+                });
+    }
+
+    private Mono<OutlierDetectionResult> detectOutlierForPosition(GpsPositionDTO position, int historyLimit) {
+        String deviceId = position.getDeviceId();
+
+        return gpsHistoryService.getHistoryList(deviceId, historyLimit)
+                .map(history -> outlierDetector.detectWithHistory(
+                        deviceId,
+                        position.getLatitude(),
+                        position.getLongitude(),
+                        position.getFixTime(),
+                        history
+                ))
+                .onErrorResume(error -> {
+                    log.warn("Failed to check outlier for device {}: {}", deviceId, error.getMessage());
+                    return Mono.just(OutlierDetectionResult.noHistory(deviceId,
+                            outlierDetectionProperties.getMaxImpliedSpeedKmh()));
+                });
+    }
+
+    private record PositionWithOutlierResult(GpsPositionDTO position, OutlierDetectionResult detectionResult) {}
 
     private Mono<VehiclePositionUpdateResult> processBatch(List<GpsPositionDTO> validPositions, Map<String, Vehicle> existingVehicles) {
         Map<String, GpsPositionDTO> latestPositionsByDevice = new java.util.LinkedHashMap<>();
@@ -226,7 +344,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             }
 
             return Flux.fromIterable(vehicles)
-                    .flatMap(this::detectAndHandleGarageTransition)
+                    .flatMap(this::detectAndHandleGarageTransition, GARAGE_DETECTION_CONCURRENCY)
                     .collectList()
                     .doOnNext(updated -> log.debug("Garage detection completed for {} vehicles", updated.size()));
         });
@@ -237,9 +355,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
             Mono<List<Vehicle>> insertMono = vehiclesToCreate.isEmpty() ?
                     Mono.just(List.of()) : vehicleRepository.batchInsert(vehiclesToCreate).collectList();
-
-            Mono<ProcessExpiredAssignmentsUseCase.Result> expiredMono =
-                    processExpiredAssignmentsUseCase.execute(Mono.empty());
 
             return Mono.zip(updateMono, insertMono)
                     .flatMap(tuple -> {
@@ -265,7 +380,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                     return Mono.just(tuple);
                                 }));
                     })
-                    .flatMap(tuple -> expiredMono.thenReturn(tuple))
                     .map(tuple -> {
                         log.debug("Batch operations: {} updated, {} created", tuple.getT1(), tuple.getT2().size());
                         return createResult(statuses);
@@ -403,5 +517,50 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     type, deviceId, vehicleId, licensePlate,
                     errorMessage != null ? ", error=" + errorMessage : "");
         }
+    }
+
+    private Mono<Void> sendToDeadLetterQueue(GpsPositionDTO gpsPosition, Throwable error) {
+        FailedGpsUpdate.FailureType failureType = classifyFailure(error);
+        String failureReason = error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName();
+
+        FailedGpsUpdate failedUpdate = FailedGpsUpdate.create(
+                gpsPosition.getDeviceId(),
+                gpsPosition.getVehicleName(),
+                gpsPosition.getLatitude(),
+                gpsPosition.getLongitude(),
+                gpsPosition.getSpeed(),
+                gpsPosition.getCourse(),
+                gpsPosition.getFixTime(),
+                failureReason,
+                failureType
+        );
+
+        return deadLetterQueue.enqueue(failedUpdate);
+    }
+
+    private FailedGpsUpdate.FailureType classifyFailure(Throwable error) {
+        String errorClass = error.getClass().getName();
+        String message = error.getMessage() != null ? error.getMessage().toLowerCase() : "";
+
+        if (errorClass.contains("OptimisticLocking") || message.contains("optimistic")) {
+            return FailedGpsUpdate.FailureType.OPTIMISTIC_LOCK_EXHAUSTED;
+        }
+        if (errorClass.contains("Constraint") || message.contains("constraint") ||
+                message.contains("duplicate") || message.contains("foreign key")) {
+            return FailedGpsUpdate.FailureType.CONSTRAINT_VIOLATION;
+        }
+        if (errorClass.contains("Timeout") || message.contains("timeout") || message.contains("timed out")) {
+            return FailedGpsUpdate.FailureType.TIMEOUT;
+        }
+        if (errorClass.contains("Connection") || message.contains("connection") ||
+                message.contains("network") || message.contains("refused")) {
+            return FailedGpsUpdate.FailureType.CONNECTION_ERROR;
+        }
+        if (errorClass.contains("Validation") || message.contains("validation") ||
+                message.contains("invalid")) {
+            return FailedGpsUpdate.FailureType.VALIDATION_ERROR;
+        }
+
+        return FailedGpsUpdate.FailureType.UNKNOWN;
     }
 }

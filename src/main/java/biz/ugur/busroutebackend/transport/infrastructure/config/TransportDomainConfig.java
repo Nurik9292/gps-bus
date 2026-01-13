@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.config;
 
+import biz.ugur.busroutebackend.transport.domain.service.GpsOutlierDetector;
 import biz.ugur.busroutebackend.transport.domain.service.LicensePlateExtractor;
 import biz.ugur.busroutebackend.transport.domain.service.PositionChangeDetector;
 import biz.ugur.busroutebackend.transport.domain.service.VehicleValidationService;
@@ -22,8 +23,23 @@ public class TransportDomainConfig {
     }
 
     @Bean
-    public PositionChangeDetector positionChangeDetector() {
-        return new PositionChangeDetector();
+    public PositionChangeDetector positionChangeDetector(PositionChangeProperties properties) {
+        return new PositionChangeDetector(
+                properties.getPositionDeltaThreshold(),
+                properties.getSpeedDeltaThresholdKmh(),
+                properties.getMinSpeedForMotionKmh()
+        );
+    }
+
+    @Bean
+    public GpsOutlierDetector gpsOutlierDetector(GpsOutlierDetectionProperties properties) {
+        return new GpsOutlierDetector(
+                properties.isEnabled(),
+                properties.getMaxImpliedSpeedKmh(),
+                properties.getMinTimeDifference().toSeconds(),
+                properties.getMaxTimeDifference().toSeconds(),
+                properties.getMinDistanceMeters()
+        );
     }
 
     @Bean

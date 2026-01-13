@@ -63,14 +63,17 @@ external:
       retry:
         max-attempts: 2
         initial-interval: 1s
-    bus-info:
-      base-url: https://edu.ayauk.gov.tm
-      username: duralga
-      password: S[A$@gmm.)-5yTzh
-      timeout: 5s
-      retry:
-        max-attempts: 2
-        initial-interval: 1s
+
+    gps-tugdk:
+      enabled: ${GPS_TUGDK_ENABLED:true}
+      base-url: ${GPS_TUGDK_BASE_URL:https://gps.tugdk.gov.tm}
+      token: ${GPS_TUGDK_TOKEN}
+      timeout: ${GPS_TUGDK_TIMEOUT:30s}
+      connect-timeout: ${GPS_TUGDK_CONNECT_TIMEOUT:10s}
+      read-timeout: ${GPS_TUGDK_READ_TIMEOUT:60s}
+      write-timeout: ${GPS_TUGDK_WRITE_TIMEOUT:10s}
+      cache-timeout: ${GPS_TUGDK_CACHE_TIMEOUT:5s}
+
 
 app:
   scheduling:

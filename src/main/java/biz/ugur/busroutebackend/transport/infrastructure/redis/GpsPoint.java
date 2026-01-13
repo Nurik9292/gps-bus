@@ -1,17 +1,16 @@
 package biz.ugur.busroutebackend.transport.infrastructure.redis;
 
+import biz.ugur.busroutebackend.transport.domain.service.GpsOutlierDetector;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
 
-/**
- * Represents a GPS point stored in Redis for route detection.
- * Optimized for minimal storage size.
- */
+
 @Getter
-public class GpsPoint {
+public class GpsPoint implements GpsOutlierDetector.GpsHistoryPoint {
     private final double lat;
     private final double lon;
     private final double speed;
@@ -42,5 +41,24 @@ public class GpsPoint {
     public String toString() {
         return String.format("GpsPoint[lat=%.6f, lon=%.6f, speed=%.1f, time=%s]",
                 lat, lon, speed, time);
+    }
+
+
+    @Override
+    @JsonIgnore
+    public double getLatitude() {
+        return lat;
+    }
+
+    @Override
+    @JsonIgnore
+    public double getLongitude() {
+        return lon;
+    }
+
+    @Override
+    @JsonIgnore
+    public LocalDateTime getTimestamp() {
+        return time;
     }
 }

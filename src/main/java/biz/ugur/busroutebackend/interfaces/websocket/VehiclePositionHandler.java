@@ -15,12 +15,15 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
+import org.springframework.scheduling.annotation.Scheduled;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -28,22 +31,33 @@ import java.util.stream.Collectors;
 @Slf4j
 public class VehiclePositionHandler implements WebSocketHandler {
 
+    private static final int BUFFER_SIZE = 4096;
+
+    private static final Duration SESSION_TIMEOUT = Duration.ofMinutes(5);
+
+    private static final long CLEANUP_INTERVAL_MS = 60_000;
+
     private final GetActiveVehiclesUseCase getActiveVehiclesUseCase;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final WebSocketBufferMetricsTracker bufferMetrics;
 
     private final Map<String, SessionConfig> activeSessions = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCounter = new AtomicInteger(0);
+    private final AtomicLong totalExpiredSessions = new AtomicLong(0);
+
 
     private final Sinks.Many<VehiclePositionWebSocketMessage> broadcastSink =
-            Sinks.many().multicast().directBestEffort();
+            Sinks.many().multicast().onBackpressureBuffer(BUFFER_SIZE, false);
 
     public VehiclePositionHandler(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
-                                           ReactiveRedisTemplate<String, Object> redisTemplate,
-                                           ObjectMapper objectMapper) {
+                                  ReactiveRedisTemplate<String, Object> redisTemplate,
+                                  ObjectMapper objectMapper,
+                                  WebSocketBufferMetricsTracker bufferMetrics) {
         this.getActiveVehiclesUseCase = getActiveVehiclesUseCase;
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
+        this.bufferMetrics = bufferMetrics;
 
         subscribeToRedisUpdates();
     }
@@ -53,9 +67,9 @@ public class VehiclePositionHandler implements WebSocketHandler {
     public Mono<Void> handle(WebSocketSession session) {
         String sessionId = generateSessionId();
         SessionConfig sessionConfig = parseSessionConfig(session);
-        activeSessions.put(sessionId, sessionConfig);
-
         String clientIp = getClientIp(session);
+        sessionConfig.setClientIp(clientIp);
+        activeSessions.put(sessionId, sessionConfig);
 
         log.info("WebSocket connection established: {} from {} (total: {}, routes: {})",
                 sessionId, clientIp, activeSessions.size(), sessionConfig.getRouteFilter());
@@ -146,13 +160,11 @@ public class VehiclePositionHandler implements WebSocketHandler {
             if (routes == null || routes.isEmpty()) {
                 return Flux.empty();
             }
-            // Запрашиваем автобусы только для указанных маршрутов
             return Flux.fromIterable(routes)
                     .flatMap(routeNumber ->
                             getActiveVehiclesUseCase.execute(GetActiveVehiclesUseCase.Query.byRoute(routeNumber)))
                     .distinct(VehiclePositionDTO::getVehicleId);
         } else if ("bounds".equals(subscriptionType)) {
-            // Для bounds фильтруем все активные по координатам
             return getActiveVehiclesUseCase.execute(null)
                     .filter(vehicle -> {
                         Double lat = vehicle.getCurrentLatitude();
@@ -163,7 +175,6 @@ public class VehiclePositionHandler implements WebSocketHandler {
                         return config.isInBounds(lat, lon);
                     });
         } else {
-            // subscriptionType = "all" - все активные автобусы
             return getActiveVehiclesUseCase.execute(null);
         }
     }
@@ -247,6 +258,8 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
     private Mono<Void> handleIncomingMessage(WebSocketSession session, String sessionId,
                                               SessionConfig config, WebSocketMessage message) {
+        config.touch();
+
         try {
             String payload = message.getPayloadAsText();
             var clientMessage = objectMapper.readValue(payload,
@@ -259,7 +272,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
             }
 
             return switch (messageType) {
-                case "ping" -> handlePing(sessionId);
+                case "ping" -> handlePing(sessionId, config);
                 case "subscribe_routes" -> handleSubscribeRoutes(session, sessionId, config, clientMessage);
                 case "subscribe_bounds" -> handleSubscribeBounds(session, sessionId, config, clientMessage);
                 default -> {
@@ -273,7 +286,8 @@ public class VehiclePositionHandler implements WebSocketHandler {
         }
     }
 
-    private Mono<Void> handlePing(String sessionId) {
+    private Mono<Void> handlePing(String sessionId, SessionConfig config) {
+        config.touch();
         log.debug("Received ping from session {}", sessionId);
         return Mono.empty();
     }
@@ -361,21 +375,36 @@ public class VehiclePositionHandler implements WebSocketHandler {
                     return true;
                 })
                 .subscribe(
-                        positionMessage -> {
-                            broadcastSink.emitNext(positionMessage, (signalType, emitResult) -> {
-                                if (emitResult == Sinks.EmitResult.FAIL_NON_SERIALIZED) {
-                                    return true;
-                                }
-                                if (emitResult != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
-                                        && emitResult != Sinks.EmitResult.FAIL_CANCELLED) {
-                                    log.warn("Failed to emit position update: {}", emitResult);
-                                }
-                                return false;
-                            });
-                        },
+                        positionMessage -> emitWithMetrics(positionMessage),
                         error -> log.error("Redis subscription error: {}", error.getMessage()),
                         () -> log.info("Redis subscription completed")
                 );
+    }
+
+
+    private void emitWithMetrics(VehiclePositionWebSocketMessage message) {
+        broadcastSink.emitNext(message, (signalType, emitResult) -> {
+            if (emitResult == Sinks.EmitResult.OK) {
+                bufferMetrics.recordEmitted();
+                return false;
+            }
+
+            if (emitResult == Sinks.EmitResult.FAIL_NON_SERIALIZED) {
+                return true;
+            }
+
+            if (emitResult == Sinks.EmitResult.FAIL_OVERFLOW) {
+                bufferMetrics.recordDropped(message.getVehicleId());
+                return false;
+            }
+
+            if (emitResult != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
+                    && emitResult != Sinks.EmitResult.FAIL_CANCELLED) {
+                log.warn("Failed to emit position update for vehicle {}: {}",
+                        message.getVehicleId(), emitResult);
+            }
+            return false;
+        });
     }
 
     public void broadcastVehiclePosition(VehiclePositionWebSocketMessage message) {
@@ -384,16 +413,68 @@ public class VehiclePositionHandler implements WebSocketHandler {
             return;
         }
 
-        broadcastSink.emitNext(message, (signalType, emitResult) -> {
-            if (emitResult == Sinks.EmitResult.FAIL_NON_SERIALIZED) {
-                return true;
+        emitWithMetrics(message);
+    }
+
+    public WebSocketBufferMetricsTracker.BufferHealthStats getBufferStats() {
+        return bufferMetrics.getStats();
+    }
+
+    public boolean isBufferHealthy() {
+        return bufferMetrics.isHealthy();
+    }
+
+
+    @Scheduled(fixedRate = CLEANUP_INTERVAL_MS)
+    public void cleanupExpiredSessions() {
+        if (activeSessions.isEmpty()) {
+            return;
+        }
+
+        int beforeSize = activeSessions.size();
+        List<String> expiredSessionIds = new ArrayList<>();
+
+        activeSessions.forEach((sessionId, config) -> {
+            if (config.isExpired(SESSION_TIMEOUT)) {
+                expiredSessionIds.add(sessionId);
             }
-            if (emitResult != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
-                    && emitResult != Sinks.EmitResult.FAIL_CANCELLED) {
-                log.warn("Failed to broadcast vehicle position: {}", emitResult);
-            }
-            return false;
         });
+
+        if (expiredSessionIds.isEmpty()) {
+            log.debug("Session cleanup: no expired sessions found (active: {})", beforeSize);
+            return;
+        }
+
+        for (String sessionId : expiredSessionIds) {
+            SessionConfig config = activeSessions.remove(sessionId);
+            if (config != null) {
+                totalExpiredSessions.incrementAndGet();
+                log.info("WEBSOCKET_SESSION_EXPIRED: Removed stale session {} from {} " +
+                         "(inactive for {}, subscription: {})",
+                        sessionId,
+                        config.getClientIp(),
+                        formatDuration(config.getInactiveDuration()),
+                        config.getSubscriptionType());
+            }
+        }
+
+        log.warn("WEBSOCKET_SESSION_CLEANUP: Removed {} expired sessions (was: {}, now: {}, total expired: {})",
+                expiredSessionIds.size(), beforeSize, activeSessions.size(), totalExpiredSessions.get());
+    }
+
+    public long getTotalExpiredSessions() {
+        return totalExpiredSessions.get();
+    }
+
+    private String formatDuration(Duration duration) {
+        long seconds = duration.getSeconds();
+        if (seconds < 60) {
+            return seconds + "s";
+        } else if (seconds < 3600) {
+            return (seconds / 60) + "m " + (seconds % 60) + "s";
+        } else {
+            return (seconds / 3600) + "h " + ((seconds % 3600) / 60) + "m";
+        }
     }
 
     public Mono<WebSocketStatsDTO> getConnectionStats() {

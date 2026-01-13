@@ -151,7 +151,7 @@ external:
     gps:
       enabled: ${GPS_API_ENABLED:true}
       base-url: ${GPS_API_BASE_URL:http://95.85.97.118/app-overseas-newenergy-core}
-      token: ${GPS_API_TOKEN:YT2AE19C2B1A4FDD8F10B934DA1E6905}
+      token: ${GPS_API_TOKEN}
       timeout: ${GPS_API_TIMEOUT:30s}
       connect-timeout: ${GPS_API_CONNECT_TIMEOUT:10s}
       read-timeout: ${GPS_API_READ_TIMEOUT:60s}
@@ -173,11 +173,16 @@ external:
       timeout:
         request: ${GPS_REQUEST_TIMEOUT:30s}
         health-check: ${GPS_HEALTH_CHECK_TIMEOUT:10s}
+      optimization:
+        selective-fetch-enabled: ${GPS_SELECTIVE_FETCH_ENABLED:false}
+        selective-fetch-threshold: ${GPS_SELECTIVE_FETCH_THRESHOLD:10}
+        parallel-fetch-concurrency: ${GPS_PARALLEL_FETCH_CONCURRENCY:5}
+        log-strategy-decisions: ${GPS_LOG_STRATEGY_DECISIONS:false}
 
     gps-tugdk:
       enabled: ${GPS_TUGDK_ENABLED:true}
       base-url: ${GPS_TUGDK_BASE_URL:https://gps.tugdk.gov.tm}
-      token: ${GPS_TUGDK_TOKEN:RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0'}
+      token: ${GPS_TUGDK_TOKEN}
       timeout: ${GPS_TUGDK_TIMEOUT:30s}
       connect-timeout: ${GPS_TUGDK_CONNECT_TIMEOUT:10s}
       read-timeout: ${GPS_TUGDK_READ_TIMEOUT:60s}
@@ -254,12 +259,43 @@ business:
     max-points: 100
     ttl-minutes: 30
 
+  gps-dlq:
+    enabled: ${GPS_DLQ_ENABLED:true}
+    max-retries: ${GPS_DLQ_MAX_RETRIES:3}
+    retry-delay: ${GPS_DLQ_RETRY_DELAY:1m}
+    retry-multiplier: ${GPS_DLQ_RETRY_MULTIPLIER:2.0}
+    max-retry-delay: ${GPS_DLQ_MAX_RETRY_DELAY:30m}
+    ttl: ${GPS_DLQ_TTL:24h}
+    retry-batch-size: ${GPS_DLQ_RETRY_BATCH_SIZE:50}
+    log-failures: ${GPS_DLQ_LOG_FAILURES:true}
+    retry-interval: ${GPS_DLQ_RETRY_INTERVAL:60000}
+
+  position-change:
+    position-delta-threshold: 0.00005
+    speed-delta-threshold-kmh: 2.0
+    min-speed-for-motion-kmh: 3.0
+
+  gps-outlier-detection:
+    # TODO: оптимизировать - всё ещё вызывает таймауты
+    enabled: ${GPS_OUTLIER_DETECTION_ENABLED:false}
+    max-implied-speed-kmh: ${GPS_OUTLIER_MAX_SPEED:150.0}
+    min-time-difference: ${GPS_OUTLIER_MIN_TIME_DIFF:3s}
+    max-time-difference: ${GPS_OUTLIER_MAX_TIME_DIFF:60s}
+    min-distance-meters: ${GPS_OUTLIER_MIN_DISTANCE:10.0}
+    consecutive-outliers-for-alert: ${GPS_OUTLIER_CONSECUTIVE_ALERT:2}
+    reject-outliers: ${GPS_OUTLIER_REJECT:false}
+    history-points-to-check: ${GPS_OUTLIER_HISTORY_POINTS:3}
+
 cache:
   redis:
     routes-ttl: 3600
     stops-ttl: 7200
     vehicle-positions-ttl: 60
     search-results-ttl: 300
+    operations:
+      read-timeout: 5s
+      write-timeout: 5s
+      batch-timeout: 10s
     key-prefix:
       routes: "routes:"
       stops: "stops:"
@@ -272,7 +308,13 @@ websocket:
   message-buffer-size: 1024
   connection-timeout: 60
 
-
+distributed-lock:
+  enabled: ${DISTRIBUTED_LOCK_ENABLED:true}
+  default-timeout: ${DISTRIBUTED_LOCK_DEFAULT_TIMEOUT:3m}
+  acquire-timeout: ${DISTRIBUTED_LOCK_ACQUIRE_TIMEOUT:10s}
+  retry-interval: ${DISTRIBUTED_LOCK_RETRY_INTERVAL:100ms}
+  key-prefix: ${DISTRIBUTED_LOCK_KEY_PREFIX:lock:}
+  gps-scheduler-lock-timeout: ${GPS_SCHEDULER_LOCK_TIMEOUT:3m}
 
 resilience4j:
   circuitbreaker:

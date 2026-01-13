@@ -1,4 +1,10 @@
-.PHONY: help dev-up dev-down dev-logs dev-clean test-up test-down prod-build
+.PHONY: help dev-up dev-down dev-logs dev-clean test-up test-down prod-build run
+
+# Load .env file if it exists
+ifneq (,$(wildcard ./.env))
+    include .env
+    export
+endif
 
 help: ## Show this help message
 	@echo 'Usage: make [TARGET] [EXTRA_ARGUMENTS]'
@@ -76,3 +82,6 @@ docker-prod-push:
 
 docker-prod-deploy:
 	./scripts/docker-prod.sh deploy
+
+run: ## Run application with .env variables loaded
+	./mvnw spring-boot:run

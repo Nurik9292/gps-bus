@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.redis;
 
+import biz.ugur.busroutebackend.shared.infrastructure.redis.RedisTimeoutHandler;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -13,24 +14,19 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Service for storing and retrieving GPS history for vehicles in Redis.
- *
- * Uses Redis Lists to store the last N GPS points per vehicle.
- * Points are stored in reverse chronological order (newest first).
- *
- * Key format: gps:history:{vehicleId}
- * TTL: Configurable (default 30 minutes)
- * Max points: Configurable (default 100)
- */
 @Service
 @Slf4j
 public class VehicleGpsHistoryService {
 
     private static final String KEY_PREFIX = "gps:history:";
+    private static final String OPERATION_ADD_POINT = "gps_history_add";
+    private static final String OPERATION_GET_HISTORY = "gps_history_get";
+    private static final String OPERATION_GET_COUNT = "gps_history_count";
+    private static final String OPERATION_CLEAR = "gps_history_clear";
 
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final RedisTimeoutHandler timeoutHandler;
 
     @Value("${business.gps-history.max-points:100}")
     private int maxPoints;
@@ -39,21 +35,13 @@ public class VehicleGpsHistoryService {
     private int ttlMinutes;
 
     public VehicleGpsHistoryService(ReactiveRedisTemplate<String, Object> redisTemplate,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    RedisTimeoutHandler timeoutHandler) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
+        this.timeoutHandler = timeoutHandler;
     }
 
-    /**
-     * Add a GPS point to the vehicle's history.
-     *
-     * @param vehicleId Vehicle ID
-     * @param latitude Latitude
-     * @param longitude Longitude
-     * @param speed Speed in km/h
-     * @param timestamp Timestamp of the position
-     * @return Mono indicating completion
-     */
     public Mono<Void> addPoint(String vehicleId, Double latitude, Double longitude,
                                 Double speed, LocalDateTime timestamp) {
         if (vehicleId == null || latitude == null || longitude == null) {
@@ -66,30 +54,24 @@ public class VehicleGpsHistoryService {
         try {
             String jsonPoint = objectMapper.writeValueAsString(point);
 
-            return redisTemplate.opsForList().leftPush(key, jsonPoint)
-                    .flatMap(size -> {
-                        if (size > maxPoints) {
-                            return redisTemplate.opsForList().trim(key, 0, maxPoints - 1).then();
-                        }
-                        return Mono.empty();
-                    })
+            Mono<Void> operation = redisTemplate.opsForList().leftPush(key, jsonPoint)
+                    .then(redisTemplate.opsForList().trim(key, 0, maxPoints - 1))
                     .then(redisTemplate.expire(key, Duration.ofMinutes(ttlMinutes)))
-                    .then()
-                    .doOnError(e -> log.error("Failed to add GPS point for vehicle {}: {}",
-                            vehicleId, e.getMessage()));
+                    .then();
+
+            return timeoutHandler.wrapWriteWithTimeout(
+                    operation,
+                    OPERATION_ADD_POINT,
+                    "vehicleId=" + vehicleId
+            ).doOnError(e -> log.error("Failed to add GPS point for vehicle {}: {}",
+                    vehicleId, e.getMessage()));
+
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize GPS point for vehicle {}: {}", vehicleId, e.getMessage());
             return Mono.empty();
         }
     }
 
-    /**
-     * Get GPS history for a vehicle.
-     *
-     * @param vehicleId Vehicle ID
-     * @param limit Maximum number of points to retrieve (default: all)
-     * @return Flux of GPS points in reverse chronological order (newest first)
-     */
     public Flux<GpsPoint> getHistory(String vehicleId, int limit) {
         if (vehicleId == null) {
             return Flux.empty();
@@ -98,77 +80,65 @@ public class VehicleGpsHistoryService {
         String key = KEY_PREFIX + vehicleId;
         int effectiveLimit = limit > 0 ? Math.min(limit, maxPoints) : maxPoints;
 
-        return redisTemplate.opsForList().range(key, 0, effectiveLimit - 1)
-                .mapNotNull(this::deserializePoint)
-                .doOnError(e -> log.error("Failed to get GPS history for vehicle {}: {}",
-                        vehicleId, e.getMessage()));
+        Flux<GpsPoint> operation = redisTemplate.opsForList()
+                .range(key, 0, effectiveLimit - 1)
+                .mapNotNull(this::deserializePoint);
+
+        return timeoutHandler.wrapFluxWithTimeout(
+                operation,
+                OPERATION_GET_HISTORY,
+                "vehicleId=" + vehicleId
+        ).doOnError(e -> log.error("Failed to get GPS history for vehicle {}: {}",
+                vehicleId, e.getMessage()));
     }
 
-    /**
-     * Get all GPS history for a vehicle.
-     *
-     * @param vehicleId Vehicle ID
-     * @return Flux of GPS points
-     */
     public Flux<GpsPoint> getHistory(String vehicleId) {
         return getHistory(vehicleId, maxPoints);
     }
 
-    /**
-     * Get GPS history as a list.
-     *
-     * @param vehicleId Vehicle ID
-     * @param limit Maximum number of points
-     * @return Mono containing list of GPS points
-     */
     public Mono<List<GpsPoint>> getHistoryList(String vehicleId, int limit) {
         return getHistory(vehicleId, limit).collectList();
     }
 
-    /**
-     * Get the count of GPS points stored for a vehicle.
-     *
-     * @param vehicleId Vehicle ID
-     * @return Mono containing the count
-     */
     public Mono<Long> getPointCount(String vehicleId) {
         if (vehicleId == null) {
             return Mono.just(0L);
         }
 
         String key = KEY_PREFIX + vehicleId;
-        return redisTemplate.opsForList().size(key)
+
+        Mono<Long> operation = redisTemplate.opsForList().size(key)
                 .defaultIfEmpty(0L);
+
+        return timeoutHandler.wrapWithTimeout(
+                operation,
+                OPERATION_GET_COUNT,
+                "vehicleId=" + vehicleId
+        ).defaultIfEmpty(0L);
     }
 
-    /**
-     * Clear GPS history for a vehicle.
-     *
-     * @param vehicleId Vehicle ID
-     * @return Mono indicating completion
-     */
     public Mono<Boolean> clearHistory(String vehicleId) {
         if (vehicleId == null) {
             return Mono.just(false);
         }
 
         String key = KEY_PREFIX + vehicleId;
-        return redisTemplate.delete(key)
+
+        Mono<Boolean> operation = redisTemplate.delete(key)
                 .map(count -> count > 0)
                 .doOnSuccess(deleted -> {
                     if (Boolean.TRUE.equals(deleted)) {
                         log.debug("Cleared GPS history for vehicle {}", vehicleId);
                     }
                 });
+
+        return timeoutHandler.wrapWithTimeout(
+                operation,
+                OPERATION_CLEAR,
+                "vehicleId=" + vehicleId
+        ).defaultIfEmpty(false);
     }
 
-    /**
-     * Check if a vehicle has enough GPS points for route detection.
-     *
-     * @param vehicleId Vehicle ID
-     * @param minPoints Minimum required points
-     * @return Mono containing true if enough points exist
-     */
     public Mono<Boolean> hasEnoughPoints(String vehicleId, int minPoints) {
         return getPointCount(vehicleId)
                 .map(count -> count >= minPoints);

@@ -1,5 +1,7 @@
 package biz.ugur.busroutebackend.transport.scheduler;
 
+import biz.ugur.busroutebackend.shared.infrastructure.redis.DistributedLockProperties;
+import biz.ugur.busroutebackend.shared.infrastructure.redis.RedisDistributedLock;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
@@ -18,7 +20,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 
 @Slf4j
@@ -26,55 +27,82 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @ConditionalOnProperty(prefix = "app.scheduling", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class VehicleDataScheduler {
 
-    private static final Duration STUCK_THRESHOLD = Duration.ofSeconds(150);
+    private static final String GPS_UPDATE_LOCK_NAME = "gps-scheduler";
 
     private final GpsDataAggregatorService gpsDataAggregator;
     private final UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase;
     private final VehicleRepository vehicleRepository;
     private final GpsUpdateStatisticsService statisticsService;
     private final SchedulerProperties schedulerProperties;
-
-    private final AtomicBoolean gpsUpdateInProgress = new AtomicBoolean(false);
-    private volatile Instant lastGpsUpdateStartTime = null;
+    private final RedisDistributedLock distributedLock;
+    private final DistributedLockProperties lockProperties;
 
     public VehicleDataScheduler(GpsDataAggregatorService gpsDataAggregator,
                                 UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase,
                                 VehicleRepository vehicleRepository,
                                 GpsUpdateStatisticsService statisticsService,
-                                SchedulerProperties schedulerProperties) {
+                                SchedulerProperties schedulerProperties,
+                                RedisDistributedLock distributedLock,
+                                DistributedLockProperties lockProperties) {
         this.gpsDataAggregator = gpsDataAggregator;
         this.updateVehiclePositionsUseCase = updateVehiclePositionsUseCase;
         this.vehicleRepository = vehicleRepository;
         this.statisticsService = statisticsService;
         this.schedulerProperties = schedulerProperties;
+        this.distributedLock = distributedLock;
+        this.lockProperties = lockProperties;
 
-        log.info("VehicleDataScheduler initialized with {} GPS providers",
-                gpsDataAggregator.getEnabledProviderCount());
+        log.info("VehicleDataScheduler initialized with {} GPS providers, distributedLock={}",
+                gpsDataAggregator.getEnabledProviderCount(),
+                lockProperties.isEnabled() ? "enabled" : "disabled");
     }
 
     @Scheduled(cron = "0/10 * 6-23 * * *", zone = "Asia/Ashgabat")
     public void updateVehiclePositions() {
-        log.debug("GPS scheduler triggered. inProgress={}, lastStartTime={}, providers={}",
-                gpsUpdateInProgress.get(), lastGpsUpdateStartTime,
-                gpsDataAggregator.getEnabledProviderCount());
+        log.debug("GPS scheduler triggered, providers={}", gpsDataAggregator.getEnabledProviderCount());
 
-        resetStuckFlagIfNeeded();
+        Duration lockTimeout = lockProperties.getGpsSchedulerLockTimeout();
 
-        if (!gpsUpdateInProgress.compareAndSet(false, true)) {
-            log.warn("GPS update already in progress, skipping this cycle");
-            return;
-        }
+        Mono.usingWhen(
+                distributedLock.tryAcquire(GPS_UPDATE_LOCK_NAME, lockTimeout),
 
-        Instant startTime = Instant.now();
-        lastGpsUpdateStartTime = startTime;
+                lockHandle -> {
+                    log.debug("Acquired distributed lock for GPS update");
+                    Instant startTime = Instant.now();
 
-        executeGpsUpdate(startTime)
-                .doFinally(signal -> {
-                    gpsUpdateInProgress.set(false);
-                    lastGpsUpdateStartTime = null;
-                    log.debug("GPS update finished with signal: {}", signal);
-                })
+                    return executeGpsUpdate(startTime)
+                            .timeout(lockTimeout.minusSeconds(10))
+                            .doOnTerminate(() -> log.debug("GPS update terminated"));
+                },
+
+                lockHandle -> releaseLock(lockHandle, "success"),
+                (lockHandle, error) -> releaseLock(lockHandle, "error: " + error.getMessage()),
+
+                lockHandle -> releaseLock(lockHandle, "cancel")
+        )
+                .onErrorResume(this::handleSchedulerError)
                 .subscribe();
+    }
+
+    private Mono<Void> handleSchedulerError(Throwable error) {
+        log.error("GPS update failed with unexpected error: {}", error.getMessage(), error);
+        return Mono.empty();
+    }
+
+    private Mono<Void> releaseLock(RedisDistributedLock.LockHandle lockHandle, String reason) {
+        return distributedLock.release(lockHandle)
+                .doOnNext(released -> {
+                    if (released) {
+                        log.debug("Released GPS update lock ({})", reason);
+                    } else {
+                        // Lock already expired or released - this is normal if operation took longer than lock TTL
+                        log.debug("GPS update lock was already released ({})", reason);
+                    }
+                })
+                .doOnError(error -> log.error("Error releasing GPS update lock ({}): {}",
+                        reason, error.getMessage()))
+                .onErrorResume(error -> Mono.just(false))
+                .then();
     }
 
     private Mono<Void> executeGpsUpdate(Instant startTime) {
@@ -144,17 +172,6 @@ public class VehicleDataScheduler {
 
         return statisticsService.saveUpdateError(error, duration)
                 .thenReturn(VehiclePositionUpdateResult.empty());
-    }
-
-    private void resetStuckFlagIfNeeded() {
-        if (gpsUpdateInProgress.get() && lastGpsUpdateStartTime != null) {
-            Duration stuckDuration = Duration.between(lastGpsUpdateStartTime, Instant.now());
-            if (stuckDuration.compareTo(STUCK_THRESHOLD) >= 0) {
-                log.warn("GPS update flag stuck for {}s, forcing reset", stuckDuration.toSeconds());
-                gpsUpdateInProgress.set(false);
-                lastGpsUpdateStartTime = null;
-            }
-        }
     }
 
     @Scheduled(cron = "0 */5 * * * *")

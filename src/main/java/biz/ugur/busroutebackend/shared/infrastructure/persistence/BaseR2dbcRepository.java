@@ -231,6 +231,10 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
             return spec.bind(name, value);
         }
 
+        if (value.getClass().isArray()) {
+            return spec.bind(name, value);
+        }
+
         return spec.bind(name, value.toString());
     }
 
