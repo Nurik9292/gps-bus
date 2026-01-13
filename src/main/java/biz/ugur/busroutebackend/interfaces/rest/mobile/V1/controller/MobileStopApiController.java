@@ -60,15 +60,17 @@ public class MobileStopApiController extends BaseMobileController {
     public Mono<ResponseEntity<ApiResponse<MobileStopListResponse>>> getAllStops(
             @RequestParam(required = false, name = "cityId") String cityId) {
 
-        return ok(getCurrentPrincipal()
-                .flatMap(principal -> {
+        return ok(getOptionalClientId()
+                .flatMap(optionalClientId -> {
                     return getAllStopsUseCase.execute(Mono.just(createDefaultStopPaginationQuery(cityId)))
                             .flatMap(stopList ->
                                     Flux.fromIterable(stopList.getStops())
                                             .flatMap(stopData -> {
-                                                Mono<Boolean> isFavoriteMono = stopIsFavoriteUseCase
-                                                        .execute(new StopIsFavoriteUseCase.Request(principal.getClientId(), stopData.id()))
-                                                        .defaultIfEmpty(false);
+                                                Mono<Boolean> isFavoriteMono = optionalClientId
+                                                        .map(clientId -> stopIsFavoriteUseCase
+                                                                .execute(new StopIsFavoriteUseCase.Request(clientId, stopData.id()))
+                                                                .defaultIfEmpty(false))
+                                                        .orElse(Mono.just(false));
 
                                                 Mono<List<String>> forwardRoutesMono = getRoutesByStopIdUseCase
                                                         .execute(Mono.just(new GetRoutesByStopIdUseCase.Query(stopData.id(), 0)))
@@ -127,12 +129,14 @@ public class MobileStopApiController extends BaseMobileController {
     @GetMapping("/{stopId}")
     public Mono<ResponseEntity<ApiResponse<MobileStopResponse>>> getStopById(@PathVariable String stopId) {
 
-        return ok(getCurrentPrincipal().flatMap(principal ->
+        return ok(getOptionalClientId().flatMap(optionalClientId ->
                 getBusStopByIdUseCase.execute(Mono.just(new GetBusStopByIdUseCase.Query(stopId)))
                         .flatMap(stopData -> {
-                            Mono<Boolean> isFavoriteMono = stopIsFavoriteUseCase
-                                    .execute(new StopIsFavoriteUseCase.Request(principal.getClientId(), stopData.id()))
-                                    .defaultIfEmpty(false);
+                            Mono<Boolean> isFavoriteMono = optionalClientId
+                                    .map(clientId -> stopIsFavoriteUseCase
+                                            .execute(new StopIsFavoriteUseCase.Request(clientId, stopData.id()))
+                                            .defaultIfEmpty(false))
+                                    .orElse(Mono.just(false));
 
                             Mono<List<String>> forwardRoutesMono = getRoutesByStopIdUseCase
                                     .execute(Mono.just(new GetRoutesByStopIdUseCase.Query(stopData.id(), 0)))

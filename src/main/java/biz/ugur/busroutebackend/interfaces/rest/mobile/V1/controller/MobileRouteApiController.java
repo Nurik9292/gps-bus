@@ -65,14 +65,14 @@ public class MobileRouteApiController extends BaseMobileController {
     public Mono<ResponseEntity<ApiResponse<MobileRouteListResponse>>> getAllRoutes(
             @RequestParam(required = false, name = "cityId") String cityId) {
 
-        return ok(getCurrentPrincipal()
-                .flatMap(principal ->
+        return ok(getOptionalClientId()
+                .flatMap(optionalClientId ->
                         routeResolutionService.resolveAllRoutes(cityId)
                                 .flatMap(resolvedRoute ->
-                                        routeIsFavoriteUseCase
-                                                .execute(new RouteIsFavoriteUseCase.Request(
-                                                        principal.getClientId(),
-                                                        resolvedRoute.routeData().id()))
+                                        optionalClientId
+                                                .map(clientId -> routeIsFavoriteUseCase
+                                                        .execute(new RouteIsFavoriteUseCase.Request(clientId, resolvedRoute.routeData().id())))
+                                                .orElse(Mono.just(false))
                                                 .map(isFavorite -> MobileRouteResponse.fromResolved(resolvedRoute, isFavorite))
                                 )
                                 .collectList()
@@ -105,13 +105,15 @@ public class MobileRouteApiController extends BaseMobileController {
                 cityId
         );
 
-        return ok(getCurrentPrincipal().flatMap(principal ->
+        return ok(getOptionalClientId().flatMap(optionalClientId ->
                 getAllBusRoutesWithPaginationUseCase.execute(Mono.just(paginationQuery))
                         .flatMap(routeList ->
                                 Flux.fromIterable(routeList.getRoutes())
                                         .flatMap(routeData ->
-                                                routeIsFavoriteUseCase
-                                                        .execute(new RouteIsFavoriteUseCase.Request(principal.getClientId(), routeData.id()))
+                                                optionalClientId
+                                                        .map(clientId -> routeIsFavoriteUseCase
+                                                                .execute(new RouteIsFavoriteUseCase.Request(clientId, routeData.id())))
+                                                        .orElse(Mono.just(false))
                                                         .map(isFavorite -> MobileRouteResponse.from(routeData, isFavorite))
                                         )
                                         .collectList()
@@ -129,13 +131,13 @@ public class MobileRouteApiController extends BaseMobileController {
     @GetMapping("/{routeNumber}")
     public Mono<ResponseEntity<ApiResponse<MobileRouteResponse>>> getRouteByNumber(@PathVariable String routeNumber) {
 
-        return okOrNotFound(getCurrentPrincipal().flatMap(principal ->
+        return okOrNotFound(getOptionalClientId().flatMap(optionalClientId ->
                 routeResolutionService.resolveByNumber(routeNumber)
                         .flatMap(resolvedRoute ->
-                                routeIsFavoriteUseCase
-                                        .execute(new RouteIsFavoriteUseCase.Request(
-                                                principal.getClientId(),
-                                                resolvedRoute.routeData().id()))
+                                optionalClientId
+                                        .map(clientId -> routeIsFavoriteUseCase
+                                                .execute(new RouteIsFavoriteUseCase.Request(clientId, resolvedRoute.routeData().id())))
+                                        .orElse(Mono.just(false))
                                         .map(isFavorite -> MobileRouteResponse.fromResolved(resolvedRoute, isFavorite))
                         )
         ));
@@ -144,13 +146,13 @@ public class MobileRouteApiController extends BaseMobileController {
     @GetMapping("/id/{routeId}")
     public Mono<ResponseEntity<ApiResponse<MobileRouteResponse>>> getRouteById(@PathVariable String routeId) {
 
-        return okOrNotFound(getCurrentPrincipal().flatMap(principal ->
+        return okOrNotFound(getOptionalClientId().flatMap(optionalClientId ->
                 routeResolutionService.resolveById(routeId)
                         .flatMap(resolvedRoute ->
-                                routeIsFavoriteUseCase
-                                        .execute(new RouteIsFavoriteUseCase.Request(
-                                                principal.getClientId(),
-                                                resolvedRoute.routeData().id()))
+                                optionalClientId
+                                        .map(clientId -> routeIsFavoriteUseCase
+                                                .execute(new RouteIsFavoriteUseCase.Request(clientId, resolvedRoute.routeData().id())))
+                                        .orElse(Mono.just(false))
                                         .map(isFavorite -> MobileRouteResponse.fromResolved(resolvedRoute, isFavorite))
                         )
         ));
@@ -174,14 +176,16 @@ public class MobileRouteApiController extends BaseMobileController {
 
     @GetMapping("/{routeId}/alternatives")
     public Mono<ResponseEntity<ApiResponse<MobileRouteAlternativesResponse>>> getRouteAlternatives(@PathVariable String routeId) {
-        return ok(getCurrentPrincipal().flatMap(principal ->
+        return ok(getOptionalClientId().flatMap(optionalClientId ->
                 Mono.just(new GetRouteByIdUseCase.Query(routeId))
                         .as(getRouteByIdUseCase::execute)
                         .flatMap(primaryRoute ->
                                 getActiveAlternativesForRouteUseCase.execute(new GetActiveAlternativesForRouteUseCase.Request(routeId))
                                         .flatMap(routeData ->
-                                                routeIsFavoriteUseCase
-                                                        .execute(new RouteIsFavoriteUseCase.Request(principal.getClientId(), routeData.id()))
+                                                optionalClientId
+                                                        .map(clientId -> routeIsFavoriteUseCase
+                                                                .execute(new RouteIsFavoriteUseCase.Request(clientId, routeData.id())))
+                                                        .orElse(Mono.just(false))
                                                         .map(isFavorite -> MobileRouteResponse.from(routeData, isFavorite))
                                         )
                                         .collectList()

@@ -1,12 +1,14 @@
 package biz.ugur.busroutebackend.integration.infrastructure.security;
 
+import biz.ugur.busroutebackend.client.infrastructure.security.ClientAuthenticationFilter;
+import biz.ugur.busroutebackend.client.infrastructure.security.ClientJwtTokenService;
 import biz.ugur.busroutebackend.integration.domain.repository.ExternalServiceRepository;
 import biz.ugur.busroutebackend.shared.infrastructure.security.SecurityExceptionHandlers;
+import biz.ugur.busroutebackend.shared.infrastructure.security.TokenBlacklistService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
@@ -21,15 +23,21 @@ import org.springframework.security.web.server.util.matcher.PathPatternParserSer
 public class IntegrationSecurityConfig {
 
     @Bean
+    @Order(1)
     public SecurityWebFilterChain integrationSecurityFilterChain(
             ServerHttpSecurity http,
             ExternalServiceRepository externalServiceRepository,
-            ApiTokenRateLimiter rateLimiter) {
+            ApiTokenRateLimiter rateLimiter,
+            ClientJwtTokenService clientJwtTokenService,
+            TokenBlacklistService tokenBlacklistService) {
 
-        log.info("Configuring Integration Security Filter Chain for external API token authentication");
+        log.info("Configuring Mobile Security Filter Chain for API token and Client JWT authentication");
 
         ApiTokenAuthenticationFilter apiTokenFilter =
                 new ApiTokenAuthenticationFilter(externalServiceRepository, rateLimiter);
+
+        ClientAuthenticationFilter clientAuthFilter =
+                new ClientAuthenticationFilter(clientJwtTokenService, tokenBlacklistService);
 
         return http
                 .securityMatcher(new PathPatternParserServerWebExchangeMatcher("/api/v1/mobile/**"))
@@ -45,9 +53,9 @@ public class IntegrationSecurityConfig {
                 )
 
                 .addFilterAt(apiTokenFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+                .addFilterAfter(clientAuthFilter, SecurityWebFiltersOrder.AUTHENTICATION)
 
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/**").permitAll()
                         .anyExchange().authenticated()
                 )
                 .build();

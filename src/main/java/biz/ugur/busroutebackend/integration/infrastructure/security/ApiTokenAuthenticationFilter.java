@@ -45,8 +45,12 @@ public class ApiTokenAuthenticationFilter implements WebFilter {
             return chain.filter(exchange);
         }
 
-        return extractApiToken(exchange)
-                .flatMap(this::authenticateExternalService)
+        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        if (!hasApiToken(authHeader)) {
+            return chain.filter(exchange);
+        }
+
+        return authenticateExternalService(extractToken(authHeader))
                 .flatMap(principal -> {
                     ExternalService service = getServiceFromPrincipal(principal);
                     service.validateEndpointAccess(path);
@@ -68,12 +72,14 @@ public class ApiTokenAuthenticationFilter implements WebFilter {
                 .onErrorResume(error -> handleAuthenticationError(exchange, chain, error));
     }
 
-    private Mono<String> extractApiToken(ServerWebExchange exchange) {
-        return Mono.justOrEmpty(exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION))
-                .filter(header -> header.startsWith(TOKEN_PREFIX))
-                .map(header -> header.substring(TOKEN_PREFIX.length()))
-                .filter(token -> token.startsWith(API_TOKEN_PREFIX))
-                .switchIfEmpty(Mono.empty()); // No API token found, let it pass to client filter
+    private boolean hasApiToken(String authHeader) {
+        return authHeader != null
+                && authHeader.startsWith(TOKEN_PREFIX)
+                && authHeader.substring(TOKEN_PREFIX.length()).startsWith(API_TOKEN_PREFIX);
+    }
+
+    private String extractToken(String authHeader) {
+        return authHeader.substring(TOKEN_PREFIX.length());
     }
 
     private Mono<ApiTokenPrincipal> authenticateExternalService(String tokenValue) {
@@ -111,7 +117,7 @@ public class ApiTokenAuthenticationFilter implements WebFilter {
                 return Mono.error(new RateLimitExceededException(
                         principal.getServiceName(),
                         principal.getRateLimitPerMinute(),
-                        principal.getRateLimitPerMinute() + 1 // Approximate
+                        principal.getRateLimitPerMinute() + 1
                 ));
             }
             return Mono.empty();

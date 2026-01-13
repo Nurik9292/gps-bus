@@ -12,7 +12,6 @@ import org.springframework.security.config.annotation.web.reactive.EnableWebFlux
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
-import org.springframework.security.web.server.util.matcher.OrServerWebExchangeMatcher;
 import org.springframework.security.web.server.util.matcher.PathPatternParserServerWebExchangeMatcher;
 
 
@@ -24,6 +23,7 @@ import org.springframework.security.web.server.util.matcher.PathPatternParserSer
 public class ClientSecurityConfig {
 
     @Bean
+    @Order(3)
     public SecurityWebFilterChain clientSecurityFilterChain(
             ServerHttpSecurity http,
             ClientJwtTokenService clientJwtTokenService,
@@ -34,10 +34,7 @@ public class ClientSecurityConfig {
                 new ClientAuthenticationFilter(clientJwtTokenService, tokenBlacklistService);
 
         return http
-                .securityMatcher(new OrServerWebExchangeMatcher(
-                        new PathPatternParserServerWebExchangeMatcher("/api/v1/client/**"),
-                        new PathPatternParserServerWebExchangeMatcher("/api/v1/mobile/**")
-                ))
+                .securityMatcher(new PathPatternParserServerWebExchangeMatcher("/api/v1/client/**"))
 
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
@@ -66,11 +63,6 @@ public class ClientSecurityConfig {
                         .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/change-password").authenticated()
 
                         .pathMatchers("/api/v1/client/favorites/**").authenticated()
-
-//                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/routes/**").permitAll()
-//                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/stops/**").permitAll()
-//                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/vehicles/**").permitAll()
-//                        .pathMatchers(HttpMethod.GET, "/api/v1/mobile/banners/**").permitAll()
 
                         .anyExchange().authenticated()
                 )
