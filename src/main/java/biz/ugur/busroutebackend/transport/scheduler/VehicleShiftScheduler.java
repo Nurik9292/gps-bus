@@ -65,8 +65,8 @@ public class VehicleShiftScheduler {
 
     @Scheduled(cron = "0 0 5 * * *", zone = "Asia/Ashgabat")
     public void applyFirstShift() {
-        log.info("First shift starting at 05:00 (Ashgabat) - applying FIRST shift assignments");
-        executeShiftChangeReactive(ShiftType.FIRST, true);
+        log.info("First shift starting at 05:00 (Ashgabat) - applying FIRST and FULL_DAY assignments");
+        executeShiftChangeForMultipleTypes(List.of(ShiftType.FIRST, ShiftType.FULL_DAY), true);
     }
 
     @Scheduled(cron = "0 0 14 * * *", zone = "Asia/Ashgabat")
@@ -148,6 +148,10 @@ public class VehicleShiftScheduler {
     }
 
     private void executeShiftChangeReactive(ShiftType shiftType, boolean clearFirst) {
+        executeShiftChangeForMultipleTypes(List.of(shiftType), clearFirst);
+    }
+
+    private void executeShiftChangeForMultipleTypes(List<ShiftType> shiftTypes, boolean clearFirst) {
         if (!shiftChangeInProgress.compareAndSet(false, true)) {
             log.warn("Shift change already in progress, skipping");
             Mono.<Void>empty().subscribe();
@@ -160,57 +164,62 @@ public class VehicleShiftScheduler {
         LocalDate today = LocalDate.now(ASHGABAT_ZONE);
 
         Mono<Void> operation = clearFirst
-                ? clearAndApplyAssignmentsReactive(today, shiftType, successCount, failCount)
-                : applyAssignmentsReactive(today, shiftType, successCount, failCount);
+                ? clearAndApplyAssignmentsForTypes(today, shiftTypes, successCount, failCount)
+                : applyAssignmentsForTypes(today, shiftTypes, successCount, failCount);
+
+        String shiftTypesStr = shiftTypes.stream().map(Enum::name).reduce((a, b) -> a + "," + b).orElse("");
 
         operation
                 .timeout(TASK_TIMEOUT)
                 .subscribeOn(Schedulers.boundedElastic())
                 .doOnSuccess(unused -> {
                     Duration duration = Duration.between(startTime, Instant.now());
-                    log.info("Shift change completed: shift={}, duration={}ms, success={}, failed={}",
-                            shiftType, duration.toMillis(), successCount.get(), failCount.get());
+                    log.info("Shift change completed: shifts=[{}], duration={}ms, success={}, failed={}",
+                            shiftTypesStr, duration.toMillis(), successCount.get(), failCount.get());
                 })
                 .doOnError(error -> {
                     Duration duration = Duration.between(startTime, Instant.now());
-                    log.error("Shift change failed: shift={}, duration={}ms, error={}",
-                            shiftType, duration.toMillis(), error.getMessage(), error);
+                    log.error("Shift change failed: shifts=[{}], duration={}ms, error={}",
+                            shiftTypesStr, duration.toMillis(), error.getMessage(), error);
                 })
                 .onErrorComplete()
                 .doFinally(signal -> {
                     shiftChangeInProgress.set(false);
                     Duration duration = Duration.between(startTime, Instant.now());
-                    saveShiftChangeStats(shiftType, successCount.get(), failCount.get(), duration)
+                    saveShiftChangeStats(shiftTypes.getFirst(), successCount.get(), failCount.get(), duration)
                             .onErrorComplete()
                             .subscribe();
                 })
                 .subscribe();
     }
 
-    private Mono<Void> clearAndApplyAssignmentsReactive(LocalDate today, ShiftType shiftType,
-                                                         AtomicInteger successCount, AtomicInteger failCount) {
-        return getActiveAssignmentVehicleIds(today, shiftType)
+    private Mono<Void> clearAndApplyAssignmentsForTypes(LocalDate today, List<ShiftType> shiftTypes,
+                                                          AtomicInteger successCount, AtomicInteger failCount) {
+        return getActiveAssignmentVehicleIdsForTypes(today, shiftTypes)
                 .doOnNext(excludeIds ->
                         log.info("Found {} vehicles with active assignments to exclude from clearing", excludeIds.size()))
                 .flatMap(vehicleRepository::clearRouteAssignmentsExcluding)
                 .doOnNext(clearedCount ->
                         log.info("Cleared {} vehicle route assignments", clearedCount))
-                .then(applyAssignmentsReactive(today, shiftType, successCount, failCount));
+                .then(applyAssignmentsForTypes(today, shiftTypes, successCount, failCount));
     }
 
-    private Mono<Void> applyAssignmentsReactive(LocalDate today, ShiftType shiftType,
+    private Mono<Void> applyAssignmentsForTypes(LocalDate today, List<ShiftType> shiftTypes,
                                                  AtomicInteger successCount, AtomicInteger failCount) {
-        log.info("Applying {} shift assignments", shiftType);
+        log.info("Applying assignments for shift types: {}", shiftTypes);
 
-        return assignmentRepository.findActiveByDateAndShift(today, shiftType)
+        return reactor.core.publisher.Flux.fromIterable(shiftTypes)
+                .flatMap(shiftType -> assignmentRepository.findActiveByDateAndShift(today, shiftType))
                 .flatMap(assignment -> applyAssignmentIfActive(assignment, successCount, failCount))
                 .then();
     }
 
-    private Mono<List<VehicleId>> getActiveAssignmentVehicleIds(LocalDate date, ShiftType shiftType) {
-        return assignmentRepository.findActiveByDateAndShift(date, shiftType)
+    private Mono<List<VehicleId>> getActiveAssignmentVehicleIdsForTypes(LocalDate date, List<ShiftType> shiftTypes) {
+        return reactor.core.publisher.Flux.fromIterable(shiftTypes)
+                .flatMap(shiftType -> assignmentRepository.findActiveByDateAndShift(date, shiftType))
                 .filter(RouteAssignment::isCurrentlyValid)
                 .map(RouteAssignment::getVehicleId)
+                .distinct()
                 .collectList();
     }
 
@@ -307,15 +316,5 @@ public class VehicleShiftScheduler {
             long durationMs,
             LocalDateTime processedAt,
             boolean success
-    ) {}
-
-
-    public record ShiftChangeResult(
-            String shiftType,
-            int assignedCount,
-            int failedCount,
-            long durationMs,
-            boolean success,
-            String errorMessage
     ) {}
 }
