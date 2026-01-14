@@ -8,6 +8,7 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
+import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 
 
@@ -66,38 +67,61 @@ public class R2dbcETARepository implements ETARepository {
     @Override
     public Mono<Integer> getStatisticalWaitingTime(String routeNumber, LocalDateTime currentTime) {
         return databaseClient.sql("""
-            WITH popular_routes AS (
-                -- Динамическое определение популярных маршрутов по количеству активных автобусов
-                SELECT route_number
+            WITH route_activity AS (
+                -- Динамическое определение активности маршрутов на основе реальных данных
+                SELECT
+                    route_number,
+                    active_vehicles,
+                    moving_vehicles,
+                    CASE
+                        WHEN active_vehicles >= 5 THEN 'main'      -- Основные маршруты (5+ автобусов)
+                        WHEN active_vehicles >= 3 THEN 'popular'   -- Популярные маршруты (3-4 автобуса)
+                        ELSE 'regular'                              -- Обычные маршруты
+                    END as route_category
                 FROM mv_active_routes_summary
-                WHERE active_vehicles >= 3
-                ORDER BY active_vehicles DESC, moving_vehicles DESC
-                LIMIT 10
+            ),
+            target_route AS (
+                SELECT
+                    br.route_number,
+                    COALESCE(ra.route_category, 'regular') as category,
+                    COALESCE(ra.active_vehicles, 0) as vehicles_count
+                FROM bus_routes br
+                LEFT JOIN route_activity ra ON br.route_number = ra.route_number
+                WHERE br.route_number = :routeNumber
+                AND br.is_active = true
+                LIMIT 1
             )
             SELECT
                 CASE
-                    WHEN br.route_number IN ('1', '2', '3', '4', '5') THEN 6    -- Основные маршруты
-                    WHEN br.route_number IN (SELECT route_number FROM popular_routes) THEN 8  -- Популярные маршруты (динамически)
-                    WHEN br.route_number SIMILAR TO '%[A-Z]' THEN 12            -- Экспресс маршруты
-                    ELSE 10                                                      -- Обычные маршруты
+                    WHEN tr.category = 'main' THEN 6                           -- Основные маршруты (5+ автобусов)
+                    WHEN tr.category = 'popular' THEN 8                        -- Популярные маршруты (3-4 автобуса)
+                    WHEN tr.route_number SIMILAR TO '%[A-Z]' THEN 12           -- Экспресс маршруты (буква в номере)
+                    ELSE 10                                                     -- Обычные маршруты
                 END as base_wait_time,
                 CASE
-                    WHEN :hour BETWEEN 7 AND 9 THEN -2    -- Час пик утром - чаще
-                    WHEN :hour BETWEEN 17 AND 19 THEN -2  -- Час пик вечером - чаще
-                    WHEN :hour BETWEEN 22 AND 6 THEN 5    -- Ночь - реже
+                    WHEN :hour BETWEEN 7 AND 9 THEN -2    -- Час пик утром - автобусы чаще
+                    WHEN :hour BETWEEN 17 AND 19 THEN -2  -- Час пик вечером - автобусы чаще
+                    WHEN :hour >= 22 OR :hour <= 6 THEN 5 -- Ночь - автобусы реже
                     ELSE 0                                 -- Обычное время
-                END as time_adjustment
-            FROM bus_routes br
-            WHERE br.route_number = :routeNumber
-            AND br.is_active = true
-            LIMIT 1
+                END as time_adjustment,
+                tr.vehicles_count,
+                tr.category
+            FROM target_route tr
             """)
                 .bind("routeNumber", routeNumber)
                 .bind("hour", currentTime.getHour())
                 .map(row -> {
                     Integer baseTime = row.get("base_wait_time", Integer.class);
                     Integer adjustment = row.get("time_adjustment", Integer.class);
-                    return (baseTime != null ? baseTime : 10) + (adjustment != null ? adjustment : 0);
+                    Integer vehiclesCount = row.get("vehicles_count", Integer.class);
+                    String category = row.get("category", String.class);
+
+                    int waitTime = (baseTime != null ? baseTime : 10) + (adjustment != null ? adjustment : 0);
+
+                    log.debug("Statistical wait for route {}: category={}, vehicles={}, base={}min, adj={}min, total={}min",
+                            routeNumber, category, vehiclesCount, baseTime, adjustment, waitTime);
+
+                    return waitTime;
                 })
                 .one()
                 .doOnNext(waitTime -> log.debug("Statistical wait time for route {}: {} minutes",
@@ -162,7 +186,26 @@ public class R2dbcETARepository implements ETARepository {
     }
 
 
+    /**
+     * Adjusts travel time based on current traffic conditions using configured multipliers.
+     * Takes into account time of day (rush hours, night) and weekend factors.
+     *
+     * @param baseTime the base travel time in minutes
+     * @return adjusted travel time accounting for traffic conditions
+     */
     private int adjustForTrafficConditions(int baseTime) {
-        return (int) Math.ceil(baseTime * 1.1);
+        LocalDateTime now = LocalDateTime.now();
+        int hour = now.getHour();
+        boolean isWeekend = now.getDayOfWeek() == DayOfWeek.SATURDAY
+                || now.getDayOfWeek() == DayOfWeek.SUNDAY;
+
+        double multiplier = etaProperties.getTraffic().getAdjustedMultiplier(hour, isWeekend);
+
+        int adjustedTime = (int) Math.ceil(baseTime * multiplier);
+
+        log.trace("Traffic adjustment: base={}min, multiplier={}, isWeekend={}, result={}min",
+                baseTime, multiplier, isWeekend, adjustedTime);
+
+        return adjustedTime;
     }
 }

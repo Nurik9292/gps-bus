@@ -5,11 +5,5 @@ import reactor.core.publisher.Mono;
 
 public interface PerformanceLogRepository {
 
-    Mono<Void> logETAPerformance(
-            String stopId,
-            int routesCount,
-            int vehiclesProcessed,
-            long calculationTimeMs,
-            boolean cacheHit
-    );
+    Mono<Void> logETAPerformance(String stopId, int routesCount, long calculationTimeMs);
 }

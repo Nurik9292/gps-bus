@@ -3,28 +3,35 @@ package biz.ugur.busroutebackend.transport.application.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
+/**
+ * DTO representing bus arrival information at a specific stop.
+ */
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class BusArrivalInfo {
     private String vehicleId;
-    private String licensePlate;           // "1234 AGH"
+    private String licensePlate;
     private String routeId;
-    private String routeNumber;           // "29"
-    private String routeName;             // "Маршрут 29"
-    private String routeColor;            // "#1976D2"
-    private Integer estimatedArrivalMinutes; // 5 минут
-    private String arrivalStatus;         // "approaching", "at_stop", "passed"
+    private String routeNumber;
+    private String routeName;
+    private String routeColor;
+    private Integer estimatedArrivalMinutes;
+    private String arrivalStatus;
     private Double currentLatitude;
     private Double currentLongitude;
     private Double speedKmh;
     private Boolean isInMotion;
-    private String currentStopName;       // "Текущая остановка"
+    private String currentStopName;
     private LocalDateTime lastUpdated;
     private Double course;
+    private Instant calculatedAt;
 
-    public BusArrivalInfo() {}
+    public BusArrivalInfo() {
+        this.calculatedAt = Instant.now();
+    }
 
     public BusArrivalInfo(String vehicleId,
                           String licensePlate,
@@ -56,23 +63,8 @@ public class BusArrivalInfo {
         this.lastUpdated = lastUpdated;
         this.routeId = routeId;
         this.course = course;
+        this.calculatedAt = Instant.now();
     }
-
-    public String getDisplayText() {
-        if (estimatedArrivalMinutes <= 1) {
-            return "Прибывает";
-        } else if (estimatedArrivalMinutes >= 60) {
-            return "Более часа";
-        } else {
-            return estimatedArrivalMinutes + " мин";
-        }
-    }
-
-    public boolean isComingSoon() {
-        return estimatedArrivalMinutes <= 5;
-    }
-
-
 }
 
 

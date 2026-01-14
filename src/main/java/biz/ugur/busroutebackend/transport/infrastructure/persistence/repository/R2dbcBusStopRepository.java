@@ -648,4 +648,46 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 course != null ? course : 0.0
         );
     }
+
+    @Override
+    public Flux<BusStop> findStopsOnRouteAhead(String routeNumber, Double vehicleLat, Double vehicleLon, int maxStops) {
+        return databaseClient.sql("""
+            WITH route_stops_ordered AS (
+                SELECT
+                    bs.id, bs.stop_name, bs.stop_code, bs.latitude, bs.longitude,
+                    bs.city_id, bs.is_active, bs.created_at, bs.updated_at,
+                    rs.stop_sequence,
+                    ST_Distance(
+                        ST_Point(:vehicleLon, :vehicleLat)::geography,
+                        ST_Point(bs.longitude, bs.latitude)::geography
+                    ) as distance_to_vehicle
+                FROM bus_stops bs
+                JOIN route_stops rs ON bs.id = rs.stop_id
+                JOIN bus_routes br ON rs.route_id = br.id
+                WHERE br.route_number = :routeNumber
+                AND br.is_active = true
+                AND bs.is_active = true
+                ORDER BY distance_to_vehicle
+            ),
+            nearest_stop AS (
+                SELECT stop_sequence FROM route_stops_ordered LIMIT 1
+            )
+            SELECT DISTINCT ON (rso.id)
+                rso.id, rso.stop_name, rso.stop_code, rso.latitude, rso.longitude,
+                rso.city_id, rso.is_active, rso.created_at, rso.updated_at,
+                rso.distance_to_vehicle
+            FROM route_stops_ordered rso
+            WHERE rso.stop_sequence >= (SELECT stop_sequence FROM nearest_stop)
+            ORDER BY rso.id, rso.stop_sequence
+            LIMIT :maxStops
+            """)
+                .bind("routeNumber", routeNumber)
+                .bind("vehicleLat", vehicleLat)
+                .bind("vehicleLon", vehicleLon)
+                .bind("maxStops", maxStops)
+                .map(this::mapRowToBusStop)
+                .all()
+                .doOnNext(stop -> log.trace("Found stop ahead on route {}: {} ({}m away)",
+                        routeNumber, stop.getStopName(), "calculated"));
+    }
 }

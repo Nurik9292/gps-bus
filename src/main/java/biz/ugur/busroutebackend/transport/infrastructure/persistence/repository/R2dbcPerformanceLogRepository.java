@@ -10,18 +10,12 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class R2dbcPerformanceLogRepository implements PerformanceLogRepository {
 
+    private static final long SLOW_QUERY_THRESHOLD_MS = 100;
+
     @Override
-    public Mono<Void> logETAPerformance(
-            String stopId,
-            int routesCount,
-            int vehiclesProcessed,
-            long calculationTimeMs,
-            boolean cacheHit
-    ) {
-        // Only log slow queries (>100ms) to application log
-        if (calculationTimeMs > 100) {
-            log.info("Slow ETA calculation: stop={}, routes={}, vehicles={}, time={}ms, cacheHit={}",
-                    stopId, routesCount, vehiclesProcessed, calculationTimeMs, cacheHit);
+    public Mono<Void> logETAPerformance(String stopId, int routesCount, long calculationTimeMs) {
+        if (calculationTimeMs > SLOW_QUERY_THRESHOLD_MS) {
+            log.info("Slow ETA calculation: stop={}, routes={}, time={}ms", stopId, routesCount, calculationTimeMs);
         }
         return Mono.empty();
     }

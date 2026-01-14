@@ -1,12 +1,15 @@
 package biz.ugur.busroutebackend.transport.infrastructure.messaging;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class VehiclePositionWebSocketMessage {
 
     @JsonProperty("vehicle_id")
@@ -42,6 +45,9 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("line")
     private final Boolean line;
 
+    @JsonProperty("next_stops")
+    private final List<NextStopEta> nextStops;
+
     @JsonCreator
     public VehiclePositionWebSocketMessage(
             @JsonProperty("vehicle_id") String vehicleId,
@@ -54,6 +60,22 @@ public class VehiclePositionWebSocketMessage {
             @JsonProperty("timestamp") LocalDateTime timestamp,
             @JsonProperty("dir") Double course,
             @JsonProperty("line") Boolean line) {
+        this(vehicleId, licensePlate, routeNumber, latitude, longitude,
+                speedKmh, isInMotion, timestamp, course, line, null);
+    }
+
+    public VehiclePositionWebSocketMessage(
+            String vehicleId,
+            String licensePlate,
+            String routeNumber,
+            Double latitude,
+            Double longitude,
+            Double speedKmh,
+            Boolean isInMotion,
+            LocalDateTime timestamp,
+            Double course,
+            Boolean line,
+            List<NextStopEta> nextStops) {
         this.vehicleId = vehicleId;
         this.licensePlate = licensePlate;
         this.routeNumber = routeNumber;
@@ -64,5 +86,35 @@ public class VehiclePositionWebSocketMessage {
         this.timestamp = timestamp;
         this.course = course;
         this.line = line;
+        this.nextStops = nextStops;
+    }
+
+
+    @Data
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class NextStopEta {
+        @JsonProperty("stop_id")
+        private final String stopId;
+
+        @JsonProperty("stop_name")
+        private final String stopName;
+
+        @JsonProperty("eta_minutes")
+        private final Integer etaMinutes;
+
+        @JsonProperty("distance_meters")
+        private final Integer distanceMeters;
+
+        @JsonCreator
+        public NextStopEta(
+                @JsonProperty("stop_id") String stopId,
+                @JsonProperty("stop_name") String stopName,
+                @JsonProperty("eta_minutes") Integer etaMinutes,
+                @JsonProperty("distance_meters") Integer distanceMeters) {
+            this.stopId = stopId;
+            this.stopName = stopName;
+            this.etaMinutes = etaMinutes;
+            this.distanceMeters = distanceMeters;
+        }
     }
 }

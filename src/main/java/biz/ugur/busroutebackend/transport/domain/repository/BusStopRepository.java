@@ -27,7 +27,6 @@ public interface BusStopRepository extends BaseRepository<BusStop, BusStopId> {
 
     Mono<Boolean> existsByStopName(String stopName);
 
-
     Flux<BusStop> findBySpecification(Specification<BusStop> specification);
 
     Flux<BusStop> findBySpecification(Specification<BusStop> specification, Pageable pageable);
@@ -35,4 +34,7 @@ public interface BusStopRepository extends BaseRepository<BusStop, BusStopId> {
     Mono<Long> countBySpecification(Specification<BusStop> specification);
 
     Flux<BusArrivalInfo> findArrivingVehicles(BusStopId stopId, Double stopLatitude, Double stopLongitude);
+
+
+    Flux<BusStop> findStopsOnRouteAhead(String routeNumber, Double vehicleLat, Double vehicleLon, int maxStops);
 }

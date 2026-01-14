@@ -72,14 +72,11 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                                 .flatMap(response -> {
                                     long calculationTime = System.currentTimeMillis() - startTime;
 
-                                    // Log performance asynchronously without blocking response
-                                    Mono<Void> logMono = logETAPerformance(stopId, response.getArrivals().size(),
-                                            0, calculationTime, false);
+                                    Mono<Void> logMono = logETAPerformance(stopId, response.getArrivals().size(), calculationTime);
 
                                     Mono<Boolean> cacheMono = redisTemplate.opsForValue()
                                             .set(cacheKey, response, Duration.ofSeconds(cacheTtlSeconds));
 
-                                    // Execute both in parallel, return response when cache is set
                                     return Mono.zip(cacheMono, logMono.thenReturn(true))
                                             .thenReturn(response);
                                 })
@@ -91,15 +88,8 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
     }
 
 
-    private Mono<Void> logETAPerformance(String stopId, int routesCount, int vehiclesProcessed,
-                                         long calculationTimeMs, boolean cacheHit) {
-        return performanceLogRepository.logETAPerformance(
-                        stopId,
-                        routesCount,
-                        vehiclesProcessed,
-                        calculationTimeMs,
-                        cacheHit
-                )
+    private Mono<Void> logETAPerformance(String stopId, int routesCount, long calculationTimeMs) {
+        return performanceLogRepository.logETAPerformance(stopId, routesCount, calculationTimeMs)
                 .subscribeOn(Schedulers.boundedElastic())
                 .doOnError(error -> log.warn("Failed to log ETA performance for stop {}: {}", stopId, error.getMessage()))
                 .onErrorResume(error -> Mono.empty());
@@ -152,10 +142,11 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
     }
 
     public Flux<BusStopArrivalsResponse> streamStopArrivals(String stopId) {
-        return Flux.interval(Duration.ofSeconds(10))
+        int streamIntervalSeconds = etaProperties.getCache().getStreamIntervalSeconds();
+
+        return Flux.interval(Duration.ofSeconds(streamIntervalSeconds))
                 .flatMap(tick -> getStopArrivals(stopId))
                 .distinctUntilChanged(response -> {
-
                     return response.getArrivals().stream()
                             .map(arrival -> String.format("%s:%d:%s",
                                     arrival.getRouteNumber(),
@@ -166,7 +157,8 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 })
                 .doOnNext(arrivals -> log.trace("Streaming update for stop {}: {} unique routes",
                         stopId, arrivals.getArrivals().size()))
-                .doOnSubscribe(sub -> log.debug("Started streaming arrivals for stop {}", stopId))
+                .doOnSubscribe(sub -> log.debug("Started streaming arrivals for stop {} (interval: {}s)",
+                        stopId, streamIntervalSeconds))
                 .doOnCancel(() -> log.debug("Stopped streaming arrivals for stop {}", stopId));
     }
 

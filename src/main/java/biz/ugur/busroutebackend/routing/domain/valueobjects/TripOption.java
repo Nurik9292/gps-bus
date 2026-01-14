@@ -25,28 +25,39 @@ public class TripOption extends ValueObject {
     private final int totalWalkingMinutes;
     private final int totalBusRideMinutes;
     private final int totalWaitingMinutes;
+    private final int initialWaitingMinutes;
     private final int transfersCount;
     private final double estimatedCostManat;
     private final LocalDateTime estimatedDeparture;
     private final LocalDateTime estimatedArrival;
     private final double comfortScore;
 
-    public TripOption(TripType tripType, List<RouteSegment> routeSegments) {
+
+    public TripOption(TripType tripType, List<RouteSegment> routeSegments,
+                      int initialWaitingMinutes, LocalDateTime departureTime) {
         this.optionId = UUID.randomUUID().toString();
         this.tripType = validateTripType(tripType);
         this.routeSegments = validateAndCopySegments(routeSegments);
+        this.initialWaitingMinutes = validateInitialWaitingTime(initialWaitingMinutes);
 
         this.totalWalkingMinutes = calculateTotalWalkingTime();
         this.totalBusRideMinutes = calculateTotalBusRideTime();
         this.totalWaitingMinutes = calculateTotalWaitingTime();
-        this.totalTravelMinutes = totalWalkingMinutes + totalBusRideMinutes + totalWaitingMinutes;
+        this.totalTravelMinutes = totalWalkingMinutes + totalBusRideMinutes + totalWaitingMinutes + this.initialWaitingMinutes;
         this.transfersCount = calculateTransfersCount();
         this.estimatedCostManat = calculateEstimatedCost();
-        this.estimatedDeparture = calculateDeparture();
+        this.estimatedDeparture = calculateDeparture(departureTime);
         this.estimatedArrival = calculateArrival();
         this.comfortScore = calculateComfortScore();
 
         validateTripLogic();
+    }
+
+    private int validateInitialWaitingTime(int waitingMinutes) {
+        if (waitingMinutes < 0) {
+            throw new IllegalArgumentException("Initial waiting time cannot be negative");
+        }
+        return Math.min(waitingMinutes, 60);
     }
 
     public boolean isFasterThan(TripOption other) {
@@ -83,6 +94,10 @@ public class TripOption extends ValueObject {
 
         if (totalWalkingMinutes > 0) {
             sb.append(String.format(" (пешком %d мин)", totalWalkingMinutes));
+        }
+
+        if (initialWaitingMinutes > 0) {
+            sb.append(String.format(", ожидание %d мин", initialWaitingMinutes));
         }
 
         if (transfersCount > 0) {
@@ -266,8 +281,20 @@ public class TripOption extends ValueObject {
         return busRides * 1.0;
     }
 
-    private LocalDateTime calculateDeparture() {
-        return LocalDateTime.now().plusMinutes(5);
+    private LocalDateTime calculateDeparture(LocalDateTime baseTime) {
+        int walkingToFirstStop = getWalkingTimeToFirstStop();
+        return baseTime.plusMinutes(walkingToFirstStop + initialWaitingMinutes);
+    }
+
+    private int getWalkingTimeToFirstStop() {
+        if (routeSegments.isEmpty()) {
+            return 0;
+        }
+        RouteSegment firstSegment = routeSegments.getFirst();
+        if (firstSegment.getType() == SegmentType.WALKING) {
+            return firstSegment.getDurationMinutes();
+        }
+        return 0;
     }
 
     private LocalDateTime calculateArrival() {

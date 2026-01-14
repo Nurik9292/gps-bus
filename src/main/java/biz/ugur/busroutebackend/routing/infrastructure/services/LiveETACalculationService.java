@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.routing.infrastructure.services;
 
 import biz.ugur.busroutebackend.routing.domain.repository.ETARepository;
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TimePeriod;
 import biz.ugur.busroutebackend.routing.infrastructure.config.ETAProperties;
 import biz.ugur.busroutebackend.geospatial.domain.constants.GeoConstants;
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
@@ -79,8 +80,10 @@ public class LiveETACalculationService implements ETACalculationService {
     public Mono<Integer> calculateWaitingTimeMinutes(String routeNumber, String stopName, LocalDateTime currentTime) {
         log.debug("Calculating wait time for route {} at stop {} at {}", routeNumber, stopName, currentTime);
 
-        int timeSlot = (currentTime.getHour() * 4) + (currentTime.getMinute() / 15);
-        String cacheKey = String.format("wait_time:%s:%s:%d", routeNumber, stopName, timeSlot);
+        TimePeriod period = TimePeriod.fromDateTime(currentTime);
+        boolean isWeekend = TimePeriod.isWeekend(currentTime);
+        String periodKey = period.name() + (isWeekend ? "_WE" : "_WD");
+        String cacheKey = String.format("wait_time:%s:%s:%s", routeNumber, stopName, periodKey);
         int cacheTtlMinutes = etaProperties.getCache().getWaitingTimeTtlMinutes();
 
         return redisTemplate.opsForValue()
@@ -94,7 +97,8 @@ public class LiveETACalculationService implements ETACalculationService {
                                                 .thenReturn(waitTime)
                                 )
                 )
-                .doOnNext(waitMinutes -> log.debug("Estimated wait time: {} minutes", waitMinutes));
+                .doOnNext(waitMinutes -> log.debug("Estimated wait time: {} minutes (period: {})",
+                        waitMinutes, periodKey));
     }
 
     @Override
@@ -120,7 +124,11 @@ public class LiveETACalculationService implements ETACalculationService {
 
     @Override
     public int calculateTransferTimeMinutes(String stopName, boolean isMajorStop) {
-        int baseTransferTime = isMajorStop ? 3 : 5;
+        ETAProperties.TransferConfig transferConfig = etaProperties.getTransfer();
+
+        int baseTransferTime = isMajorStop
+                ? transferConfig.getMajorStopMinutes()
+                : transferConfig.getRegularStopMinutes();
 
         int additionalTime = 0;
 
@@ -128,12 +136,12 @@ public class LiveETACalculationService implements ETACalculationService {
             String lowerStopName = stopName.toLowerCase();
 
             if (lowerStopName.contains("аэропорт") || lowerStopName.contains("airport")) {
-                additionalTime += 3;
+                additionalTime += transferConfig.getAirportPenaltyMinutes();
             } else if (lowerStopName.contains("базар") || lowerStopName.contains("рынок") ||
                     lowerStopName.contains("bazaar") || lowerStopName.contains("market")) {
-                additionalTime += 2;
+                additionalTime += transferConfig.getMarketPenaltyMinutes();
             } else if (lowerStopName.contains("центр") || lowerStopName.contains("center")) {
-                additionalTime += 2;
+                additionalTime += transferConfig.getCenterPenaltyMinutes();
             }
         }
 
@@ -167,26 +175,16 @@ public class LiveETACalculationService implements ETACalculationService {
 
     private Mono<Integer> getFrequencyBasedWaitingTime(String routeNumber, LocalDateTime currentTime) {
         return Mono.fromCallable(() -> {
-            int hour = currentTime.getHour();
-            int dayOfWeek = currentTime.getDayOfWeek().getValue();
+            TimePeriod period = TimePeriod.fromDateTime(currentTime);
+            boolean isWeekend = TimePeriod.isWeekend(currentTime);
 
+            int baseWaitTime = period.getBaseWaitingMinutes(isWeekend);
+            int maxWaitTime = etaProperties.getFallback().getMaxWaitingTimeMinutes();
 
-            int baseWaitTime;
-            if (hour >= 6 && hour <= 9) {
-                baseWaitTime = 8;
-            } else if (hour >= 17 && hour <= 20) {
-                baseWaitTime = 10;
-            } else if (hour >= 22 || hour <= 5) {
-                baseWaitTime = 25;
-            } else {
-                baseWaitTime = 15;
-            }
+            log.trace("Frequency-based wait time: period={}, weekend={}, base={}min",
+                    period, isWeekend, baseWaitTime);
 
-            if (dayOfWeek >= 6) {
-                baseWaitTime += 5;
-            }
-
-            return Math.min(baseWaitTime, 30);
+            return Math.min(baseWaitTime, maxWaitTime);
         });
     }
 
@@ -195,40 +193,42 @@ public class LiveETACalculationService implements ETACalculationService {
     private Mono<Integer> calculateTravelTimeFromDatabase(String routeNumber, String fromStopName, String toStopName) {
         return etaRepository.calculateTravelTimeFromDatabase(routeNumber, fromStopName, toStopName)
                 .switchIfEmpty(Mono.fromCallable(() -> {
-                    log.warn("No route data found for {} from {} to {}, using fallback",
-                            routeNumber, fromStopName, toStopName);
-                    return 15;
+                    int fallbackTime = etaProperties.getFallback().getDefaultTravelTimeMinutes();
+                    log.warn("No route data found for {} from {} to {}, using fallback: {}min",
+                            routeNumber, fromStopName, toStopName, fallbackTime);
+                    return fallbackTime;
                 }));
     }
 
 
     private int applyWalkingConditionsCorrection(int baseWalkingTime, double distanceMeters) {
+        int correction;
+
         if (distanceMeters < 200) {
-            return baseWalkingTime + 1;
+            correction = 1;
+        } else if (distanceMeters < 500) {
+            correction = 2;
+        } else if (distanceMeters <= 800) {
+            correction = 2;
+        } else {
+            correction = 3;
         }
 
-        if (distanceMeters < 500) {
-            return baseWalkingTime + 2;
-        }
+        log.trace("Walking correction: distance={}m, base={}min, correction=+{}min",
+                Math.round(distanceMeters), baseWalkingTime, correction);
 
-        if (distanceMeters > 800) {
-            return baseWalkingTime + 3;
-        }
-
-        return baseWalkingTime + 1;
+        return baseWalkingTime + correction;
     }
 
     private int calculateBaseWaitingTime(LocalDateTime departureTime) {
-        int hour = departureTime.getHour();
+        TimePeriod period = TimePeriod.fromDateTime(departureTime);
+        boolean isWeekend = TimePeriod.isWeekend(departureTime);
 
-        if (hour >= 6 && hour <= 9) {
-            return 5;
-        } else if (hour >= 17 && hour <= 20) {
-            return 7;
-        } else if (hour >= 22 || hour <= 5) {
-            return 15;
-        } else {
-            return 10;
-        }
+        int baseTime = period.getBaseWaitingMinutes(isWeekend) / 2;
+
+        log.trace("Base waiting time: period={}, weekend={}, base={}min",
+                period, isWeekend, baseTime);
+
+        return Math.max(baseTime, 3);
     }
 }

@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.messaging;
 
 import biz.ugur.busroutebackend.shared.infrastructure.cache.RedisKeyRegistry;
 import biz.ugur.busroutebackend.shared.infrastructure.messaging.ReactiveEventBus;
+import biz.ugur.busroutebackend.transport.application.services.VehicleEtaEnricherService;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleAssignedToRouteEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent;
@@ -34,6 +35,7 @@ public class VehicleEventHandler {
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final VehiclePositionWebSocketPublisher webSocketPublisher;
     private final ReactiveEventBus reactiveEventBus;
+    private final VehicleEtaEnricherService vehicleEtaEnricherService;
 
     private Disposable positionSubscription;
     private Disposable routeAssignmentSubscription;
@@ -41,10 +43,12 @@ public class VehicleEventHandler {
 
     public VehicleEventHandler(ReactiveRedisTemplate<String, Object> redisTemplate,
                                VehiclePositionWebSocketPublisher webSocketPublisher,
-                               ReactiveEventBus reactiveEventBus) {
+                               ReactiveEventBus reactiveEventBus,
+                               VehicleEtaEnricherService vehicleEtaEnricherService) {
         this.redisTemplate = redisTemplate;
         this.webSocketPublisher = webSocketPublisher;
         this.reactiveEventBus = reactiveEventBus;
+        this.vehicleEtaEnricherService = vehicleEtaEnricherService;
     }
 
     @PostConstruct
@@ -180,8 +184,9 @@ public class VehicleEventHandler {
                 event.getLine()
         );
 
-        return webSocketPublisher.broadcastVehiclePosition(msg)
-                .doOnSuccess(v -> log.trace("Broadcasted position: {}", event.getVehicleId()));
+        return vehicleEtaEnricherService.enrichWithEta(msg)
+                .flatMap(enrichedMsg -> webSocketPublisher.broadcastVehiclePosition(enrichedMsg))
+                .doOnSuccess(v -> log.trace("Broadcasted position with ETA: {}", event.getVehicleId()));
     }
 
     private Mono<Boolean> updateRouteAssignmentCache(VehicleAssignedToRouteEvent event) {

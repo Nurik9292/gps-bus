@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Component
@@ -63,16 +64,20 @@ public class DirectRouteOptionBuilder {
             throw new IllegalArgumentException("Walking time too long");
         }
 
+        String routeNumber = directRoute.route().getRouteNumber();
+        String fromStopName = directRoute.fromStop().getStopName();
+        String toStopName = directRoute.toStop().getStopName();
+        LocalDateTime departureTime = LocalDateTime.now();
 
-        return etaCalculationService.calculateTravelTimeMinutes(
-                directRoute.route().getRouteNumber(),
-                directRoute.fromStop().getStopName(),
-                directRoute.toStop().getStopName()
-        ).map(busRideTime -> {
+        return Mono.zip(
+                etaCalculationService.calculateTravelTimeMinutes(routeNumber, fromStopName, toStopName),
+                etaCalculationService.calculateWaitingTimeMinutes(routeNumber, fromStopName, departureTime)
+        ).map(tuple -> {
+            int busRideTime = tuple.getT1();
+            int initialWaitingMinutes = tuple.getT2();
 
             String routeGeometry = getCorrectRouteGeometry(directRoute);
             Integer routeDistance = getCorrectRouteDistance(directRoute);
-
 
             String trimmedGeometry = trimRouteGeometry(
                     routeGeometry,
@@ -86,14 +91,16 @@ public class DirectRouteOptionBuilder {
                             fromStopLocation,
                             toStopLocation,
                             busRideTime,
-                            directRoute.route().getRouteNumber(),
+                            routeNumber,
                             trimmedGeometry,
                             routeDistance),
                     routeSegmentFactory.createWalkingSegment(toStopLocation, context.toLocation(), walkingFromStop)
             );
 
-            return tripOptionFactory.createDirectOption(segments);
+            log.debug("Creating direct option for route {} with waiting time {} min",
+                    routeNumber, initialWaitingMinutes);
 
+            return tripOptionFactory.createDirectOption(segments, initialWaitingMinutes, departureTime);
         });
     }
 

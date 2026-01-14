@@ -16,6 +16,8 @@ public class ETAProperties {
     private CacheConfig cache = new CacheConfig();
     private TrafficMultiplierConfig traffic = new TrafficMultiplierConfig();
     private StopConfig stop = new StopConfig();
+    private FallbackConfig fallback = new FallbackConfig();
+    private TransferConfig transfer = new TransferConfig();
 
     @Getter
     @Setter
@@ -49,7 +51,9 @@ public class ETAProperties {
     @Setter
     public static class CacheConfig {
 
-        private int stopArrivalsTtlSeconds = 15;
+        private int stopArrivalsTtlSeconds = 10;
+
+        private int streamIntervalSeconds = 10;
 
         private int waitingTimeTtlMinutes = 10;
 
@@ -99,5 +103,31 @@ public class ETAProperties {
         private int stoppedPenaltySeconds = 60;
 
         private int terminalWaitSeconds = 120;
+    }
+
+    @Getter
+    @Setter
+    public static class FallbackConfig {
+
+        private int defaultTravelTimeMinutes = 15;
+
+        private int minutesPerStop = 2;
+
+        private int maxWaitingTimeMinutes = 30;
+    }
+
+    @Getter
+    @Setter
+    public static class TransferConfig {
+
+        private int majorStopMinutes = 3;
+
+        private int regularStopMinutes = 5;
+
+        private int airportPenaltyMinutes = 3;
+
+        private int marketPenaltyMinutes = 2;
+
+        private int centerPenaltyMinutes = 2;
     }
 }
