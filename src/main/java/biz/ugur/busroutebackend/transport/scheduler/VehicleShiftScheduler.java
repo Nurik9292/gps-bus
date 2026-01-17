@@ -71,8 +71,11 @@ public class VehicleShiftScheduler {
 
     @Scheduled(cron = "0 0 14 * * *", zone = "Asia/Ashgabat")
     public void applySecondShift() {
-        log.info("Second shift starting at 14:00 (Ashgabat) - applying SECOND shift assignments");
-        executeShiftChangeReactive(ShiftType.SECOND, true);
+        log.info("Second shift starting at 14:00 (Ashgabat) - applying SECOND shift assignments, preserving FULL_DAY");
+        executeShiftChangeWithPreserve(
+                List.of(ShiftType.SECOND, ShiftType.FULL_DAY),  // preserve these
+                List.of(ShiftType.SECOND)                        // apply only SECOND
+        );
     }
 
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Ashgabat")
@@ -151,6 +154,46 @@ public class VehicleShiftScheduler {
         executeShiftChangeForMultipleTypes(List.of(shiftType), clearFirst);
     }
 
+
+    private void executeShiftChangeWithPreserve(List<ShiftType> typesToPreserve, List<ShiftType> typesToApply) {
+        if (!shiftChangeInProgress.compareAndSet(false, true)) {
+            log.warn("Shift change already in progress, skipping");
+            Mono.<Void>empty().subscribe();
+            return;
+        }
+
+        Instant startTime = Instant.now();
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failCount = new AtomicInteger(0);
+        LocalDate today = LocalDate.now(ASHGABAT_ZONE);
+
+        String preserveStr = typesToPreserve.stream().map(Enum::name).reduce((a, b) -> a + "," + b).orElse("");
+        String applyStr = typesToApply.stream().map(Enum::name).reduce((a, b) -> a + "," + b).orElse("");
+
+        clearAndApplyAssignments(today, typesToPreserve, typesToApply, successCount, failCount)
+                .timeout(TASK_TIMEOUT)
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnSuccess(unused -> {
+                    Duration duration = Duration.between(startTime, Instant.now());
+                    log.info("Shift change completed: preserve=[{}], apply=[{}], duration={}ms, success={}, failed={}",
+                            preserveStr, applyStr, duration.toMillis(), successCount.get(), failCount.get());
+                })
+                .doOnError(error -> {
+                    Duration duration = Duration.between(startTime, Instant.now());
+                    log.error("Shift change failed: preserve=[{}], apply=[{}], duration={}ms, error={}",
+                            preserveStr, applyStr, duration.toMillis(), error.getMessage(), error);
+                })
+                .onErrorComplete()
+                .doFinally(signal -> {
+                    shiftChangeInProgress.set(false);
+                    Duration duration = Duration.between(startTime, Instant.now());
+                    saveShiftChangeStats(typesToApply.getFirst(), successCount.get(), failCount.get(), duration)
+                            .onErrorComplete()
+                            .subscribe();
+                })
+                .subscribe();
+    }
+
     private void executeShiftChangeForMultipleTypes(List<ShiftType> shiftTypes, boolean clearFirst) {
         if (!shiftChangeInProgress.compareAndSet(false, true)) {
             log.warn("Shift change already in progress, skipping");
@@ -195,13 +238,23 @@ public class VehicleShiftScheduler {
 
     private Mono<Void> clearAndApplyAssignmentsForTypes(LocalDate today, List<ShiftType> shiftTypes,
                                                           AtomicInteger successCount, AtomicInteger failCount) {
-        return getActiveAssignmentVehicleIdsForTypes(today, shiftTypes)
+        return clearAndApplyAssignments(today, shiftTypes, shiftTypes, successCount, failCount);
+    }
+
+
+    private Mono<Void> clearAndApplyAssignments(LocalDate today,
+                                                 List<ShiftType> typesToPreserve,
+                                                 List<ShiftType> typesToApply,
+                                                 AtomicInteger successCount,
+                                                 AtomicInteger failCount) {
+        return getActiveAssignmentVehicleIdsForTypes(today, typesToPreserve)
                 .doOnNext(excludeIds ->
-                        log.info("Found {} vehicles with active assignments to exclude from clearing", excludeIds.size()))
+                        log.info("Found {} vehicles with active assignments ({}) to exclude from clearing",
+                                excludeIds.size(), typesToPreserve))
                 .flatMap(vehicleRepository::clearRouteAssignmentsExcluding)
                 .doOnNext(clearedCount ->
                         log.info("Cleared {} vehicle route assignments", clearedCount))
-                .then(applyAssignmentsForTypes(today, shiftTypes, successCount, failCount));
+                .then(applyAssignmentsForTypes(today, typesToApply, successCount, failCount));
     }
 
     private Mono<Void> applyAssignmentsForTypes(LocalDate today, List<ShiftType> shiftTypes,
