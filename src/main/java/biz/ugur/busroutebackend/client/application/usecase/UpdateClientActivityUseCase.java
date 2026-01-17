@@ -6,8 +6,12 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
+
+import java.time.Duration;
 
 @Log4j2
 @Service
@@ -32,18 +36,23 @@ public class UpdateClientActivityUseCase extends BaseUseCase<Mono<UpdateClientAc
         return "client";
     }
 
-    private Mono<Void> processInternal(Command command) {
-        return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-            log.info("Update status client CorrelationId: {} - ClientId: {} ", correlationId, command.clientId());
+    private static final int MAX_RETRY_ATTEMPTS = 3;
+    private static final Duration RETRY_BACKOFF = Duration.ofMillis(50);
 
-            return clientRepository.findById(ClientId.of(command.clientId()))
-                    .switchIfEmpty(Mono.error(new IllegalArgumentException("Client not found")))
-                    .flatMap(client -> {
-                        client.updateActivity();
-                        return clientRepository.save(client);
-                    })
-                    .then();
-        });
+    private Mono<Void> processInternal(Command command) {
+        ClientId clientId = ClientId.of(command.clientId());
+
+        return Mono.defer(() ->
+                clientRepository.findById(clientId)
+                        .switchIfEmpty(Mono.error(new IllegalArgumentException("Client not found")))
+                        .flatMap(client -> {
+                            client.updateActivity();
+                            return clientRepository.save(client);
+                        })
+        )
+        .retryWhen(Retry.backoff(MAX_RETRY_ATTEMPTS, RETRY_BACKOFF)
+                .filter(e -> e instanceof OptimisticLockingFailureException))
+        .then();
     }
 
     public record Command(String clientId) {}
