@@ -6,9 +6,7 @@ import lombok.Getter;
 
 import java.util.UUID;
 
-/**
- * Value object representing a unique identifier for a Garage
- */
+
 @Getter
 @EqualsAndHashCode(callSuper = false)
 public class GarageId extends ValueObject {

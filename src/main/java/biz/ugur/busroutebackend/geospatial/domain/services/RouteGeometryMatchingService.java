@@ -66,13 +66,7 @@ public class RouteGeometryMatchingService {
         );
     }
 
-    /**
-     * Calculate how well GPS points match a specific geometry.
-     *
-     * @param gpsPoints GPS points
-     * @param geometry Route geometry
-     * @return Score between 0.0 and 1.0
-     */
+
     private double calculateGeometryMatchScore(List<GpsPoint> gpsPoints, RouteGeometry geometry) {
         List<Coordinates> routePoints = geometry.getPoints();
         if (routePoints.size() < 2) {
@@ -105,9 +99,7 @@ public class RouteGeometryMatchingService {
         return Math.max(0.0, Math.min(1.0, finalScore));
     }
 
-    /**
-     * Calculate minimum distance from a point to any segment of the route.
-     */
+
     private double calculateMinDistanceToRoute(Coordinates point, List<Coordinates> routePoints) {
         double minDistance = Double.MAX_VALUE;
 

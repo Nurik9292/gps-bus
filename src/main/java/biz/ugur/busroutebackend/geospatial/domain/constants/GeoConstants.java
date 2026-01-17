@@ -13,7 +13,6 @@ public final class GeoConstants {
 
     public static final int SRID_WGS84 = 4326;
 
-    // ========== Distance Thresholds ==========
 
     public static final double SIGNIFICANT_POSITION_CHANGE_METERS = 5.0;
 
@@ -21,15 +20,14 @@ public final class GeoConstants {
 
     public static final double MAX_STOP_RELOCATION_METERS = 500.0;
 
-    // ========== Walking Parameters ==========
 
     public static final double AVERAGE_WALKING_SPEED_KMH = 5.0;
 
     public static final double AVERAGE_WALKING_SPEED_M_PER_MIN =
-        AVERAGE_WALKING_SPEED_KMH * 1000.0 / 60.0; // 83.33 m/min
+        AVERAGE_WALKING_SPEED_KMH * 1000.0 / 60.0;
 
     public static final double AVERAGE_WALKING_SPEED_M_PER_SEC =
-        AVERAGE_WALKING_SPEED_KMH * 1000.0 / 3600.0; // 1.39 m/s
+        AVERAGE_WALKING_SPEED_KMH * 1000.0 / 3600.0;
 
     public static final int MAX_WALKING_TIME_MINUTES = 20;
 
@@ -37,7 +35,6 @@ public final class GeoConstants {
 
     public static final int MIN_WALKING_TIME_MINUTES = 1;
 
-    // ========== Search Radiuses ==========
 
     public static final double DEFAULT_SEARCH_RADIUS_METERS = 800.0;
 
@@ -45,13 +42,11 @@ public final class GeoConstants {
 
     public static final double MIN_SEARCH_RADIUS_METERS = 100.0;
 
-    // ========== Layered Search Configuration ==========
 
     public static final double[] LAYERED_SEARCH_RADIUSES_KM = {0.3, 0.6, 1.0};
 
     public static final int[] MAX_STOPS_PER_LAYER = {4, 6, 8};
 
-    // ========== Traffic and Urban Corrections ==========
 
     public static final int MIN_URBAN_CORRECTION_MINUTES = 1;
     public static final int MAX_URBAN_CORRECTION_MINUTES = 3;
@@ -61,13 +56,11 @@ public final class GeoConstants {
     public static final double TRAFFIC_MULTIPLIER_MODERATE = 1.2;
     public static final double TRAFFIC_MULTIPLIER_HEAVY = 1.4;
 
-    // ========== Vehicle Tracking ==========
 
     public static final int MAX_VEHICLE_POSITION_AGE_MINUTES = 10;
 
     public static final double MIN_MOTION_SPEED_KMH = 5.0;
 
-    // ========== Geometry Validation ==========
 
     public static final int MIN_LINESTRING_POINTS = 2;
 
@@ -75,7 +68,6 @@ public final class GeoConstants {
 
     public static final int MAX_GEOMETRY_POINTS = 10_000;
 
-    // ========== Conversion Factors ==========
 
     public static final double METERS_PER_KILOMETER = 1000.0;
 

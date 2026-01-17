@@ -16,13 +16,6 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Use case for processing vehicle entry into a garage.
- *
- * This use case:
- * 1. Updates the vehicle's garage tracking fields
- * 2. Publishes VehicleEnteredGarageEvent
- */
 @Service
 @Slf4j
 public class ProcessGarageEntryUseCase extends BaseUseCase<ProcessGarageEntryUseCase.Request, Vehicle> {

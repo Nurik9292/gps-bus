@@ -81,7 +81,7 @@ public class ProcessGarageExitUseCase extends BaseUseCase<ProcessGarageExitUseCa
         Vehicle exitedVehicle = vehicle.exitGarage();
 
         return findAndApplyShiftAssignment(exitedVehicle)
-                .flatMap(vehicleWithRoute -> vehicleRepository.save(vehicleWithRoute))
+                .flatMap(vehicleRepository::save)
                 .doOnSuccess(savedVehicle -> publishEvents(savedVehicle, garage, exitTime, entryTime, vehicle));
     }
 

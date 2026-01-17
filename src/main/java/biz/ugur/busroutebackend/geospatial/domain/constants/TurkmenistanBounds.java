@@ -8,7 +8,6 @@ public final class TurkmenistanBounds {
         throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
     }
 
-    // ========== Standard Bounds (Generous) ==========
 
     public static final BigDecimal MIN_LATITUDE = new BigDecimal("35.00");
 
@@ -18,7 +17,6 @@ public final class TurkmenistanBounds {
 
     public static final BigDecimal MAX_LONGITUDE = new BigDecimal("67.00");
 
-    // ========== Strict Bounds (For Fixed Infrastructure) ==========
 
     public static final BigDecimal STRICT_MIN_LATITUDE = new BigDecimal("35.10");
 
@@ -28,7 +26,6 @@ public final class TurkmenistanBounds {
 
     public static final BigDecimal STRICT_MAX_LONGITUDE = new BigDecimal("66.70");
 
-    // ========== Major Cities Coordinates (Reference) ==========
 
     public static final class Cities {
 

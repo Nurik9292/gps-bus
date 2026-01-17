@@ -51,6 +51,52 @@ public class VehicleEtaEnricherServiceImpl implements VehicleEtaEnricherService 
         }
 
         double effectiveSpeed = getEffectiveSpeed(speedKmh);
+        double correctionFactor = etaProperties.getFallback().getRouteDistanceCorrectionFactor();
+
+        return busStopRepository.findStopsOnRouteAheadWithRouteDistance(
+                        routeNumber, latitude, longitude, null, maxStops)
+                .map(stop -> {
+                    double distanceMeters = stop.getEffectiveDistance(correctionFactor);
+
+                    int etaMinutes = calculateEtaMinutes(distanceMeters, effectiveSpeed);
+
+                    if (log.isTraceEnabled()) {
+                        log.trace("ETA for stop {}: {}m ({}), {} min @ {} km/h",
+                                stop.getStopName(),
+                                Math.round(distanceMeters),
+                                stop.hasRouteDistance() ? "route" : "fallback",
+                                etaMinutes,
+                                Math.round(effectiveSpeed));
+                    }
+
+                    return new NextStopEta(
+                            stop.getStopId(),
+                            stop.getStopName(),
+                            etaMinutes,
+                            (int) Math.round(distanceMeters)
+                    );
+                })
+                .collectList()
+                .doOnNext(stops -> log.trace(
+                        "Calculated ETA for vehicle {} on route {}: {} stops (using route geometry)",
+                        vehicleId, routeNumber, stops.size()))
+                .onErrorResume(error -> {
+                    log.warn("Route distance calculation failed for vehicle {}, falling back to Haversine: {}",
+                            vehicleId, error.getMessage());
+                    return calculateNextStopsEtaFallback(vehicleId, routeNumber, latitude, longitude, speedKmh, maxStops);
+                });
+    }
+
+    private Mono<List<NextStopEta>> calculateNextStopsEtaFallback(
+            String vehicleId,
+            String routeNumber,
+            Double latitude,
+            Double longitude,
+            Double speedKmh,
+            int maxStops) {
+
+        double effectiveSpeed = getEffectiveSpeed(speedKmh);
+        double correctionFactor = etaProperties.getFallback().getRouteDistanceCorrectionFactor();
 
         return busStopRepository.findStopsOnRouteAhead(routeNumber, latitude, longitude, maxStops)
                 .map(stop -> {
@@ -60,17 +106,19 @@ public class VehicleEtaEnricherServiceImpl implements VehicleEtaEnricherService 
                             stop.getLongitude().doubleValue()
                     ).getMeters();
 
-                    int etaMinutes = calculateEtaMinutes(distanceMeters, effectiveSpeed);
+                    double adjustedDistance = distanceMeters * correctionFactor;
+                    int etaMinutes = calculateEtaMinutes(adjustedDistance, effectiveSpeed);
 
                     return new NextStopEta(
                             stop.getId().getValue(),
                             stop.getStopName(),
                             etaMinutes,
-                            (int) Math.round(distanceMeters)
+                            (int) Math.round(adjustedDistance)
                     );
                 })
                 .collectList()
-                .doOnNext(stops -> log.trace("Calculated ETA for vehicle {} on route {}: {} stops",
+                .doOnNext(stops -> log.trace(
+                        "Calculated ETA for vehicle {} on route {}: {} stops (Haversine fallback)",
                         vehicleId, routeNumber, stops.size()))
                 .onErrorResume(error -> {
                     log.debug("Failed to calculate ETA for vehicle {}: {}", vehicleId, error.getMessage());

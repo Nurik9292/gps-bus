@@ -114,6 +114,8 @@ public class ETAProperties {
         private int minutesPerStop = 2;
 
         private int maxWaitingTimeMinutes = 30;
+
+        private double routeDistanceCorrectionFactor = 1.3;
     }
 
     @Getter

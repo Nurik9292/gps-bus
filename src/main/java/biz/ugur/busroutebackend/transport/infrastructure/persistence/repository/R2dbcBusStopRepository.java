@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.shared.domain.specification.Specification;
 import biz.ugur.busroutebackend.shared.domain.specification.SqlCriteria;
 import biz.ugur.busroutebackend.shared.infrastructure.persistence.BaseR2dbcRepository;
 import biz.ugur.busroutebackend.transport.application.dto.BusArrivalInfo;
+import biz.ugur.busroutebackend.transport.domain.valueobject.StopWithRouteDistance;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
@@ -689,5 +690,183 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 .all()
                 .doOnNext(stop -> log.trace("Found stop ahead on route {}: {} ({}m away)",
                         routeNumber, stop.getStopName(), "calculated"));
+    }
+
+    @Override
+    public Flux<StopWithRouteDistance> findStopsOnRouteAheadWithRouteDistance(
+            String routeNumber,
+            Double vehicleLat,
+            Double vehicleLon,
+            Integer direction,
+            int maxStops) {
+
+        String sql = """
+            WITH route_info AS (
+                -- Get route geometry and total distance based on direction
+                SELECT
+                    br.id as route_id,
+                    br.route_number,
+                    CASE WHEN :direction = 1 THEN br.route_geometry_backward
+                         ELSE br.route_geometry_forward
+                    END as route_geometry,
+                    CASE WHEN :direction = 1 THEN COALESCE(br.total_distance_backward_meters, 10000)
+                         ELSE COALESCE(br.total_distance_forward_meters, 10000)
+                    END as total_distance,
+                    COALESCE(:direction, 0) as eff_direction
+                FROM bus_routes br
+                WHERE br.route_number = :routeNumber
+                AND br.is_active = true
+                LIMIT 1
+            ),
+
+            vehicle_position AS (
+                -- Project vehicle position onto route line
+                SELECT
+                    ri.*,
+                    CASE
+                        WHEN ri.route_geometry IS NOT NULL
+                             AND ri.route_geometry LIKE 'LINESTRING%'
+                             AND LENGTH(ri.route_geometry) > 20
+                        THEN ST_LineLocatePoint(
+                            ST_GeomFromText(ri.route_geometry, 4326),
+                            ST_SetSRID(ST_Point(:vehicleLon, :vehicleLat), 4326)
+                        )
+                        ELSE NULL
+                    END as vehicle_fraction
+                FROM route_info ri
+            ),
+
+            stops_with_fractions AS (
+                -- Calculate position of each stop on the route line
+                SELECT
+                    bs.id as stop_id,
+                    bs.stop_name,
+                    bs.latitude,
+                    bs.longitude,
+                    rs.stop_sequence,
+                    rs.direction,
+                    vp.total_distance,
+                    vp.vehicle_fraction,
+                    CASE
+                        WHEN vp.route_geometry IS NOT NULL
+                             AND vp.route_geometry LIKE 'LINESTRING%'
+                             AND LENGTH(vp.route_geometry) > 20
+                        THEN ST_LineLocatePoint(
+                            ST_GeomFromText(vp.route_geometry, 4326),
+                            ST_SetSRID(ST_Point(bs.longitude, bs.latitude), 4326)
+                        )
+                        ELSE NULL
+                    END as stop_fraction,
+                    -- Direct distance for fallback
+                    ST_Distance(
+                        ST_Point(:vehicleLon, :vehicleLat)::geography,
+                        ST_Point(bs.longitude, bs.latitude)::geography
+                    ) as direct_distance
+                FROM bus_stops bs
+                JOIN route_stops rs ON bs.id = rs.stop_id
+                JOIN bus_routes br ON rs.route_id = br.id
+                CROSS JOIN vehicle_position vp
+                WHERE br.route_number = :routeNumber
+                  AND br.is_active = true
+                  AND bs.is_active = true
+                  AND rs.direction = vp.eff_direction
+            ),
+
+            stops_with_route_distance AS (
+                SELECT
+                    stop_id,
+                    stop_name,
+                    latitude,
+                    longitude,
+                    stop_sequence,
+                    direction,
+                    direct_distance as direct_distance_meters,
+                    vehicle_fraction,
+                    stop_fraction,
+                    CASE
+                        -- If we have valid fractions and stop is ahead on route
+                        WHEN vehicle_fraction IS NOT NULL
+                             AND stop_fraction IS NOT NULL
+                             AND stop_fraction > vehicle_fraction
+                        THEN (stop_fraction - vehicle_fraction) * total_distance
+                        -- Fallback: use direct distance with correction factor
+                        ELSE direct_distance * :correctionFactor
+                    END as distance_on_route_meters,
+                    -- Determine if stop is ahead
+                    CASE
+                        WHEN vehicle_fraction IS NOT NULL AND stop_fraction IS NOT NULL
+                        THEN stop_fraction > vehicle_fraction
+                        ELSE true  -- If no geometry, include by sequence
+                    END as is_ahead
+                FROM stops_with_fractions
+            )
+
+            SELECT
+                stop_id,
+                stop_name,
+                latitude,
+                longitude,
+                stop_sequence,
+                direction,
+                direct_distance_meters,
+                distance_on_route_meters
+            FROM stops_with_route_distance
+            WHERE is_ahead = true
+              AND distance_on_route_meters > 0
+            ORDER BY
+                CASE
+                    WHEN stop_fraction IS NOT NULL THEN stop_fraction
+                    ELSE stop_sequence::float / 1000.0
+                END
+            LIMIT :maxStops
+            """;
+
+        // Handle null direction - default to 0 (forward)
+        Integer effectiveDirection = direction != null ? direction : 0;
+        double correctionFactor = etaProperties.getFallback().getRouteDistanceCorrectionFactor();
+
+        return databaseClient.sql(sql)
+                .bind("routeNumber", routeNumber)
+                .bind("vehicleLat", vehicleLat)
+                .bind("vehicleLon", vehicleLon)
+                .bind("direction", effectiveDirection)
+                .bind("correctionFactor", correctionFactor)
+                .bind("maxStops", maxStops)
+                .map(this::mapToStopWithRouteDistance)
+                .all()
+                .doOnNext(stop -> log.trace(
+                        "Stop {} on route {}: route_dist={}m, direct_dist={}m ({})",
+                        stop.getStopName(),
+                        routeNumber,
+                        Math.round(stop.getDistanceOnRouteMeters()),
+                        Math.round(stop.getDirectDistanceMeters()),
+                        stop.hasRouteDistance() ? "geometry" : "fallback"
+                ));
+    }
+
+    private StopWithRouteDistance mapToStopWithRouteDistance(Row row, RowMetadata metadata) {
+        return StopWithRouteDistance.builder()
+                .stopId(row.get("stop_id", String.class))
+                .stopName(row.get("stop_name", String.class))
+                .latitude(safeGetDouble(row, "latitude"))
+                .longitude(safeGetDouble(row, "longitude"))
+                .stopSequence(row.get("stop_sequence", Integer.class))
+                .direction(row.get("direction", Integer.class))
+                .distanceOnRouteMeters(safeGetDouble(row, "distance_on_route_meters"))
+                .directDistanceMeters(safeGetDouble(row, "direct_distance_meters"))
+                .build();
+    }
+
+    private Double safeGetDouble(Row row, String columnName) {
+        try {
+            BigDecimal value = row.get(columnName, BigDecimal.class);
+            return value != null ? value.doubleValue() : null;
+        } catch (Exception e) {
+            try {
+                return row.get(columnName, Double.class);
+            } catch (Exception e2) {
+                return null;
+            }
+        }
     }
 }
