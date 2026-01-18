@@ -59,31 +59,31 @@ public class VehicleDataScheduler {
 
     @Scheduled(cron = "0/10 * 6-23 * * *", zone = "Asia/Ashgabat")
     public void updateVehiclePositions() {
-        log.debug("GPS scheduler triggered, providers={}", gpsDataAggregator.getEnabledProviderCount());
+        try {
+            Duration lockTimeout = lockProperties.getGpsSchedulerLockTimeout();
+            Duration lockAcquireTimeout = Duration.ofSeconds(5);
 
-        Duration lockTimeout = lockProperties.getGpsSchedulerLockTimeout();
+            Mono.usingWhen(
+                    distributedLock.tryAcquire(GPS_UPDATE_LOCK_NAME, lockTimeout)
+                            .timeout(lockAcquireTimeout)
+                            .switchIfEmpty(Mono.empty()),
 
-        Mono.usingWhen(
-                distributedLock.tryAcquire(GPS_UPDATE_LOCK_NAME, lockTimeout)
-                        .doOnNext(handle -> log.debug("Acquired lock, starting GPS update"))
-                        .switchIfEmpty(Mono.defer(() -> {
-                            log.debug("Could not acquire lock '{}' - another instance may be running", GPS_UPDATE_LOCK_NAME);
-                            return Mono.empty();
-                        })),
+                    lockHandle -> {
+                        Instant startTime = Instant.now();
+                        return executeGpsUpdate(startTime)
+                                .timeout(lockTimeout.minusSeconds(10));
+                    },
 
-                lockHandle -> {
-                    Instant startTime = Instant.now();
-                    return executeGpsUpdate(startTime)
-                            .timeout(lockTimeout.minusSeconds(10))
-                            .doOnTerminate(() -> log.debug("GPS update terminated"));
-                },
-
-                lockHandle -> releaseLock(lockHandle, "success"),
-                (lockHandle, error) -> releaseLock(lockHandle, "error: " + error.getMessage()),
-                lockHandle -> releaseLock(lockHandle, "cancel")
-        )
-                .onErrorResume(this::handleSchedulerError)
-                .subscribe();
+                            this::releaseLock,
+                    (lockHandle, error) -> releaseLock(lockHandle),
+                            this::releaseLock
+            )
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .onErrorResume(this::handleSchedulerError)
+                    .subscribe();
+        } catch (Exception e) {
+            log.error("GPS scheduler failed to start: {}", e.getMessage(), e);
+        }
     }
 
     private Mono<Void> handleSchedulerError(Throwable error) {
@@ -91,18 +91,9 @@ public class VehicleDataScheduler {
         return Mono.empty();
     }
 
-    private Mono<Void> releaseLock(RedisDistributedLock.LockHandle lockHandle, String reason) {
+    private Mono<Void> releaseLock(RedisDistributedLock.LockHandle lockHandle) {
         return distributedLock.release(lockHandle)
-                .doOnNext(released -> {
-                    if (released) {
-                        log.debug("Released GPS update lock ({})", reason);
-                    } else {
-                        // Lock already expired or released - this is normal if operation took longer than lock TTL
-                        log.debug("GPS update lock was already released ({})", reason);
-                    }
-                })
-                .doOnError(error -> log.error("Error releasing GPS update lock ({}): {}",
-                        reason, error.getMessage()))
+                .timeout(Duration.ofSeconds(5))
                 .onErrorResume(error -> Mono.just(false))
                 .then();
     }
