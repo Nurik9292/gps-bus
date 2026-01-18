@@ -18,9 +18,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 
@@ -71,6 +69,8 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
 
         ChinaGpsRequestDTO request = ChinaGpsRequestDTO.fromDeviceIds(deviceIds);
 
+        Set<String> requestedDeviceIds = new HashSet<>(deviceIds);
+
         return webClient.post()
                 .uri(API_PATH)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -82,7 +82,10 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
                 .map(response -> processResponse(response, deviceIds.size()))
                 .timeout(properties.getTimeout().getRequest())
                 .retryWhen(createRetrySpec())
-                .doOnSuccess(positions -> logSuccess(positions.size(), deviceIds.size()))
+                .doOnSuccess(positions -> {
+                    logSuccess(positions.size(), deviceIds.size());
+                    logMissingDevices(requestedDeviceIds, positions);
+                })
                 .onErrorResume(error -> handleError(error, deviceIds.size()));
     }
 
@@ -180,6 +183,20 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
         } catch (Exception e) {
             log.warn("[CHINA] Failed to parse reportTime: {} or {}", time1, time2);
             return time1.compareTo(time2);
+        }
+    }
+
+    private void logMissingDevices(Set<String> requestedDeviceIds, List<GpsPositionDTO> positions) {
+        Set<String> returnedDeviceIds = positions.stream()
+                .map(GpsPositionDTO::getDeviceId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Set<String> missingDeviceIds = new HashSet<>(requestedDeviceIds);
+        missingDeviceIds.removeAll(returnedDeviceIds);
+
+        if (!missingDeviceIds.isEmpty()) {
+            log.debug("[CHINA] {} devices not returned by API", missingDeviceIds.size());
         }
     }
 

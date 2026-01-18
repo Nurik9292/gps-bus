@@ -64,12 +64,15 @@ public class VehicleDataScheduler {
         Duration lockTimeout = lockProperties.getGpsSchedulerLockTimeout();
 
         Mono.usingWhen(
-                distributedLock.tryAcquire(GPS_UPDATE_LOCK_NAME, lockTimeout),
+                distributedLock.tryAcquire(GPS_UPDATE_LOCK_NAME, lockTimeout)
+                        .doOnNext(handle -> log.debug("Acquired lock, starting GPS update"))
+                        .switchIfEmpty(Mono.defer(() -> {
+                            log.debug("Could not acquire lock '{}' - another instance may be running", GPS_UPDATE_LOCK_NAME);
+                            return Mono.empty();
+                        })),
 
                 lockHandle -> {
-                    log.debug("Acquired distributed lock for GPS update");
                     Instant startTime = Instant.now();
-
                     return executeGpsUpdate(startTime)
                             .timeout(lockTimeout.minusSeconds(10))
                             .doOnTerminate(() -> log.debug("GPS update terminated"));
@@ -77,7 +80,6 @@ public class VehicleDataScheduler {
 
                 lockHandle -> releaseLock(lockHandle, "success"),
                 (lockHandle, error) -> releaseLock(lockHandle, "error: " + error.getMessage()),
-
                 lockHandle -> releaseLock(lockHandle, "cancel")
         )
                 .onErrorResume(this::handleSchedulerError)
@@ -130,15 +132,27 @@ public class VehicleDataScheduler {
 
     private Mono<List<GpsPositionDTO>> fetchPositionsIfNotEmpty(Map<GpsProviderType, List<String>> devicesByProvider) {
         if (devicesByProvider.isEmpty()) {
-            log.warn("No device IDs found in database, skipping GPS update");
+            log.warn("No device IDs found in database (is_active=true, device_id NOT NULL), skipping GPS update");
             return Mono.just(List.of());
         }
 
         int totalDevices = devicesByProvider.values().stream().mapToInt(List::size).sum();
-        log.debug("Found {} device IDs across {} providers, fetching GPS positions",
+
+        log.debug("Fetching GPS positions for {} devices across {} providers",
                 totalDevices, devicesByProvider.size());
 
-        return gpsDataAggregator.fetchPositionsGroupedByProvider(devicesByProvider);
+        return gpsDataAggregator.fetchPositionsGroupedByProvider(devicesByProvider)
+                .doOnNext(positions -> {
+                    int fetched = positions.size();
+                    int missing = totalDevices - fetched;
+                    if (missing > 0) {
+                        log.warn("API returned {} positions for {} requested devices. Missing {} devices",
+                                fetched, totalDevices, missing);
+                    } else {
+                        log.debug("API returned {} positions for {} requested devices",
+                                fetched, totalDevices);
+                    }
+                });
     }
 
     private Mono<VehiclePositionUpdateResult> processBatch(List<GpsPositionDTO> batch, Duration timeout) {

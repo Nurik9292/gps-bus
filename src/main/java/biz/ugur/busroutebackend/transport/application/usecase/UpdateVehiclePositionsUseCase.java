@@ -40,12 +40,18 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Service
 @Slf4j
 public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionDTO>, VehiclePositionUpdateResult> {
+
+    private static final long FORCE_PUBLISH_INTERVAL_SECONDS = 30;
+
+    private final ConcurrentHashMap<String, Instant> lastPublishedTime = new ConcurrentHashMap<>();
 
     private final VehicleRepository vehicleRepository;
     private final VehicleFactory vehicleFactory;
@@ -131,7 +137,14 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
             validationMetricsRecorder.recordBatch(validationCounts);
 
+            long invalidCount = gpsPositions.size() - validPositions.size();
+            if (invalidCount > 0) {
+                log.debug("Validation: total={}, valid={}, invalid={}",
+                        gpsPositions.size(), validPositions.size(), invalidCount);
+            }
+
             if (validPositions.isEmpty()) {
+                log.warn("All positions failed validation: {}", validationCounts);
                 return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, gpsPositions.size() - validPositions.size(), 0, LocalDateTime.now(), List.of()));
             }
 
@@ -146,11 +159,18 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validPositions.size(), 0, LocalDateTime.now(), List.of()));
             }
 
+            final int validCount = validPositions.size();
             return filterOutliers(validPositions)
                     .flatMap(filteredPositions -> {
+                        int outlierCount = validCount - filteredPositions.size();
+                        if (outlierCount > 0) {
+                            log.debug("Outlier filter: {} of {} positions filtered",
+                                    outlierCount, validCount);
+                        }
+
                         if (filteredPositions.isEmpty()) {
-                            log.warn("All {} positions were filtered as outliers", validPositions.size());
-                            return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validPositions.size(), 0, LocalDateTime.now(), List.of()));
+                            log.warn("All {} positions were filtered as outliers", validCount);
+                            return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validCount, 0, LocalDateTime.now(), List.of()));
                         }
 
                         List<String> filteredDeviceIds = filteredPositions.stream()
@@ -272,16 +292,22 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
                     vehiclesToUpdate.add(updatedVehicle);
 
-                    boolean shouldPublish = positionChangeDetector.hasSignificantChange(
+                    boolean hasSignificantChange = positionChangeDetector.hasSignificantChange(
                             oldLatitude, oldLongitude, oldSpeed,
                             updatedVehicle.getCurrentLatitude(),
                             updatedVehicle.getCurrentLongitude(),
                             updatedVehicle.getSpeedKmh()
                     );
 
+                    String vehicleId = updatedVehicle.getId().getValue();
+                    boolean shouldForcePublish = shouldForcePublishForVehicle(vehicleId);
+                    boolean shouldPublish = hasSignificantChange || shouldForcePublish;
+
                     if (shouldPublish) {
+                        lastPublishedTime.put(vehicleId, Instant.now());
+
                         VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
-                                updatedVehicle.getId().getValue(),
+                                vehicleId,
                                 updatedVehicle.getDeviceId(),
                                 updatedVehicle.getLicensePlate(),
                                 updatedVehicle.getRouteNumber(),
@@ -385,6 +411,16 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         return createResult(statuses);
                     });
         });
+    }
+
+
+    private boolean shouldForcePublishForVehicle(String vehicleId) {
+        Instant lastPublished = lastPublishedTime.get(vehicleId);
+        if (lastPublished == null) {
+            return true;
+        }
+        long secondsSinceLastPublish = Instant.now().getEpochSecond() - lastPublished.getEpochSecond();
+        return secondsSinceLastPublish >= FORCE_PUBLISH_INTERVAL_SECONDS;
     }
 
     private VehiclePositionUpdateResult createResult(List<VehicleUpdateStatus> statuses) {
