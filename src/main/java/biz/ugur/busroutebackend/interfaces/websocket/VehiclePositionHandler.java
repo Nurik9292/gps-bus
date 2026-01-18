@@ -210,6 +210,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
     private Flux<WebSocketMessage> getLivePositionUpdates(WebSocketSession session,
                                                           SessionConfig config) {
         return broadcastSink.asFlux()
+                .takeWhile(ignored -> session.isOpen())
                 .doOnNext(positionMsg -> {
                     boolean inScope = isPositionInScope(positionMsg, config);
                     if ("routes".equals(config.getSubscriptionType())) {
@@ -221,7 +222,11 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 .filter(positionMsg -> isPositionInScope(positionMsg, config))
                 .onBackpressureLatest()
                 .bufferTimeout(100, Duration.ofMillis(500))
+                .takeWhile(ignored -> session.isOpen())
                 .filter(updates -> !updates.isEmpty())
+                .onBackpressureDrop(dropped ->
+                        log.debug("Dropped batch of {} updates - session {} not consuming",
+                                dropped.size(), session.getId()))
                 .map(updates -> {
                     try {
                         Map<String, VehiclePositionWebSocketMessage> latestUpdates = updates.stream()
@@ -375,7 +380,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
                     return true;
                 })
                 .subscribe(
-                        positionMessage -> emitWithMetrics(positionMessage),
+                        this::emitWithMetrics,
                         error -> log.error("Redis subscription error: {}", error.getMessage()),
                         () -> log.info("Redis subscription completed")
                 );
