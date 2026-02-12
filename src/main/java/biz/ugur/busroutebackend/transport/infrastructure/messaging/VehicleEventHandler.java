@@ -12,6 +12,7 @@ import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.util.retry.Retry;
 
 import jakarta.annotation.PostConstruct;
@@ -27,6 +28,7 @@ public class VehicleEventHandler {
     private static final Duration OPERATION_TIMEOUT = Duration.ofSeconds(5);
     private static final int MAX_RETRY_ATTEMPTS = 2;
     private static final Duration RETRY_DELAY = Duration.ofMillis(100);
+    private static final Duration ETA_ENRICHMENT_TIMEOUT = Duration.ofMillis(500);
 
     private static final int POSITION_CONCURRENCY = 64;
     private static final int ROUTE_ASSIGNMENT_CONCURRENCY = 16;
@@ -184,9 +186,22 @@ public class VehicleEventHandler {
                 event.getLine()
         );
 
-        return vehicleEtaEnricherService.enrichWithEta(msg)
-                .flatMap(enrichedMsg -> webSocketPublisher.broadcastVehiclePosition(enrichedMsg))
-                .doOnSuccess(v -> log.trace("Broadcasted position with ETA: {}", event.getVehicleId()));
+        Mono<Void> immediateBroadcast = webSocketPublisher.broadcastVehiclePosition(msg)
+                .doOnSuccess(v -> log.trace("Broadcasted position: {}", event.getVehicleId()));
+
+        if (event.getRouteNumber() != null) {
+            vehicleEtaEnricherService.enrichWithEta(msg)
+                    .timeout(ETA_ENRICHMENT_TIMEOUT)
+                    .filter(enriched -> enriched.getNextStops() != null && !enriched.getNextStops().isEmpty())
+                    .flatMap(webSocketPublisher::broadcastVehiclePosition)
+                    .doOnError(error -> log.debug("Async ETA enrichment skipped for vehicle {}: {}",
+                            event.getVehicleId(), error.getMessage()))
+                    .onErrorComplete()
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .subscribe();
+        }
+
+        return immediateBroadcast;
     }
 
     private Mono<Boolean> updateRouteAssignmentCache(VehicleAssignedToRouteEvent event) {

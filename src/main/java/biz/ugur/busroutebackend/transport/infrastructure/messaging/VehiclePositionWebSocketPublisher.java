@@ -1,6 +1,5 @@
 package biz.ugur.busroutebackend.transport.infrastructure.messaging;
 
-import biz.ugur.busroutebackend.interfaces.websocket.VehiclePositionHandler;
 import biz.ugur.busroutebackend.shared.infrastructure.redis.RedisPubSubHealthTracker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
@@ -15,14 +14,11 @@ public class VehiclePositionWebSocketPublisher {
     private static final String POSITION_UPDATES_CHANNEL = "vehicle-position-updates";
     private static final String ROUTE_ASSIGNMENTS_CHANNEL = "vehicle-route-assignments";
 
-    private final VehiclePositionHandler vehiclePositionHandler;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final RedisPubSubHealthTracker healthTracker;
 
-    public VehiclePositionWebSocketPublisher(VehiclePositionHandler vehiclePositionHandler,
-                                             ReactiveRedisTemplate<String, Object> redisTemplate,
+    public VehiclePositionWebSocketPublisher(ReactiveRedisTemplate<String, Object> redisTemplate,
                                              RedisPubSubHealthTracker healthTracker) {
-        this.vehiclePositionHandler = vehiclePositionHandler;
         this.redisTemplate = redisTemplate;
         this.healthTracker = healthTracker;
     }
@@ -34,13 +30,7 @@ public class VehiclePositionWebSocketPublisher {
             return Mono.empty();
         }
 
-        Mono<Void> localBroadcast = Mono.fromRunnable(() ->
-                vehiclePositionHandler.broadcastVehiclePosition(message)
-        );
-
-        Mono<Void> redisPublish = publishToRedis(POSITION_UPDATES_CHANNEL, message);
-
-        return localBroadcast.then(redisPublish);
+        return publishToRedis(POSITION_UPDATES_CHANNEL, message);
     }
 
     public Mono<Void> broadcastRouteAssignment(VehicleRouteAssignmentMessage message) {

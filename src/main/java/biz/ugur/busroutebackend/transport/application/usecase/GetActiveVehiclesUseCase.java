@@ -96,7 +96,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
                                 .flatMap(this::enrichVehicleWithRouteInfo)
                                 .collectList()
                                 .flatMapMany(vehicles ->
-                                        cacheRepository.cache(cacheKey, Flux.fromIterable(vehicles), Duration.ofMinutes(2))
+                                        cacheRepository.cache(cacheKey, Flux.fromIterable(vehicles), Duration.ofSeconds(30))
                                                 .thenMany(Flux.fromIterable(vehicles))
                                 )
                 )
@@ -121,7 +121,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
                                 )
                                 .collectList()
                                 .flatMapMany(vehicles ->
-                                        cacheRepository.cache(cacheKey, Flux.fromIterable(vehicles), Duration.ofMinutes(1))
+                                        cacheRepository.cache(cacheKey, Flux.fromIterable(vehicles), Duration.ofSeconds(20))
                                                 .thenMany(Flux.fromIterable(vehicles))
                                 )
                 )

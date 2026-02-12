@@ -49,7 +49,7 @@ import java.time.LocalDateTime;
 @Slf4j
 public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionDTO>, VehiclePositionUpdateResult> {
 
-    private static final long FORCE_PUBLISH_INTERVAL_SECONDS = 30;
+    private static final long FORCE_PUBLISH_INTERVAL_SECONDS = 15;
 
     private final ConcurrentHashMap<String, Instant> lastPublishedTime = new ConcurrentHashMap<>();
 

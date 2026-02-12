@@ -21,7 +21,7 @@ spring:
     database: ${DB_NAME:bus_route_db}
     pool:
       initial-size: ${DB_POOL_MIN_IDLE:2}
-      max-size: ${DB_POOL_MAX_SIZE:10}
+      max-size: ${DB_POOL_MAX_SIZE:15}
       max-idle-time: 30m
       max-acquire-time: 60s
       max-create-connection-time: 60s
@@ -36,8 +36,8 @@ spring:
       timeout: 2000ms
       lettuce:
         pool:
-          max-active: 8
-          max-idle: 8
+          max-active: 12
+          max-idle: 12
           min-idle: 0
 
   flyway:
@@ -430,24 +430,23 @@ management:
 
 logging:
   level:
-    level:
-      biz.ugur.busroutebackend: WARN
-      biz.ugur.busroutebackend.transport.scheduler: WARN
-      biz.ugur.busroutebackend.shared.application.MaterializedViewRefreshService: WARN
-      biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase: WARN
-      biz.ugur.busroutebackend.transport.application.service.GpsDataAggregatorService: WARN
-      biz.ugur.busroutebackend.transport.infrastructure.messaging: WARN
-      biz.ugur.busroutebackend.shared.infrastructure.security: INFO
-      biz.ugur.busroutebackend.admin.infrastructure.security: INFO
-      biz.ugur.busroutebackend.interfaces.websocket: WARN
-      org.springframework: WARN
-      org.hibernate: WARN
-      io.r2dbc: WARN
-      io.netty: WARN
-      org.springframework.web.reactive: ${SPRING_LOG_LEVEL:WARN}
-      org.springframework.data: ${DATA_LOG_LEVEL:WARN}
-      org.springframework.r2dbc: ${R2DBC_LOG_LEVEL:WARN}
-      org.flywaydb: ${FLYWAY_LOG_LEVEL:INFO}
+    biz.ugur.busroutebackend: WARN
+    biz.ugur.busroutebackend.transport.scheduler: INFO
+    biz.ugur.busroutebackend.shared.application.MaterializedViewRefreshService: WARN
+    biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase: WARN
+    biz.ugur.busroutebackend.transport.application.service.GpsDataAggregatorService: WARN
+    biz.ugur.busroutebackend.transport.infrastructure.messaging: INFO
+    biz.ugur.busroutebackend.shared.infrastructure.security: INFO
+    biz.ugur.busroutebackend.admin.infrastructure.security: INFO
+    biz.ugur.busroutebackend.interfaces.websocket: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    io.r2dbc: WARN
+    io.netty: WARN
+    org.springframework.web.reactive: ${SPRING_LOG_LEVEL:WARN}
+    org.springframework.data: ${DATA_LOG_LEVEL:WARN}
+    org.springframework.r2dbc: ${R2DBC_LOG_LEVEL:WARN}
+    org.flywaydb: ${FLYWAY_LOG_LEVEL:INFO}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

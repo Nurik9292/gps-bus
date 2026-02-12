@@ -32,14 +32,14 @@ spring:
 logging:
   level:
     biz.ugur.busroutebackend: WARN
-    biz.ugur.busroutebackend.transport.scheduler: WARN
+    biz.ugur.busroutebackend.transport.scheduler: INFO
     biz.ugur.busroutebackend.shared.application.MaterializedViewRefreshService: WARN
     biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase: WARN
     biz.ugur.busroutebackend.transport.application.service.GpsDataAggregatorService: WARN
-    biz.ugur.busroutebackend.transport.infrastructure.messaging: WARN
+    biz.ugur.busroutebackend.transport.infrastructure.messaging: INFO
     biz.ugur.busroutebackend.shared.infrastructure.security: INFO
     biz.ugur.busroutebackend.admin.infrastructure.security: INFO
-    biz.ugur.busroutebackend.interfaces.websocket: WARN
+    biz.ugur.busroutebackend.interfaces.websocket: INFO
     org.springframework: WARN
     org.hibernate: WARN
     io.r2dbc: WARN

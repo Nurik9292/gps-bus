@@ -158,7 +158,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
         Double newSpeed = sanitizeSpeed(speed);
         Boolean newIsInMotion = newSpeed > VehicleConstants.MOTION_SPEED_THRESHOLD_KMH;
-        LocalDateTime newFixTime = LocalDateTime.now();
+        LocalDateTime newFixTime = fixTime != null ? fixTime : LocalDateTime.now();
         Double newCourse = course != null ? course : 0.0;
 
         Vehicle updatedVehicle = this.toBuilder()

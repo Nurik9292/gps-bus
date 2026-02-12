@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class VehicleDataScheduler {
 
     private static final String GPS_UPDATE_LOCK_NAME = "gps-scheduler";
-    private static final Duration UPDATE_INTERVAL = Duration.ofSeconds(10);
+    private static final Duration UPDATE_INTERVAL = Duration.ofSeconds(5);
     private static final ZoneId TIMEZONE = ZoneId.of("Asia/Ashgabat");
     private static final int ACTIVE_HOUR_START = 6;
     private static final int ACTIVE_HOUR_END = 23;
