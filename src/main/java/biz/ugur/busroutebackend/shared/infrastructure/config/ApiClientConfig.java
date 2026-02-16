@@ -69,4 +69,29 @@ public class ApiClientConfig {
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
                 .build();
     }
+
+    @Bean("nominatimClient")
+    @ConditionalOnProperty(prefix = "external.api.nominatim", name = "enabled", havingValue = "true")
+    public WebClient nominatimClient(
+            @Value("${external.api.nominatim.base-url}") String baseUrl,
+            @Value("${external.api.nominatim.timeout:10s}") Duration timeout,
+            @Value("${external.api.nominatim.connect-timeout:3s}") Duration connectTimeout,
+            @Value("${external.api.nominatim.read-timeout:10s}") Duration readTimeout,
+            @Value("${external.api.nominatim.write-timeout:3s}") Duration writeTimeout) {
+
+        HttpClient httpClient = HttpClient.create()
+                .responseTimeout(timeout)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) connectTimeout.toMillis())
+                .doOnConnected(conn -> conn
+                        .addHandlerLast(new ReadTimeoutHandler(readTimeout.toSeconds(), TimeUnit.SECONDS))
+                        .addHandlerLast(new WriteTimeoutHandler(writeTimeout.toSeconds(), TimeUnit.SECONDS)));
+
+        log.info("Nominatim WebClient configured: baseUrl={}, responseTimeout={}s", baseUrl, timeout.toSeconds());
+
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
+                .build();
+    }
 }

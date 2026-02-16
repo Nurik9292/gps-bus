@@ -59,6 +59,9 @@ public class AdminSecurityConfig {
                         .pathMatchers("/api/v1/admin/stops", "/api/v1/admin/stops/**").hasRole("ADMIN")
                         .pathMatchers("/api/v1/admin/banners", "/api/v1/admin/banners/**").hasRole("ADMIN")
                         .pathMatchers("/api/v1/admin/cities", "/api/v1/admin/cities/**").hasRole("ADMIN")
+                        .pathMatchers("/api/v1/admin/places", "/api/v1/admin/places/**").hasRole("ADMIN")
+                        .pathMatchers("/api/v1/admin/streets", "/api/v1/admin/streets/**").hasRole("ADMIN")
+                        .pathMatchers("/api/v1/admin/suggestions", "/api/v1/admin/suggestions/**").hasRole("ADMIN")
 
                         .pathMatchers("/api/v1/admin/users", "/api/v1/admin/users/**").hasRole("SUPER_ADMIN")
                         .pathMatchers("/api/v1/admin/system", "/api/v1/admin/system/**").hasRole("SUPER_ADMIN")

@@ -114,6 +114,15 @@ app:
           max-longitude: 67.0
 
 
+  place:
+    search:
+      similarity-threshold: 0.3
+      short-query-max-length: 3
+      default-limit: 20
+      max-limit: 50
+      nearby-default-radius-meters: 500
+      nearby-max-radius-meters: 5000
+
   security:
     jwt:
       admin:
@@ -214,6 +223,14 @@ external:
     #     initial-interval: 1s
     #     multiplier: 2.0
     #     max-interval: 10s
+
+    nominatim:
+      enabled: ${NOMINATIM_ENABLED:true}
+      base-url: ${NOMINATIM_BASE_URL:http://localhost:8088}
+      timeout: ${NOMINATIM_TIMEOUT:10s}
+      connect-timeout: ${NOMINATIM_CONNECT_TIMEOUT:3s}
+      read-timeout: ${NOMINATIM_READ_TIMEOUT:10s}
+      write-timeout: ${NOMINATIM_WRITE_TIMEOUT:3s}
 
 business:
   routing:
@@ -357,6 +374,12 @@ resilience4j:
           - io.r2dbc.spi.R2dbcTimeoutException
           - org.springframework.r2dbc.BadSqlGrammarException
           - java.util.concurrent.TimeoutException
+      nominatimApi:
+        base-config: default
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 2
 
   ratelimiter:
     configs:

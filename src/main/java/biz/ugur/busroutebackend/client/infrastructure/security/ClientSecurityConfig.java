@@ -63,6 +63,7 @@ public class ClientSecurityConfig {
                         .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/change-password").authenticated()
 
                         .pathMatchers("/api/v1/client/favorites/**").authenticated()
+                        .pathMatchers("/api/v1/client/suggestions/**").authenticated()
 
                         .anyExchange().authenticated()
                 )

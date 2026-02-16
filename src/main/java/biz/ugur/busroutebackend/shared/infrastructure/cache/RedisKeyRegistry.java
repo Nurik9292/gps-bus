@@ -98,4 +98,31 @@ public final class RedisKeyRegistry {
         private Search() {
         }
     }
+
+    public static final class Place {
+        public static final String SEARCH_PREFIX = "place:search";
+        public static final String AUTOCOMPLETE_PREFIX = "place:autocomplete";
+        public static final String DETAIL_PREFIX = "place:detail";
+        public static final String STREET_ALIAS_MAP = "place:street:alias:map";
+
+        public static final Duration SEARCH_TTL = Duration.ofMinutes(5);
+        public static final Duration DETAIL_TTL = Duration.ofMinutes(30);
+        public static final Duration AUTOCOMPLETE_TTL = Duration.ofMinutes(3);
+        public static final Duration STREET_ALIASES_TTL = Duration.ofHours(1);
+
+        public static String search(String key) {
+            return SEARCH_PREFIX + ":" + key;
+        }
+
+        public static String autocomplete(String key) {
+            return AUTOCOMPLETE_PREFIX + ":" + key;
+        }
+
+        public static String detail(String placeId) {
+            return DETAIL_PREFIX + ":" + placeId;
+        }
+
+        private Place() {
+        }
+    }
 }

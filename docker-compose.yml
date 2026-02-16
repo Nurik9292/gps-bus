@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: bus_route_user
       POSTGRES_PASSWORD: bus_route_pass
       PGDATA: /var/lib/postgresql/data/pgdata
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --max-connections=200"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=en_US.utf8 --lc-ctype=en_US.utf8"
     command: >
       postgres 
       -c max_connections=200
@@ -134,6 +134,27 @@ services:
     restart: unless-stopped
 
 
+  nominatim:
+    image: mediagis/nominatim:5.2
+    container_name: bus-route-nominatim
+    environment:
+      PBF_URL: https://download.geofabrik.de/asia/turkmenistan-latest.osm.pbf
+      REPLICATION_URL: https://download.geofabrik.de/asia/turkmenistan-updates/
+      NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:-nominatim}
+      IMPORT_STYLE: full
+    volumes:
+      - nominatim_data:/var/lib/postgresql/14/main
+    ports:
+      - "8088:8080"
+    networks:
+      - bus-route-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
 networks:
   bus-route-network:
     driver: bridge
@@ -151,3 +172,5 @@ volumes:
     name: bus-route-prometheus-data
   grafana_data_bus_route:
     name: bus-route-grafana-data
+  nominatim_data:
+    name: bus-route-nominatim-data

@@ -63,6 +63,17 @@ public class ApiVersionConfig {
     public static final String V1_CLIENT_AUTH = V1_CLIENT + AUTH;
     public static final String V1_CLIENT_FAVORITES = V1_CLIENT + FAVORITES;
 
+    public static final String SUGGESTIONS = "/suggestions";
+    public static final String V1_CLIENT_SUGGESTIONS = V1_CLIENT + SUGGESTIONS;
+    public static final String V1_ADMIN_SUGGESTIONS = V1_ADMIN + SUGGESTIONS;
+
     public static final String V1_INTEGRATION = API_V1 + INTEGRATION;
     public static final String V1_INTEGRATION_CLIENTS = V1_INTEGRATION + CLIENTS;
+
+    public static final String PLACES = "/places";
+    public static final String STREETS = "/streets";
+    public static final String V1_PLACES = API_V1 + PLACES;
+    public static final String V1_MOBILE_PLACES = V1_MOBILE + PLACES;
+    public static final String V1_ADMIN_PLACES = V1_ADMIN + PLACES;
+    public static final String V1_ADMIN_STREETS = V1_ADMIN + STREETS;
 }
