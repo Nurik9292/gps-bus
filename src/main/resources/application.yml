@@ -63,10 +63,16 @@ spring:
     time-zone: UTC
     default-property-inclusion: non_null
 
-
-
-
 app:
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    admin-email: ${ADMIN_EMAIL:admin@busroute.tm}
+    from: ${MAIL_FROM:noreply@busroute.tm}
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+
   scheduling:
     enabled: true
 

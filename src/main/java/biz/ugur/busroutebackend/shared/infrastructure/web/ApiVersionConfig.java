@@ -76,4 +76,8 @@ public class ApiVersionConfig {
     public static final String V1_MOBILE_PLACES = V1_MOBILE + PLACES;
     public static final String V1_ADMIN_PLACES = V1_ADMIN + PLACES;
     public static final String V1_ADMIN_STREETS = V1_ADMIN + STREETS;
+
+    public static final String COMPLAINTS = "/complaints";
+    public static final String V1_CLIENT_COMPLAINTS = V1_CLIENT + COMPLAINTS;
+    public static final String V1_ADMIN_COMPLAINTS = V1_ADMIN + COMPLAINTS;
 }

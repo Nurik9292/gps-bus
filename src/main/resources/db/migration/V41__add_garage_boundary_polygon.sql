@@ -1,7 +1,7 @@
 ALTER TABLE garages
-ADD COLUMN boundary GEOGRAPHY(POLYGON, 4326);
+ADD COLUMN IF NOT EXISTS boundary GEOGRAPHY(POLYGON, 4326);
 
-CREATE INDEX idx_garages_boundary ON garages USING GIST (boundary);
+CREATE INDEX IF NOT EXISTS idx_garages_boundary ON garages USING GIST (boundary);
 
 COMMENT ON COLUMN garages.boundary IS 'Polygon boundary for precise geofencing. When set, takes precedence over radius_meters for containment checks. Stored as WGS84 geography for accurate distance calculations.';
 

@@ -15,7 +15,8 @@ public enum BannerType {
     STOPS("stops"),
     ROUTES("routes"),
     PLACES("places"),
-    POPUP("popup");
+    POPUP("popup"),
+    STOP_BUTTON("stop-button");
 
     private final String value;
 
