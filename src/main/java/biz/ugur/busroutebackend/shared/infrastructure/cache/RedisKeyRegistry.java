@@ -125,4 +125,29 @@ public final class RedisKeyRegistry {
         private Place() {
         }
     }
+
+    public static final class Analytics {
+        public static final String ROUTING_OVERVIEW_PREFIX = "analytics:routing:overview";
+        public static final String ROUTING_HEATMAP_PREFIX = "analytics:routing:heatmap";
+        public static final String ROUTING_OD_PAIRS_PREFIX = "analytics:routing:od-pairs";
+
+        public static final Duration OVERVIEW_TTL = Duration.ofMinutes(5);
+        public static final Duration HEATMAP_TTL = Duration.ofMinutes(15);
+        public static final Duration OD_PAIRS_TTL = Duration.ofMinutes(15);
+
+        public static String routingOverview(String period) {
+            return ROUTING_OVERVIEW_PREFIX + ":" + period;
+        }
+
+        public static String routingHeatmap(String pointType) {
+            return ROUTING_HEATMAP_PREFIX + ":" + pointType;
+        }
+
+        public static String routingOdPairs(int limit) {
+            return ROUTING_OD_PAIRS_PREFIX + ":" + limit;
+        }
+
+        private Analytics() {
+        }
+    }
 }

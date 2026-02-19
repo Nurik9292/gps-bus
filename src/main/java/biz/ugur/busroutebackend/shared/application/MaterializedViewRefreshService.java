@@ -53,6 +53,33 @@ public class MaterializedViewRefreshService {
                 );
     }
 
+    @Scheduled(fixedRate = 600000, initialDelay = 300000) // every 10 min
+    public void refreshSearchHourlyStats() {
+        refreshView("mv_search_hourly_stats", "Search Hourly Stats")
+                .subscribe(
+                        duration -> log.debug("[MaterializedView] mv_search_hourly_stats refreshed in {}ms", duration),
+                        error -> log.error("[MaterializedView] Failed to refresh mv_search_hourly_stats", error)
+                );
+    }
+
+    @Scheduled(fixedRate = 1800000, initialDelay = 360000)
+    public void refreshSearchHeatmap() {
+        refreshView("mv_search_heatmap", "Search Heatmap")
+                .subscribe(
+                        duration -> log.debug("[MaterializedView] mv_search_heatmap refreshed in {}ms", duration),
+                        error -> log.error("[MaterializedView] Failed to refresh mv_search_heatmap", error)
+                );
+    }
+
+    @Scheduled(fixedRate = 1800000, initialDelay = 420000) // every 30 min
+    public void refreshPopularODPairs() {
+        refreshView("mv_popular_od_pairs", "Popular OD Pairs")
+                .subscribe(
+                        duration -> log.debug("[MaterializedView] mv_popular_od_pairs refreshed in {}ms", duration),
+                        error -> log.error("[MaterializedView] Failed to refresh mv_popular_od_pairs", error)
+                );
+    }
+
     public Mono<Void> refreshAllViews() {
         log.debug("[MaterializedView] Starting refresh of all materialized views");
         LocalDateTime startTime = LocalDateTime.now();
@@ -109,27 +136,27 @@ public class MaterializedViewRefreshService {
                 getLastRefreshTime("mv_active_routes_summary"),
                 getLastRefreshTime("mv_popular_direct_routes"),
                 getLastRefreshTime("mv_stop_connections"),
-                getLastRefreshTime("mv_route_statistics")
+                getLastRefreshTime("mv_route_statistics"),
+                getLastRefreshTime("mv_search_hourly_stats"),
+                getLastRefreshTime("mv_search_heatmap"),
+                getLastRefreshTime("mv_popular_od_pairs")
         ).map(tuple -> {
-            LocalDateTime activeRoutes = tuple.getT1();
-            LocalDateTime directRoutes = tuple.getT2();
-            LocalDateTime connections = tuple.getT3();
-            LocalDateTime statistics = tuple.getT4();
-
-            boolean activeRoutesHealthy = Duration.between(activeRoutes, now).toMinutes() < 10;
-
-            boolean directRoutesHealthy = Duration.between(directRoutes, now).toMinutes() < 30;
-
-            boolean connectionsHealthy = Duration.between(connections, now).toMinutes() < 40;
-
-            boolean statisticsHealthy = Duration.between(statistics, now).toMinutes() < 60;
+            boolean activeRoutesHealthy = Duration.between(tuple.getT1(), now).toMinutes() < 10;
+            boolean directRoutesHealthy = Duration.between(tuple.getT2(), now).toMinutes() < 30;
+            boolean connectionsHealthy = Duration.between(tuple.getT3(), now).toMinutes() < 40;
+            boolean statisticsHealthy = Duration.between(tuple.getT4(), now).toMinutes() < 60;
+            boolean hourlyStatsHealthy = Duration.between(tuple.getT5(), now).toMinutes() < 20;
+            boolean heatmapHealthy = Duration.between(tuple.getT6(), now).toMinutes() < 60;
+            boolean odPairsHealthy = Duration.between(tuple.getT7(), now).toMinutes() < 60;
 
             boolean allHealthy = activeRoutesHealthy && directRoutesHealthy &&
-                    connectionsHealthy && statisticsHealthy;
+                    connectionsHealthy && statisticsHealthy &&
+                    hourlyStatsHealthy && heatmapHealthy && odPairsHealthy;
 
             if (!allHealthy) {
-                log.warn("[MaterializedView] Health check failed - activeRoutes: {}, directRoutes: {}, connections: {}, statistics: {}",
-                        activeRoutesHealthy, directRoutesHealthy, connectionsHealthy, statisticsHealthy);
+                log.warn("[MaterializedView] Health check failed - activeRoutes: {}, directRoutes: {}, connections: {}, statistics: {}, hourlyStats: {}, heatmap: {}, odPairs: {}",
+                        activeRoutesHealthy, directRoutesHealthy, connectionsHealthy, statisticsHealthy,
+                        hourlyStatsHealthy, heatmapHealthy, odPairsHealthy);
             }
 
             return allHealthy;

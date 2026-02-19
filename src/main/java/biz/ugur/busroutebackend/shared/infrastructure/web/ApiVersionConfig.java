@@ -80,4 +80,7 @@ public class ApiVersionConfig {
     public static final String COMPLAINTS = "/complaints";
     public static final String V1_CLIENT_COMPLAINTS = V1_CLIENT + COMPLAINTS;
     public static final String V1_ADMIN_COMPLAINTS = V1_ADMIN + COMPLAINTS;
+
+    public static final String ANALYTICS = "/analytics";
+    public static final String V1_ADMIN_ANALYTICS = V1_ADMIN + ANALYTICS;
 }
