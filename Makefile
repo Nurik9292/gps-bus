@@ -83,5 +83,16 @@ docker-prod-push:
 docker-prod-deploy:
 	./scripts/docker-prod.sh deploy
 
+osrm-setup: ## Download and preprocess Turkmenistan OSM data for OSRM foot routing
+	@mkdir -p docker/osrm/data
+	@echo "Downloading Turkmenistan OSM data (~150MB)..."
+	docker run --rm -v $(PWD)/docker/osrm/data:/data osrm/osrm-backend:latest \
+		sh -c "wget -q --show-progress -O /data/turkmenistan.osm.pbf \
+		https://download.geofabrik.de/asia/turkmenistan-latest.osm.pbf && \
+		echo 'Extracting...' && osrm-extract -p /opt/foot.lua /data/turkmenistan.osm.pbf && \
+		echo 'Partitioning...' && osrm-partition /data/turkmenistan.osrm && \
+		echo 'Customizing...' && osrm-customize /data/turkmenistan.osrm && \
+		echo 'OSRM data ready!'"
+
 run: ## Run application with .env variables loaded
 	./mvnw spring-boot:run

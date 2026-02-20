@@ -70,6 +70,31 @@ public class ApiClientConfig {
                 .build();
     }
 
+    @Bean("osrmClient")
+    @ConditionalOnProperty(prefix = "external.api.osrm", name = "enabled", havingValue = "true")
+    public WebClient osrmClient(
+            @Value("${external.api.osrm.base-url}") String baseUrl,
+            @Value("${external.api.osrm.timeout:3s}") Duration timeout,
+            @Value("${external.api.osrm.connect-timeout:2s}") Duration connectTimeout,
+            @Value("${external.api.osrm.read-timeout:3s}") Duration readTimeout,
+            @Value("${external.api.osrm.write-timeout:2s}") Duration writeTimeout) {
+
+        HttpClient httpClient = HttpClient.create()
+                .responseTimeout(timeout)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) connectTimeout.toMillis())
+                .doOnConnected(conn -> conn
+                        .addHandlerLast(new ReadTimeoutHandler(readTimeout.toSeconds(), TimeUnit.SECONDS))
+                        .addHandlerLast(new WriteTimeoutHandler(writeTimeout.toSeconds(), TimeUnit.SECONDS)));
+
+        log.info("OSRM WebClient configured: baseUrl={}", baseUrl);
+
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(512 * 1024))
+                .build();
+    }
+
     @Bean("nominatimClient")
     @ConditionalOnProperty(prefix = "external.api.nominatim", name = "enabled", havingValue = "true")
     public WebClient nominatimClient(

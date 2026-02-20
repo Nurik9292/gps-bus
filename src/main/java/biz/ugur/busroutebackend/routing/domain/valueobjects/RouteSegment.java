@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 
@@ -28,6 +29,7 @@ public class RouteSegment extends ValueObject {
     private  String routeGeometryWkt;
     private  Integer totalDistanceMeters;
     private  List<Double[]> walkingPath;
+    private  List<List<Double>> walkingGeometry;
 
     public RouteSegment(SegmentType type, Coordinates fromLocation, Coordinates toLocation,
                         int durationMinutes, String routeNumber, String instruction) {
@@ -56,9 +58,31 @@ public class RouteSegment extends ValueObject {
         this.detailedDescription = generateDetailedDescription();
     }
 
+    public RouteSegment(SegmentType type, Coordinates fromLocation, Coordinates toLocation,
+                        int durationMinutes, String routeNumber, String instruction,
+                        List<List<Double>> walkingGeometry, Integer totalDistanceMeters) {
+        this.type = type;
+        this.fromLocation = fromLocation;
+        this.toLocation = toLocation;
+        this.durationMinutes = durationMinutes;
+        this.routeNumber = routeNumber;
+        this.instruction = instruction;
+        this.walkingGeometry = walkingGeometry != null ? Collections.unmodifiableList(walkingGeometry) : null;
+        this.totalDistanceMeters = totalDistanceMeters;
+        this.walkingPath = null;
+        this.detailedDescription = generateDetailedDescription();
+    }
+
     public static RouteSegment walkingSegment(Coordinates from, Coordinates to, int minutes) {
         String instruction = String.format("Walk %d minutes", minutes);
         return new RouteSegment(SegmentType.WALKING, from, to, minutes, null, instruction);
+    }
+
+    public static RouteSegment walkingSegmentWithGeometry(Coordinates from, Coordinates to, int minutes,
+                                                          List<List<Double>> geometry, int distanceMeters) {
+        String instruction = String.format("Walk %d minutes", minutes);
+        return new RouteSegment(SegmentType.WALKING, from, to, minutes, null, instruction,
+                geometry, distanceMeters);
     }
 
     public static RouteSegment busRideSegment(Coordinates from, Coordinates to, int minutes, String routeNumber) {

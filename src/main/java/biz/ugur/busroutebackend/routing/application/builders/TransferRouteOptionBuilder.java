@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.routing.application.factory.TripOptionFactory;
 import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
+import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.routing.infrastructure.services.RouteGeometryTrimmingService;
@@ -28,17 +29,20 @@ public class TransferRouteOptionBuilder {
     private final RouteGeometryTrimmingService geometryTrimmingService;
     private final RouteSegmentFactory routeSegmentFactory;
     private final TripOptionFactory tripOptionFactory;
+    private final WalkingRouteService walkingRouteService;
 
     public TransferRouteOptionBuilder(ETACalculationService etaCalculationService,
                                       WalkingTimeCalculator walkingTimeCalculator,
                                       RouteGeometryTrimmingService geometryTrimmingService,
                                       RouteSegmentFactory routeSegmentFactory,
-                                      TripOptionFactory tripOptionFactory) {
+                                      TripOptionFactory tripOptionFactory,
+                                      WalkingRouteService walkingRouteService) {
         this.etaCalculationService = etaCalculationService;
         this.walkingTimeCalculator = walkingTimeCalculator;
         this.geometryTrimmingService = geometryTrimmingService;
         this.routeSegmentFactory = routeSegmentFactory;
         this.tripOptionFactory = tripOptionFactory;
+        this.walkingRouteService = walkingRouteService;
     }
 
     public Mono<TripOption> createOneTransferOption(RouteCalculationService.TransferRouteResult transferRoute,
@@ -79,51 +83,58 @@ public class TransferRouteOptionBuilder {
         String fromStopName = transferRoute.fromStop().getStopName();
         LocalDateTime departureTime = LocalDateTime.now();
 
-        return etaCalculationService.calculateWaitingTimeMinutes(firstRouteNumber, fromStopName, departureTime)
-                .map(initialWaitingMinutes -> {
-                    String firstRouteGeometry = getCorrectRouteGeometry(transferRoute.firstRoute());
-                    Integer firstRouteDistance = getCorrectRouteDistance(transferRoute.firstRoute());
+        return Mono.zip(
+                etaCalculationService.calculateWaitingTimeMinutes(firstRouteNumber, fromStopName, departureTime),
+                walkingRouteService.getWalkingRoute(context.fromLocation(), firstStopLocation),
+                walkingRouteService.getWalkingRoute(lastStopLocation, context.toLocation())
+        ).map(tuple -> {
+            int initialWaitingMinutes = tuple.getT1();
+            WalkingRouteService.WalkingRouteResult walkToFirst = tuple.getT2();
+            WalkingRouteService.WalkingRouteResult walkFromLast = tuple.getT3();
 
-                    String secondRouteGeometry = getCorrectRouteGeometry(transferRoute.secondRoute());
-                    Integer secondRouteDistance = getCorrectRouteDistance(transferRoute.secondRoute());
+            String firstRouteGeometry = getCorrectRouteGeometry(transferRoute.firstRoute());
+            Integer firstRouteDistance = getCorrectRouteDistance(transferRoute.firstRoute());
 
-                    String firstRouteTrimmed = trimRouteGeometry(
-                            firstRouteGeometry,
-                            transferRoute.fromStop(),
-                            transferRoute.transferStop()
-                    );
+            String secondRouteGeometry = getCorrectRouteGeometry(transferRoute.secondRoute());
+            Integer secondRouteDistance = getCorrectRouteDistance(transferRoute.secondRoute());
 
-                    String secondRouteTrimmed = trimRouteGeometry(
-                            secondRouteGeometry,
-                            transferRoute.transferStop(),
-                            transferRoute.toStop()
-                    );
+            String firstRouteTrimmed = trimRouteGeometry(
+                    firstRouteGeometry,
+                    transferRoute.fromStop(),
+                    transferRoute.transferStop()
+            );
 
-                    List<RouteSegment> segments = List.of(
-                            routeSegmentFactory.createWalkingSegment(context.fromLocation(), firstStopLocation, walkingToFirst),
-                            createBusSegmentWithGeometry(
-                                    firstStopLocation,
-                                    transferStopLocation,
-                                    transferRoute.firstRouteTravelMinutes(),
-                                    firstRouteNumber,
-                                    firstRouteTrimmed,
-                                    firstRouteDistance),
-                            routeSegmentFactory.createTransferSegment(transferStopLocation, transferRoute.transferWaitMinutes()),
-                            createBusSegmentWithGeometry(
-                                    transferStopLocation,
-                                    lastStopLocation,
-                                    transferRoute.secondRouteTravelMinutes(),
-                                    transferRoute.secondRoute().getRouteNumber(),
-                                    secondRouteTrimmed,
-                                    secondRouteDistance),
-                            routeSegmentFactory.createWalkingSegment(lastStopLocation, context.toLocation(), walkingFromLast)
-                    );
+            String secondRouteTrimmed = trimRouteGeometry(
+                    secondRouteGeometry,
+                    transferRoute.transferStop(),
+                    transferRoute.toStop()
+            );
 
-                    log.debug("Creating one-transfer option for routes {}->{} with waiting time {} min",
-                            firstRouteNumber, transferRoute.secondRoute().getRouteNumber(), initialWaitingMinutes);
+            List<RouteSegment> segments = List.of(
+                    routeSegmentFactory.createWalkingSegment(context.fromLocation(), firstStopLocation, walkingToFirst, walkToFirst),
+                    createBusSegmentWithGeometry(
+                            firstStopLocation,
+                            transferStopLocation,
+                            transferRoute.firstRouteTravelMinutes(),
+                            firstRouteNumber,
+                            firstRouteTrimmed,
+                            firstRouteDistance),
+                    routeSegmentFactory.createTransferSegment(transferStopLocation, transferRoute.transferWaitMinutes()),
+                    createBusSegmentWithGeometry(
+                            transferStopLocation,
+                            lastStopLocation,
+                            transferRoute.secondRouteTravelMinutes(),
+                            transferRoute.secondRoute().getRouteNumber(),
+                            secondRouteTrimmed,
+                            secondRouteDistance),
+                    routeSegmentFactory.createWalkingSegment(lastStopLocation, context.toLocation(), walkingFromLast, walkFromLast)
+            );
 
-                    return tripOptionFactory.createOneTransferOption(segments, initialWaitingMinutes, departureTime);
-                });
+            log.debug("Creating one-transfer option for routes {}->{} with waiting time {} min",
+                    firstRouteNumber, transferRoute.secondRoute().getRouteNumber(), initialWaitingMinutes);
+
+            return tripOptionFactory.createOneTransferOption(segments, initialWaitingMinutes, departureTime);
+        });
     }
 
     private Mono<TripOption> buildTwoTransferOption(RouteCalculationService.TwoTransferRouteResult twoTransferRoute,
@@ -147,64 +158,71 @@ public class TransferRouteOptionBuilder {
         String fromStopName = twoTransferRoute.fromStop().getStopName();
         LocalDateTime departureTime = LocalDateTime.now();
 
-        return etaCalculationService.calculateWaitingTimeMinutes(firstRouteNumber, fromStopName, departureTime)
-                .map(initialWaitingMinutes -> {
-                    String firstRouteGeometry = getCorrectRouteGeometry(twoTransferRoute.firstRoute());
-                    String secondRouteGeometry = getCorrectRouteGeometry(twoTransferRoute.secondRoute());
-                    String thirdRouteGeometry = getCorrectRouteGeometry(twoTransferRoute.thirdRoute());
+        return Mono.zip(
+                etaCalculationService.calculateWaitingTimeMinutes(firstRouteNumber, fromStopName, departureTime),
+                walkingRouteService.getWalkingRoute(context.fromLocation(), firstStopLocation),
+                walkingRouteService.getWalkingRoute(finalStopLocation, context.toLocation())
+        ).map(tuple -> {
+            int initialWaitingMinutes = tuple.getT1();
+            WalkingRouteService.WalkingRouteResult walkToFirst = tuple.getT2();
+            WalkingRouteService.WalkingRouteResult walkFromFinal = tuple.getT3();
 
-                    String firstRouteTrimmed = trimRouteGeometry(
-                            firstRouteGeometry,
-                            twoTransferRoute.fromStop(),
-                            twoTransferRoute.firstTransferStop()
-                    );
+            String firstRouteGeometry = getCorrectRouteGeometry(twoTransferRoute.firstRoute());
+            String secondRouteGeometry = getCorrectRouteGeometry(twoTransferRoute.secondRoute());
+            String thirdRouteGeometry = getCorrectRouteGeometry(twoTransferRoute.thirdRoute());
 
-                    String secondRouteTrimmed = trimRouteGeometry(
-                            secondRouteGeometry,
-                            twoTransferRoute.firstTransferStop(),
-                            twoTransferRoute.secondTransferStop()
-                    );
+            String firstRouteTrimmed = trimRouteGeometry(
+                    firstRouteGeometry,
+                    twoTransferRoute.fromStop(),
+                    twoTransferRoute.firstTransferStop()
+            );
 
-                    String thirdRouteTrimmed = trimRouteGeometry(
-                            thirdRouteGeometry,
-                            twoTransferRoute.secondTransferStop(),
-                            twoTransferRoute.toStop()
-                    );
+            String secondRouteTrimmed = trimRouteGeometry(
+                    secondRouteGeometry,
+                    twoTransferRoute.firstTransferStop(),
+                    twoTransferRoute.secondTransferStop()
+            );
 
-                    List<RouteSegment> segments = List.of(
-                            routeSegmentFactory.createWalkingSegment(context.fromLocation(), firstStopLocation, walkingToFirst),
-                            createBusSegmentWithGeometry(
-                                    firstStopLocation,
-                                    firstTransferLocation,
-                                    twoTransferRoute.firstRouteTravelMinutes(),
-                                    firstRouteNumber,
-                                    firstRouteTrimmed,
-                                    getCorrectRouteDistance(twoTransferRoute.firstRoute())),
-                            routeSegmentFactory.createTransferSegment(firstTransferLocation, twoTransferRoute.firstTransferWaitMinutes()),
-                            createBusSegmentWithGeometry(
-                                    firstTransferLocation,
-                                    secondTransferLocation,
-                                    twoTransferRoute.secondRouteTravelMinutes(),
-                                    twoTransferRoute.secondRoute().getRouteNumber(),
-                                    secondRouteTrimmed,
-                                    getCorrectRouteDistance(twoTransferRoute.secondRoute())),
-                            routeSegmentFactory.createTransferSegment(secondTransferLocation, twoTransferRoute.secondTransferWaitMinutes()),
-                            createBusSegmentWithGeometry(
-                                    secondTransferLocation,
-                                    finalStopLocation,
-                                    twoTransferRoute.thirdRouteTravelMinutes(),
-                                    twoTransferRoute.thirdRoute().getRouteNumber(),
-                                    thirdRouteTrimmed,
-                                    getCorrectRouteDistance(twoTransferRoute.thirdRoute())),
-                            routeSegmentFactory.createWalkingSegment(finalStopLocation, context.toLocation(), walkingFromFinal)
-                    );
+            String thirdRouteTrimmed = trimRouteGeometry(
+                    thirdRouteGeometry,
+                    twoTransferRoute.secondTransferStop(),
+                    twoTransferRoute.toStop()
+            );
 
-                    log.debug("Creating two-transfer option for routes {}->{}->{}  with waiting time {} min",
-                            firstRouteNumber, twoTransferRoute.secondRoute().getRouteNumber(),
-                            twoTransferRoute.thirdRoute().getRouteNumber(), initialWaitingMinutes);
+            List<RouteSegment> segments = List.of(
+                    routeSegmentFactory.createWalkingSegment(context.fromLocation(), firstStopLocation, walkingToFirst, walkToFirst),
+                    createBusSegmentWithGeometry(
+                            firstStopLocation,
+                            firstTransferLocation,
+                            twoTransferRoute.firstRouteTravelMinutes(),
+                            firstRouteNumber,
+                            firstRouteTrimmed,
+                            getCorrectRouteDistance(twoTransferRoute.firstRoute())),
+                    routeSegmentFactory.createTransferSegment(firstTransferLocation, twoTransferRoute.firstTransferWaitMinutes()),
+                    createBusSegmentWithGeometry(
+                            firstTransferLocation,
+                            secondTransferLocation,
+                            twoTransferRoute.secondRouteTravelMinutes(),
+                            twoTransferRoute.secondRoute().getRouteNumber(),
+                            secondRouteTrimmed,
+                            getCorrectRouteDistance(twoTransferRoute.secondRoute())),
+                    routeSegmentFactory.createTransferSegment(secondTransferLocation, twoTransferRoute.secondTransferWaitMinutes()),
+                    createBusSegmentWithGeometry(
+                            secondTransferLocation,
+                            finalStopLocation,
+                            twoTransferRoute.thirdRouteTravelMinutes(),
+                            twoTransferRoute.thirdRoute().getRouteNumber(),
+                            thirdRouteTrimmed,
+                            getCorrectRouteDistance(twoTransferRoute.thirdRoute())),
+                    routeSegmentFactory.createWalkingSegment(finalStopLocation, context.toLocation(), walkingFromFinal, walkFromFinal)
+            );
 
-                    return tripOptionFactory.createTwoTransferOption(segments, initialWaitingMinutes, departureTime);
-                });
+            log.debug("Creating two-transfer option for routes {}->{}->{}  with waiting time {} min",
+                    firstRouteNumber, twoTransferRoute.secondRoute().getRouteNumber(),
+                    twoTransferRoute.thirdRoute().getRouteNumber(), initialWaitingMinutes);
+
+            return tripOptionFactory.createTwoTransferOption(segments, initialWaitingMinutes, departureTime);
+        });
     }
 
     private Coordinates createCoordinatesFromStop(BusStop stop) {

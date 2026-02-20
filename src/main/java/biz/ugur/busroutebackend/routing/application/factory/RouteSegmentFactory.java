@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.routing.application.factory;
 
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
+import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import org.springframework.stereotype.Component;
 
@@ -8,6 +9,16 @@ import org.springframework.stereotype.Component;
 public class RouteSegmentFactory {
 
     public RouteSegment createWalkingSegment(Coordinates from, Coordinates to, int durationMinutes) {
+        return RouteSegment.walkingSegment(from, to, durationMinutes);
+    }
+
+    public RouteSegment createWalkingSegment(Coordinates from, Coordinates to, int durationMinutes,
+                                             WalkingRouteService.WalkingRouteResult walkingRoute) {
+        if (walkingRoute.hasGeometry()) {
+            return RouteSegment.walkingSegmentWithGeometry(
+                    from, to, durationMinutes,
+                    walkingRoute.coordinates(), walkingRoute.distanceMeters());
+        }
         return RouteSegment.walkingSegment(from, to, durationMinutes);
     }
 

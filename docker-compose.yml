@@ -134,6 +134,18 @@ services:
     restart: unless-stopped
 
 
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: bus-route-osrm
+    volumes:
+      - ./docker/osrm/data:/data
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/turkmenistan.osrm
+    ports:
+      - "5001:5000"
+    networks:
+      - bus-route-network
+    restart: unless-stopped
+
   nominatim:
     image: mediagis/nominatim:5.2
     container_name: bus-route-nominatim
@@ -143,16 +155,17 @@ services:
       NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:-nominatim}
       IMPORT_STYLE: full
     volumes:
-      - nominatim_data:/var/lib/postgresql/14/main
+      - nominatim_data:/var/lib/postgresql/16/main
     ports:
       - "8088:8080"
     networks:
       - bus-route-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/status"]
-      interval: 30s
+      interval: 60s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 60m
     restart: unless-stopped
 
 networks:

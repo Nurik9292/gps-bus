@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.routing.application.factory.TripOptionFactory;
 import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
+import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.routing.infrastructure.services.RouteGeometryTrimmingService;
@@ -27,17 +28,20 @@ public class DirectRouteOptionBuilder {
     private final WalkingTimeCalculator walkingTimeCalculator;
     private final RouteSegmentFactory routeSegmentFactory;
     private final TripOptionFactory tripOptionFactory;
+    private final WalkingRouteService walkingRouteService;
 
     public DirectRouteOptionBuilder(ETACalculationService etaCalculationService,
                                     RouteGeometryTrimmingService geometryTrimmingService,
                                     WalkingTimeCalculator walkingTimeCalculator,
                                     RouteSegmentFactory routeSegmentFactory,
-                                    TripOptionFactory tripOptionFactory) {
+                                    TripOptionFactory tripOptionFactory,
+                                    WalkingRouteService walkingRouteService) {
         this.etaCalculationService = etaCalculationService;
         this.geometryTrimmingService = geometryTrimmingService;
         this.walkingTimeCalculator = walkingTimeCalculator;
         this.routeSegmentFactory = routeSegmentFactory;
         this.tripOptionFactory = tripOptionFactory;
+        this.walkingRouteService = walkingRouteService;
     }
 
     public Mono<TripOption> createOption(RouteCalculationService.DirectRouteResult directRoute,
@@ -71,10 +75,14 @@ public class DirectRouteOptionBuilder {
 
         return Mono.zip(
                 etaCalculationService.calculateTravelTimeMinutes(routeNumber, fromStopName, toStopName),
-                etaCalculationService.calculateWaitingTimeMinutes(routeNumber, fromStopName, departureTime)
+                etaCalculationService.calculateWaitingTimeMinutes(routeNumber, fromStopName, departureTime),
+                walkingRouteService.getWalkingRoute(context.fromLocation(), fromStopLocation),
+                walkingRouteService.getWalkingRoute(toStopLocation, context.toLocation())
         ).map(tuple -> {
             int busRideTime = tuple.getT1();
             int initialWaitingMinutes = tuple.getT2();
+            WalkingRouteService.WalkingRouteResult walkToStop = tuple.getT3();
+            WalkingRouteService.WalkingRouteResult walkFromStop = tuple.getT4();
 
             String routeGeometry = getCorrectRouteGeometry(directRoute);
             Integer routeDistance = getCorrectRouteDistance(directRoute);
@@ -86,7 +94,7 @@ public class DirectRouteOptionBuilder {
             );
 
             List<RouteSegment> segments = List.of(
-                    routeSegmentFactory.createWalkingSegment(context.fromLocation(), fromStopLocation, walkingToStop),
+                    routeSegmentFactory.createWalkingSegment(context.fromLocation(), fromStopLocation, walkingToStop, walkToStop),
                     createBusSegmentWithGeometry(
                             fromStopLocation,
                             toStopLocation,
@@ -94,7 +102,7 @@ public class DirectRouteOptionBuilder {
                             routeNumber,
                             trimmedGeometry,
                             routeDistance),
-                    routeSegmentFactory.createWalkingSegment(toStopLocation, context.toLocation(), walkingFromStop)
+                    routeSegmentFactory.createWalkingSegment(toStopLocation, context.toLocation(), walkingFromStop, walkFromStop)
             );
 
             log.debug("Creating direct option for route {} with waiting time {} min",

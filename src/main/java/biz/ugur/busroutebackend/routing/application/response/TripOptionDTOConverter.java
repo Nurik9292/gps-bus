@@ -62,6 +62,10 @@ public class TripOptionDTOConverter {
                 dto.setRouteGeometry(geometry);
                 dto.setTotalDistanceMeters(segment.getTotalDistanceMeters());
             }
+        } else if (segment.getType() == SegmentType.WALKING && segment.getWalkingGeometry() != null) {
+            dto.setRouteGeometry(new RouteSegmentDTO.RouteGeometryDTO(
+                    segment.getWalkingGeometry(), segment.getTotalDistanceMeters()));
+            dto.setTotalDistanceMeters(segment.getTotalDistanceMeters());
         }
     }
 
