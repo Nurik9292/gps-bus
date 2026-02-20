@@ -512,6 +512,9 @@ server:
   max-http-request-header-size: 1MB
 
 routing:
+  dijkstra:
+    enabled: ${DIJKSTRA_ENABLED:true}
+
   stop-based-search:
     enabled: true
     timeout-seconds: 18
