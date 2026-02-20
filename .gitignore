@@ -32,3 +32,6 @@ build/
 logs/
 docs/
 CLAUDE.md
+
+# OSRM preprocessed data (large binary files, generated via make osrm-setup)
+docker/osrm/data/
