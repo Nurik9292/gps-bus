@@ -221,7 +221,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 })
                 .filter(positionMsg -> isPositionInScope(positionMsg, config))
                 .onBackpressureLatest()
-                .bufferTimeout(100, Duration.ofMillis(200))
+                .bufferTimeout(50, Duration.ofMillis(500))
                 .takeWhile(ignored -> session.isOpen())
                 .filter(updates -> !updates.isEmpty())
                 .onBackpressureDrop(dropped ->

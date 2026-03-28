@@ -30,7 +30,7 @@ public class VehicleEventHandler {
     private static final Duration RETRY_DELAY = Duration.ofMillis(100);
     private static final Duration ETA_ENRICHMENT_TIMEOUT = Duration.ofMillis(500);
 
-    private static final int POSITION_CONCURRENCY = 64;
+    private static final int POSITION_CONCURRENCY = 16;
     private static final int ROUTE_ASSIGNMENT_CONCURRENCY = 16;
     private static final int REGISTRATION_CONCURRENCY = 8;
 
@@ -186,22 +186,17 @@ public class VehicleEventHandler {
                 event.getLine()
         );
 
-        Mono<Void> immediateBroadcast = webSocketPublisher.broadcastVehiclePosition(msg)
-                .doOnSuccess(v -> log.trace("Broadcasted position: {}", event.getVehicleId()));
-
-        if (event.getRouteNumber() != null) {
-            vehicleEtaEnricherService.enrichWithEta(msg)
-                    .timeout(ETA_ENRICHMENT_TIMEOUT)
-                    .filter(enriched -> enriched.getNextStops() != null && !enriched.getNextStops().isEmpty())
-                    .flatMap(webSocketPublisher::broadcastVehiclePosition)
-                    .doOnError(error -> log.debug("Async ETA enrichment skipped for vehicle {}: {}",
-                            event.getVehicleId(), error.getMessage()))
-                    .onErrorComplete()
-                    .subscribeOn(Schedulers.boundedElastic())
-                    .subscribe();
+        if (event.getRouteNumber() == null) {
+            return webSocketPublisher.broadcastVehiclePosition(msg)
+                    .doOnSuccess(v -> log.trace("Broadcasted position: {}", event.getVehicleId()));
         }
 
-        return immediateBroadcast;
+        // Single broadcast: enriched with ETA if available within timeout, plain otherwise
+        return vehicleEtaEnricherService.enrichWithEta(msg)
+                .timeout(ETA_ENRICHMENT_TIMEOUT)
+                .onErrorReturn(msg)
+                .flatMap(webSocketPublisher::broadcastVehiclePosition)
+                .doOnSuccess(v -> log.trace("Broadcasted position: {}", event.getVehicleId()));
     }
 
     private Mono<Boolean> updateRouteAssignmentCache(VehicleAssignedToRouteEvent event) {

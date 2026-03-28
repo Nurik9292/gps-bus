@@ -50,7 +50,7 @@ import java.time.LocalDateTime;
 @Slf4j
 public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionDTO>, VehiclePositionUpdateResult> {
 
-    private static final long FORCE_PUBLISH_INTERVAL_SECONDS = 15;
+    private static final long FORCE_PUBLISH_INTERVAL_SECONDS = 5;
 
     private final ConcurrentHashMap<String, Instant> lastPublishedTime = new ConcurrentHashMap<>();
 
@@ -196,8 +196,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         });
     }
 
-    private static final int OUTLIER_DETECTION_CONCURRENCY = 12;
-    private static final int GARAGE_DETECTION_CONCURRENCY = 6;
+    private static final int OUTLIER_DETECTION_CONCURRENCY = 4;
+    private static final int GARAGE_DETECTION_CONCURRENCY = 2;
 
     private Mono<List<GpsPositionDTO>> filterOutliers(List<GpsPositionDTO> positions) {
         if (!outlierDetectionProperties.isEnabled()) {
@@ -456,6 +456,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     })
                     .map(tuple -> {
                         log.debug("Batch operations: {} updated, {} created", tuple.getT1(), tuple.getT2().size());
+                        cleanupStalePublishTimes();
                         return createResult(statuses);
                     });
         });
@@ -469,6 +470,11 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         }
         long secondsSinceLastPublish = Instant.now().getEpochSecond() - lastPublished.getEpochSecond();
         return secondsSinceLastPublish >= FORCE_PUBLISH_INTERVAL_SECONDS;
+    }
+
+    private void cleanupStalePublishTimes() {
+        Instant cutoff = Instant.now().minusSeconds(300); // 5 минут
+        lastPublishedTime.entrySet().removeIf(entry -> entry.getValue().isBefore(cutoff));
     }
 
     private VehiclePositionUpdateResult createResult(List<VehicleUpdateStatus> statuses) {

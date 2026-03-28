@@ -96,40 +96,48 @@ public class ParallelRouteSearchService {
                                                  Mono<SearchResult> twoTransferSearch) {
         Mono<SearchResult> stopBasedSearch = this.stopBasedSearch.search(context, stopsContext);
 
-        return Mono.zip(directSearch, oneTransferSearch, twoTransferSearch, stopBasedSearch)
-                .map(results -> {
-                    List<SearchResult> allResults = List.of(
-                            results.getT1(),
-                            results.getT2(),
-                            results.getT3(),
-                            results.getT4()
-                    );
+        return directSearch.flatMap(directResult -> {
+            log.info("[{}] 🔍 Direct search completed: {} options",
+                    context.searchId(), directResult.getOptionsCount());
 
-                    return combineWithDeduplication(context, allResults);
-                });
-
+            return Mono.zip(oneTransferSearch, twoTransferSearch, stopBasedSearch)
+                    .map(transferResults -> {
+                        List<SearchResult> allResults = List.of(
+                                directResult,
+                                transferResults.getT1(),
+                                transferResults.getT2(),
+                                transferResults.getT3()
+                        );
+                        return combineWithDeduplication(context, allResults);
+                    });
+        });
     }
 
     private Mono<TripPlan> executeStandardSearch(SearchContext context,
                                                  Mono<SearchResult> directSearch,
                                                  Mono<SearchResult> oneTransferSearch,
                                                  Mono<SearchResult> twoTransferSearch) {
-        return Mono.zip(directSearch, oneTransferSearch, twoTransferSearch)
-                .map(results -> {
+        return directSearch.flatMap(directResult -> {
+            log.info("[{}] 🔍 Direct search completed: {} options",
+                    context.searchId(), directResult.getOptionsCount());
+
+            return Mono.zip(oneTransferSearch, twoTransferSearch)
+                    .map(transferResults -> {
                         log.info("[{}] 🔍 Search results: direct={}, oneTransfer={}, twoTransfer={}",
                                 context.searchId(),
-                                results.getT1().getOptionsCount(),
-                                results.getT2().getOptionsCount(),
-                                results.getT3().getOptionsCount());
+                                directResult.getOptionsCount(),
+                                transferResults.getT1().getOptionsCount(),
+                                transferResults.getT2().getOptionsCount());
 
                         List<SearchResult> allResults = List.of(
-                                results.getT1(),
-                                results.getT2(),
-                                results.getT3()
+                                directResult,
+                                transferResults.getT1(),
+                                transferResults.getT2()
                         );
 
                         return combineWithDeduplication(context, allResults);
                     });
+        });
     }
 
     private TripPlan combineWithDeduplication(SearchContext context, List<SearchResult> allResults) {
