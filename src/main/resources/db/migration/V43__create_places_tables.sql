@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_places_name_en_trgm ON places USING GIN (name_en 
 CREATE INDEX IF NOT EXISTS idx_places_name_tm_trgm ON places USING GIN (name_tm gin_trgm_ops);
 
 CREATE INDEX IF NOT EXISTS idx_places_location ON places USING GIST (
-    ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography
+    CAST(ST_SetSRID(ST_MakePoint(longitude, latitude), 4326) AS geography)
 );
 
 CREATE INDEX IF NOT EXISTS idx_places_city_id ON places (city_id);

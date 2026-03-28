@@ -18,30 +18,42 @@ public class GpsOutlierDetector {
     private static final long DEFAULT_MAX_TIME_DIFF_SECONDS = 60;
     private static final double DEFAULT_MIN_DISTANCE_METERS = 10.0;
 
+    private static final double DEFAULT_MIN_SPEED_FOR_FROZEN_DETECTION_KMH = 10.0;
+
     private final boolean enabled;
     private final double maxImpliedSpeedKmh;
     private final long minTimeDifferenceSeconds;
     private final long maxTimeDifferenceSeconds;
     private final double minDistanceMeters;
+    private final double minSpeedForFrozenDetectionKmh;
 
     public GpsOutlierDetector() {
         this(true, DEFAULT_MAX_IMPLIED_SPEED_KMH, DEFAULT_MIN_TIME_DIFF_SECONDS,
-                DEFAULT_MAX_TIME_DIFF_SECONDS, DEFAULT_MIN_DISTANCE_METERS);
+                DEFAULT_MAX_TIME_DIFF_SECONDS, DEFAULT_MIN_DISTANCE_METERS,
+                DEFAULT_MIN_SPEED_FOR_FROZEN_DETECTION_KMH);
     }
 
     public GpsOutlierDetector(boolean enabled, double maxImpliedSpeedKmh,
                                long minTimeDifferenceSeconds, long maxTimeDifferenceSeconds,
                                double minDistanceMeters) {
+        this(enabled, maxImpliedSpeedKmh, minTimeDifferenceSeconds, maxTimeDifferenceSeconds,
+                minDistanceMeters, DEFAULT_MIN_SPEED_FOR_FROZEN_DETECTION_KMH);
+    }
+
+    public GpsOutlierDetector(boolean enabled, double maxImpliedSpeedKmh,
+                               long minTimeDifferenceSeconds, long maxTimeDifferenceSeconds,
+                               double minDistanceMeters, double minSpeedForFrozenDetectionKmh) {
         this.enabled = enabled;
         this.maxImpliedSpeedKmh = maxImpliedSpeedKmh;
         this.minTimeDifferenceSeconds = minTimeDifferenceSeconds;
         this.maxTimeDifferenceSeconds = maxTimeDifferenceSeconds;
         this.minDistanceMeters = minDistanceMeters;
+        this.minSpeedForFrozenDetectionKmh = minSpeedForFrozenDetectionKmh;
 
         log.info("GpsOutlierDetector initialized: enabled={}, maxImpliedSpeed={} km/h, " +
-                        "timeDiffRange=[{}-{}]s, minDistance={}m",
+                        "timeDiffRange=[{}-{}]s, minDistance={}m, frozenDetectionThreshold={}km/h",
                 enabled, maxImpliedSpeedKmh, minTimeDifferenceSeconds,
-                maxTimeDifferenceSeconds, minDistanceMeters);
+                maxTimeDifferenceSeconds, minDistanceMeters, minSpeedForFrozenDetectionKmh);
     }
 
     public OutlierDetectionResult detect(String deviceId,
@@ -76,26 +88,29 @@ public class GpsOutlierDetector {
         );
 
         if (distanceMeters < minDistanceMeters) {
-            log.trace("Distance too small for device {}: {:.1f}m < {}m",
-                    deviceId, distanceMeters, minDistanceMeters);
+            log.trace("Distance too small for device {}: {}m < {}m",
+                    deviceId, String.format("%.1f", distanceMeters), minDistanceMeters);
             return OutlierDetectionResult.distanceTooSmall(deviceId, distanceMeters, maxImpliedSpeedKmh);
         }
+
 
         double speedMps = distanceMeters / timeDiffSeconds;
         double impliedSpeedKmh = speedMps * METERS_PER_SECOND_TO_KMH;
 
         if (impliedSpeedKmh > maxImpliedSpeedKmh) {
-            log.warn("OUTLIER detected for device {}: implied speed {:.1f} km/h exceeds max {:.1f} km/h " +
-                            "(distance: {:.0f}m, time: {}s)",
-                    deviceId, impliedSpeedKmh, maxImpliedSpeedKmh, distanceMeters, timeDiffSeconds);
+            log.warn("OUTLIER detected for device {}: implied speed {} km/h exceeds max {} km/h " +
+                            "(distance: {}m, time: {}s)",
+                    deviceId, String.format("%.1f", impliedSpeedKmh),
+                    String.format("%.1f", maxImpliedSpeedKmh),
+                    String.format("%.0f", distanceMeters), timeDiffSeconds);
 
             return OutlierDetectionResult.outlier(deviceId, impliedSpeedKmh,
                     distanceMeters, timeDiffSeconds, maxImpliedSpeedKmh);
         }
 
-        log.trace("Position valid for device {}: implied speed {:.1f} km/h " +
-                        "(distance: {:.0f}m, time: {}s)",
-                deviceId, impliedSpeedKmh, distanceMeters, timeDiffSeconds);
+        log.trace("Position valid for device {}: implied speed {} km/h (distance: {}m, time: {}s)",
+                deviceId, String.format("%.1f", impliedSpeedKmh),
+                String.format("%.0f", distanceMeters), timeDiffSeconds);
 
         return OutlierDetectionResult.valid(deviceId, impliedSpeedKmh,
                 distanceMeters, timeDiffSeconds, maxImpliedSpeedKmh);
@@ -105,6 +120,21 @@ public class GpsOutlierDetector {
             String deviceId,
             double newLatitude, double newLongitude, LocalDateTime newTimestamp,
             List<T> historyPoints) {
+        return detectWithHistory(deviceId, newLatitude, newLongitude, newTimestamp, historyPoints, null);
+    }
+
+    /**
+     * Detects outliers using GPS history, with optional reported speed for frozen-coordinates detection.
+     *
+     * @param reportedSpeedKmh speed reported by the GPS device (from CAN bus or device firmware).
+     *                         If non-null and > threshold while coordinates are frozen, flags as
+     *                         FROZEN_COORDINATES_WITH_MOTION — indicating stale GPS fix from provider.
+     */
+    public <T extends GpsHistoryPoint> OutlierDetectionResult detectWithHistory(
+            String deviceId,
+            double newLatitude, double newLongitude, LocalDateTime newTimestamp,
+            List<T> historyPoints,
+            Double reportedSpeedKmh) {
 
         if (!enabled) {
             return OutlierDetectionResult.disabled(deviceId);
@@ -116,9 +146,31 @@ public class GpsOutlierDetector {
 
         T mostRecentPoint = historyPoints.getFirst();
 
-        return detect(deviceId,
+        OutlierDetectionResult baseResult = detect(deviceId,
                 newLatitude, newLongitude, newTimestamp,
                 mostRecentPoint.getLatitude(), mostRecentPoint.getLongitude(), mostRecentPoint.getTimestamp());
+
+        // After the base check: if distance is tiny but reported speed is significant,
+        // it means the GPS fix is frozen (stale position) while the vehicle is actually moving.
+        // Source: provider-level anomaly — CAN-bus speed is live, GPS position is not.
+        if (baseResult.type() == OutlierDetectionResult.OutlierType.DISTANCE_TOO_SMALL
+                && reportedSpeedKmh != null
+                && reportedSpeedKmh >= minSpeedForFrozenDetectionKmh) {
+
+            double distanceMeters = DistanceCalculationService.haversineDistanceMeters(
+                    mostRecentPoint.getLatitude(), mostRecentPoint.getLongitude(),
+                    newLatitude, newLongitude
+            );
+
+            log.warn("[GPS_ANOMALY|SOURCE:PROVIDER] FROZEN_COORDS_WITH_MOTION: " +
+                            "device={}, distance={}m, reportedSpeed={}km/h — stale GPS fix",
+                    deviceId, String.format("%.1f", distanceMeters),
+                    String.format("%.1f", reportedSpeedKmh));
+
+            return OutlierDetectionResult.frozenCoordinatesWithMotion(deviceId, distanceMeters, reportedSpeedKmh);
+        }
+
+        return baseResult;
     }
 
     public interface GpsHistoryPoint {

@@ -31,6 +31,11 @@ public class RouteSegment extends ValueObject {
     private  List<Double[]> walkingPath;
     private  List<List<Double>> walkingGeometry;
 
+    @lombok.Setter
+    private String fromLocationName;
+    @lombok.Setter
+    private String toLocationName;
+
     public RouteSegment(SegmentType type, Coordinates fromLocation, Coordinates toLocation,
                         int durationMinutes, String routeNumber, String instruction) {
         this.type = type;

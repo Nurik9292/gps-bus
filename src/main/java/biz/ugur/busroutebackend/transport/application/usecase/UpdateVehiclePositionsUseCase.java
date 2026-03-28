@@ -34,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -195,8 +196,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         });
     }
 
-    private static final int OUTLIER_DETECTION_CONCURRENCY = 16;
-    private static final int GARAGE_DETECTION_CONCURRENCY = 8;
+    private static final int OUTLIER_DETECTION_CONCURRENCY = 12;
+    private static final int GARAGE_DETECTION_CONCURRENCY = 6;
 
     private Mono<List<GpsPositionDTO>> filterOutliers(List<GpsPositionDTO> positions) {
         if (!outlierDetectionProperties.isEnabled()) {
@@ -205,6 +206,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
         int historyLimit = outlierDetectionProperties.getHistoryPointsToCheck();
         boolean rejectOutliers = outlierDetectionProperties.isRejectOutliers();
+        boolean rejectFrozenMotion = outlierDetectionProperties.isRejectFrozenMotion();
 
         return Flux.fromIterable(positions)
                 .flatMap(position -> detectOutlierForPosition(position, historyLimit)
@@ -214,21 +216,42 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 .map(results -> {
                     List<GpsPositionDTO> nonOutliers = new ArrayList<>();
                     List<OutlierDetectionResult> allResults = new ArrayList<>();
+                    int teleportRejected = 0;
+                    int frozenRejected = 0;
 
-                    for (PositionWithOutlierResult result : results) {
-                        allResults.add(result.detectionResult());
+                    for (PositionWithOutlierResult r : results) {
+                        allResults.add(r.detectionResult());
+                        OutlierDetectionResult.OutlierType type = r.detectionResult().type();
 
-                        if (!result.detectionResult().isOutlier() || !rejectOutliers) {
-                            nonOutliers.add(result.position());
+                        boolean isTeleportation = type == OutlierDetectionResult.OutlierType.SPEED_EXCEEDED;
+                        boolean isFrozen = type == OutlierDetectionResult.OutlierType.FROZEN_COORDINATES_WITH_MOTION;
+
+                        // Teleportation: reject when rejectOutliers=true (default)
+                        if (isTeleportation && rejectOutliers) {
+                            teleportRejected++;
+                            log.warn("[GPS_ANOMALY|SOURCE:SERVER] TELEPORTATION_REJECTED: " +
+                                            "device={}, impliedSpeed={}km/h — {}",
+                                    r.detectionResult().deviceId(),
+                                    String.format("%.1f", r.detectionResult().impliedSpeedKmh()),
+                                    r.detectionResult().getDescription());
+                            continue;
                         }
+
+                        // Frozen coords + motion: reject only if explicitly configured (default: pass through)
+                        if (isFrozen && rejectFrozenMotion) {
+                            frozenRejected++;
+                            continue;
+                        }
+
+                        nonOutliers.add(r.position());
                     }
 
                     outlierMetricsRecorder.recordBatch(allResults);
 
-                    int outliersDetected = (int) allResults.stream().filter(OutlierDetectionResult::isOutlier).count();
-                    if (outliersDetected > 0) {
-                        log.info("Outlier detection: {} outliers detected out of {} positions, {} rejected",
-                                outliersDetected, positions.size(), rejectOutliers ? outliersDetected : 0);
+                    int totalRejected = teleportRejected + frozenRejected;
+                    if (totalRejected > 0) {
+                        log.info("Outlier filter: {}/{} positions rejected (teleport={}, frozen={})",
+                                totalRejected, positions.size(), teleportRejected, frozenRejected);
                     }
 
                     return nonOutliers;
@@ -238,13 +261,17 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private Mono<OutlierDetectionResult> detectOutlierForPosition(GpsPositionDTO position, int historyLimit) {
         String deviceId = position.getDeviceId();
 
+        // publishOn: Redis response arrives on lettuce-epollEventLoop — must switch thread
+        // before CPU work (Haversine, outlier logic) to avoid blocking the Redis event loop.
         return gpsHistoryService.getHistoryList(deviceId, historyLimit)
+                .publishOn(Schedulers.boundedElastic())
                 .map(history -> outlierDetector.detectWithHistory(
                         deviceId,
                         position.getLatitude(),
                         position.getLongitude(),
                         position.getFixTime(),
-                        history
+                        history,
+                        position.getSpeed()   // pass reported speed for frozen-coords detection
                 ))
                 .onErrorResume(error -> {
                     log.warn("Failed to check outlier for device {}: {}", deviceId, error.getMessage());
@@ -269,6 +296,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         log.debug("Batched {} updates into {} unique vehicles",
                 validPositions.size(), latestPositionsByDevice.size());
 
+        // Vehicles with significant position change → need DB update, direction/garage detection, history
         List<Vehicle> vehiclesToUpdate = new ArrayList<>();
         List<Vehicle> vehiclesToCreate = new ArrayList<>();
         List<VehicleUpdateStatus> statuses = new ArrayList<>();
@@ -290,14 +318,34 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             gpsPosition.getCourse()
                     );
 
-                    vehiclesToUpdate.add(updatedVehicle);
-
                     boolean hasSignificantChange = positionChangeDetector.hasSignificantChange(
                             oldLatitude, oldLongitude, oldSpeed,
                             updatedVehicle.getCurrentLatitude(),
                             updatedVehicle.getCurrentLongitude(),
                             updatedVehicle.getSpeedKmh()
                     );
+
+                    // Only run expensive pipeline (direction, garage, DB write) when position changed.
+                    // Stationary vehicles skip DB writes — reduces PostgreSQL write load significantly.
+                    if (hasSignificantChange) {
+                        // Detect frozen coordinates with motion at server processing level.
+                        // If position didn't change but vehicle reports motion — stale GPS fix from provider.
+                        if (Boolean.TRUE.equals(updatedVehicle.getIsInMotion())
+                                && oldLatitude != null && oldLongitude != null
+                                && !positionChangeDetector.hasSignificantPositionChange(
+                                        oldLatitude, oldLongitude,
+                                        updatedVehicle.getCurrentLatitude(),
+                                        updatedVehicle.getCurrentLongitude())) {
+                            log.warn("[GPS_ANOMALY|SOURCE:SERVER] FROZEN_COORDS_WITH_MOTION: " +
+                                            "device={}, plate={}, speed={}km/h, coords=({},{})",
+                                    gpsPosition.getDeviceId(),
+                                    updatedVehicle.getLicensePlate(),
+                                    String.format("%.1f", updatedVehicle.getSpeedKmh()),
+                                    String.format("%.6f", updatedVehicle.getCurrentLatitude()),
+                                    String.format("%.6f", updatedVehicle.getCurrentLongitude()));
+                        }
+                        vehiclesToUpdate.add(updatedVehicle);
+                    }
 
                     String vehicleId = updatedVehicle.getId().getValue();
                     boolean shouldForcePublish = shouldForcePublishForVehicle(vehicleId);
@@ -395,12 +443,12 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         return Flux.fromIterable(updatedVehicles)
                                 .filter(Vehicle::hasPosition)
                                 .flatMap(v -> gpsHistoryService.addPoint(
-                                        v.getId().getValue(),
+                                        v.getDeviceId(),   // KEY FIX: use deviceId (IMEI), not vehicleId (UUID)
                                         v.getCurrentLatitude(),
                                         v.getCurrentLongitude(),
                                         v.getSpeedKmh(),
                                         v.getLastPositionUpdate()
-                                ), 10)
+                                ), 5)
                                 .then(Mono.defer(() -> {
                                     log.debug("Saved GPS history for {} vehicles", vehiclesWithPosition);
                                     return Mono.just(tuple);

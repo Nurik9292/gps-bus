@@ -20,8 +20,8 @@ spring:
     port: ${DB_PORT:5432}
     database: ${DB_NAME:bus_route_db}
     pool:
-      initial-size: ${DB_POOL_MIN_IDLE:2}
-      max-size: ${DB_POOL_MAX_SIZE:15}
+      initial-size: ${DB_POOL_MIN_IDLE:5}
+      max-size: ${DB_POOL_MAX_SIZE:25}
       max-idle-time: 30m
       max-acquire-time: 60s
       max-create-connection-time: 60s
@@ -36,9 +36,9 @@ spring:
       timeout: 2000ms
       lettuce:
         pool:
-          max-active: 12
-          max-idle: 12
-          min-idle: 0
+          max-active: 30
+          max-idle: 20
+          min-idle: 2
 
   flyway:
     enabled: true
@@ -79,7 +79,7 @@ app:
   scheduler:
     gps:
       batch-size: ${SCHEDULER_GPS_BATCH_SIZE:100}
-      parallel-workers: ${SCHEDULER_GPS_PARALLEL_WORKERS:4}
+      parallel-workers: ${SCHEDULER_GPS_PARALLEL_WORKERS:2}
       batch-timeout: ${SCHEDULER_GPS_BATCH_TIMEOUT:30s}
       total-timeout: ${SCHEDULER_GPS_TOTAL_TIMEOUT:120s}
 
@@ -307,15 +307,19 @@ business:
     min-speed-for-motion-kmh: 3.0
 
   gps-outlier-detection:
-    # TODO: оптимизировать - всё ещё вызывает таймауты
-    enabled: ${GPS_OUTLIER_DETECTION_ENABLED:false}
+    enabled: ${GPS_OUTLIER_DETECTION_ENABLED:true}
     max-implied-speed-kmh: ${GPS_OUTLIER_MAX_SPEED:150.0}
     min-time-difference: ${GPS_OUTLIER_MIN_TIME_DIFF:3s}
     max-time-difference: ${GPS_OUTLIER_MAX_TIME_DIFF:60s}
     min-distance-meters: ${GPS_OUTLIER_MIN_DISTANCE:10.0}
     consecutive-outliers-for-alert: ${GPS_OUTLIER_CONSECUTIVE_ALERT:2}
-    reject-outliers: ${GPS_OUTLIER_REJECT:false}
+    # Teleportation (implied speed > max) must be rejected — we have history now
+    reject-outliers: ${GPS_OUTLIER_REJECT:true}
     history-points-to-check: ${GPS_OUTLIER_HISTORY_POINTS:3}
+    # Frozen GPS fix threshold: if reported speed > this but coords didn't change, flag as stale
+    min-speed-for-frozen-detection-kmh: ${GPS_OUTLIER_FROZEN_SPEED_THRESHOLD:10.0}
+    # Log frozen coords anomaly but still update speed/motion state (partial data > no data)
+    reject-frozen-motion: ${GPS_OUTLIER_REJECT_FROZEN:false}
 
 cache:
   redis:

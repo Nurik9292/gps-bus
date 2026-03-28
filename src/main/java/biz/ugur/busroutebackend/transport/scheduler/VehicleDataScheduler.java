@@ -92,7 +92,13 @@ public class VehicleDataScheduler {
             return;
         }
 
+        // publishOn (not subscribeOn) is required here:
+        // Mono.delay() emits on Schedulers.parallel() which in Reactor Netty maps to
+        // reactor-http-epoll threads. subscribeOn only affects the subscribe signal upstream,
+        // leaving all downstream operators (including the GPS update work) on the event loop.
+        // publishOn switches the DOWNSTREAM thread, keeping GPS I/O work off the event loop.
         schedulerDisposable = Mono.delay(UPDATE_INTERVAL)
+                .publishOn(Schedulers.boundedElastic())
                 .flatMap(tick -> {
                     if (!isActiveHours()) {
                         log.debug("Outside active hours ({}-{}), skipping GPS update",
@@ -101,7 +107,6 @@ public class VehicleDataScheduler {
                     }
                     return executeWithLock();
                 })
-                .subscribeOn(Schedulers.boundedElastic())
                 .doFinally(signal -> scheduleNextUpdate())
                 .subscribe();
     }
@@ -153,7 +158,7 @@ public class VehicleDataScheduler {
                 .flatMapIterable(positions -> positions)
                 .buffer(batchSize)
                 .parallel(parallelWorkers)
-                .runOn(Schedulers.parallel())
+                .runOn(Schedulers.boundedElastic())  // GPS batch work is I/O-bound (DB+Redis+events)
                 .flatMap(batch -> processBatch(batch, batchTimeout))
                 .sequential()
                 .reduce(VehiclePositionUpdateResult.empty(), VehiclePositionUpdateResult::merge)
@@ -224,12 +229,15 @@ public class VehicleDataScheduler {
                     log.error("Health check failed: {}", error.getMessage());
                     return Mono.empty();
                 })
+                .subscribeOn(Schedulers.boundedElastic())
                 .subscribe();
     }
 
     @Scheduled(cron = "0 0 2 * * *")
     public void cleanupOldData() {
         log.info("Starting cleanup of old cached data");
-        statisticsService.cleanupOldStats().subscribe();
+        statisticsService.cleanupOldStats()
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe();
     }
 }

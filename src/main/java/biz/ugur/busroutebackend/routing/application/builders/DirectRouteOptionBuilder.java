@@ -1,16 +1,15 @@
 package biz.ugur.busroutebackend.routing.application.builders;
 
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.factory.RouteSegmentFactory;
 import biz.ugur.busroutebackend.routing.application.factory.TripOptionFactory;
-import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.routing.infrastructure.services.RouteGeometryTrimmingService;
-import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -46,7 +45,7 @@ public class DirectRouteOptionBuilder {
 
     public Mono<TripOption> createOption(RouteCalculationService.DirectRouteResult directRoute,
                                          SearchContext context) {
-        return buildDirectOption(directRoute, context)
+        return Mono.defer(() -> buildDirectOption(directRoute, context))
                 .onErrorResume(error -> {
                     log.debug("Failed to create direct option for route {}: {}",
                             directRoute.route().getRouteNumber(), error.getMessage());
@@ -93,17 +92,17 @@ public class DirectRouteOptionBuilder {
                     directRoute.toStop()
             );
 
-            List<RouteSegment> segments = List.of(
-                    routeSegmentFactory.createWalkingSegment(context.fromLocation(), fromStopLocation, walkingToStop, walkToStop),
-                    createBusSegmentWithGeometry(
-                            fromStopLocation,
-                            toStopLocation,
-                            busRideTime,
-                            routeNumber,
-                            trimmedGeometry,
-                            routeDistance),
-                    routeSegmentFactory.createWalkingSegment(toStopLocation, context.toLocation(), walkingFromStop, walkFromStop)
-            );
+            RouteSegment walkToSeg = routeSegmentFactory.createWalkingSegment(context.fromLocation(), fromStopLocation, walkingToStop, walkToStop);
+            walkToSeg.setToLocationName(fromStopName);
+
+            RouteSegment busSeg = createBusSegmentWithGeometry(fromStopLocation, toStopLocation, busRideTime, routeNumber, trimmedGeometry, routeDistance);
+            busSeg.setFromLocationName(fromStopName);
+            busSeg.setToLocationName(toStopName);
+
+            RouteSegment walkFromSeg = routeSegmentFactory.createWalkingSegment(toStopLocation, context.toLocation(), walkingFromStop, walkFromStop);
+            walkFromSeg.setFromLocationName(toStopName);
+
+            List<RouteSegment> segments = List.of(walkToSeg, busSeg, walkFromSeg);
 
             log.debug("Creating direct option for route {} with waiting time {} min",
                     routeNumber, initialWaitingMinutes);

@@ -89,11 +89,14 @@ public class LiveETACalculationService implements ETACalculationService {
         return redisTemplate.opsForValue()
                 .get(cacheKey)
                 .cast(Integer.class)
+                .timeout(Duration.ofSeconds(2), Mono.empty())
                 .switchIfEmpty(
                         calculateWaitingTimeFromData(routeNumber, stopName, currentTime)
+                                .timeout(Duration.ofSeconds(3), getFrequencyBasedWaitingTime(routeNumber, currentTime))
                                 .flatMap(waitTime ->
                                         redisTemplate.opsForValue()
                                                 .set(cacheKey, waitTime, Duration.ofMinutes(cacheTtlMinutes))
+                                                .timeout(Duration.ofSeconds(1), Mono.just(true))
                                                 .thenReturn(waitTime)
                                 )
                 )
@@ -111,11 +114,14 @@ public class LiveETACalculationService implements ETACalculationService {
         return redisTemplate.opsForValue()
                 .get(cacheKey)
                 .cast(Integer.class)
+                .timeout(Duration.ofSeconds(2), Mono.empty())
                 .switchIfEmpty(
                         calculateTravelTimeFromDatabase(routeNumber, fromStopName, toStopName)
+                                .timeout(Duration.ofSeconds(3), Mono.fromCallable(() -> etaProperties.getFallback().getDefaultTravelTimeMinutes()))
                                 .flatMap(travelTime ->
                                         redisTemplate.opsForValue()
                                                 .set(cacheKey, travelTime, Duration.ofMinutes(cacheTtlMinutes))
+                                                .timeout(Duration.ofSeconds(1), Mono.just(true))
                                                 .thenReturn(travelTime)
                                 )
                 )
@@ -153,8 +159,16 @@ public class LiveETACalculationService implements ETACalculationService {
 
     private Mono<Integer> calculateWaitingTimeFromData(String routeNumber, String stopName, LocalDateTime currentTime) {
         return getVehicleBasedWaitingTime(routeNumber, stopName)
+                .onErrorResume(e -> {
+                    log.warn("Vehicle-based wait time failed for route {}: {}", routeNumber, e.getMessage());
+                    return Mono.empty();
+                })
                 .switchIfEmpty(
                         getStatisticalWaitingTime(routeNumber, currentTime)
+                                .onErrorResume(e -> {
+                                    log.warn("Statistical wait time failed for route {}: {}", routeNumber, e.getMessage());
+                                    return Mono.empty();
+                                })
                 )
                 .switchIfEmpty(
                         getFrequencyBasedWaitingTime(routeNumber, currentTime)

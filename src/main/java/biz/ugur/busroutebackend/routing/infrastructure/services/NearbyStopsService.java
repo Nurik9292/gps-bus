@@ -26,7 +26,7 @@ public class NearbyStopsService {
     private static final double SEARCH_RADIUS_KM =
         GeoConstants.MAX_SEARCH_RADIUS_METERS / GeoConstants.METERS_PER_KILOMETER; // 5km
 
-    private static final int MAX_STOPS_PER_LOCATION = 50;
+    private static final int MAX_STOPS_PER_LOCATION = 20;
 
     private static final double[] LAYERED_SEARCH_RADIUSES = GeoConstants.LAYERED_SEARCH_RADIUSES_KM;
     private static final int[] MAX_STOPS_PER_LAYER = GeoConstants.MAX_STOPS_PER_LAYER;
@@ -88,20 +88,8 @@ public class NearbyStopsService {
                 .sort((stop1, stop2) -> compareStopsByEnhancedPriority(stop1, stop2, location))
                 .take(MAX_STOPS_PER_LOCATION)
                 .collectList()
-                .doOnNext(stops -> {
-                    log.info("Found {} {} stops near ({}, {})", stops.size(), locationType,
-                            location.getLatitudeAsDouble(), location.getLongitudeAsDouble());
-                    stops.forEach(stop -> {
-                        double distance = distanceService.calculateDistance(
-                                location.getLatitudeAsDouble(), location.getLongitudeAsDouble(),
-                                stop.getLatitude().doubleValue(), stop.getLongitude().doubleValue()
-                        ).getMeters();
-                        log.info("STOP DEBUG: {} ({}) at ({}, {}) - distance: {:.0f}m, major: {}, routes: {}",
-                                stop.getId().getValue(), stop.getStopName(),
-                                stop.getLatitude(), stop.getLongitude(),
-                                distance, stop.getIsMajorStop(), stop.getServingRoutesCount());
-                    });
-                });
+                .doOnNext(stops -> log.debug("Found {} {} stops near ({}, {})", stops.size(), locationType,
+                        location.getLatitudeAsDouble(), location.getLongitudeAsDouble()));
     }
 
     private int compareStopsByEnhancedPriority(BusStop stop1, BusStop stop2, Coordinates location) {

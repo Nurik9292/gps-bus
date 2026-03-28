@@ -28,4 +28,16 @@ public class GpsOutlierDetectionProperties {
     private boolean rejectOutliers = false;
 
     private int historyPointsToCheck = 3;
+
+    /**
+     * Minimum reported speed (km/h) above which frozen coordinates are considered an anomaly.
+     * If reported speed > this threshold but coordinates haven't changed, it's a stale GPS fix.
+     */
+    private double minSpeedForFrozenDetectionKmh = 10.0;
+
+    /**
+     * Whether to reject (drop) updates with frozen coordinates + motion.
+     * Default false — log anomaly but still update speed/motion state.
+     */
+    private boolean rejectFrozenMotion = false;
 }

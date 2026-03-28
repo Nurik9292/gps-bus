@@ -16,6 +16,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -47,46 +48,48 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
     public Flux<DirectRouteResult> findDirectRoutes(List<BusStop> fromStops, List<BusStop> toStops) {
         if (fromStops.isEmpty() || toStops.isEmpty()) return Flux.empty();
 
-        return graphCache.getGraph().flatMapMany(graph -> {
-            long start = System.currentTimeMillis();
-            List<DirectRouteResult> results = new ArrayList<>();
-            Set<String> seen = new HashSet<>();
+        return graphCache.getGraph()
+                .flatMap(graph -> Mono.fromCallable(() -> {
+                    long start = System.currentTimeMillis();
+                    List<DirectRouteResult> results = new ArrayList<>();
+                    Set<String> seen = new HashSet<>();
 
-            for (BusStop fromStop : fromStops) {
-                for (BusStop toStop : toStops) {
-                    String fromId = fromStop.getId().getValue();
-                    String toId = toStop.getId().getValue();
+                    for (BusStop fromStop : fromStops) {
+                        for (BusStop toStop : toStops) {
+                            String fromId = fromStop.getId().getValue();
+                            String toId = toStop.getId().getValue();
 
-                    for (TransitPath path : dijkstraEngine.findPaths(graph, fromId, toId)) {
-                        List<TransitPathSegment> collapsed = path.collapsed();
-                        List<TransitPathSegment> busSegs = busSegments(collapsed);
+                            for (TransitPath path : dijkstraEngine.findPaths(graph, fromId, toId)) {
+                                List<TransitPathSegment> collapsed = path.collapsed();
+                                List<TransitPathSegment> busSegs = busSegments(collapsed);
 
-                        if (busSegs.size() == 1) {
-                            TransitPathSegment seg = busSegs.get(0);
-                            BusRoute route = graph.getRoute(seg.routeId());
-                            BusStop boarding = graph.getStop(seg.fromStopId());
-                            BusStop alighting = graph.getStop(seg.toStopId());
+                                if (busSegs.size() == 1) {
+                                    TransitPathSegment seg = busSegs.get(0);
+                                    BusRoute route = graph.getRoute(seg.routeId());
+                                    BusStop boarding = graph.getStop(seg.fromStopId());
+                                    BusStop alighting = graph.getStop(seg.toStopId());
 
-                            if (route == null || boarding == null || alighting == null) continue;
+                                    if (route == null || boarding == null || alighting == null) continue;
 
-                            String key = seg.routeId() + ":" + seg.fromStopId() + ":" + seg.toStopId();
-                            if (seen.add(key)) {
-                                results.add(new DirectRouteResult(
-                                        route, boarding, alighting,
-                                        seg.costMinutes(),
-                                        leadingWalkKm(collapsed),
-                                        trailingWalkKm(collapsed)
-                                ));
+                                    String key = seg.routeId() + ":" + seg.fromStopId() + ":" + seg.toStopId();
+                                    if (seen.add(key)) {
+                                        results.add(new DirectRouteResult(
+                                                route, boarding, alighting,
+                                                seg.costMinutes(),
+                                                leadingWalkKm(collapsed),
+                                                trailingWalkKm(collapsed)
+                                        ));
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            }
 
-            log.debug("✅ Dijkstra direct routes: {} results in {}ms", results.size(),
-                    System.currentTimeMillis() - start);
-            return Flux.fromIterable(results);
-        });
+                    log.debug("✅ Dijkstra direct routes: {} results in {}ms", results.size(),
+                            System.currentTimeMillis() - start);
+                    return results;
+                }).subscribeOn(Schedulers.boundedElastic()))
+                .flatMapMany(Flux::fromIterable);
     }
 
     @Override
@@ -95,53 +98,55 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
                                                                double maxTransferDistanceKm) {
         if (fromStops.isEmpty() || toStops.isEmpty()) return Flux.empty();
 
-        return graphCache.getGraph().flatMapMany(graph -> {
-            long start = System.currentTimeMillis();
-            List<TransferRouteResult> results = new ArrayList<>();
-            Set<String> seen = new HashSet<>();
+        return graphCache.getGraph()
+                .flatMap(graph -> Mono.fromCallable(() -> {
+                    long start = System.currentTimeMillis();
+                    List<TransferRouteResult> results = new ArrayList<>();
+                    Set<String> seen = new HashSet<>();
 
-            for (BusStop fromStop : fromStops) {
-                for (BusStop toStop : toStops) {
-                    String fromId = fromStop.getId().getValue();
-                    String toId = toStop.getId().getValue();
+                    for (BusStop fromStop : fromStops) {
+                        for (BusStop toStop : toStops) {
+                            String fromId = fromStop.getId().getValue();
+                            String toId = toStop.getId().getValue();
 
-                    for (TransitPath path : dijkstraEngine.findPaths(graph, fromId, toId)) {
-                        List<TransitPathSegment> collapsed = path.collapsed();
-                        List<TransitPathSegment> busSegs = busSegments(collapsed);
+                            for (TransitPath path : dijkstraEngine.findPaths(graph, fromId, toId)) {
+                                List<TransitPathSegment> collapsed = path.collapsed();
+                                List<TransitPathSegment> busSegs = busSegments(collapsed);
 
-                        if (busSegs.size() == 2) {
-                            TransitPathSegment first = busSegs.get(0);
-                            TransitPathSegment second = busSegs.get(1);
+                                if (busSegs.size() == 2) {
+                                    TransitPathSegment first = busSegs.get(0);
+                                    TransitPathSegment second = busSegs.get(1);
 
-                            BusRoute firstRoute = graph.getRoute(first.routeId());
-                            BusRoute secondRoute = graph.getRoute(second.routeId());
-                            BusStop boarding = graph.getStop(first.fromStopId());
-                            BusStop transferStop = graph.getStop(first.toStopId());
-                            BusStop alighting = graph.getStop(second.toStopId());
+                                    BusRoute firstRoute = graph.getRoute(first.routeId());
+                                    BusRoute secondRoute = graph.getRoute(second.routeId());
+                                    BusStop boarding = graph.getStop(first.fromStopId());
+                                    BusStop transferStop = graph.getStop(first.toStopId());
+                                    BusStop alighting = graph.getStop(second.toStopId());
 
-                            if (anyNull(firstRoute, secondRoute, boarding, transferStop, alighting)) continue;
+                                    if (anyNull(firstRoute, secondRoute, boarding, transferStop, alighting)) continue;
 
-                            String key = first.routeId() + ":" + second.routeId() + ":" + first.toStopId();
-                            if (seen.add(key)) {
-                                results.add(new TransferRouteResult(
-                                        firstRoute, boarding, transferStop,
-                                        secondRoute, alighting,
-                                        first.costMinutes(),
-                                        transferWaitMinutes(collapsed, first, second),
-                                        second.costMinutes(),
-                                        leadingWalkKm(collapsed),
-                                        trailingWalkKm(collapsed)
-                                ));
+                                    String key = first.routeId() + ":" + second.routeId() + ":" + first.toStopId();
+                                    if (seen.add(key)) {
+                                        results.add(new TransferRouteResult(
+                                                firstRoute, boarding, transferStop,
+                                                secondRoute, alighting,
+                                                first.costMinutes(),
+                                                transferWaitMinutes(collapsed, first, second),
+                                                second.costMinutes(),
+                                                leadingWalkKm(collapsed),
+                                                trailingWalkKm(collapsed)
+                                        ));
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            }
 
-            log.debug("✅ Dijkstra one-transfer routes: {} results in {}ms", results.size(),
-                    System.currentTimeMillis() - start);
-            return Flux.fromIterable(results);
-        });
+                    log.debug("✅ Dijkstra one-transfer routes: {} results in {}ms", results.size(),
+                            System.currentTimeMillis() - start);
+                    return results;
+                }).subscribeOn(Schedulers.boundedElastic()))
+                .flatMapMany(Flux::fromIterable);
     }
 
     @Override
@@ -150,61 +155,63 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
                                                                    double maxTransferDistanceKm) {
         if (fromStops.isEmpty() || toStops.isEmpty()) return Flux.empty();
 
-        return graphCache.getGraph().flatMapMany(graph -> {
-            long start = System.currentTimeMillis();
-            List<TwoTransferRouteResult> results = new ArrayList<>();
-            Set<String> seen = new HashSet<>();
+        return graphCache.getGraph()
+                .flatMap(graph -> Mono.fromCallable(() -> {
+                    long start = System.currentTimeMillis();
+                    List<TwoTransferRouteResult> results = new ArrayList<>();
+                    Set<String> seen = new HashSet<>();
 
-            for (BusStop fromStop : fromStops) {
-                for (BusStop toStop : toStops) {
-                    String fromId = fromStop.getId().getValue();
-                    String toId = toStop.getId().getValue();
+                    for (BusStop fromStop : fromStops) {
+                        for (BusStop toStop : toStops) {
+                            String fromId = fromStop.getId().getValue();
+                            String toId = toStop.getId().getValue();
 
-                    for (TransitPath path : dijkstraEngine.findPaths(graph, fromId, toId)) {
-                        List<TransitPathSegment> collapsed = path.collapsed();
-                        List<TransitPathSegment> busSegs = busSegments(collapsed);
+                            for (TransitPath path : dijkstraEngine.findPaths(graph, fromId, toId)) {
+                                List<TransitPathSegment> collapsed = path.collapsed();
+                                List<TransitPathSegment> busSegs = busSegments(collapsed);
 
-                        if (busSegs.size() == 3) {
-                            TransitPathSegment first = busSegs.get(0);
-                            TransitPathSegment second = busSegs.get(1);
-                            TransitPathSegment third = busSegs.get(2);
+                                if (busSegs.size() == 3) {
+                                    TransitPathSegment first = busSegs.get(0);
+                                    TransitPathSegment second = busSegs.get(1);
+                                    TransitPathSegment third = busSegs.get(2);
 
-                            BusRoute firstRoute = graph.getRoute(first.routeId());
-                            BusRoute secondRoute = graph.getRoute(second.routeId());
-                            BusRoute thirdRoute = graph.getRoute(third.routeId());
-                            BusStop boarding = graph.getStop(first.fromStopId());
-                            BusStop firstTransfer = graph.getStop(first.toStopId());
-                            BusStop secondTransfer = graph.getStop(second.toStopId());
-                            BusStop alighting = graph.getStop(third.toStopId());
+                                    BusRoute firstRoute = graph.getRoute(first.routeId());
+                                    BusRoute secondRoute = graph.getRoute(second.routeId());
+                                    BusRoute thirdRoute = graph.getRoute(third.routeId());
+                                    BusStop boarding = graph.getStop(first.fromStopId());
+                                    BusStop firstTransfer = graph.getStop(first.toStopId());
+                                    BusStop secondTransfer = graph.getStop(second.toStopId());
+                                    BusStop alighting = graph.getStop(third.toStopId());
 
-                            if (anyNull(firstRoute, secondRoute, thirdRoute,
-                                    boarding, firstTransfer, secondTransfer, alighting)) continue;
+                                    if (anyNull(firstRoute, secondRoute, thirdRoute,
+                                            boarding, firstTransfer, secondTransfer, alighting)) continue;
 
-                            String key = first.routeId() + ":" + second.routeId() + ":" + third.routeId()
-                                    + ":" + first.toStopId() + ":" + second.toStopId();
-                            if (seen.add(key)) {
-                                results.add(new TwoTransferRouteResult(
-                                        firstRoute, boarding, firstTransfer,
-                                        secondRoute, secondTransfer,
-                                        thirdRoute, alighting,
-                                        first.costMinutes(),
-                                        transferWaitMinutes(collapsed, first, second),
-                                        second.costMinutes(),
-                                        transferWaitMinutes(collapsed, second, third),
-                                        third.costMinutes(),
-                                        leadingWalkKm(collapsed),
-                                        trailingWalkKm(collapsed)
-                                ));
+                                    String key = first.routeId() + ":" + second.routeId() + ":" + third.routeId()
+                                            + ":" + first.toStopId() + ":" + second.toStopId();
+                                    if (seen.add(key)) {
+                                        results.add(new TwoTransferRouteResult(
+                                                firstRoute, boarding, firstTransfer,
+                                                secondRoute, secondTransfer,
+                                                thirdRoute, alighting,
+                                                first.costMinutes(),
+                                                transferWaitMinutes(collapsed, first, second),
+                                                second.costMinutes(),
+                                                transferWaitMinutes(collapsed, second, third),
+                                                third.costMinutes(),
+                                                leadingWalkKm(collapsed),
+                                                trailingWalkKm(collapsed)
+                                        ));
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            }
 
-            log.debug("✅ Dijkstra two-transfer routes: {} results in {}ms", results.size(),
-                    System.currentTimeMillis() - start);
-            return Flux.fromIterable(results);
-        });
+                    log.debug("✅ Dijkstra two-transfer routes: {} results in {}ms", results.size(),
+                            System.currentTimeMillis() - start);
+                    return results;
+                }).subscribeOn(Schedulers.boundedElastic()))
+                .flatMapMany(Flux::fromIterable);
     }
 
     @Override

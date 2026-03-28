@@ -83,8 +83,8 @@ public class R2dbcTransitGraphDataRepository implements TransitGraphDataReposito
                 WHERE bs1.is_active = true
                   AND bs2.is_active = true
                   AND ST_DWithin(
-                        ST_MakePoint(bs1.longitude::float, bs1.latitude::float)::geography,
-                        ST_MakePoint(bs2.longitude::float, bs2.latitude::float)::geography,
+                        ST_SetSRID(ST_MakePoint(bs1.longitude::float, bs1.latitude::float), 4326)::geography,
+                        ST_SetSRID(ST_MakePoint(bs2.longitude::float, bs2.latitude::float), 4326)::geography,
                         :maxMeters
                   )
                 """;

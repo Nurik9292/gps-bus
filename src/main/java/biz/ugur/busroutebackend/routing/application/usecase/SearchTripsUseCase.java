@@ -82,7 +82,6 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
 
         return checkCacheFirst(cacheKey, context)
                 .switchIfEmpty(performSearchAndCache(context, cacheKey))
-                .timeout(config.getTotalSearchTimeout())
                 .onErrorResume(error -> handleSearchError(error, context));
     }
 
@@ -101,6 +100,7 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
 
     private Mono<TripSearchResponse> performSearchAndCache(SearchContext context, String cacheKey) {
         return parallelSearchService.searchAllRoutes(context)
+                .timeout(config.getTotalSearchTimeout())
                 .flatMap(tripPlan -> saveTripPlan(tripPlan, context))
                 .flatMap(tripPlan -> responseBuilder.createSuccessResponse(tripPlan, context))
                 .flatMap(response -> cacheIfSuccessful(cacheKey, response, context))

@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
 
 @Service
@@ -54,6 +55,7 @@ public class ParallelRouteSearchService {
                 context.toLocation().getLongitudeAsDouble());
 
         return nearbyStopsService.findStopsForBothLocations(context)
+                .timeout(Duration.ofSeconds(5))
                 .doOnNext(stopsContext -> log.info("[{}] 📍 Found stops: from={}, to={}",
                         context.searchId(),
                         stopsContext.fromStops().size(),

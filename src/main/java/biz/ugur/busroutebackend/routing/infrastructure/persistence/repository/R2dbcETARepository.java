@@ -113,7 +113,7 @@ public class R2dbcETARepository implements ETARepository {
                 .map(row -> {
                     Integer baseTime = row.get("base_wait_time", Integer.class);
                     Integer adjustment = row.get("time_adjustment", Integer.class);
-                    Integer vehiclesCount = row.get("vehicles_count", Integer.class);
+                    Long vehiclesCount = row.get("vehicles_count", Long.class);
                     String category = row.get("category", String.class);
 
                     int waitTime = (baseTime != null ? baseTime : 10) + (adjustment != null ? adjustment : 0);
