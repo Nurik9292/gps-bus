@@ -48,6 +48,21 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("next_stops")
     private final List<NextStopEta> nextStops;
 
+    /**
+     * {@code true} for server-predicted positions (dead reckoning / route interpolation).
+     * {@code null} / {@code false} for real GPS fixes.
+     * Flutter clients can use this to render predicted markers differently.
+     */
+    @JsonProperty("predicted")
+    private final Boolean predicted;
+
+    /**
+     * Position along the route as a fraction [0.0–1.0].
+     * Present only when snap-to-route is active; {@code null} otherwise.
+     */
+    @JsonProperty("fraction")
+    private final Double fraction;
+
     @JsonCreator
     public VehiclePositionWebSocketMessage(
             @JsonProperty("vehicle_id") String vehicleId,
@@ -61,7 +76,7 @@ public class VehiclePositionWebSocketMessage {
             @JsonProperty("dir") Double course,
             @JsonProperty("line") Boolean line) {
         this(vehicleId, licensePlate, routeNumber, latitude, longitude,
-                speedKmh, isInMotion, timestamp, course, line, null);
+                speedKmh, isInMotion, timestamp, course, line, null, null, null);
     }
 
     public VehiclePositionWebSocketMessage(
@@ -76,6 +91,24 @@ public class VehiclePositionWebSocketMessage {
             Double course,
             Boolean line,
             List<NextStopEta> nextStops) {
+        this(vehicleId, licensePlate, routeNumber, latitude, longitude,
+                speedKmh, isInMotion, timestamp, course, line, nextStops, null, null);
+    }
+
+    public VehiclePositionWebSocketMessage(
+            String vehicleId,
+            String licensePlate,
+            String routeNumber,
+            Double latitude,
+            Double longitude,
+            Double speedKmh,
+            Boolean isInMotion,
+            LocalDateTime timestamp,
+            Double course,
+            Boolean line,
+            List<NextStopEta> nextStops,
+            Boolean predicted,
+            Double fraction) {
         this.vehicleId = vehicleId;
         this.licensePlate = licensePlate;
         this.routeNumber = routeNumber;
@@ -87,6 +120,8 @@ public class VehiclePositionWebSocketMessage {
         this.course = course;
         this.line = line;
         this.nextStops = nextStops;
+        this.predicted = predicted;
+        this.fraction = fraction;
     }
 
 

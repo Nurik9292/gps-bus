@@ -26,6 +26,7 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.OutlierDetectionRes
 import biz.ugur.busroutebackend.transport.infrastructure.config.GpsOutlierDetectionProperties;
 import biz.ugur.busroutebackend.transport.infrastructure.metrics.GpsOutlierMetricsRecorder;
 import biz.ugur.busroutebackend.transport.infrastructure.metrics.GpsValidationMetricsRecorder;
+import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePositionPredictionService;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.GpsPoint;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.GpsUpdateDeadLetterQueue;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistoryService;
@@ -70,6 +71,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private final GpsOutlierDetector outlierDetector;
     private final GpsOutlierMetricsRecorder outlierMetricsRecorder;
     private final GpsOutlierDetectionProperties outlierDetectionProperties;
+    private final VehiclePositionPredictionService predictionService;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
                                          VehicleFactory vehicleFactory,
@@ -88,7 +90,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                          GpsUpdateDeadLetterQueue deadLetterQueue,
                                          GpsOutlierDetector outlierDetector,
                                          GpsOutlierMetricsRecorder outlierMetricsRecorder,
-                                         GpsOutlierDetectionProperties outlierDetectionProperties) {
+                                         GpsOutlierDetectionProperties outlierDetectionProperties,
+                                         VehiclePositionPredictionService predictionService) {
         super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
         this.vehicleFactory = vehicleFactory;
@@ -106,6 +109,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         this.outlierDetector = outlierDetector;
         this.outlierMetricsRecorder = outlierMetricsRecorder;
         this.outlierDetectionProperties = outlierDetectionProperties;
+        this.predictionService = predictionService;
     }
 
     @Override
@@ -368,6 +372,24 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 updatedVehicle.getCurrentDirection()
                         );
                         domainEventPublisher.publish(event);
+                    }
+
+                    // Feed real GPS data into the prediction service on every update
+                    if (updatedVehicle.getCurrentLatitude() != null && updatedVehicle.getCurrentLongitude() != null) {
+                        predictionService.onGpsUpdate(
+                                vehicleId,
+                                updatedVehicle.getLicensePlate(),
+                                updatedVehicle.getRouteNumber(),
+                                updatedVehicle.getCurrentLatitude(),
+                                updatedVehicle.getCurrentLongitude(),
+                                updatedVehicle.getSpeedKmh() != null ? updatedVehicle.getSpeedKmh() : 0.0,
+                                updatedVehicle.getCourse() != null ? updatedVehicle.getCourse() : 0.0,
+                                Boolean.TRUE.equals(updatedVehicle.getIsInMotion()),
+                                updatedVehicle.getLastPositionUpdate() != null
+                                        ? updatedVehicle.getLastPositionUpdate().toInstant(java.time.ZoneOffset.UTC)
+                                        : Instant.now(),
+                                updatedVehicle.getCurrentDirection() != null ? updatedVehicle.getCurrentDirection() : 0
+                        );
                     }
 
                     statuses.add(VehicleUpdateStatus.updated(
