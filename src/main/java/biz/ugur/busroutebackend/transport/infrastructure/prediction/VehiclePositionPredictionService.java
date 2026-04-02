@@ -1,7 +1,8 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.transport.infrastructure.messaging.DirectVehiclePositionBroadcaster;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage;
-import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketPublisher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -12,47 +13,36 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Dead reckoning prediction service (Phase 1 + Phase 2).
- *
- * <p>Phase 1 — dead reckoning by speed + course (plain direction vector).
- * <p>Phase 2 — route-aware prediction: when a vehicle is assigned to a route and its
- * geometry is cached, the predicted position advances along the route geometry using a
- * fraction [0.0–1.0], producing smooth road-following movement.
- */
+
 @Service
 @Slf4j
 public class VehiclePositionPredictionService {
 
-    /** Metres per degree of latitude (approximately constant) */
     private static final double METRES_PER_DEGREE_LAT = 111_320.0;
 
-    /** Prediction step size in seconds (matches scheduler interval) */
     private static final double DT_SECONDS = 1.0;
+
+
+    private static final double MAX_CORRECTION_DISTANCE_METERS = 50.0;
 
     private final ConcurrentHashMap<String, VehiclePredictionState> vehicleStates = new ConcurrentHashMap<>();
 
     private final PredictionProperties properties;
-    private final VehiclePositionWebSocketPublisher webSocketPublisher;
+    private final DirectVehiclePositionBroadcaster directBroadcaster;
     private final RouteGeometryCache routeGeometryCache;
     private final MapMatchingService mapMatchingService;
 
     public VehiclePositionPredictionService(PredictionProperties properties,
-                                             VehiclePositionWebSocketPublisher webSocketPublisher,
+                                             DirectVehiclePositionBroadcaster directBroadcaster,
                                              RouteGeometryCache routeGeometryCache,
                                              MapMatchingService mapMatchingService) {
         this.properties = properties;
-        this.webSocketPublisher = webSocketPublisher;
+        this.directBroadcaster = directBroadcaster;
         this.routeGeometryCache = routeGeometryCache;
         this.mapMatchingService = mapMatchingService;
     }
 
-    /**
-     * Called by {@link biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase}
-     * whenever a real GPS fix arrives for a vehicle.
-     *
-     * @param direction 0 = forward, 1 = backward (pass current vehicle direction)
-     */
+
     public void onGpsUpdate(String vehicleId,
                             String licensePlate,
                             String routeNumber,
@@ -69,43 +59,86 @@ public class VehiclePositionPredictionService {
 
         VehiclePredictionState existing = vehicleStates.get(vehicleId);
 
-        // Blend existing predicted position toward the new real position
-        double predictedLat = latitude;
-        double predictedLon = longitude;
-        if (existing != null) {
-            double cf = properties.getCorrectionFactor();
-            predictedLat = existing.getPredictedLatitude() + cf * (latitude - existing.getPredictedLatitude());
-            predictedLon = existing.getPredictedLongitude() + cf * (longitude - existing.getPredictedLongitude());
+        if (existing != null && !timestamp.isAfter(existing.getLastGpsUpdate())) {
+            log.trace("Ignoring duplicate GPS for vehicle {}: timestamp {} <= lastGpsUpdate {}",
+                    vehicleId, timestamp, existing.getLastGpsUpdate());
+            return;
         }
 
-        // ---- Phase 2: try to snap to route and obtain route geometry ----
+        double predictedLat;
+        double predictedLon;
+        double fraction;
+
         List<double[]> routeCoords = null;
         double totalDist = 0;
-        double fraction = -1;
 
         if (routeNumber != null && properties.isSnapToRoute()) {
             routeCoords = routeGeometryCache.getPoints(routeNumber, direction);
             if (routeCoords == null) {
-                // Try opposite direction
                 int opposite = (direction == 0) ? 1 : 0;
                 routeCoords = routeGeometryCache.getPoints(routeNumber, opposite);
                 if (routeCoords != null) {
                     direction = opposite;
                 }
             }
+        }
 
-            if (routeCoords != null) {
-                totalDist = routeGeometryCache.getTotalDistance(routeNumber, direction);
-                MapMatchingService.SnappedResult snap =
-                        mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords);
-                if (snap.snapped()) {
+        if (routeCoords != null) {
+            // Route-aware mode
+            totalDist = routeGeometryCache.getTotalDistance(routeNumber, direction);
+            MapMatchingService.SnappedResult snap =
+                    mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords);
+
+            if (snap.snapped()) {
+                double realFraction = snap.fraction();
+                double predictedFraction = (existing != null) ? existing.getFractionOnRoute() : -1;
+
+                boolean realIsAhead = (predictedFraction < 0)  // no prior state
+                        || (direction == 0 && realFraction >= predictedFraction)
+                        || (direction == 1 && realFraction <= predictedFraction);
+
+                if (realIsAhead) {
+                    // Bug 2 (route): real GPS is ahead — snap predicted forward
                     predictedLat = snap.latitude();
                     predictedLon = snap.longitude();
-                    fraction = snap.fraction();
-                    // Derive course from route geometry for snapped vehicles
+                    fraction = realFraction;
                     course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction);
+                } else {
+                    predictedLat = existing.getPredictedLatitude();
+                    predictedLon = existing.getPredictedLongitude();
+                    fraction = existing.getFractionOnRoute();
+                    course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction);
+                    log.trace("GPS behind predicted for vehicle {} (realFraction={}, predictedFraction={}); keeping predicted position",
+                            vehicleId, realFraction, predictedFraction);
+                }
+            } else {
+                predictedLat = applyBlendingIfClose(existing, latitude, longitude);
+                predictedLon = applyBlendingIfClose_lon(existing, latitude, longitude);
+                fraction = -1;
+                routeCoords = null;
+                totalDist = 0;
+            }
+
+        } else {
+            if (existing == null) {
+                predictedLat = latitude;
+                predictedLon = longitude;
+            } else {
+                double dist = DistanceCalculationService.haversineDistanceMeters(
+                        existing.getPredictedLatitude(), existing.getPredictedLongitude(),
+                        latitude, longitude);
+
+                if (dist <= MAX_CORRECTION_DISTANCE_METERS) {
+                    double cf = properties.getCorrectionFactor();
+                    predictedLat = existing.getPredictedLatitude() + cf * (latitude - existing.getPredictedLatitude());
+                    predictedLon = existing.getPredictedLongitude() + cf * (longitude - existing.getPredictedLongitude());
+                } else {
+                    predictedLat = existing.getPredictedLatitude();
+                    predictedLon = existing.getPredictedLongitude();
+                    log.trace("GPS {}m from predicted for vehicle {}; keeping predicted position", (int) dist, vehicleId);
                 }
             }
+            fraction = -1;
         }
 
         VehiclePredictionState state = VehiclePredictionState.builder()
@@ -127,15 +160,10 @@ public class VehiclePositionPredictionService {
                 .build();
 
         vehicleStates.put(vehicleId, state);
-        log.trace("GPS update: vehicleId={}, lat={}, lon={}, speed={}km/h, fraction={}",
-                vehicleId, latitude, longitude, speedKmh, fraction);
+        log.trace("GPS update stored: vehicleId={}, speed={}km/h, inMotion={}, fraction={}",
+                vehicleId, speedKmh, inMotion, fraction);
     }
 
-    /**
-     * Called every second by {@link PositionPredictionScheduler}.
-     * Advances each active vehicle's predicted position and broadcasts via WebSocket.
-     * Also triggers periodic cleanup of stale states.
-     */
     public Mono<Void> predictNextPositions() {
         if (!properties.isEnabled()) {
             return Mono.empty();
@@ -145,12 +173,11 @@ public class VehiclePositionPredictionService {
 
         Instant now = Instant.now();
         long maxAgeMs = properties.getMaxAgeMs();
+        double minSpeed = properties.getMinSpeedKmh();
 
         List<VehiclePredictionState> activeStates = vehicleStates.values().stream()
-                .filter(state -> {
-                    long ageMs = now.toEpochMilli() - state.getLastGpsUpdate().toEpochMilli();
-                    return ageMs <= maxAgeMs;
-                })
+                .filter(state -> state.isInMotion() && state.getSpeedKmh() >= minSpeed)
+                .filter(state -> (now.toEpochMilli() - state.getLastGpsUpdate().toEpochMilli()) <= maxAgeMs)
                 .filter(state -> !isAtRouteBoundary(state))
                 .toList();
 
@@ -158,7 +185,7 @@ public class VehiclePositionPredictionService {
             return Mono.empty();
         }
 
-        log.trace("Prediction cycle: {} active vehicles", activeStates.size());
+        log.trace("Prediction cycle: {} moving vehicles", activeStates.size());
 
         return Flux.fromIterable(activeStates)
                 .flatMap(state -> {
@@ -169,43 +196,26 @@ public class VehiclePositionPredictionService {
                 .then();
     }
 
-    /**
-     * Removes entries from {@code vehicleStates} that have not received a GPS update
-     * in more than 5 minutes. Prevents unbounded memory growth when vehicles go offline.
-     */
+    // ---- private ----
+
     private void cleanupStaleStates() {
         Instant cutoff = Instant.now().minusSeconds(300);
         vehicleStates.entrySet().removeIf(e -> e.getValue().getLastGpsUpdate().isBefore(cutoff));
     }
 
-    /**
-     * Returns {@code true} when a route-aware vehicle has reached the end (or start) of its route
-     * and should no longer generate predictions.
-     */
     private boolean isAtRouteBoundary(VehiclePredictionState state) {
         if (state.getRouteCoordinates() == null || state.getFractionOnRoute() < 0) {
-            return false; // plain dead reckoning — no boundary
+            return false;
         }
         double f = state.getFractionOnRoute();
         return (state.getDirection() == 0 && f >= 1.0)
                 || (state.getDirection() == 1 && f <= 0.0);
     }
 
-    // ---- private ----
 
-    /**
-     * Applies one prediction step.
-     * Phase 2: uses route-aware fraction movement when geometry is available.
-     * Phase 1 fallback: dead reckoning by speed + course vector.
-     */
     private VehiclePredictionState advanceState(VehiclePredictionState state) {
-        if (!state.isInMotion() || state.getSpeedKmh() < properties.getMinSpeedKmh()) {
-            return state;
-        }
-
         double decayedSpeedKmh = state.getSpeedKmh() * properties.getDecayFactor();
 
-        // ---- Phase 2: route-aware prediction ----
         List<double[]> routeCoords = state.getRouteCoordinates();
         if (routeCoords != null && state.getFractionOnRoute() >= 0
                 && state.getTotalRouteDistanceMeters() > 0) {
@@ -235,7 +245,6 @@ public class VehiclePositionPredictionService {
                     .build();
         }
 
-        // ---- Phase 1 fallback: dead reckoning by speed + course ----
         double speedMs   = decayedSpeedKmh / 3.6;
         double courseRad = Math.toRadians(state.getCourse());
 
@@ -265,18 +274,42 @@ public class VehiclePositionPredictionService {
                 state.isInMotion(),
                 LocalDateTime.now(),
                 state.getCourse(),
-                state.getDirection() == 0,  // line=true for forward direction
-                null,                       // nextStops — not available for predictions
-                Boolean.TRUE,               // predicted = true
+                state.getDirection() == 0,
+                null,
+                Boolean.TRUE,
                 fractionValue
         );
 
-        return webSocketPublisher.broadcastVehiclePosition(msg)
-                .doOnSuccess(v -> log.trace("Prediction broadcasted: vehicleId={}", state.getVehicleId()))
-                .onErrorResume(e -> {
-                    log.warn("Failed to broadcast prediction for vehicle {}: {}", state.getVehicleId(), e.getMessage());
-                    return Mono.empty();
-                });
+        return Mono.fromRunnable(() -> {
+            try {
+                directBroadcaster.broadcastDirect(msg);
+                log.trace("Prediction broadcasted direct: vehicleId={}", state.getVehicleId());
+            } catch (Exception e) {
+                log.warn("Failed to broadcast prediction for vehicle {}: {}", state.getVehicleId(), e.getMessage());
+            }
+        });
+    }
+
+    private double applyBlendingIfClose(VehiclePredictionState existing, double realLat, double realLon) {
+        if (existing == null) return realLat;
+        double dist = DistanceCalculationService.haversineDistanceMeters(
+                existing.getPredictedLatitude(), existing.getPredictedLongitude(), realLat, realLon);
+        if (dist <= MAX_CORRECTION_DISTANCE_METERS) {
+            return existing.getPredictedLatitude()
+                    + properties.getCorrectionFactor() * (realLat - existing.getPredictedLatitude());
+        }
+        return existing.getPredictedLatitude();
+    }
+
+    private double applyBlendingIfClose_lon(VehiclePredictionState existing, double realLat, double realLon) {
+        if (existing == null) return realLon;
+        double dist = DistanceCalculationService.haversineDistanceMeters(
+                existing.getPredictedLatitude(), existing.getPredictedLongitude(), realLat, realLon);
+        if (dist <= MAX_CORRECTION_DISTANCE_METERS) {
+            return existing.getPredictedLongitude()
+                    + properties.getCorrectionFactor() * (realLon - existing.getPredictedLongitude());
+        }
+        return existing.getPredictedLongitude();
     }
 
     public int getActiveStateCount() {

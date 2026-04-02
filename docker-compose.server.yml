@@ -1,0 +1,106 @@
+services:
+  db-route:
+    image: postgis/postgis
+    container_name: db-route
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bus_route_db
+      POSTGRES_USER: bus_route_user
+      POSTGRES_PASSWORD: bus_route_pass
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+    volumes:
+      - postgres_data_bus_route:/var/lib/postgresql/data
+      - ./src/main/resources/db/migration:/docker-entrypoint-initdb.d/migration
+    networks:
+      - bus-route-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bus_route_user -d bus_route_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis-route:
+    image: redis
+    container_name: redis-route
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ""
+    volumes:
+      - redis_data_bus_route:/data
+    networks:
+      - bus-route-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  bus-route-app:
+    image: bus-route-backend:latest
+    container_name: bus-route-app-prod
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: db-route
+      DB_PORT: 5432
+      REDIS_HOST: redis-route
+      REDIS_PORT: 6379
+      GPS_API_BASE_URL: https://gps.tugdk.gov.tm
+      GPS_API_TOKEN: RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0
+      GPS_TUGDK_TOKEN: RzBFAiAXi8BptuCSC_g7z-YrCnAK9GXhdT4RCqG6YPymO51TSgIhALFe-uQ4S2Pm-pojsla3SRRTy02MmfsJT3ypjwvpDFK9eyJ1IjoxMywiZSI6IjIwMjYtMTItMjNUMTk6MDA6MDAuMDAwKzAwOjAwIn0
+      BUS_INFO_API_BASE_URL: https://edu.ayauk.gov.tm/gps/buses
+      BUS_INFO_API_USERNAME: turkmenportal
+      BUS_INFO_API_PASSWORD: turkmenportal
+      AVATAR_STORAGE_PATH: /app/data/avatars
+      AVATAR_BASE_URL: http://${SERVER_HOST:-localhost}:8080/uploads/avatars
+      AVATAR_CREATE_THUMBNAILS: false
+      AVATAR_THUMBNAIL_SIZE: 150
+      AVATAR_JPEG_QUALITY: 0.85
+      BANNER_STORAGE_PATH: /app/data/banners
+      BANNER_BASE_URL: http://${SERVER_HOST:-localhost}:8080/uploads/banners
+      BANNER_CREATE_THUMBNAILS: false
+      BANNER_THUMBNAIL_WIDTH: 400
+      BANNER_THUMBNAIL_HEIGHT: 200
+      BANNER_JPEG_QUALITY: 0.85
+      JAVA_OPTS: "-Xms1g -Xmx2g -XX:+UseG1GC -XX:+UseStringDeduplication -XX:MaxGCPauseMillis=200"
+      JVM_OPTS: "-server -Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom"
+      SCHEDULER_GPS_PARALLEL_WORKERS: 2
+      SCHEDULER_GPS_BATCH_SIZE: 300
+      SCHEDULER_GPS_TOTAL_TIMEOUT: 60s
+    ports:
+      - "8080:8080"
+    volumes:
+      - app_data_avatars:/app/data/avatars
+      - app_data_banners:/app/data/banners
+      - ./logs:/app/logs
+    depends_on:
+      db-route:
+        condition: service_healthy
+      redis-route:
+        condition: service_healthy
+    networks:
+      - bus-route-network
+      - shared-network
+
+networks:
+  bus-route-network:
+    driver: bridge
+    name: bus-route-network
+  shared-network:
+    external: true
+    name: shared-network
+
+volumes:
+  postgres_data_bus_route:
+    name: bus-route-postgres-data
+  redis_data_bus_route:
+    name: bus-route-redis-data
+  app_data_avatars:
+    name: bus-route-avatars-data
+  app_data_banners:
+    name: bus-route-banners-data

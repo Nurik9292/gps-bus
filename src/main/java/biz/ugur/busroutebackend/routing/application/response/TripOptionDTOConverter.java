@@ -1,25 +1,63 @@
 package biz.ugur.busroutebackend.routing.application.response;
 
+import biz.ugur.busroutebackend.place.application.dto.GeocodingResult;
+import biz.ugur.busroutebackend.place.domain.services.GeocodingService;
 import biz.ugur.busroutebackend.routing.application.dto.RouteSegmentDTO;
 import biz.ugur.busroutebackend.routing.application.dto.TripOptionDTO;
 import biz.ugur.busroutebackend.routing.domain.enums.SegmentType;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
+@Slf4j
 public class TripOptionDTOConverter {
 
-    public TripOptionDTO convertToDTO(TripOption tripOption) {
+    private final GeocodingService geocodingService;
+
+    public TripOptionDTOConverter(@Nullable GeocodingService geocodingService) {
+        this.geocodingService = geocodingService;
+    }
+
+    public Mono<TripOptionDTO> convertToDTO(TripOption tripOption) {
         List<RouteSegmentDTO> segments = tripOption.getRouteSegments()
                 .stream()
                 .map(this::convertSegmentToDTO)
                 .collect(Collectors.toList());
 
+        Mono<Void> resolveFirst = Mono.empty();
+        Mono<Void> resolveLast = Mono.empty();
+
+        if (!segments.isEmpty()) {
+            RouteSegmentDTO first = segments.getFirst();
+            if (first.getFromLocation() != null && first.getFromLocation().getName() == null) {
+                double lat = first.getFromLocation().getLatitude();
+                double lon = first.getFromLocation().getLongitude();
+                resolveFirst = resolveLocationName(lat, lon)
+                        .doOnNext(first.getFromLocation()::setName)
+                        .then();
+            }
+            RouteSegmentDTO last = segments.getLast();
+            if (last.getToLocation() != null && last.getToLocation().getName() == null) {
+                double lat = last.getToLocation().getLatitude();
+                double lon = last.getToLocation().getLongitude();
+                resolveLast = resolveLocationName(lat, lon)
+                        .doOnNext(last.getToLocation()::setName)
+                        .then();
+            }
+        }
+
+        return Mono.when(resolveFirst, resolveLast).thenReturn(buildDTO(tripOption, segments));
+    }
+
+    private TripOptionDTO buildDTO(TripOption tripOption, List<RouteSegmentDTO> segments) {
         TripOptionDTO dto = new TripOptionDTO(
                 tripOption.getOptionId(),
                 tripOption.getTripType().name().toLowerCase(),
@@ -29,11 +67,37 @@ public class TripOptionDTOConverter {
                 tripOption.getTransfersCount(),
                 segments
         );
-
         dto.setEstimatedDeparture(tripOption.getEstimatedDeparture());
         dto.setEstimatedArrival(tripOption.getEstimatedArrival());
-
         return dto;
+    }
+
+    private Mono<String> resolveLocationName(double lat, double lon) {
+        if (geocodingService == null) {
+            return Mono.just(formatCoordinates(lat, lon));
+        }
+        return geocodingService.reverse(lat, lon)
+                .map(result -> formatGeocodingResult(result, lat, lon))
+                .defaultIfEmpty(formatCoordinates(lat, lon))
+                .onErrorReturn(formatCoordinates(lat, lon));
+    }
+
+    private String formatGeocodingResult(GeocodingResult result, double lat, double lon) {
+        if (result.street() != null) {
+            String addr = result.street();
+            if (result.houseNumber() != null) {
+                addr += ", " + result.houseNumber();
+            }
+            return addr;
+        }
+        if (result.displayName() != null) {
+            return result.displayName();
+        }
+        return formatCoordinates(lat, lon);
+    }
+
+    private String formatCoordinates(double lat, double lon) {
+        return String.format("%.4f°, %.4f°", lat, lon);
     }
 
     private RouteSegmentDTO convertSegmentToDTO(RouteSegment segment) {

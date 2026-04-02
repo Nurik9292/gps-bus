@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.interfaces.websocket;
 
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
 import biz.ugur.busroutebackend.transport.application.usecase.GetActiveVehiclesUseCase;
+import biz.ugur.busroutebackend.transport.infrastructure.messaging.DirectVehiclePositionBroadcaster;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,7 +30,7 @@ import java.util.stream.Collectors;
 
 @Component
 @Slf4j
-public class VehiclePositionHandler implements WebSocketHandler {
+public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePositionBroadcaster {
 
     private static final int BUFFER_SIZE = 4096;
 
@@ -419,6 +420,16 @@ public class VehiclePositionHandler implements WebSocketHandler {
         }
 
         emitWithMetrics(message);
+    }
+
+    /**
+     * {@inheritDoc}
+     * Writes directly to the in-process broadcast sink — no Redis round-trip.
+     * Used by the prediction subsystem to avoid polluting Redis pub/sub.
+     */
+    @Override
+    public void broadcastDirect(VehiclePositionWebSocketMessage message) {
+        broadcastVehiclePosition(message);
     }
 
     public WebSocketBufferMetricsTracker.BufferHealthStats getBufferStats() {

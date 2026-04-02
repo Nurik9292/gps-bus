@@ -46,6 +46,7 @@ public abstract class ExternalServiceBaseRepository extends BaseR2dbcRepository<
         columns.put("rate_limit_per_minute", entity.getRateLimitPerMinute());
         columns.put("last_used_at", entity.getLastUsedAt());
         columns.put("created_by_admin_id", entity.getCreatedByAdminId());
+        columns.put("can_manage_clients", entity.getCanManageClients());
         columns.put("version", entity.getVersion());
         columns.put("created_at", entity.getCreatedAt());
         columns.put("updated_at", entity.getUpdatedAt());
@@ -69,6 +70,7 @@ public abstract class ExternalServiceBaseRepository extends BaseR2dbcRepository<
                 .createdByAdminId(row.get("created_by_admin_id", String.class))
                 .createdAt(row.get("created_at", LocalDateTime.class))
                 .updatedAt(row.get("updated_at", LocalDateTime.class))
+                .canManageClients(row.get("can_manage_clients", Boolean.class))
                 .version(row.get("version", Long.class))
                 .build());
     }

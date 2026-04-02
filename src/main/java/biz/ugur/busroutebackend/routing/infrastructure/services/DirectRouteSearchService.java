@@ -44,6 +44,7 @@ public class DirectRouteSearchService {
     }
 
     private Mono<SearchResult> performDirectSearch(SearchContext context, StopsContext stopsContext) {
+        log.info("[{}] Executing direct route SQL query", context.searchId());
         return routeCalculationService.findDirectRoutes(
                         stopsContext.fromStops(), stopsContext.toStops())
                 .filter(this::isRouteViable)

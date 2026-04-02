@@ -8,11 +8,11 @@ import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
 import biz.ugur.busroutebackend.routing.domain.service.TripOptionComparator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Component("customResponseBuilder")
@@ -25,27 +25,23 @@ public class ResponseBuilder {
     }
 
     public Mono<TripSearchResponse> createSuccessResponse(TripPlan tripPlan, SearchContext context) {
-        return Mono.fromCallable(() -> {
-            int totalOptions = tripPlan.getTripOptions().size();
+        if (tripPlan.getTripOptions().isEmpty()) {
+            log.warn("[{}] No routes found - returning error response", context.searchId());
+            return Mono.just(new TripSearchResponse(
+                    "error",
+                    TripPlanningException.PlanningErrorType.NO_ROUTE_FOUND.getDefaultMessage(),
+                    TripPlanningException.PlanningErrorType.NO_ROUTE_FOUND.name()
+            ));
+        }
 
-            if (totalOptions == 0) {
-                log.warn("[{}] No routes found - returning error response", context.searchId());
-                return new TripSearchResponse(
-                        "error",
-                        TripPlanningException.PlanningErrorType.NO_ROUTE_FOUND.getDefaultMessage(),
-                        TripPlanningException.PlanningErrorType.NO_ROUTE_FOUND.name()
-                );
-            }
-
-            List<TripOptionDTO> options = selectAndConvertBestOptions(tripPlan);
-            String message = createSuccessMessage(tripPlan);
-
-            TripSearchResponse response = new TripSearchResponse("success", message, options);
-            response.setSearchTime(LocalDateTime.now());
-
-            logResponseCreated(context, tripPlan, options.size());
-            return response;
-        });
+        return selectAndConvertBestOptions(tripPlan)
+                .map(options -> {
+                    String message = createSuccessMessage(tripPlan);
+                    TripSearchResponse response = new TripSearchResponse("success", message, options);
+                    response.setSearchTime(LocalDateTime.now());
+                    logResponseCreated(context, tripPlan, options.size());
+                    return response;
+                });
     }
 
     public Mono<TripSearchResponse> createErrorResponse(String message) {
@@ -64,12 +60,11 @@ public class ResponseBuilder {
         return createErrorResponse(ex.getPlanningErrorType(), ex.getMessage());
     }
 
-    private List<TripOptionDTO> selectAndConvertBestOptions(TripPlan tripPlan) {
+    private Mono<List<TripOptionDTO>> selectAndConvertBestOptions(TripPlan tripPlan) {
         TripOptionComparator comparator = new TripOptionComparator(tripPlan.getSearchCriteria());
-        return tripPlan.getBestOptions(5, comparator)
-                .stream()
-                .map(dtoConverter::convertToDTO)
-                .collect(Collectors.toList());
+        return Flux.fromIterable(tripPlan.getBestOptions(5, comparator))
+                .flatMap(dtoConverter::convertToDTO)
+                .collectList();
     }
 
     private String createSuccessMessage(TripPlan tripPlan) {

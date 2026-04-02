@@ -22,9 +22,10 @@ spring:
     pool:
       initial-size: ${DB_POOL_MIN_IDLE:5}
       max-size: ${DB_POOL_MAX_SIZE:25}
-      max-idle-time: 30m
-      max-acquire-time: 60s
-      max-create-connection-time: 60s
+      max-idle-time: 30s
+      max-life-time: 300s
+      max-acquire-time: 5s
+      max-create-connection-time: 5s
       validation-query: SELECT 1
 
   data:

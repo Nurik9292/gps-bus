@@ -19,6 +19,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 
 
 @Component
@@ -31,6 +32,8 @@ public class VehicleEventHandler {
     private static final Duration ETA_ENRICHMENT_TIMEOUT = Duration.ofMillis(500);
 
     private static final int POSITION_CONCURRENCY = 16;
+    private static final int MAX_ETA_CONCURRENCY = 3;
+    private final Semaphore etaSemaphore = new Semaphore(MAX_ETA_CONCURRENCY);
     private static final int ROUTE_ASSIGNMENT_CONCURRENCY = 16;
     private static final int REGISTRATION_CONCURRENCY = 8;
 
@@ -191,12 +194,20 @@ public class VehicleEventHandler {
                     .doOnSuccess(v -> log.trace("Broadcasted position: {}", event.getVehicleId()));
         }
 
-        // Single broadcast: enriched with ETA if available within timeout, plain otherwise
-        return vehicleEtaEnricherService.enrichWithEta(msg)
-                .timeout(ETA_ENRICHMENT_TIMEOUT)
-                .onErrorReturn(msg)
-                .flatMap(webSocketPublisher::broadcastVehiclePosition)
-                .doOnSuccess(v -> log.trace("Broadcasted position: {}", event.getVehicleId()));
+        // ETA enrichment is limited to MAX_ETA_CONCURRENCY concurrent DB queries.
+        // If all slots are busy the message is broadcast without ETA to keep the
+        // connection pool free for route search and other requests.
+        if (etaSemaphore.tryAcquire()) {
+            return vehicleEtaEnricherService.enrichWithEta(msg)
+                    .timeout(ETA_ENRICHMENT_TIMEOUT)
+                    .onErrorReturn(msg)
+                    .doFinally(signal -> etaSemaphore.release())
+                    .flatMap(webSocketPublisher::broadcastVehiclePosition)
+                    .doOnSuccess(v -> log.trace("Broadcasted position (ETA): {}", event.getVehicleId()));
+        } else {
+            return webSocketPublisher.broadcastVehiclePosition(msg)
+                    .doOnSuccess(v -> log.trace("Broadcasted position (no ETA slot): {}", event.getVehicleId()));
+        }
     }
 
     private Mono<Boolean> updateRouteAssignmentCache(VehicleAssignedToRouteEvent event) {
