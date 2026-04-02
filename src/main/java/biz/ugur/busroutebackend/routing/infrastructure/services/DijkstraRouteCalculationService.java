@@ -30,7 +30,7 @@ import java.util.Set;
  * Enabled when routing.dijkstra.enabled=true.
  */
 @Service
-@ConditionalOnProperty(prefix = "routing.dijkstra", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(name = "routing.dijkstra.enabled", havingValue = "true")
 @Slf4j
 @RequiredArgsConstructor
 public class DijkstraRouteCalculationService implements RouteCalculationService {

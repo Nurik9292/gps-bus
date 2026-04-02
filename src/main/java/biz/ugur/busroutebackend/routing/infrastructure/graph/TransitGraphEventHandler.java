@@ -21,7 +21,7 @@ import java.util.List;
  * immediately after invalidation so the next route search doesn't stall.
  */
 @Component
-@ConditionalOnProperty(prefix = "routing.dijkstra", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(name = "routing.dijkstra.enabled", havingValue = "true")
 @Slf4j
 public class TransitGraphEventHandler {
 

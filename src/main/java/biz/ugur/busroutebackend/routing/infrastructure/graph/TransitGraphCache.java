@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Only active when routing.dijkstra.enabled=true.
  */
 @Component
-@ConditionalOnProperty(prefix = "routing.dijkstra", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(name = "routing.dijkstra.enabled", havingValue = "true")
 @Slf4j
 @RequiredArgsConstructor
 public class TransitGraphCache {

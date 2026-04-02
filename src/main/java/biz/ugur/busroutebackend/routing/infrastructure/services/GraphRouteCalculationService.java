@@ -22,7 +22,7 @@ import java.util.List;
 
 
 @Service
-@ConditionalOnProperty(prefix = "routing.dijkstra", name = "enabled", havingValue = "false", matchIfMissing = true)
+@ConditionalOnProperty(name = "routing.dijkstra.enabled", havingValue = "false", matchIfMissing = true)
 @Slf4j
 @RequiredArgsConstructor
 public class GraphRouteCalculationService implements RouteCalculationService {
