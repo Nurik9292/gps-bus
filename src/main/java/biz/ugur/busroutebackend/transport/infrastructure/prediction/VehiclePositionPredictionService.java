@@ -223,28 +223,13 @@ public class VehiclePositionPredictionService {
             }
 
         } else {
-            // Dead-reckoning mode (no route geometry available)
-            if (existing == null) {
-                predictedLat = latitude;
-                predictedLon = longitude;
-            } else {
-                double dist = DistanceCalculationService.haversineDistanceMeters(
-                        existing.getPredictedLatitude(), existing.getPredictedLongitude(),
-                        latitude, longitude);
-                double cf = properties.getCorrectionFactor();
-                if (dist <= MAX_CORRECTION_DISTANCE_METERS) {
-                    // Small gap: smooth blend toward real GPS
-                    predictedLat = existing.getPredictedLatitude() + cf * (latitude - existing.getPredictedLatitude());
-                    predictedLon = existing.getPredictedLongitude() + cf * (longitude - existing.getPredictedLongitude());
-                } else {
-                    // Fix 3: Large jump — keep current predicted, smoothly correct over cycles
-                    predictedLat = existing.getPredictedLatitude();
-                    predictedLon = existing.getPredictedLongitude();
-                    needsSmoothCorrection = true;
-                    log.debug("Smooth correction started for vehicle {}: {}m gap toward ({},{})",
-                            vehicleId, (int) dist, latitude, longitude);
-                }
-            }
+            // Dead-reckoning mode (no route geometry available).
+            // Always snap to real GPS position — outlier detection above already ensures
+            // the GPS is physically valid (< MAX_BUS_SPEED_MS × elapsed). Smooth correction
+            // is avoided here because it compounds with dead-reckoning each cycle and can
+            // diverge when GPS updates race with the prediction scheduler.
+            predictedLat = latitude;
+            predictedLon = longitude;
             fraction = -1;
         }
 
