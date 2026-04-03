@@ -257,7 +257,7 @@ public class VehiclePositionPredictionService {
                    .correctionCyclesLeft(SMOOTH_CORRECTION_CYCLES);
         }
 
-        vehicleStates.put(vehicleId, builder.build());
+        vehicleStates.put(vehicleId, builder.lastReceivedAt(Instant.now()).build());
         log.trace("GPS stored: vehicleId={}, speed={}km/h, inMotion={}, fraction={}",
                 vehicleId, speedKmh, inMotion, fraction);
     }
@@ -286,7 +286,11 @@ public class VehiclePositionPredictionService {
 
         List<VehiclePredictionState> activeStates = vehicleStates.values().stream()
                 .filter(state -> state.isInMotion() && state.getSpeedKmh() >= minSpeed)
-                .filter(state -> (now.toEpochMilli() - state.getLastGpsUpdate().toEpochMilli()) <= maxAgeMs)
+                // Use server receipt time, not GPS fix time. Fix timestamps can lag server
+                // by 5–30 s (batching + network); comparing fix time to maxAgeMs=10 s would
+                // exclude every vehicle. Receipt time is always within seconds of "now".
+                .filter(state -> state.getLastReceivedAt() != null
+                        && (now.toEpochMilli() - state.getLastReceivedAt().toEpochMilli()) <= maxAgeMs)
                 // For route-aware states: skip if at boundary (fractionOnRoute was reset to -1).
                 // For dead-reckoning states (routeCoordinates=null): always advance —
                 // these vehicles have no route assigned, so fractionOnRoute stays -1 forever
@@ -315,7 +319,10 @@ public class VehiclePositionPredictionService {
 
     private void cleanupStaleStates() {
         Instant cutoff = Instant.now().minusSeconds(300);
-        vehicleStates.entrySet().removeIf(e -> e.getValue().getLastGpsUpdate().isBefore(cutoff));
+        vehicleStates.entrySet().removeIf(e -> {
+            Instant received = e.getValue().getLastReceivedAt();
+            return received != null && received.isBefore(cutoff);
+        });
     }
 
     private boolean isAtRouteBoundary(VehiclePredictionState state) {

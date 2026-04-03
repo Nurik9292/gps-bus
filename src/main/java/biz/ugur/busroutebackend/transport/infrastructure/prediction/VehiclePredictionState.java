@@ -26,7 +26,15 @@ public class VehiclePredictionState {
     /** Heading in degrees (0 = North, 90 = East) */
     private double course;
     private boolean inMotion;
+    /** GPS fix timestamp from the device (used for deduplication and outlier time-delta). */
     private Instant lastGpsUpdate;
+    /**
+     * Server-side time when we last received a GPS update for this vehicle.
+     * Used for the prediction age filter — GPS fix timestamps can lag server time
+     * by 5–30 s (batching + network), so comparing fix time to maxAgeMs (10 s default)
+     * would immediately exclude every vehicle. Receipt time is always "now".
+     */
+    private Instant lastReceivedAt;
 
     // ---- Predicted position (updated each scheduler tick) ----
     private double predictedLatitude;

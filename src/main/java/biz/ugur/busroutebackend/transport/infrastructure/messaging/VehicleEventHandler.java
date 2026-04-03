@@ -118,9 +118,12 @@ public class VehicleEventHandler {
                 event.getVehicleId(), event.getLicensePlate());
 
         // When prediction is enabled, the prediction service (PositionPredictionScheduler)
-        // handles all WebSocket broadcasting every second with smooth, outlier-filtered positions.
-        // Sending raw GPS here would cause visual jumps on clients — so we skip it.
-        Mono<Void> broadcastMono = predictionProperties.isEnabled()
+        // handles all WebSocket broadcasting every second for MOVING vehicles.
+        // Stationary vehicles (isInMotion=false) are excluded from the prediction cycle,
+        // so we still broadcast their GPS directly to keep them visible on the map.
+        boolean handledByPrediction = predictionProperties.isEnabled()
+                && Boolean.TRUE.equals(event.getIsInMotion());
+        Mono<Void> broadcastMono = handledByPrediction
                 ? Mono.empty()
                 : broadcastPositionUpdate(event);
 
