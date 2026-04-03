@@ -294,7 +294,13 @@ public class VehiclePositionPredictionService {
         List<VehiclePredictionState> activeStates = vehicleStates.values().stream()
                 .filter(state -> state.isInMotion() && state.getSpeedKmh() >= minSpeed)
                 .filter(state -> (now.toEpochMilli() - state.getLastGpsUpdate().toEpochMilli()) <= maxAgeMs)
-                .filter(state -> state.getFractionOnRoute() >= 0) // skip boundary-reset states
+                // For route-aware states: skip if at boundary (fractionOnRoute was reset to -1).
+                // For dead-reckoning states (routeCoordinates=null): always advance —
+                // these vehicles have no route assigned, so fractionOnRoute stays -1 forever
+                // and without this exception they'd never get predicted movement between GPS batches.
+                .filter(state -> state.getRouteCoordinates() != null
+                        ? state.getFractionOnRoute() >= 0
+                        : true)
                 .toList();
 
         if (activeStates.isEmpty()) {

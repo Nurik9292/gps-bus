@@ -18,7 +18,7 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("license_plate")
     private final String licensePlate;
 
-    @JsonProperty("rout_number")
+    @JsonProperty("route_number")
     private final String routeNumber;
 
     @JsonProperty("latitude")
@@ -67,7 +67,7 @@ public class VehiclePositionWebSocketMessage {
     public VehiclePositionWebSocketMessage(
             @JsonProperty("vehicle_id") String vehicleId,
             @JsonProperty("license_plate") String licensePlate,
-            @JsonProperty("rout_number") String routeNumber,
+            @JsonProperty("route_number") String routeNumber,
             @JsonProperty("latitude") Double latitude,
             @JsonProperty("longitude") Double longitude,
             @JsonProperty("speed_kmh") Double speedKmh,
