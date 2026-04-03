@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.transport.application.services.VehicleEtaEnriche
 import biz.ugur.busroutebackend.transport.domain.event.VehicleAssignedToRouteEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent;
+import biz.ugur.busroutebackend.transport.infrastructure.prediction.PredictionProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
@@ -41,6 +42,7 @@ public class VehicleEventHandler {
     private final VehiclePositionWebSocketPublisher webSocketPublisher;
     private final ReactiveEventBus reactiveEventBus;
     private final VehicleEtaEnricherService vehicleEtaEnricherService;
+    private final PredictionProperties predictionProperties;
 
     private Disposable positionSubscription;
     private Disposable routeAssignmentSubscription;
@@ -49,11 +51,13 @@ public class VehicleEventHandler {
     public VehicleEventHandler(ReactiveRedisTemplate<String, Object> redisTemplate,
                                VehiclePositionWebSocketPublisher webSocketPublisher,
                                ReactiveEventBus reactiveEventBus,
-                               VehicleEtaEnricherService vehicleEtaEnricherService) {
+                               VehicleEtaEnricherService vehicleEtaEnricherService,
+                               PredictionProperties predictionProperties) {
         this.redisTemplate = redisTemplate;
         this.webSocketPublisher = webSocketPublisher;
         this.reactiveEventBus = reactiveEventBus;
         this.vehicleEtaEnricherService = vehicleEtaEnricherService;
+        this.predictionProperties = predictionProperties;
     }
 
     @PostConstruct
@@ -113,8 +117,15 @@ public class VehicleEventHandler {
         log.debug("Processing vehicle position update: vehicleId={}, plate={}",
                 event.getVehicleId(), event.getLicensePlate());
 
+        // When prediction is enabled, the prediction service (PositionPredictionScheduler)
+        // handles all WebSocket broadcasting every second with smooth, outlier-filtered positions.
+        // Sending raw GPS here would cause visual jumps on clients — so we skip it.
+        Mono<Void> broadcastMono = predictionProperties.isEnabled()
+                ? Mono.empty()
+                : broadcastPositionUpdate(event);
+
         return cacheVehiclePosition(event)
-                .then(broadcastPositionUpdate(event))
+                .then(broadcastMono)
                 .timeout(OPERATION_TIMEOUT)
                 .retryWhen(createRetrySpec("position update"))
                 .doOnSuccess(v -> log.trace("Vehicle position processed: {}", event.getVehicleId()))
