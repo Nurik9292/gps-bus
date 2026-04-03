@@ -20,7 +20,7 @@ public class DirectRouteQueryService {
     public Flux<DirectRouteResult> findDirectRoutes(List<BusStop> fromStops, List<BusStop> toStops) {
         long startTime = System.currentTimeMillis();
 
-        log.debug("🔍 Direct route search: {} origin stops → {} destination stops",
+        log.info("🔍 Direct route search: {} origin stops → {} destination stops",
                 fromStops.size(), toStops.size());
 
         if (fromStops.isEmpty() || toStops.isEmpty()) {
@@ -34,7 +34,7 @@ public class DirectRouteQueryService {
                         result.estimatedTravelMinutes()))
                 .doOnComplete(() -> {
                     long duration = System.currentTimeMillis() - startTime;
-                    log.debug("✅ Direct route search completed in {}ms", duration);
+                    log.info("✅ Direct route search completed in {}ms", duration);
                 })
                 .doOnError(error -> log.error("❌ Direct route search failed: {}", error.getMessage(), error));
     }

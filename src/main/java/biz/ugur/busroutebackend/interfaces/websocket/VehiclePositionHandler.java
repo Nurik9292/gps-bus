@@ -17,10 +17,13 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 import org.springframework.scheduling.annotation.Scheduled;
+import jakarta.annotation.PostConstruct;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,9 +35,9 @@ import java.util.stream.Collectors;
 @Slf4j
 public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePositionBroadcaster {
 
-    private static final int BUFFER_SIZE = 4096;
-
     private static final Duration SESSION_TIMEOUT = Duration.ofMinutes(5);
+    /** Real GPS messages older than this threshold are dropped before reaching WebSocket clients. */
+    private static final Duration MAX_GPS_AGE = Duration.ofMinutes(10);
 
     private static final long CLEANUP_INTERVAL_MS = 60_000;
 
@@ -47,9 +50,10 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
     private final AtomicInteger sessionCounter = new AtomicInteger(0);
     private final AtomicLong totalExpiredSessions = new AtomicLong(0);
 
-
+    // directBestEffort: без буфера, медленные подписчики просто пропускают обновления.
+    // Для GPS-позиций промежуточные обновления не важны — важна только последняя позиция.
     private final Sinks.Many<VehiclePositionWebSocketMessage> broadcastSink =
-            Sinks.many().multicast().onBackpressureBuffer(BUFFER_SIZE, false);
+            Sinks.many().multicast().directBestEffort();
 
     public VehiclePositionHandler(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                   ReactiveRedisTemplate<String, Object> redisTemplate,
@@ -59,8 +63,15 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.bufferMetrics = bufferMetrics;
+    }
 
-        subscribeToRedisUpdates();
+    @PostConstruct
+    public void init() {
+        try {
+            subscribeToRedisUpdates();
+        } catch (Exception e) {
+            log.warn("Redis pub/sub unavailable at startup, WebSocket live updates disabled: {}", e.getMessage());
+        }
     }
 
 
@@ -222,7 +233,7 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                 })
                 .filter(positionMsg -> isPositionInScope(positionMsg, config))
                 .onBackpressureLatest()
-                .bufferTimeout(50, Duration.ofMillis(500))
+                .bufferTimeout(50, Duration.ofMillis(100))
                 .takeWhile(ignored -> session.isOpen())
                 .filter(updates -> !updates.isEmpty())
                 .onBackpressureDrop(dropped ->
@@ -345,6 +356,13 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
 
     private void subscribeToRedisUpdates() {
         redisTemplate.listenToChannel("vehicle-position-updates")
+                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(2))
+                        .maxBackoff(Duration.ofSeconds(30))
+                        .doBeforeRetry(signal -> log.warn(
+                                "Redis vehicle-position-updates subscription lost (attempt {}), reconnecting in {}s: {}",
+                                signal.totalRetries() + 1,
+                                Math.min(2 << (int) Math.min(signal.totalRetries(), 4), 30),
+                                signal.failure().getMessage())))
                 .filter(Objects::nonNull)
                 .mapNotNull(message -> {
                     try {
@@ -380,37 +398,46 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                     }
                     return true;
                 })
+                // Fix 2: Drop real GPS messages with stale timestamps (>10 min old).
+                // Predicted messages always use LocalDateTime.now() so they are never stale.
+                .filter(msg -> {
+                    if (Boolean.TRUE.equals(msg.getPredicted())) return true; // predictions are always fresh
+                    if (msg.getTimestamp() == null) return true;
+                    LocalDateTime cutoff = LocalDateTime.now(ZoneOffset.UTC).minus(MAX_GPS_AGE);
+                    if (msg.getTimestamp().isBefore(cutoff)) {
+                        log.debug("Stale GPS dropped for vehicle {} (timestamp={})",
+                                msg.getVehicleId(), msg.getTimestamp());
+                        return false;
+                    }
+                    return true;
+                })
                 .subscribe(
                         this::emitWithMetrics,
-                        error -> log.error("Redis subscription error: {}", error.getMessage()),
-                        () -> log.info("Redis subscription completed")
+                        error -> {
+                            // After MAX_VALUE retries (never reached), just log.
+                            // In practice retryWhen above handles reconnection indefinitely.
+                            log.error("Redis vehicle-position subscription permanently failed: {}", error.getMessage());
+                        },
+                        () -> log.info("Redis vehicle-position subscription completed")
                 );
     }
 
 
     private void emitWithMetrics(VehiclePositionWebSocketMessage message) {
-        broadcastSink.emitNext(message, (signalType, emitResult) -> {
-            if (emitResult == Sinks.EmitResult.OK) {
-                bufferMetrics.recordEmitted();
-                return false;
-            }
+        Sinks.EmitResult result;
+        int retries = 0;
+        do {
+            result = broadcastSink.tryEmitNext(message);
+            retries++;
+        } while (result == Sinks.EmitResult.FAIL_NON_SERIALIZED && retries < 10);
 
-            if (emitResult == Sinks.EmitResult.FAIL_NON_SERIALIZED) {
-                return true;
-            }
-
-            if (emitResult == Sinks.EmitResult.FAIL_OVERFLOW) {
-                bufferMetrics.recordDropped(message.getVehicleId());
-                return false;
-            }
-
-            if (emitResult != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
-                    && emitResult != Sinks.EmitResult.FAIL_CANCELLED) {
-                log.warn("Failed to emit position update for vehicle {}: {}",
-                        message.getVehicleId(), emitResult);
-            }
-            return false;
-        });
+        if (result == Sinks.EmitResult.OK) {
+            bufferMetrics.recordEmitted();
+        } else if (result != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
+                && result != Sinks.EmitResult.FAIL_CANCELLED) {
+            bufferMetrics.recordDropped(message.getVehicleId());
+            log.debug("Dropped position update for vehicle {}: {}", message.getVehicleId(), result);
+        }
     }
 
     public void broadcastVehiclePosition(VehiclePositionWebSocketMessage message) {

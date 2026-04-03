@@ -21,18 +21,16 @@ public class MapMatchingService {
 
     /**
      * Projects {@code (gpsLat, gpsLon)} onto the nearest segment of {@code routePoints}.
+     * {@code totalRouteDistanceMeters} must be pre-computed (from {@code RouteGeometryCache})
+     * to avoid an O(n) scan on every call.
      * Returns the snapped position with its fraction along the route (0.0–1.0).
      * If the nearest segment is more than {@link #MAX_SNAP_DISTANCE_METERS} away,
      * {@link SnappedResult#snapped} is {@code false} and the original GPS is returned unchanged.
      */
     public SnappedResult snapToNearestSegment(double gpsLat, double gpsLon,
-                                               List<double[]> routePoints) {
-        if (routePoints == null || routePoints.size() < 2) {
-            return new SnappedResult(gpsLat, gpsLon, -1, Double.MAX_VALUE, false);
-        }
-
-        double totalLength = totalDistance(routePoints);
-        if (totalLength == 0) {
+                                               List<double[]> routePoints,
+                                               double totalRouteDistanceMeters) {
+        if (routePoints == null || routePoints.size() < 2 || totalRouteDistanceMeters == 0) {
             return new SnappedResult(gpsLat, gpsLon, -1, Double.MAX_VALUE, false);
         }
 
@@ -51,7 +49,7 @@ public class MapMatchingService {
                 minDist       = proj.distance;
                 bestLat       = proj.lat;
                 bestLon       = proj.lon;
-                bestFraction  = (accumLen + segLen * proj.t) / totalLength;
+                bestFraction  = (accumLen + segLen * proj.t) / totalRouteDistanceMeters;
             }
 
             accumLen += segLen;
@@ -67,18 +65,19 @@ public class MapMatchingService {
 
     /**
      * Interpolates the geographical position at {@code fraction} (0.0–1.0) along {@code routePoints}.
+     * {@code totalRouteDistanceMeters} must be pre-computed (from {@code RouteGeometryCache}).
      * Returns the last point if fraction ≥ 1.0, first point if ≤ 0.0.
      *
      * @return {@code [lat, lon]} pair
      */
-    public double[] interpolateRoutePoint(List<double[]> routePoints, double fraction) {
+    public double[] interpolateRoutePoint(List<double[]> routePoints, double fraction,
+                                          double totalRouteDistanceMeters) {
         if (routePoints == null || routePoints.isEmpty()) return null;
         if (fraction <= 0) return routePoints.get(0).clone();
         if (fraction >= 1) return routePoints.get(routePoints.size() - 1).clone();
 
-        double totalLen = totalDistance(routePoints);
-        double target   = fraction * totalLen;
-        double accum    = 0;
+        double target = fraction * totalRouteDistanceMeters;
+        double accum  = 0;
 
         for (int i = 0; i < routePoints.size() - 1; i++) {
             double[] a = routePoints.get(i);
@@ -101,15 +100,15 @@ public class MapMatchingService {
     /**
      * Derives the vehicle heading (degrees, 0=North, 90=East) from the direction of
      * the route segment at the given {@code fraction}.
+     * {@code totalRouteDistanceMeters} must be pre-computed (from {@code RouteGeometryCache}).
      * For backward direction the bearing is reversed by 180°.
      */
-    public double calculateCourseFromRoute(List<double[]> routePoints, double fraction, int direction) {
+    public double calculateCourseFromRoute(List<double[]> routePoints, double fraction,
+                                           int direction, double totalRouteDistanceMeters) {
         if (routePoints == null || routePoints.size() < 2) return 0;
 
-        // Find the segment index at this fraction
-        double totalLen = totalDistance(routePoints);
-        double target   = fraction * totalLen;
-        double accum    = 0;
+        double target  = fraction * totalRouteDistanceMeters;
+        double accum   = 0;
 
         int segIndex = routePoints.size() - 2; // default: last segment
         for (int i = 0; i < routePoints.size() - 1; i++) {
@@ -132,38 +131,41 @@ public class MapMatchingService {
 
     /**
      * Projects point {@code (lat, lon)} onto segment {@code a→b}.
-     * All coordinates are in degrees; result coordinates and distance in metres.
+     * Parameter {@code t} is computed in metric space (metres) to avoid distortion
+     * from unequal degree sizes (1° lat ≈ 111 km, 1° lon ≈ 88 km at lat 38°).
+     * Without this correction the projected point is skewed toward the wrong end
+     * of diagonal segments, causing snap errors of 20–30 m on long straight sections.
      */
     private ProjectionResult projectPointOnSegment(double lat, double lon,
                                                     double[] a, double[] b) {
-        double dy = b[0] - a[0]; // lat delta
-        double dx = b[1] - a[1]; // lon delta
+        // Convert degree deltas to approximate metres using midpoint latitude.
+        double midLat = (a[0] + b[0]) / 2.0;
+        double metersPerDegreeLon = METRES_PER_DEGREE_LAT * Math.cos(Math.toRadians(midLat));
 
-        if (dy == 0 && dx == 0) {
-            // Degenerate segment (zero-length)
+        double dyM = (b[0] - a[0]) * METRES_PER_DEGREE_LAT; // lat delta in metres
+        double dxM = (b[1] - a[1]) * metersPerDegreeLon;     // lon delta in metres
+
+        if (dyM == 0 && dxM == 0) {
             return new ProjectionResult(a[0], a[1], haversine(new double[]{lat, lon}, a), 0);
         }
 
-        double t = ((lat - a[0]) * dy + (lon - a[1]) * dx) / (dy * dy + dx * dx);
+        double pyM = (lat - a[0]) * METRES_PER_DEGREE_LAT;
+        double pxM = (lon - a[1]) * metersPerDegreeLon;
+
+        double t = (pyM * dyM + pxM * dxM) / (dyM * dyM + dxM * dxM);
         t = Math.max(0, Math.min(1, t));
 
-        double projLat = a[0] + t * dy;
-        double projLon = a[1] + t * dx;
+        double projLat = a[0] + t * (b[0] - a[0]);
+        double projLon = a[1] + t * (b[1] - a[1]);
         double dist = DistanceCalculationService.haversineDistanceMeters(lat, lon, projLat, projLon);
 
         return new ProjectionResult(projLat, projLon, dist, t);
     }
 
+    private static final double METRES_PER_DEGREE_LAT = 111_320.0;
+
     private static double haversine(double[] a, double[] b) {
         return DistanceCalculationService.haversineDistanceMeters(a[0], a[1], b[0], b[1]);
-    }
-
-    private static double totalDistance(List<double[]> points) {
-        double d = 0;
-        for (int i = 0; i < points.size() - 1; i++) {
-            d += haversine(points.get(i), points.get(i + 1));
-        }
-        return d;
     }
 
     /**

@@ -16,7 +16,8 @@ public class NearbyStopsQueryService {
     private final BusStopRepository busStopRepository;
 
     public Flux<BusStop> findStopsWithinRadius(Coordinates location, double radiusKm) {
-        log.debug("Finding stops within {}km of ({}, {})",
+        log.info(">>> R2dbc executing nearby stops SQL");
+        log.info("Finding stops within {}km of ({}, {})",
                 radiusKm,
                 location.getLatitudeAsDouble(),
                 location.getLongitudeAsDouble());
@@ -26,7 +27,7 @@ public class NearbyStopsQueryService {
                 location.getLongitudeAsDouble(),
                 radiusKm
         ).doOnComplete(() ->
-                log.debug("Completed nearby stops search for location ({}, {})",
+                log.info("Completed nearby stops search for location ({}, {})",
                         location.getLatitudeAsDouble(),
                         location.getLongitudeAsDouble())
         );

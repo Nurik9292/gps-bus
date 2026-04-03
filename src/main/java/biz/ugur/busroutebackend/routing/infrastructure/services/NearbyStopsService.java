@@ -38,6 +38,7 @@ public class NearbyStopsService {
     }
 
     public Mono<StopsContext> findStopsForBothLocations(SearchContext context) {
+        log.info(">>> findStopsForBothLocations starting");
         return Mono.zip(
                         findNearbyStops(context.fromLocation(), "origin"),
                         findNearbyStops(context.toLocation(), "destination")
@@ -80,8 +81,7 @@ public class NearbyStopsService {
     }
 
     private Mono<List<BusStop>> findNearbyStops(Coordinates location, String locationType) {
-        log.debug("Finding {} stops near ({}, {}) within {}km",
-                locationType, location.getLatitudeAsDouble(), location.getLongitudeAsDouble(), SEARCH_RADIUS_KM);
+        log.info(">>> findNearbyStops {} calling routeCalculationService", locationType);
 
         return routeCalculationService.findNearbyStops(location, SEARCH_RADIUS_KM)
                 .filter(this::isStopAccessible)

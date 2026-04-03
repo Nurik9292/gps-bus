@@ -19,11 +19,22 @@ import java.util.concurrent.ConcurrentHashMap;
 public class VehiclePositionPredictionService {
 
     private static final double METRES_PER_DEGREE_LAT = 111_320.0;
-
     private static final double DT_SECONDS = 1.0;
 
-
+    /** GPS within this distance from prediction → smooth blend; farther → smooth correction. */
     private static final double MAX_CORRECTION_DISTANCE_METERS = 50.0;
+    /** Max bus speed for outlier detection: 25 m/s = 90 km/h. */
+    private static final double MAX_BUS_SPEED_MS = 25.0;
+    /** Tolerance multiplier for outlier check (allows short bursts up to 2× max speed). */
+    private static final double OUTLIER_TOLERANCE = 2.0;
+    /** If GPS heading differs from route heading by more than this → flip direction. */
+    private static final double DIRECTION_FLIP_THRESHOLD_DEG = 90.0;
+    /** Number of prediction cycles over which a large GPS jump is smoothed. */
+    private static final int SMOOTH_CORRECTION_CYCLES = 5;
+    /** GPS older than this is rejected by prediction engine (same as WebSocket stale filter). */
+    private static final long MAX_GPS_AGE_MS = 10 * 60 * 1000L; // 10 minutes
+    /** If snapped GPS is this far from predicted → override realIsAhead (bus turned around). */
+    private static final double DIRECTION_CHANGE_DISTANCE_METERS = 150.0;
 
     private final ConcurrentHashMap<String, VehiclePredictionState> vehicleStates = new ConcurrentHashMap<>();
 
@@ -57,17 +68,47 @@ public class VehiclePositionPredictionService {
             return;
         }
 
+        // Fix #9: Reject stale GPS before it pollutes the prediction state map.
+        // Ancient positions (months/years old) cause incorrect outlier tolerance and
+        // interfere with direction detection when fresh GPS eventually arrives.
+        long gpsAgeMs = Instant.now().toEpochMilli() - timestamp.toEpochMilli();
+        if (gpsAgeMs > MAX_GPS_AGE_MS) {
+            log.trace("Stale GPS rejected in prediction engine for vehicle {}: age={}min",
+                    vehicleId, gpsAgeMs / 60_000);
+            return;
+        }
+
         VehiclePredictionState existing = vehicleStates.get(vehicleId);
 
+        // Deduplication: ignore if not newer than last known GPS
         if (existing != null && !timestamp.isAfter(existing.getLastGpsUpdate())) {
             log.trace("Ignoring duplicate GPS for vehicle {}: timestamp {} <= lastGpsUpdate {}",
                     vehicleId, timestamp, existing.getLastGpsUpdate());
             return;
         }
 
+        // Fix 4: Outlier detection — reject physically impossible GPS jumps
+        if (existing != null) {
+            long elapsedMs = timestamp.toEpochMilli() - existing.getLastGpsUpdate().toEpochMilli();
+            if (elapsedMs > 0 && elapsedMs < 300_000) {
+                double distFromLastGps = DistanceCalculationService.haversineDistanceMeters(
+                        existing.getGpsLatitude(), existing.getGpsLongitude(), latitude, longitude);
+                double maxPossibleDist = (elapsedMs / 1000.0) * MAX_BUS_SPEED_MS * OUTLIER_TOLERANCE;
+                if (distFromLastGps > maxPossibleDist) {
+                    log.warn("GPS outlier rejected for vehicle {}: {}m in {}ms (max {}m at {}km/h×{})",
+                            vehicleId, (int) distFromLastGps, elapsedMs,
+                            (int) maxPossibleDist, (int) (MAX_BUS_SPEED_MS * 3.6), OUTLIER_TOLERANCE);
+                    return;
+                }
+            }
+        }
+
         double predictedLat;
         double predictedLon;
         double fraction;
+        boolean needsSmoothCorrection = false;
+        double smoothTargetLat = latitude;
+        double smoothTargetLon = longitude;
 
         List<double[]> routeCoords = null;
         double totalDist = 0;
@@ -84,42 +125,97 @@ public class VehiclePositionPredictionService {
         }
 
         if (routeCoords != null) {
-            // Route-aware mode
             totalDist = routeGeometryCache.getTotalDistance(routeNumber, direction);
             MapMatchingService.SnappedResult snap =
-                    mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords);
+                    mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, totalDist);
+
+            // Fix 1: Validate direction via GPS heading — flip if route heading contradicts course
+            if (snap.snapped() && course > 1.0) {
+                double routeHeading = mapMatchingService.calculateCourseFromRoute(
+                        routeCoords, snap.fraction(), direction, totalDist);
+                double headingDiff = Math.abs(course - routeHeading);
+                if (headingDiff > 180) headingDiff = 360 - headingDiff;
+                if (headingDiff > DIRECTION_FLIP_THRESHOLD_DEG) {
+                    int flippedDir = (direction == 0) ? 1 : 0;
+                    List<double[]> flippedCoords = routeGeometryCache.getPoints(routeNumber, flippedDir);
+                    if (flippedCoords != null) {
+                        double flippedDist = routeGeometryCache.getTotalDistance(routeNumber, flippedDir);
+                        MapMatchingService.SnappedResult flippedSnap =
+                                mapMatchingService.snapToNearestSegment(latitude, longitude, flippedCoords, flippedDist);
+                        if (flippedSnap.snapped()) {
+                            log.debug("Direction corrected for vehicle {}: {} → {} (headingDiff={}°, course={}°, routeHeading={}°)",
+                                    vehicleId, direction, flippedDir,
+                                    (int) headingDiff, (int) course, (int) routeHeading);
+                            direction = flippedDir;
+                            routeCoords = flippedCoords;
+                            totalDist = flippedDist;
+                            snap = flippedSnap;
+                        }
+                    }
+                }
+            }
 
             if (snap.snapped()) {
                 double realFraction = snap.fraction();
                 double predictedFraction = (existing != null) ? existing.getFractionOnRoute() : -1;
 
-                boolean realIsAhead = (predictedFraction < 0)  // no prior state
+                boolean realIsAhead = (predictedFraction < 0)
                         || (direction == 0 && realFraction >= predictedFraction)
                         || (direction == 1 && realFraction <= predictedFraction);
 
+                // Fix #2: If snapped position is far from predicted, bus likely turned around
+                // at terminal. Override realIsAhead to prevent freezing on boundary.
+                if (!realIsAhead && existing != null) {
+                    double distFromPredicted = DistanceCalculationService.haversineDistanceMeters(
+                            existing.getPredictedLatitude(), existing.getPredictedLongitude(),
+                            snap.latitude(), snap.longitude());
+                    if (distFromPredicted > DIRECTION_CHANGE_DISTANCE_METERS) {
+                        log.debug("Direction change override for vehicle {}: {}m gap, accepting GPS (fraction {} → {})",
+                                vehicleId, (int) distFromPredicted, predictedFraction, realFraction);
+                        realIsAhead = true;
+                    }
+                }
+
                 if (realIsAhead) {
-                    // Bug 2 (route): real GPS is ahead — snap predicted forward
-                    predictedLat = snap.latitude();
-                    predictedLon = snap.longitude();
+                    // Fix #3: If snap position is far from current predicted (>MAX_CORRECTION),
+                    // use smooth correction instead of instant jump to avoid visual teleportation.
+                    if (existing != null) {
+                        double snapDist = DistanceCalculationService.haversineDistanceMeters(
+                                existing.getPredictedLatitude(), existing.getPredictedLongitude(),
+                                snap.latitude(), snap.longitude());
+                        if (snapDist > MAX_CORRECTION_DISTANCE_METERS) {
+                            needsSmoothCorrection = true;
+                            smoothTargetLat = snap.latitude();
+                            smoothTargetLon = snap.longitude();
+                            log.debug("Snap correction started for vehicle {}: {}m to route snap",
+                                    vehicleId, (int) snapDist);
+                        }
+                    }
+                    predictedLat = needsSmoothCorrection && existing != null
+                            ? existing.getPredictedLatitude() : snap.latitude();
+                    predictedLon = needsSmoothCorrection && existing != null
+                            ? existing.getPredictedLongitude() : snap.longitude();
                     fraction = realFraction;
-                    course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction);
+                    course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction, totalDist);
                 } else {
                     predictedLat = existing.getPredictedLatitude();
                     predictedLon = existing.getPredictedLongitude();
                     fraction = existing.getFractionOnRoute();
-                    course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction);
-                    log.trace("GPS behind predicted for vehicle {} (realFraction={}, predictedFraction={}); keeping predicted position",
+                    course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction, totalDist);
+                    log.trace("GPS behind predicted for vehicle {} (real={}, predicted={}); keeping predicted",
                             vehicleId, realFraction, predictedFraction);
                 }
             } else {
-                predictedLat = applyBlendingIfClose(existing, latitude, longitude);
-                predictedLon = applyBlendingIfClose_lon(existing, latitude, longitude);
+                // Not snapped to route — fall back to blended GPS position
+                predictedLat = blendOrAccept(existing, latitude, longitude, true);
+                predictedLon = blendOrAccept(existing, latitude, longitude, false);
                 fraction = -1;
                 routeCoords = null;
                 totalDist = 0;
             }
 
         } else {
+            // Dead-reckoning mode (no route geometry available)
             if (existing == null) {
                 predictedLat = latitude;
                 predictedLon = longitude;
@@ -127,21 +223,24 @@ public class VehiclePositionPredictionService {
                 double dist = DistanceCalculationService.haversineDistanceMeters(
                         existing.getPredictedLatitude(), existing.getPredictedLongitude(),
                         latitude, longitude);
-
+                double cf = properties.getCorrectionFactor();
                 if (dist <= MAX_CORRECTION_DISTANCE_METERS) {
-                    double cf = properties.getCorrectionFactor();
+                    // Small gap: smooth blend toward real GPS
                     predictedLat = existing.getPredictedLatitude() + cf * (latitude - existing.getPredictedLatitude());
                     predictedLon = existing.getPredictedLongitude() + cf * (longitude - existing.getPredictedLongitude());
                 } else {
+                    // Fix 3: Large jump — keep current predicted, smoothly correct over cycles
                     predictedLat = existing.getPredictedLatitude();
                     predictedLon = existing.getPredictedLongitude();
-                    log.trace("GPS {}m from predicted for vehicle {}; keeping predicted position", (int) dist, vehicleId);
+                    needsSmoothCorrection = true;
+                    log.debug("Smooth correction started for vehicle {}: {}m gap toward ({},{})",
+                            vehicleId, (int) dist, latitude, longitude);
                 }
             }
             fraction = -1;
         }
 
-        VehiclePredictionState state = VehiclePredictionState.builder()
+        VehiclePredictionState.VehiclePredictionStateBuilder builder = VehiclePredictionState.builder()
                 .vehicleId(vehicleId)
                 .licensePlate(licensePlate)
                 .routeNumber(routeNumber)
@@ -156,11 +255,17 @@ public class VehiclePositionPredictionService {
                 .routeCoordinates(routeCoords)
                 .totalRouteDistanceMeters(totalDist)
                 .fractionOnRoute(fraction)
-                .direction(direction)
-                .build();
+                .direction(direction);
 
-        vehicleStates.put(vehicleId, state);
-        log.trace("GPS update stored: vehicleId={}, speed={}km/h, inMotion={}, fraction={}",
+        if (needsSmoothCorrection) {
+            // smoothTargetLat/Lon is set to snap position (route-aware) or real GPS (dead-reckoning)
+            builder.correctionTargetLat(smoothTargetLat)
+                   .correctionTargetLon(smoothTargetLon)
+                   .correctionCyclesLeft(SMOOTH_CORRECTION_CYCLES);
+        }
+
+        vehicleStates.put(vehicleId, builder.build());
+        log.trace("GPS stored: vehicleId={}, speed={}km/h, inMotion={}, fraction={}",
                 vehicleId, speedKmh, inMotion, fraction);
     }
 
@@ -175,10 +280,21 @@ public class VehiclePositionPredictionService {
         long maxAgeMs = properties.getMaxAgeMs();
         double minSpeed = properties.getMinSpeedKmh();
 
+        // Fix #1: When bus reaches terminal, reset fractionOnRoute so the next real GPS
+        // update is accepted freely (predictedFraction < 0 → realIsAhead = true always).
+        // Without this, the bus freezes at the terminal until direction flips in DB,
+        // then jumps to wherever the bus actually is → teleportation.
+        vehicleStates.values().forEach(state -> {
+            if (isAtRouteBoundary(state)) {
+                vehicleStates.put(state.getVehicleId(),
+                        state.toBuilder().fractionOnRoute(-1).build());
+            }
+        });
+
         List<VehiclePredictionState> activeStates = vehicleStates.values().stream()
                 .filter(state -> state.isInMotion() && state.getSpeedKmh() >= minSpeed)
                 .filter(state -> (now.toEpochMilli() - state.getLastGpsUpdate().toEpochMilli()) <= maxAgeMs)
-                .filter(state -> !isAtRouteBoundary(state))
+                .filter(state -> state.getFractionOnRoute() >= 0) // skip boundary-reset states
                 .toList();
 
         if (activeStates.isEmpty()) {
@@ -212,16 +328,21 @@ public class VehiclePositionPredictionService {
                 || (state.getDirection() == 1 && f <= 0.0);
     }
 
-
     private VehiclePredictionState advanceState(VehiclePredictionState state) {
+        VehiclePredictionState advanced = advancePositionOnly(state);
+        return applySmoothCorrection(advanced);
+    }
+
+    /** Advances the predicted position by one DT_SECONDS step (route-aware or dead-reckoning). */
+    private VehiclePredictionState advancePositionOnly(VehiclePredictionState state) {
         double decayedSpeedKmh = state.getSpeedKmh() * properties.getDecayFactor();
 
         List<double[]> routeCoords = state.getRouteCoordinates();
-        if (routeCoords != null && state.getFractionOnRoute() >= 0
-                && state.getTotalRouteDistanceMeters() > 0) {
+        double totalRouteDistance = state.getTotalRouteDistanceMeters();
 
+        if (routeCoords != null && state.getFractionOnRoute() >= 0 && totalRouteDistance > 0) {
             double speedMs = decayedSpeedKmh / 3.6;
-            double fractionDelta = speedMs * DT_SECONDS / state.getTotalRouteDistanceMeters();
+            double fractionDelta = speedMs * DT_SECONDS / totalRouteDistance;
 
             double newFraction;
             if (state.getDirection() == 0) {
@@ -230,11 +351,11 @@ public class VehiclePositionPredictionService {
                 newFraction = Math.max(state.getFractionOnRoute() - fractionDelta, 0.0);
             }
 
-            double[] coords = mapMatchingService.interpolateRoutePoint(routeCoords, newFraction);
+            double[] coords = mapMatchingService.interpolateRoutePoint(routeCoords, newFraction, totalRouteDistance);
             if (coords == null) return state;
 
             double newCourse = mapMatchingService.calculateCourseFromRoute(
-                    routeCoords, newFraction, state.getDirection());
+                    routeCoords, newFraction, state.getDirection(), totalRouteDistance);
 
             return state.toBuilder()
                     .speedKmh(decayedSpeedKmh)
@@ -245,19 +366,38 @@ public class VehiclePositionPredictionService {
                     .build();
         }
 
+        // Dead-reckoning: advance along course heading
         double speedMs   = decayedSpeedKmh / 3.6;
         double courseRad = Math.toRadians(state.getCourse());
-
         double dNorth = speedMs * DT_SECONDS * Math.cos(courseRad);
         double dEast  = speedMs * DT_SECONDS * Math.sin(courseRad);
-
-        double dLat = dNorth / METRES_PER_DEGREE_LAT;
-        double dLon = dEast  / (METRES_PER_DEGREE_LAT * Math.cos(Math.toRadians(state.getPredictedLatitude())));
+        double dLat   = dNorth / METRES_PER_DEGREE_LAT;
+        double dLon   = dEast  / (METRES_PER_DEGREE_LAT * Math.cos(Math.toRadians(state.getPredictedLatitude())));
 
         return state.toBuilder()
                 .speedKmh(decayedSpeedKmh)
                 .predictedLatitude(state.getPredictedLatitude() + dLat)
                 .predictedLongitude(state.getPredictedLongitude() + dLon)
+                .build();
+    }
+
+    /**
+     * Fix 3: Gradually blends the predicted position toward the GPS correction target.
+     * Each cycle moves 1/N of the remaining distance, giving a smooth visual transition.
+     */
+    private VehiclePredictionState applySmoothCorrection(VehiclePredictionState state) {
+        if (state.getCorrectionCyclesLeft() <= 0) return state;
+
+        double alpha  = 1.0 / state.getCorrectionCyclesLeft();
+        double corrLat = state.getPredictedLatitude()
+                + alpha * (state.getCorrectionTargetLat() - state.getPredictedLatitude());
+        double corrLon = state.getPredictedLongitude()
+                + alpha * (state.getCorrectionTargetLon() - state.getPredictedLongitude());
+
+        return state.toBuilder()
+                .predictedLatitude(corrLat)
+                .predictedLongitude(corrLon)
+                .correctionCyclesLeft(state.getCorrectionCyclesLeft() - 1)
                 .build();
     }
 
@@ -283,33 +423,29 @@ public class VehiclePositionPredictionService {
         return Mono.fromRunnable(() -> {
             try {
                 directBroadcaster.broadcastDirect(msg);
-                log.trace("Prediction broadcasted direct: vehicleId={}", state.getVehicleId());
+                log.trace("Prediction broadcasted: vehicleId={}", state.getVehicleId());
             } catch (Exception e) {
                 log.warn("Failed to broadcast prediction for vehicle {}: {}", state.getVehicleId(), e.getMessage());
             }
         });
     }
 
-    private double applyBlendingIfClose(VehiclePredictionState existing, double realLat, double realLon) {
-        if (existing == null) return realLat;
+    /**
+     * Returns a blended or accepted coordinate value (lat if {@code isLat=true}, lon otherwise).
+     * Within correction distance → smooth blend; farther → accept GPS directly (route-unaware fallback).
+     */
+    private double blendOrAccept(VehiclePredictionState existing, double realLat, double realLon,
+                                  boolean isLat) {
+        if (existing == null) return isLat ? realLat : realLon;
         double dist = DistanceCalculationService.haversineDistanceMeters(
                 existing.getPredictedLatitude(), existing.getPredictedLongitude(), realLat, realLon);
+        double cf = properties.getCorrectionFactor();
         if (dist <= MAX_CORRECTION_DISTANCE_METERS) {
-            return existing.getPredictedLatitude()
-                    + properties.getCorrectionFactor() * (realLat - existing.getPredictedLatitude());
+            return isLat
+                    ? existing.getPredictedLatitude() + cf * (realLat - existing.getPredictedLatitude())
+                    : existing.getPredictedLongitude() + cf * (realLon - existing.getPredictedLongitude());
         }
-        return existing.getPredictedLatitude();
-    }
-
-    private double applyBlendingIfClose_lon(VehiclePredictionState existing, double realLat, double realLon) {
-        if (existing == null) return realLon;
-        double dist = DistanceCalculationService.haversineDistanceMeters(
-                existing.getPredictedLatitude(), existing.getPredictedLongitude(), realLat, realLon);
-        if (dist <= MAX_CORRECTION_DISTANCE_METERS) {
-            return existing.getPredictedLongitude()
-                    + properties.getCorrectionFactor() * (realLon - existing.getPredictedLongitude());
-        }
-        return existing.getPredictedLongitude();
+        return isLat ? realLat : realLon;
     }
 
     public int getActiveStateCount() {

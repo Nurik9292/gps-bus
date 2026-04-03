@@ -39,27 +39,9 @@ public class GraphRouteCalculationService implements RouteCalculationService {
 
     @Override
     public Flux<BusStop> findNearbyStops(Coordinates location, double radiusKm) {
-        log.debug("🔍 Finding stops within {}km of ({}, {})",
+        log.info("Finding stops within {}km of ({}, {})",
                 radiusKm, location.getLatitudeAsDouble(), location.getLongitudeAsDouble());
-
-        return cacheService.getCachedNearbyStops(location, radiusKm)
-                .flatMapMany(cachedStopIds -> {
-                    log.debug("✅ Cache hit: Found {} cached stop IDs", cachedStopIds.size());
-                    // TODO: Fetch full BusStop objects from repository by IDs
-
-                    return findNearbyStopsFromDatabase(location, radiusKm);
-                })
-                .switchIfEmpty(findNearbyStopsFromDatabase(location, radiusKm));
-    }
-
-    private Flux<BusStop> findNearbyStopsFromDatabase(Coordinates location, double radiusKm) {
-        return nearbyStopsQueryService.findStopsWithinRadius(location, radiusKm)
-                .collectList()
-                .flatMapMany(stops -> {
-                    return cacheService.cacheNearbyStops(location, radiusKm, stops)
-                            .thenMany(Flux.fromIterable(stops));
-                })
-                .doOnComplete(() -> log.debug("✅ Completed nearby stops search"));
+        return nearbyStopsQueryService.findStopsWithinRadius(location, radiusKm);
     }
 
 
@@ -67,7 +49,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
     public Flux<DirectRouteResult> findDirectRoutes(List<BusStop> fromStops, List<BusStop> toStops) {
         long startTime = System.currentTimeMillis();
 
-        log.debug("🔍 Finding direct routes: {} origin stops → {} destination stops",
+        log.info("🔍 Finding direct routes: {} origin stops → {} destination stops",
                 fromStops.size(), toStops.size());
 
         if (fromStops.isEmpty() || toStops.isEmpty()) {
@@ -78,7 +60,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
         return directRouteQueryService.findDirectRoutes(fromStops, toStops)
                 .doOnComplete(() -> {
                     long duration = System.currentTimeMillis() - startTime;
-                    log.debug("✅ Direct route search completed in {}ms", duration);
+                    log.info("✅ Direct route search completed in {}ms", duration);
                 })
                 .doOnError(error -> log.error("❌ Direct route search failed: {}", error.getMessage(), error));
     }
@@ -89,7 +71,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                                                                 double maxTransferDistanceKm) {
         long startTime = System.currentTimeMillis();
 
-        log.debug("🔍 Finding one-transfer routes: {} origin stops → {} destination stops (max transfer: {}km)",
+        log.info("🔍 Finding one-transfer routes: {} origin stops → {} destination stops (max transfer: {}km)",
                 fromStops.size(), toStops.size(), maxTransferDistanceKm);
 
         if (fromStops.isEmpty() || toStops.isEmpty()) {
@@ -99,12 +81,12 @@ public class GraphRouteCalculationService implements RouteCalculationService {
 
         double adjustedDistance = calculateOptimalTransferDistance(fromStops, toStops, maxTransferDistanceKm);
 
-        log.debug("📏 Adjusted transfer distance: {}km → {}km", maxTransferDistanceKm, adjustedDistance);
+        log.info("📏 Adjusted transfer distance: {}km → {}km", maxTransferDistanceKm, adjustedDistance);
 
         return oneTransferQueryService.findRoutesWithOneTransfer(fromStops, toStops, adjustedDistance)
                 .doOnComplete(() -> {
                     long duration = System.currentTimeMillis() - startTime;
-                    log.debug("✅ One-transfer search completed in {}ms", duration);
+                    log.info("✅ One-transfer search completed in {}ms", duration);
                 })
                 .doOnError(error -> log.error("❌ One-transfer search failed: {}", error.getMessage(), error));
     }
@@ -115,7 +97,7 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                                                                     double maxTransferDistanceKm) {
         long startTime = System.currentTimeMillis();
 
-        log.debug("🔍 Finding two-transfer routes: {} origin stops → {} destination stops (max transfer: {}km)",
+        log.info("🔍 Finding two-transfer routes: {} origin stops → {} destination stops (max transfer: {}km)",
                 fromStops.size(), toStops.size(), maxTransferDistanceKm);
 
         if (fromStops.isEmpty() || toStops.isEmpty()) {
@@ -125,12 +107,12 @@ public class GraphRouteCalculationService implements RouteCalculationService {
 
         double adjustedDistance = calculateOptimalTransferDistance(fromStops, toStops, maxTransferDistanceKm);
 
-        log.debug("📏 Adjusted transfer distance: {}km → {}km", maxTransferDistanceKm, adjustedDistance);
+        log.info("📏 Adjusted transfer distance: {}km → {}km", maxTransferDistanceKm, adjustedDistance);
 
         return twoTransferQueryService.findRoutesWithTwoTransfers(fromStops, toStops, adjustedDistance)
                 .doOnComplete(() -> {
                     long duration = System.currentTimeMillis() - startTime;
-                    log.debug("✅ Two-transfer search completed in {}ms", duration);
+                    log.info("✅ Two-transfer search completed in {}ms", duration);
                 })
                 .doOnError(error -> log.error("❌ Two-transfer search failed: {}", error.getMessage(), error));
     }
@@ -168,16 +150,16 @@ public class GraphRouteCalculationService implements RouteCalculationService {
                                                     double maxDistance) {
         if (fromStops.size() > 6 && toStops.size() > 6) {
             double adjusted = Math.min(maxDistance, 0.3);
-            log.debug("📏 Many stops detected: adjusting transfer distance to {}km", adjusted);
+            log.info("📏 Many stops detected: adjusting transfer distance to {}km", adjusted);
             return adjusted;
         }
         if (fromStops.size() <= 3 || toStops.size() <= 3) {
             double adjusted = Math.min(maxDistance, 0.5);
-            log.debug("📏 Few stops detected: adjusting transfer distance to {}km", adjusted);
+            log.info("📏 Few stops detected: adjusting transfer distance to {}km", adjusted);
             return adjusted;
         }
         double adjusted = Math.min(maxDistance, 0.4);
-        log.debug("📏 Medium stops detected: adjusting transfer distance to {}km", adjusted);
+        log.info("📏 Medium stops detected: adjusting transfer distance to {}km", adjusted);
         return adjusted;
     }
 }

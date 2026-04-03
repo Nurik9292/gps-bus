@@ -14,7 +14,7 @@ public class TripPlanningException extends RoutingDomainException {
         INVALID_DESTINATION("Invalid destination location"),
         SAME_ORIGIN_DESTINATION("Origin and destination are the same"),
         DISTANCE_TOO_LONG("Distance between origin and destination is too long"),
-        DISTANCE_TOO_SHORT("Minimum distance is 100 meters"),
+        DISTANCE_TOO_SHORT("Minimum distance is 500 meters"),
         LOCATION_OUT_OF_BOUNDS("Locations must be within Turkmenistan"),
         MISSING_LOCATION("From and To locations are required"),
         NO_SERVICE_AVAILABLE("No bus service available for the requested time"),

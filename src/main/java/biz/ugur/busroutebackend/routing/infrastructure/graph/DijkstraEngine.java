@@ -43,6 +43,10 @@ public class DijkstraEngine {
      * Find up to K best paths from fromStopId to toStopId.
      */
     public List<TransitPath> findPaths(TransitGraph graph, String fromStopId, String toStopId) {
+        return findPaths(graph, fromStopId, toStopId, K_PATHS);
+    }
+
+    public List<TransitPath> findPaths(TransitGraph graph, String fromStopId, String toStopId, int maxPaths) {
         if (fromStopId.equals(toStopId)) return Collections.emptyList();
         if (graph.getStop(fromStopId) == null || graph.getStop(toStopId) == null) {
             return Collections.emptyList();
@@ -51,7 +55,7 @@ public class DijkstraEngine {
         List<TransitPath> results = new ArrayList<>();
         Set<String> penalizedRoutes = new HashSet<>();
 
-        for (int k = 0; k < K_PATHS; k++) {
+        for (int k = 0; k < maxPaths; k++) {
             TransitPath path = runDijkstra(graph, fromStopId, toStopId, penalizedRoutes);
             if (path == null) break;
 
@@ -66,21 +70,23 @@ public class DijkstraEngine {
                                     Set<String> penalizedRoutes) {
         PriorityQueue<DijkstraState> pq = new PriorityQueue<>(Comparator.comparingInt(s -> s.cost));
         Map<String, Integer> dist = new HashMap<>();
+        // predecessor map: stateKey -> (prevStateKey, fromStopId of the edge, edge taken)
+        Map<String, EdgeRecord> prev = new HashMap<>();
 
         String startKey = stateKey(fromStopId, null);
         dist.put(startKey, 0);
-        pq.offer(new DijkstraState(0, fromStopId, null, 0, Collections.emptyList()));
+        pq.offer(new DijkstraState(0, fromStopId, null, 0));
 
         while (!pq.isEmpty()) {
             DijkstraState cur = pq.poll();
             String curKey = stateKey(cur.stopId, cur.lastBusRouteId);
 
-            // Skip if we've already found a better cost for this state
+            // Skip stale entries
             Integer bestCost = dist.get(curKey);
             if (bestCost != null && bestCost < cur.cost) continue;
 
             if (cur.stopId.equals(toStopId)) {
-                return new TransitPath(cur.segments, cur.cost, cur.transfers);
+                return reconstructPath(cur.cost, cur.transfers, curKey, startKey, prev);
             }
 
             for (TransitEdge edge : graph.getEdges(cur.stopId)) {
@@ -113,20 +119,34 @@ public class DijkstraEngine {
 
                 if (!dist.containsKey(nextKey) || dist.get(nextKey) > newCost) {
                     dist.put(nextKey, newCost);
-
-                    List<TransitPathSegment> newSegs = new ArrayList<>(cur.segments);
-                    newSegs.add(new TransitPathSegment(
-                            cur.stopId, edge.toStopId(),
-                            edge.type(),
-                            edge.weightMinutes(), // actual travel time, not penalized cost
-                            edge.routeNumber(), edge.routeId()
-                    ));
-                    pq.offer(new DijkstraState(newCost, edge.toStopId(), newLastBusRouteId, newTransfers, newSegs));
+                    prev.put(nextKey, new EdgeRecord(curKey, cur.stopId, edge));
+                    pq.offer(new DijkstraState(newCost, edge.toStopId(), newLastBusRouteId, newTransfers));
                 }
             }
         }
 
         return null; // No path found
+    }
+
+    /** Reconstructs the segment list by walking the predecessor map backwards. */
+    private TransitPath reconstructPath(int totalCost, int transfers,
+                                        String finalKey, String startKey,
+                                        Map<String, EdgeRecord> prev) {
+        List<TransitPathSegment> segments = new ArrayList<>();
+        String curKey = finalKey;
+
+        while (!curKey.equals(startKey) && prev.containsKey(curKey)) {
+            EdgeRecord rec = prev.get(curKey);
+            segments.add(0, new TransitPathSegment(
+                    rec.fromStopId(), rec.edge().toStopId(),
+                    rec.edge().type(),
+                    rec.edge().weightMinutes(), // actual travel time, not penalized cost
+                    rec.edge().routeNumber(), rec.edge().routeId()
+            ));
+            curKey = rec.prevKey();
+        }
+
+        return new TransitPath(segments, totalCost, transfers);
     }
 
     private String stateKey(String stopId, String lastBusRouteId) {
@@ -137,7 +157,9 @@ public class DijkstraEngine {
             int cost,
             String stopId,
             String lastBusRouteId, // null = no bus taken yet, or last move was walking
-            int transfers,
-            List<TransitPathSegment> segments
+            int transfers
     ) {}
+
+    /** Predecessor edge record for path reconstruction. */
+    private record EdgeRecord(String prevKey, String fromStopId, TransitEdge edge) {}
 }

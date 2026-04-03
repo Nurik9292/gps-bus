@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -37,12 +38,32 @@ public class RouteGeometryCache {
 
     @PostConstruct
     public void init() {
+        loadWithRetry();
+    }
+
+    /**
+     * Loads all active route geometries with exponential-backoff retry.
+     * If the R2DBC connection is not yet ready at startup (common in Docker),
+     * the previous implementation failed permanently — leaving the cache empty
+     * and causing all buses to fall into dead-reckoning until app restart.
+     * Now retries up to 5 times: delays 2s, 4s, 8s, 16s, 32s.
+     */
+    private void loadWithRetry() {
         busRouteRepository.findActiveRoutes()
                 .doOnNext(this::cacheRoute)
-                .doOnError(e -> log.error("Failed to load route geometries into prediction cache: {}", e.getMessage()))
+                .retryWhen(reactor.util.retry.Retry.backoff(5, Duration.ofSeconds(2))
+                        .maxBackoff(Duration.ofSeconds(32))
+                        .doBeforeRetry(signal -> log.warn(
+                                "Route geometry cache load failed (attempt {}), retrying in {}s: {}",
+                                signal.totalRetries() + 1,
+                                Math.min(2 << (int) signal.totalRetries(), 32),
+                                signal.failure().getMessage())))
+                .doOnError(e -> log.error(
+                        "Route geometry cache failed after all retries — prediction will use dead-reckoning: {}",
+                        e.getMessage()))
                 .subscribe(
                         route -> {},
-                        error -> log.error("Route geometry cache init error", error),
+                        error -> log.error("Route geometry cache init error (all retries exhausted)", error),
                         () -> log.info("Route geometry cache loaded: {} entries", pointsCache.size())
                 );
     }

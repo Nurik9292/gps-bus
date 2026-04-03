@@ -44,9 +44,16 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
         return nearbyStopsQueryService.findStopsWithinRadius(location, radiusKm);
     }
 
+    private static final int DIRECT_STOP_LIMIT = 5;
+
     @Override
     public Flux<DirectRouteResult> findDirectRoutes(List<BusStop> fromStops, List<BusStop> toStops) {
         if (fromStops.isEmpty() || toStops.isEmpty()) return Flux.empty();
+
+        List<BusStop> limitedFrom = fromStops.subList(0, Math.min(DIRECT_STOP_LIMIT, fromStops.size()));
+        List<BusStop> limitedTo = toStops.subList(0, Math.min(DIRECT_STOP_LIMIT, toStops.size()));
+        log.info("Dijkstra direct: {}×{} stop pairs ({} from, {} to truncated to {})",
+                limitedFrom.size(), limitedTo.size(), fromStops.size(), toStops.size(), DIRECT_STOP_LIMIT);
 
         return graphCache.getGraph()
                 .flatMap(graph -> Mono.fromCallable(() -> {
@@ -54,12 +61,12 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
                     List<DirectRouteResult> results = new ArrayList<>();
                     Set<String> seen = new HashSet<>();
 
-                    for (BusStop fromStop : fromStops) {
-                        for (BusStop toStop : toStops) {
+                    for (BusStop fromStop : limitedFrom) {
+                        for (BusStop toStop : limitedTo) {
                             String fromId = fromStop.getId().getValue();
                             String toId = toStop.getId().getValue();
 
-                            for (TransitPath path : dijkstraEngine.findPaths(graph, fromId, toId)) {
+                            for (TransitPath path : dijkstraEngine.findPaths(graph, fromId, toId, 2)) {
                                 List<TransitPathSegment> collapsed = path.collapsed();
                                 List<TransitPathSegment> busSegs = busSegments(collapsed);
 
@@ -85,7 +92,7 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
                         }
                     }
 
-                    log.debug("✅ Dijkstra direct routes: {} results in {}ms", results.size(),
+                    log.info("Dijkstra direct routes: {} results in {}ms", results.size(),
                             System.currentTimeMillis() - start);
                     return results;
                 }).subscribeOn(Schedulers.boundedElastic()))
@@ -98,14 +105,18 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
                                                                double maxTransferDistanceKm) {
         if (fromStops.isEmpty() || toStops.isEmpty()) return Flux.empty();
 
+        List<BusStop> limitedFrom = fromStops.subList(0, Math.min(DIRECT_STOP_LIMIT, fromStops.size()));
+        List<BusStop> limitedTo = toStops.subList(0, Math.min(DIRECT_STOP_LIMIT, toStops.size()));
+        log.info("Dijkstra one-transfer: {}×{} stop pairs", limitedFrom.size(), limitedTo.size());
+
         return graphCache.getGraph()
                 .flatMap(graph -> Mono.fromCallable(() -> {
                     long start = System.currentTimeMillis();
                     List<TransferRouteResult> results = new ArrayList<>();
                     Set<String> seen = new HashSet<>();
 
-                    for (BusStop fromStop : fromStops) {
-                        for (BusStop toStop : toStops) {
+                    for (BusStop fromStop : limitedFrom) {
+                        for (BusStop toStop : limitedTo) {
                             String fromId = fromStop.getId().getValue();
                             String toId = toStop.getId().getValue();
 
@@ -142,7 +153,7 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
                         }
                     }
 
-                    log.debug("✅ Dijkstra one-transfer routes: {} results in {}ms", results.size(),
+                    log.info("Dijkstra one-transfer routes: {} results in {}ms", results.size(),
                             System.currentTimeMillis() - start);
                     return results;
                 }).subscribeOn(Schedulers.boundedElastic()))
@@ -155,14 +166,18 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
                                                                    double maxTransferDistanceKm) {
         if (fromStops.isEmpty() || toStops.isEmpty()) return Flux.empty();
 
+        List<BusStop> limitedFrom = fromStops.subList(0, Math.min(DIRECT_STOP_LIMIT, fromStops.size()));
+        List<BusStop> limitedTo = toStops.subList(0, Math.min(DIRECT_STOP_LIMIT, toStops.size()));
+        log.info("Dijkstra two-transfer: {}×{} stop pairs", limitedFrom.size(), limitedTo.size());
+
         return graphCache.getGraph()
                 .flatMap(graph -> Mono.fromCallable(() -> {
                     long start = System.currentTimeMillis();
                     List<TwoTransferRouteResult> results = new ArrayList<>();
                     Set<String> seen = new HashSet<>();
 
-                    for (BusStop fromStop : fromStops) {
-                        for (BusStop toStop : toStops) {
+                    for (BusStop fromStop : limitedFrom) {
+                        for (BusStop toStop : limitedTo) {
                             String fromId = fromStop.getId().getValue();
                             String toId = toStop.getId().getValue();
 
@@ -207,7 +222,7 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
                         }
                     }
 
-                    log.debug("✅ Dijkstra two-transfer routes: {} results in {}ms", results.size(),
+                    log.info("Dijkstra two-transfer routes: {} results in {}ms", results.size(),
                             System.currentTimeMillis() - start);
                     return results;
                 }).subscribeOn(Schedulers.boundedElastic()))

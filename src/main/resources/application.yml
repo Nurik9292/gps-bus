@@ -571,8 +571,8 @@ ugur:
     # Minimum speed below which dead reckoning is not applied (km/h)
     min-speed-kmh: ${PREDICTION_MIN_SPEED_KMH:3.0}
     # Per-cycle velocity decay factor applied to speedKmh
-    decay-factor: ${PREDICTION_DECAY_FACTOR:0.92}
+    decay-factor: ${PREDICTION_DECAY_FACTOR:0.98}
     # Blend factor when correcting predicted position on new GPS fix
     correction-factor: ${PREDICTION_CORRECTION_FACTOR:0.7}
     # Phase 2: snap predicted position to nearest route geometry
-    snap-to-route: ${PREDICTION_SNAP_TO_ROUTE:false}
+    snap-to-route: ${PREDICTION_SNAP_TO_ROUTE:true}

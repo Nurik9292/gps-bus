@@ -14,7 +14,7 @@ public class TripValidationService {
 
     private final DistanceCalculationService distanceCalculationService;
 
-    private static final double MIN_TRIP_DISTANCE_METERS = 100.0;
+    private static final double MIN_TRIP_DISTANCE_METERS = 0.0;
     private static final double MAX_TRIP_DISTANCE_METERS = 100_000.0;
 
     public void validateTripLocations(Coordinates origin, Coordinates destination) {

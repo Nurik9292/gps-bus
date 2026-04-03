@@ -54,6 +54,7 @@ public class ParallelRouteSearchService {
                 context.toLocation().getLatitudeAsDouble(),
                 context.toLocation().getLongitudeAsDouble());
 
+        log.info("[{}] >>> Step 1: Finding nearby stops", context.searchId());
         return nearbyStopsService.findStopsForBothLocations(context)
                 .timeout(Duration.ofSeconds(5))
                 .doOnNext(stopsContext -> log.info("[{}] 📍 Found stops: from={}, to={}",

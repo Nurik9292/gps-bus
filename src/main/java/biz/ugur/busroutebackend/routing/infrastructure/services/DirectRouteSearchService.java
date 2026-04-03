@@ -28,7 +28,7 @@ public class DirectRouteSearchService {
     private static final Duration SEARCH_TIMEOUT = Duration.ofSeconds(15);
     private static final Duration OPTION_BUILD_TIMEOUT = Duration.ofSeconds(5);
     private static final int MAX_RESULTS = 5;
-    private static final int BUILD_CONCURRENCY = 4;
+    private static final int BUILD_CONCURRENCY = 2;
 
     public DirectRouteSearchService(RouteCalculationService routeCalculationService, DirectRouteOptionBuilder optionBuilder) {
         this.routeCalculationService = routeCalculationService;
@@ -62,7 +62,7 @@ public class DirectRouteSearchService {
     }
 
     private boolean isRouteViable(RouteCalculationService.DirectRouteResult route) {
-        return route.estimatedTravelMinutes() >= 2 && route.estimatedTravelMinutes() <= 120;
+        return route.estimatedTravelMinutes() >= 4 && route.estimatedTravelMinutes() <= 120;
     }
 
     private List<RouteCalculationService.DirectRouteResult> sortByProximity(

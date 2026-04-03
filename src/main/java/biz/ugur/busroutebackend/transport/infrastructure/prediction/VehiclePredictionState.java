@@ -53,4 +53,24 @@ public class VehiclePredictionState {
     /** 0 = forward (fraction grows), 1 = backward (fraction decreases). */
     @Builder.Default
     private int direction = 0;
+
+    // ---- Phase 3: smooth GPS correction (dead-reckoning mode) ----
+
+    /**
+     * Target latitude toward which the predicted position is smoothly corrected.
+     * Zero when no correction is active.
+     */
+    @Builder.Default
+    private double correctionTargetLat = 0;
+
+    /** Target longitude for smooth correction. Zero when no correction is active. */
+    @Builder.Default
+    private double correctionTargetLon = 0;
+
+    /**
+     * Number of prediction cycles remaining until the smooth correction finishes.
+     * Zero means no correction is active.
+     */
+    @Builder.Default
+    private int correctionCyclesLeft = 0;
 }

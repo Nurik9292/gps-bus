@@ -158,13 +158,6 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
             );
         }
 
-        double distance = calculateDistance(request.getFrom(), request.getTo());
-        if (distance < 100) {
-            return ValidationResult.invalid(
-                    TripPlanningException.PlanningErrorType.DISTANCE_TOO_SHORT
-            );
-        }
-
         return ValidationResult.valid();
     }
 
