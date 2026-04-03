@@ -25,8 +25,10 @@ public class VehiclePositionPredictionService {
     private static final double MAX_CORRECTION_DISTANCE_METERS = 50.0;
     /** Max bus speed for outlier detection: 25 m/s = 90 km/h. */
     private static final double MAX_BUS_SPEED_MS = 25.0;
-    /** Tolerance multiplier for outlier check (allows short bursts up to 2× max speed). */
-    private static final double OUTLIER_TOLERANCE = 2.0;
+    /** Tolerance multiplier for outlier check.
+     *  1.0 = strict (reject GPS implying >90 km/h — city bus physical limit).
+     *  GPS batch updates every ~7s: 200m in 7s = 103 km/h → rejected, prediction continues smoothly. */
+    private static final double OUTLIER_TOLERANCE = 1.0;
     /** If GPS heading differs from route heading by more than this → flip direction. */
     private static final double DIRECTION_FLIP_THRESHOLD_DEG = 90.0;
     /** Number of prediction cycles over which a large GPS jump is smoothed. */
@@ -195,7 +197,13 @@ public class VehiclePositionPredictionService {
                             ? existing.getPredictedLatitude() : snap.latitude();
                     predictedLon = needsSmoothCorrection && existing != null
                             ? existing.getPredictedLongitude() : snap.longitude();
-                    fraction = realFraction;
+                    // When smooth correction is active, keep the old fraction so the route
+                    // interpolation stays in sync with the position being smoothed.
+                    // The fraction advances naturally each prediction tick, converging toward
+                    // the real GPS fraction as the position blends toward the snap point.
+                    fraction = needsSmoothCorrection && existing != null && existing.getFractionOnRoute() >= 0
+                            ? existing.getFractionOnRoute()
+                            : realFraction;
                     course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction, totalDist);
                 } else {
                     predictedLat = existing.getPredictedLatitude();
