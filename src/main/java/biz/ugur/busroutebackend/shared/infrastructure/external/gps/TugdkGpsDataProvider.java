@@ -38,6 +38,8 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
     private final GpsFetchOptimizationProperties optimizationProperties;
     private final GpsFetchStrategyMetricsRecorder metricsRecorder;
 
+    private static final Duration MAX_FALLBACK_CACHE_AGE = Duration.ofMinutes(2);
+
     private final AtomicReference<CachedPositions> cache = new AtomicReference<>(CachedPositions.empty());
 
     public TugdkGpsDataProvider(
@@ -93,8 +95,10 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
         CachedPositions cached = cache.get();
         if (cached.isValid(cacheTimeout)) {
             metricsRecorder.recordCacheHit(deviceCount, "TUGDK");
+            log.debug("[GPS_PIPELINE] TUGDK_CACHE_HIT age={}s positions={}", cached.ageSeconds(), cached.positions().size());
             return Mono.just(filterPositions(cached.positions(), deviceIdSet, deviceCount));
         }
+        log.debug("[GPS_PIPELINE] TUGDK_CACHE_MISS age={}s → fetching", cached.ageSeconds());
 
         if (shouldUseSelectiveFetch(deviceCount)) {
             return fetchPositionsSelectively(deviceIds, deviceIdSet);
@@ -166,13 +170,18 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
                 deviceIds != null ? deviceIds.size() : 0, throwable.getMessage());
 
         CachedPositions cached = cache.get();
-        if (cached.hasData()) {
+        if (cached.hasData() && !cached.isTooStale(MAX_FALLBACK_CACHE_AGE)) {
             Set<String> deviceIdSet = Set.copyOf(Objects.requireNonNull(deviceIds));
             List<GpsPositionDTO> filtered = filterPositions(cached.positions(), deviceIdSet, deviceIds.size());
-            log.info("[TUGDK] Returning {} stale cached positions from fallback", filtered.size());
+            log.info("[TUGDK] Returning {} cached positions (age={}s) from circuit-breaker fallback",
+                    filtered.size(), cached.ageSeconds());
             return Mono.just(filtered);
         }
 
+        if (cached.hasData()) {
+            log.warn("[TUGDK] Cache too stale for fallback: age={}s > max={}s",
+                    cached.ageSeconds(), MAX_FALLBACK_CACHE_AGE.toSeconds());
+        }
         return Mono.just(List.of());
     }
 
@@ -221,11 +230,16 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
         log.warn("[TUGDK] Circuit breaker fallback for fetchAllPositions: {}", throwable.getMessage());
 
         CachedPositions cached = cache.get();
-        if (cached.hasData()) {
-            log.info("[TUGDK] Returning {} stale cached positions from fallback", cached.positions().size());
+        if (cached.hasData() && !cached.isTooStale(MAX_FALLBACK_CACHE_AGE)) {
+            log.info("[TUGDK] Returning {} cached positions (age={}s) from circuit-breaker fallback",
+                    cached.positions().size(), cached.ageSeconds());
             return Mono.just(cached.positions());
         }
 
+        if (cached.hasData()) {
+            log.warn("[TUGDK] Cache too stale for fallback: age={}s > max={}s",
+                    cached.ageSeconds(), MAX_FALLBACK_CACHE_AGE.toSeconds());
+        }
         return Mono.just(List.of());
     }
 
@@ -236,6 +250,8 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
 
         log.info("[TUGDK] Fetched {} positions ({} valid) from API",
                 responses.size(), positions.size());
+        log.debug("[GPS_PIPELINE] TUGDK_FETCH_DONE raw={} valid={} dropped={}",
+                responses.size(), positions.size(), responses.size() - positions.size());
 
         return positions;
     }
@@ -245,11 +261,16 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
                 error.getClass().getSimpleName(), error.getMessage());
 
         CachedPositions cached = cache.get();
-        if (cached.hasData()) {
-            log.info("[TUGDK] Returning {} stale cached positions due to error", cached.positions().size());
+        if (cached.hasData() && !cached.isTooStale(MAX_FALLBACK_CACHE_AGE)) {
+            log.info("[TUGDK] Returning {} cached positions (age={}s) due to fetch error",
+                    cached.positions().size(), cached.ageSeconds());
             return Mono.just(cached.positions());
         }
 
+        if (cached.hasData()) {
+            log.warn("[TUGDK] Cache too stale to use on error: age={}s > max={}s",
+                    cached.ageSeconds(), MAX_FALLBACK_CACHE_AGE.toSeconds());
+        }
         return Mono.just(List.of());
     }
 
@@ -294,12 +315,21 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
             return !positions.isEmpty();
         }
 
+        long ageMs() {
+            return System.currentTimeMillis() - timestamp;
+        }
+
+        long ageSeconds() {
+            return ageMs() / 1000;
+        }
+
         boolean isValid(Duration timeout) {
-            if (positions.isEmpty()) {
-                return false;
-            }
-            long age = System.currentTimeMillis() - timestamp;
-            return age < timeout.toMillis();
+            if (positions.isEmpty()) return false;
+            return ageMs() < timeout.toMillis();
+        }
+
+        boolean isTooStale(Duration maxAge) {
+            return ageMs() >= maxAge.toMillis();
         }
     }
 }

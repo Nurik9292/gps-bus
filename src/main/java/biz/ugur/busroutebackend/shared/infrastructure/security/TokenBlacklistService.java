@@ -106,7 +106,7 @@ public class TokenBlacklistService {
                     }
                 })
                 .doOnError(error -> log.error("Error checking refresh token blacklist status: {}", error.getMessage(), error))
-                .onErrorReturn(false); // В случае ошибки Redis считаем что токен не в blacklist
+                .onErrorReturn(false); 
     }
 
     public Mono<Void> permanentlyBlacklistToken(String token) {
@@ -146,13 +146,10 @@ public class TokenBlacklistService {
 
         log.warn("Blacklisting all tokens for admin: {}", adminId);
 
-        // В реальной реализации здесь можно было бы хранить mapping
-        // adminId -> список активных токенов, но для простоты
-        // используем pattern-based blacklisting
         String pattern = "blacklist:user:" + adminId;
 
         return redisTemplate.opsForValue()
-                .set(pattern, BLACKLIST_VALUE, Duration.ofDays(30)) // 30 дней blacklist
+                .set(pattern, BLACKLIST_VALUE, Duration.ofDays(30))
                 .doOnSuccess(result -> log.warn("All tokens blacklisted for admin: {}", adminId))
                 .doOnError(error -> log.error("Error blacklisting all user tokens: {}", error.getMessage(), error))
                 .then();

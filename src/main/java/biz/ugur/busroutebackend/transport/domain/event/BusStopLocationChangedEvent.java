@@ -18,16 +18,11 @@ public record BusStopLocationChangedEvent(
         this(stopId, newLatitude, newLongitude, Instant.now());
     }
 
-    /**
-     * Convenience constructor using Coordinates value object
-     */
+
     public BusStopLocationChangedEvent(BusStopId stopId, Coordinates coordinates) {
         this(stopId, coordinates.getLatitude(), coordinates.getLongitude(), Instant.now());
     }
 
-    /**
-     * Get coordinates as value object
-     */
     public Coordinates getCoordinates() {
         return Coordinates.of(newLatitude, newLongitude);
     }

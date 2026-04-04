@@ -24,11 +24,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Dijkstra-based implementation of RouteCalculationService.
- * Uses an in-memory transit graph to find routes without touching the database.
- * Enabled when routing.dijkstra.enabled=true.
- */
 @Service
 @ConditionalOnProperty(name = "routing.dijkstra.enabled", havingValue = "true")
 @Slf4j
@@ -258,17 +253,12 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
         });
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
-
-    /** Extract only BUS_RIDE segments from a collapsed path. */
+   
     private List<TransitPathSegment> busSegments(List<TransitPathSegment> collapsed) {
         return collapsed.stream().filter(TransitPathSegment::isBusRide).toList();
     }
 
-    /**
-     * Walking distance (km) from the input fromStop to the bus boarding stop.
-     * Non-zero only when the algorithm used a walking edge before the first bus.
-     */
+
     private double leadingWalkKm(List<TransitPathSegment> collapsed) {
         if (!collapsed.isEmpty() && collapsed.get(0).isWalking()) {
             return minutesToKm(collapsed.get(0).costMinutes());
@@ -276,9 +266,7 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
         return 0.0;
     }
 
-    /**
-     * Walking distance (km) from the last bus stop to the input toStop.
-     */
+
     private double trailingWalkKm(List<TransitPathSegment> collapsed) {
         if (!collapsed.isEmpty() && collapsed.get(collapsed.size() - 1).isWalking()) {
             return minutesToKm(collapsed.get(collapsed.size() - 1).costMinutes());
@@ -286,11 +274,7 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
         return 0.0;
     }
 
-    /**
-     * Minutes to wait / walk between two consecutive bus segments in a collapsed path.
-     * If there are walking segments between them, their cost is summed.
-     * Minimum value is 2 minutes (boarding wait).
-     */
+
     private int transferWaitMinutes(List<TransitPathSegment> collapsed,
                                     TransitPathSegment firstBus, TransitPathSegment secondBus) {
         int firstIdx = -1, secondIdx = -1;
@@ -312,7 +296,6 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
         return Math.max(2, walkTime);
     }
 
-    /** Convert walking minutes to approximate km at 5 km/h. */
     private double minutesToKm(int minutes) {
         return minutes * 5.0 / 60.0;
     }

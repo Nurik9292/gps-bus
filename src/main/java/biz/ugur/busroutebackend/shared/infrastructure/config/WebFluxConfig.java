@@ -20,14 +20,6 @@ public class WebFluxConfig implements WebFluxConfigurer {
     @Value("${app.storage.avatars.base-path:/app/data/avatars}")
     private String avatarsBasePath;
 
-    /**
-     * Suppress the "client response body has been released due to cancellation" error that
-     * Reactor Netty emits when a WebClient request is cancelled (e.g. by .timeout()) at the
-     * exact moment the HTTP response body starts arriving. This is a race condition in Reactor
-     * Netty, not a bug in application logic — the cancellation itself works correctly, the
-     * request is abandoned, and no data is lost. Without this hook the error gets logged as
-     * ERROR via the default onErrorDropped handler, which is misleading.
-     */
     @PostConstruct
     public void configureReactorHooks() {
         Hooks.onErrorDropped(error -> {

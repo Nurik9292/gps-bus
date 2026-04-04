@@ -215,8 +215,6 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
             return responseBuilder.createErrorResponseFromException(tripEx);
         }
 
-        // ТЕХНИЧЕСКИЕ ОШИБКИ → пробрасываем в GlobalExceptionHandler (HTTP 5xx)
-        // НЕ преобразуем в TripPlanningException!
         log.error("[{}] Technical error during trip search after {}ms: {}",
                 context.searchId(), duration, error.getMessage(), error);
 

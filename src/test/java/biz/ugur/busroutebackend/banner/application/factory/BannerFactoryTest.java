@@ -188,7 +188,7 @@ class BannerFactoryTest {
                 .as(StepVerifier::create)
                 .assertNext(updateBanner -> {
                     assertNotNull(updateBanner);
-                    assertEquals(COMPRESS_CONTENT, updateBanner.getContent()); // content сохраняется если null передан
+                    assertEquals(COMPRESS_CONTENT, updateBanner.getContent());
                     assertEquals(UPDATE_TITLE, updateBanner.getTitle().getValue());
                     assertEquals(UPDATE_PROCESS_IMAGE_URL, updateBanner.getImageUrl().getValue());
                 })

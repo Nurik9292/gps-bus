@@ -73,8 +73,8 @@ public class VehicleShiftScheduler {
     public void applySecondShift() {
         log.info("Second shift starting at 14:00 (Ashgabat) - applying SECOND shift assignments, preserving FULL_DAY");
         executeShiftChangeWithPreserve(
-                List.of(ShiftType.SECOND, ShiftType.FULL_DAY),  // preserve these
-                List.of(ShiftType.SECOND)                        // apply only SECOND
+                List.of(ShiftType.SECOND, ShiftType.FULL_DAY), 
+                List.of(ShiftType.SECOND)                      
         );
     }
 

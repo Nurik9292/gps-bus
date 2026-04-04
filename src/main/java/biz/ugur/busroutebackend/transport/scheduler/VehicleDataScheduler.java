@@ -92,11 +92,6 @@ public class VehicleDataScheduler {
             return;
         }
 
-        // publishOn (not subscribeOn) is required here:
-        // Mono.delay() emits on Schedulers.parallel() which in Reactor Netty maps to
-        // reactor-http-epoll threads. subscribeOn only affects the subscribe signal upstream,
-        // leaving all downstream operators (including the GPS update work) on the event loop.
-        // publishOn switches the DOWNSTREAM thread, keeping GPS I/O work off the event loop.
         schedulerDisposable = Mono.delay(UPDATE_INTERVAL)
                 .publishOn(Schedulers.boundedElastic())
                 .flatMap(tick -> {
@@ -119,9 +114,17 @@ public class VehicleDataScheduler {
     private Mono<Void> executeWithLock() {
         Duration lockTimeout = lockProperties.getGpsSchedulerLockTimeout();
 
+        Mono<RedisDistributedLock.LockHandle> lockMono = distributedLock
+                .tryAcquire(GPS_UPDATE_LOCK_NAME, lockTimeout)
+                .timeout(Duration.ofSeconds(5))
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[GPS_PIPELINE] LOCK_BLOCKED — cannot acquire '{}', held by another instance (TTL={}). GPS update skipped.",
+                            GPS_UPDATE_LOCK_NAME, lockTimeout);
+                    return Mono.empty();
+                }));
+
         return Mono.usingWhen(
-                distributedLock.tryAcquire(GPS_UPDATE_LOCK_NAME, lockTimeout)
-                        .timeout(Duration.ofSeconds(5)),
+                lockMono,
 
                 lockHandle -> {
                     Instant startTime = Instant.now();
@@ -153,12 +156,23 @@ public class VehicleDataScheduler {
         Duration batchTimeout = schedulerProperties.getGps().getBatchTimeout();
         Duration totalTimeout = schedulerProperties.getGps().getTotalTimeout();
 
+        log.debug("[GPS_PIPELINE] CYCLE_START providers={}", gpsDataAggregator.getEnabledProviderCount());
+
         return vehicleRepository.findAllDeviceIdsGroupedByProvider()
+                .doOnNext(grouped -> {
+                    int total = grouped.values().stream().mapToInt(List::size).sum();
+                    grouped.forEach((provider, ids) ->
+                            log.debug("[GPS_PIPELINE] FETCH_START provider={} devices={}",
+                                    provider.getCode(), ids.size()));
+                    log.debug("[GPS_PIPELINE] FETCH_START total_devices={}", total);
+                })
                 .flatMap(this::fetchPositionsIfNotEmpty)
+                .doOnNext(positions ->
+                        log.debug("[GPS_PIPELINE] FETCH_DONE received={}", positions.size()))
                 .flatMapIterable(positions -> positions)
                 .buffer(batchSize)
                 .parallel(parallelWorkers)
-                .runOn(Schedulers.boundedElastic())  // GPS batch work is I/O-bound (DB+Redis+events)
+                .runOn(Schedulers.boundedElastic()) 
                 .flatMap(batch -> processBatch(batch, batchTimeout))
                 .sequential()
                 .reduce(VehiclePositionUpdateResult.empty(), VehiclePositionUpdateResult::merge)
@@ -199,8 +213,9 @@ public class VehicleDataScheduler {
     private Mono<VehiclePositionUpdateResult> handleSuccess(VehiclePositionUpdateResult result, Instant startTime) {
         Duration duration = Duration.between(startTime, Instant.now());
 
-        log.debug("GPS update: {}ms, updated={}, failed={}",
-                duration.toMillis(), result.updatedCount(), result.failedCount());
+        log.debug("[GPS_PIPELINE] CYCLE_DONE duration={}ms updated={} created={} failed={} invalid={}",
+                duration.toMillis(), result.updatedCount(), result.createdCount(),
+                result.failedCount(), result.invalidCount());
 
         return statisticsService.saveUpdateStats(result, duration)
                 .thenReturn(result);

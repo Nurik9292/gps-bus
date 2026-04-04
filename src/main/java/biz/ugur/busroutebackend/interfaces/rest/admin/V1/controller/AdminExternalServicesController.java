@@ -18,10 +18,7 @@ import reactor.core.publisher.Mono;
 
 import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN_EXTERNAL_SERVICES;
 
-/**
- * REST API controller for managing external services (Admin only)
- * Provides CRUD operations for external API access management
- */
+
 @RestController
 @RequestMapping(V1_ADMIN_EXTERNAL_SERVICES)
 @CrossOrigin(origins = "*")
@@ -58,10 +55,7 @@ public class AdminExternalServicesController extends BaseController {
         return AdminExternalServicesController.class.getSimpleName();
     }
 
-    /**
-     * Get all external services
-     * GET /api/v1/admin/external-services
-     */
+   
     @GetMapping
     public Mono<ResponseEntity<ApiResponse<ExternalServiceListDTO>>> getAllExternalServices(
             @RequestParam(defaultValue = "false") boolean activeOnly) {
@@ -72,10 +66,7 @@ public class AdminExternalServicesController extends BaseController {
         return ok(getAllExternalServicesUseCase.execute());
     }
 
-    /**
-     * Get external service by ID
-     * GET /api/v1/admin/external-services/{id}
-     */
+  
     @GetMapping("/{id}")
     public Mono<ResponseEntity<ApiResponse<ExternalServiceDTO>>> getExternalServiceById(
             @PathVariable String id) {
@@ -83,11 +74,7 @@ public class AdminExternalServicesController extends BaseController {
         return ok(getExternalServiceByIdUseCase.execute(id));
     }
 
-    /**
-     * Create new external service
-     * POST /api/v1/admin/external-services
-     * Returns the generated API token (only shown once!)
-     */
+  
     @PostMapping
     public Mono<ResponseEntity<ApiResponse<ExternalServiceDTO>>> createExternalService(
             @Valid @RequestBody CreateExternalServiceRequest request) {
@@ -97,10 +84,6 @@ public class AdminExternalServicesController extends BaseController {
                 .flatMap(dto -> created(Mono.just(dto)));
     }
 
-    /**
-     * Update external service
-     * PUT /api/v1/admin/external-services/{id}
-     */
     @PutMapping("/{id}")
     public Mono<ResponseEntity<ApiResponse<ExternalServiceDTO>>> updateExternalService(
             @PathVariable String id,
@@ -109,10 +92,7 @@ public class AdminExternalServicesController extends BaseController {
         return ok(updateExternalServiceUseCase.execute(id, request));
     }
 
-    /**
-     * Block (deactivate) external service
-     * POST /api/v1/admin/external-services/{id}/block
-     */
+
     @PostMapping("/{id}/block")
     public Mono<ResponseEntity<ApiResponse<ExternalServiceDTO>>> blockExternalService(
             @PathVariable String id,
@@ -123,10 +103,7 @@ public class AdminExternalServicesController extends BaseController {
                 .flatMap(dto -> ok(Mono.just(dto)));
     }
 
-    /**
-     * Unblock (activate) external service
-     * POST /api/v1/admin/external-services/{id}/unblock
-     */
+  
     @PostMapping("/{id}/unblock")
     public Mono<ResponseEntity<ApiResponse<ExternalServiceDTO>>> unblockExternalService(
             @PathVariable String id) {
@@ -136,11 +113,7 @@ public class AdminExternalServicesController extends BaseController {
                 .flatMap(dto -> ok(Mono.just(dto)));
     }
 
-    /**
-     * Delete external service
-     * DELETE /api/v1/admin/external-services/{id}
-     * This immediately revokes API access
-     */
+  
     @DeleteMapping("/{id}")
     public Mono<ResponseEntity<Void>> deleteExternalService(
             @PathVariable String id) {
@@ -150,9 +123,7 @@ public class AdminExternalServicesController extends BaseController {
                 .then(noContent());
     }
 
-    /**
-     * Helper method to get current admin ID from security context
-     */
+   
     private Mono<AdminId> getCurrentAdminId() {
         return ReactiveSecurityContextHolder.getContext()
                 .map(SecurityContext::getAuthentication)

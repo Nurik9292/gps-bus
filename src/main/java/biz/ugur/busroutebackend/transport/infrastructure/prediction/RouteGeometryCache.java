@@ -11,20 +11,14 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * In-memory cache of route geometry points.
- * Key format: {@code routeNumber + "_0"} (forward) or {@code routeNumber + "_1"} (backward).
- * Each value is a list of {@code [lat, lon]} pairs derived from the route's WKT LINESTRING.
- *
- * Loaded once at startup; a route change event should call {@link #refreshRoute(String)} as needed.
- */
+
 @Component
 @Slf4j
 public class RouteGeometryCache {
 
-    /** Key suffix for forward direction */
+  
     public static final String FORWARD  = "_0";
-    /** Key suffix for backward direction */
+
     public static final String BACKWARD = "_1";
 
     private final ConcurrentHashMap<String, List<double[]>> pointsCache    = new ConcurrentHashMap<>();
@@ -41,13 +35,7 @@ public class RouteGeometryCache {
         loadWithRetry();
     }
 
-    /**
-     * Loads all active route geometries with exponential-backoff retry.
-     * If the R2DBC connection is not yet ready at startup (common in Docker),
-     * the previous implementation failed permanently — leaving the cache empty
-     * and causing all buses to fall into dead-reckoning until app restart.
-     * Now retries up to 5 times: delays 2s, 4s, 8s, 16s, 32s.
-     */
+    
     private void loadWithRetry() {
         busRouteRepository.findActiveRoutes()
                 .doOnNext(this::cacheRoute)
@@ -68,26 +56,19 @@ public class RouteGeometryCache {
                 );
     }
 
-    /**
-     * Returns cached point list for a route/direction key, or {@code null} if absent or empty.
-     */
+
     public List<double[]> getPoints(String routeNumber, int direction) {
         String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
         return pointsCache.get(key);
     }
 
-    /**
-     * Total distance of a cached route in metres, or {@code 0} if absent.
-     */
+    
     public double getTotalDistance(String routeNumber, int direction) {
         String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
         return distanceCache.getOrDefault(key, 0.0);
     }
 
-    /**
-     * Re-fetch a single route from the DB and update its cache entries.
-     * Useful when a route geometry changes.
-     */
+ 
     public void refreshRoute(String routeNumber) {
         busRouteRepository.findByRouteNumber(routeNumber)
                 .doOnNext(this::cacheRoute)
@@ -97,7 +78,6 @@ public class RouteGeometryCache {
                 );
     }
 
-    // ---- helpers ----
 
     private void cacheRoute(BusRoute route) {
         String routeNumber = route.getRouteNumber();
@@ -120,10 +100,7 @@ public class RouteGeometryCache {
         }
     }
 
-    /**
-     * Parses {@code LINESTRING(lon1 lat1, lon2 lat2, ...)} into {@code [lat, lon]} pairs.
-     * WKT stores coordinates as lon lat (GIS convention); we flip to [lat, lon] internally.
-     */
+   
     static List<double[]> parseWkt(String wkt) {
         String trimmed = wkt.trim();
         if (!trimmed.startsWith("LINESTRING(") || !trimmed.endsWith(")")) {
@@ -137,7 +114,7 @@ public class RouteGeometryCache {
             if (parts.length < 2) throw new IllegalArgumentException("Bad point: " + tokens[i]);
             double lon = Double.parseDouble(parts[0]);
             double lat = Double.parseDouble(parts[1]);
-            result[i] = new double[]{lat, lon};  // store as [lat, lon]
+            result[i] = new double[]{lat, lon}; 
         }
         return List.of(result);
     }

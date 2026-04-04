@@ -14,10 +14,6 @@ public class R2dbcTransitGraphDataRepository implements TransitGraphDataReposito
 
     private final DatabaseClient db;
 
-    /**
-     * Returns directed bus-ride edges: consecutive stop pairs in the same route+direction.
-     * Weight is estimated as route_duration / (stop_count - 1), minimum 2 minutes.
-     */
     @Override
     public Flux<BusEdgeRecord> findAllConsecutiveStopEdges() {
         String sql = """
@@ -62,10 +58,6 @@ public class R2dbcTransitGraphDataRepository implements TransitGraphDataReposito
                 .doOnError(e -> log.error("Failed to load bus edges for graph: {}", e.getMessage()));
     }
 
-    /**
-     * Returns bidirectional walking edges between stops within maxWalkingMeters.
-     * Walking speed assumed 5 km/h → 83.3 m/min.
-     */
     @Override
     public Flux<WalkingEdgeRecord> findAllWalkingEdges(double maxWalkingMeters) {
         String sql = """

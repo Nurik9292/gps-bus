@@ -18,18 +18,6 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 
-/**
- * Dijkstra-based path finder for the transit graph.
- *
- * State: (stopId, lastBusRouteId) — the last bus route taken to arrive at stopId.
- * Null lastBusRouteId means: started here, or last move was walking.
- *
- * Transfer counting: a transfer is recorded when boarding a bus whose route differs
- * from the last bus route ridden (lastBusRouteId != edge.routeId).
- *
- * K-paths: run Dijkstra up to K times; after each iteration, penalize the routes
- * used in the found path so the next iteration finds a genuinely different alternative.
- */
 @Component
 @Slf4j
 public class DijkstraEngine {
@@ -37,11 +25,8 @@ public class DijkstraEngine {
     private static final int TRANSFER_PENALTY_MINUTES = 5;
     private static final int MAX_TRANSFERS = 2;
     private static final int K_PATHS = 3;
-    private static final int ROUTE_PENALTY_MINUTES = 30; // penalty for routes used in previous paths
+    private static final int ROUTE_PENALTY_MINUTES = 30;
 
-    /**
-     * Find up to K best paths from fromStopId to toStopId.
-     */
     public List<TransitPath> findPaths(TransitGraph graph, String fromStopId, String toStopId) {
         return findPaths(graph, fromStopId, toStopId, K_PATHS);
     }
@@ -70,7 +55,6 @@ public class DijkstraEngine {
                                     Set<String> penalizedRoutes) {
         PriorityQueue<DijkstraState> pq = new PriorityQueue<>(Comparator.comparingInt(s -> s.cost));
         Map<String, Integer> dist = new HashMap<>();
-        // predecessor map: stateKey -> (prevStateKey, fromStopId of the edge, edge taken)
         Map<String, EdgeRecord> prev = new HashMap<>();
 
         String startKey = stateKey(fromStopId, null);
@@ -81,7 +65,6 @@ public class DijkstraEngine {
             DijkstraState cur = pq.poll();
             String curKey = stateKey(cur.stopId, cur.lastBusRouteId);
 
-            // Skip stale entries
             Integer bestCost = dist.get(curKey);
             if (bestCost != null && bestCost < cur.cost) continue;
 
@@ -98,7 +81,6 @@ public class DijkstraEngine {
                 if (edge.type() == EdgeType.BUS_RIDE) {
                     String edgeRouteId = edge.routeId();
 
-                    // Transfer: boarding a bus different from the last one ridden
                     if (cur.lastBusRouteId != null && !cur.lastBusRouteId.equals(edgeRouteId)) {
                         newTransfers = cur.transfers + 1;
                         if (newTransfers > MAX_TRANSFERS) continue;
@@ -106,13 +88,10 @@ public class DijkstraEngine {
                     }
                     newLastBusRouteId = edgeRouteId;
 
-                    // Penalize routes used in previous K-path iterations
                     if (penalizedRoutes.contains(edgeRouteId)) {
                         edgeCost += ROUTE_PENALTY_MINUTES;
                     }
                 }
-                // Walking: lastBusRouteId is preserved so the next bus boarding
-                // correctly detects a transfer if the route changes.
 
                 int newCost = cur.cost + edgeCost + penalty;
                 String nextKey = stateKey(edge.toStopId(), newLastBusRouteId);
@@ -125,10 +104,9 @@ public class DijkstraEngine {
             }
         }
 
-        return null; // No path found
+        return null;
     }
 
-    /** Reconstructs the segment list by walking the predecessor map backwards. */
     private TransitPath reconstructPath(int totalCost, int transfers,
                                         String finalKey, String startKey,
                                         Map<String, EdgeRecord> prev) {
@@ -140,7 +118,7 @@ public class DijkstraEngine {
             segments.add(0, new TransitPathSegment(
                     rec.fromStopId(), rec.edge().toStopId(),
                     rec.edge().type(),
-                    rec.edge().weightMinutes(), // actual travel time, not penalized cost
+                    rec.edge().weightMinutes(),
                     rec.edge().routeNumber(), rec.edge().routeId()
             ));
             curKey = rec.prevKey();
@@ -156,10 +134,9 @@ public class DijkstraEngine {
     private record DijkstraState(
             int cost,
             String stopId,
-            String lastBusRouteId, // null = no bus taken yet, or last move was walking
+            String lastBusRouteId, 
             int transfers
     ) {}
 
-    /** Predecessor edge record for path reconstruction. */
     private record EdgeRecord(String prevKey, String fromStopId, TransitEdge edge) {}
 }

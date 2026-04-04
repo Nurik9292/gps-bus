@@ -61,7 +61,6 @@ class R2dbcAdminRepositoryIntegrationTest {
     void setUp() {
         repository = new R2dbcAdminRepository(databaseClient);
 
-        // Create minimal admins table schema (matching production schema)
         String createTableSql = """
             CREATE TABLE IF NOT EXISTS admins (
                 id VARCHAR(36) PRIMARY KEY,
@@ -92,10 +91,8 @@ class R2dbcAdminRepositoryIntegrationTest {
 
     @Test
     void save_ShouldPersistAdminSuccessfully() {
-        // Given
         Admin admin = Admin.create("testadmin", passwordEncoder.encode("password123"), "Test Admin", null, false, true);
 
-        // When & Then
         StepVerifier.create(repository.save(admin))
                 .assertNext(savedAdmin -> {
                     assertNotNull(savedAdmin);
@@ -294,7 +291,7 @@ class R2dbcAdminRepositoryIntegrationTest {
                     assertNotNull(retrieved.getLastLoginAt());
                     assertNotNull(retrieved.getCreatedAt());
                     assertNotNull(retrieved.getUpdatedAt());
-                    assertEquals(1L, retrieved.getVersion()); // Version is 1 after first save
+                    assertEquals(1L, retrieved.getVersion());
                 })
                 .verifyComplete();
     }

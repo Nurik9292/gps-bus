@@ -48,18 +48,9 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("next_stops")
     private final List<NextStopEta> nextStops;
 
-    /**
-     * {@code true} for server-predicted positions (dead reckoning / route interpolation).
-     * {@code null} / {@code false} for real GPS fixes.
-     * Flutter clients can use this to render predicted markers differently.
-     */
     @JsonProperty("predicted")
     private final Boolean predicted;
 
-    /**
-     * Position along the route as a fraction [0.0–1.0].
-     * Present only when snap-to-route is active; {@code null} otherwise.
-     */
     @JsonProperty("fraction")
     private final Double fraction;
 

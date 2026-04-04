@@ -5,10 +5,6 @@ import lombok.Data;
 
 import java.util.List;
 
-/**
- * Wrapper для ответа нового GPS API
- * Новый API возвращает объект с полями code, msg, traceId, data
- */
 @Data
 public class GpsApiResponseDTO {
 
@@ -24,9 +20,6 @@ public class GpsApiResponseDTO {
     @JsonProperty("data")
     private List<GpsPositionDTO> data;
 
-    /**
-     * Проверка успешности ответа
-     */
     public boolean isSuccess() {
         return code != null && code == 1;
     }

@@ -150,7 +150,7 @@ public class DistanceCalculationService {
         double d23 = greatCircleDistance(lat2, lon2, latP, lonP);
         double d12 = greatCircleDistance(lat1, lon1, lat2, lon2);
 
-        if (d12 < 0.001) { // < 1 meter
+        if (d12 < 0.001) { 
             return Distance.ofMeters(d13 * GeoConstants.EARTH_RADIUS_METERS);
         }
 

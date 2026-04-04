@@ -129,7 +129,6 @@ class GetBannersByTypeUseCaseTest {
 
         verify(correlationService, times(1)).getCurrentCorrelationId();
         verify(adminBannerRepository, times(1)).findByTypeAndActive(BannerType.fromValue(TYPE));
-        // Note: countByType and countActiveBanners ARE called due to eager subscription with zipWith
     }
 
     @Test

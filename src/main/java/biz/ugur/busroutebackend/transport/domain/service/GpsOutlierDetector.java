@@ -123,13 +123,6 @@ public class GpsOutlierDetector {
         return detectWithHistory(deviceId, newLatitude, newLongitude, newTimestamp, historyPoints, null);
     }
 
-    /**
-     * Detects outliers using GPS history, with optional reported speed for frozen-coordinates detection.
-     *
-     * @param reportedSpeedKmh speed reported by the GPS device (from CAN bus or device firmware).
-     *                         If non-null and > threshold while coordinates are frozen, flags as
-     *                         FROZEN_COORDINATES_WITH_MOTION — indicating stale GPS fix from provider.
-     */
     public <T extends GpsHistoryPoint> OutlierDetectionResult detectWithHistory(
             String deviceId,
             double newLatitude, double newLongitude, LocalDateTime newTimestamp,
@@ -150,9 +143,6 @@ public class GpsOutlierDetector {
                 newLatitude, newLongitude, newTimestamp,
                 mostRecentPoint.getLatitude(), mostRecentPoint.getLongitude(), mostRecentPoint.getTimestamp());
 
-        // After the base check: if distance is tiny but reported speed is significant,
-        // it means the GPS fix is frozen (stale position) while the vehicle is actually moving.
-        // Source: provider-level anomaly — CAN-bus speed is live, GPS position is not.
         if (baseResult.type() == OutlierDetectionResult.OutlierType.DISTANCE_TOO_SMALL
                 && reportedSpeedKmh != null
                 && reportedSpeedKmh >= minSpeedForFrozenDetectionKmh) {

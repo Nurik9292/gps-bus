@@ -49,8 +49,6 @@ public class DirectRouteSearchService {
                         stopsContext.fromStops(), stopsContext.toStops())
                 .filter(this::isRouteViable)
                 .collectList()
-                // Sort by proximity to fromLocation, then take MAX_RESULTS — BEFORE building options.
-                // This prevents createOption (OSRM + ETA calls) from running on all SQL results.
                 .map(routes -> sortByProximity(routes, context.fromLocation())
                         .stream().limit(MAX_RESULTS).toList())
                 .flatMapMany(Flux::fromIterable)

@@ -37,8 +37,6 @@ public class OsrmWalkingRouteService implements WalkingRouteService {
                         return WalkingRouteResult.EMPTY;
                     }
 
-                    // OSRM возвращает [lon, lat] (GeoJSON стандарт),
-                    // конвертируем в [lat, lon] согласно внутреннему соглашению проекта
                     List<List<Double>> coordinates = route.geometry().coordinates().stream()
                             .filter(c -> c.size() == 2)
                             .map(c -> List.of(c.get(1), c.get(0)))

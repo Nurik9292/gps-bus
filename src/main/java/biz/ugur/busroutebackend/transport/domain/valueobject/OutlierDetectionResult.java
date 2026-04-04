@@ -25,10 +25,6 @@ public record OutlierDetectionResult(
 
         SPEED_EXCEEDED,
 
-        /**
-         * GPS coordinates frozen (distance ≈ 0) while reported speed > threshold.
-         * Indicates stale GPS fix from provider — CAN-bus speed is live but position is not.
-         */
         FROZEN_COORDINATES_WITH_MOTION,
 
         NO_HISTORY,

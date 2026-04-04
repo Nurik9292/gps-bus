@@ -59,13 +59,10 @@ class BannerPeriodTest {
         LocalDateTime end = LocalDateTime.now().plusDays(1);
         BannerPeriod period = BannerPeriod.between(start, end);
 
-        // Сейчас период активен
         assertTrue(period.isActive(LocalDateTime.now()));
 
-        // Перед стартом
         assertFalse(period.isActive(start.minusSeconds(1)));
 
-        // После конца
         assertFalse(period.isActive(end.plusSeconds(1)));
     }
 
@@ -74,13 +71,10 @@ class BannerPeriodTest {
         LocalDateTime start = LocalDateTime.now().minusDays(1);
         BannerPeriod period = BannerPeriod.startingAt(start);
 
-        // Сейчас период активен
         assertTrue(period.isActive(LocalDateTime.now()));
 
-        // Перед стартом
         assertFalse(period.isActive(start.minusSeconds(1)));
 
-        // Без передачи now (null), метод должен работать
         assertTrue(period.isActive(null));
     }
 

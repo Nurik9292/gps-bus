@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -41,29 +42,21 @@ public class TugdkGpsPositionMapper {
         try {
             GpsPositionDTO dto = new GpsPositionDTO();
 
-            // Device ID from attributes.uniqueId (IMEI)
             dto.setDeviceId(source.getAttributes().getUniqueId());
 
-            // Coordinates
             dto.setLatitude(source.getLatitude());
             dto.setLongitude(source.getLongitude());
 
-            // Speed: convert from knots to km/h
             dto.setSpeed(source.getSpeedKmh());
 
-            // Course/heading
             dto.setCourse(source.getCourse());
 
-            // Fix time: parse ISO-8601 format
             dto.setFixTime(parseFixTime(source.getFixTime()));
 
-            // Report time for compatibility
             dto.setReportTime(formatReportTime(source.getFixTime()));
-
-            // UTC time
+            
             dto.setUtcTime(source.getFixTime());
 
-            // Attributes
             GpsPositionDTO.GpsAttributesDTO attributes = new GpsPositionDTO.GpsAttributesDTO();
             attributes.setUniqueId(source.getAttributes().getUniqueId());
             attributes.setName(normalizeLicensePlate(source.getAttributes().getName()));
@@ -94,7 +87,7 @@ public class TugdkGpsPositionMapper {
 
         try {
             OffsetDateTime odt = OffsetDateTime.parse(isoTime, ISO_FORMATTER);
-            return odt.toLocalDateTime();
+            return odt.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
         } catch (DateTimeParseException e) {
             log.debug("Failed to parse fixTime '{}': {}", isoTime, e.getMessage());
             return LocalDateTime.now();

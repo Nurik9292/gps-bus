@@ -117,10 +117,6 @@ public class VehicleEventHandler {
         log.debug("Processing vehicle position update: vehicleId={}, plate={}",
                 event.getVehicleId(), event.getLicensePlate());
 
-        // When prediction is enabled, the prediction service (PositionPredictionScheduler)
-        // handles all WebSocket broadcasting every second for MOVING vehicles.
-        // Stationary vehicles (isInMotion=false) are excluded from the prediction cycle,
-        // so we still broadcast their GPS directly to keep them visible on the map.
         boolean handledByPrediction = predictionProperties.isEnabled()
                 && Boolean.TRUE.equals(event.getIsInMotion());
         Mono<Void> broadcastMono = handledByPrediction
@@ -208,9 +204,6 @@ public class VehicleEventHandler {
                     .doOnSuccess(v -> log.trace("Broadcasted position: {}", event.getVehicleId()));
         }
 
-        // ETA enrichment is limited to MAX_ETA_CONCURRENCY concurrent DB queries.
-        // If all slots are busy the message is broadcast without ETA to keep the
-        // connection pool free for route search and other requests.
         if (etaSemaphore.tryAcquire()) {
             return vehicleEtaEnricherService.enrichWithEta(msg)
                     .timeout(ETA_ENRICHMENT_TIMEOUT)

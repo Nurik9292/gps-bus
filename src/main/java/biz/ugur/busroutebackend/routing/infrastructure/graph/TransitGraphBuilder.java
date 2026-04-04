@@ -53,12 +53,10 @@ public class TransitGraphBuilder {
 
                     Map<String, List<TransitEdge>> adj = new HashMap<>(stops.size() * 2);
 
-                    // Initialize adjacency list for all known stops
                     for (String stopId : stops.keySet()) {
                         adj.put(stopId, new ArrayList<>());
                     }
 
-                    // Add directed bus-ride edges
                     int busEdgeCount = 0;
                     for (TransitGraphDataRepository.BusEdgeRecord edge : busEdges) {
                         List<TransitEdge> list = adj.computeIfAbsent(edge.fromStopId(), k -> new ArrayList<>());
@@ -72,7 +70,6 @@ public class TransitGraphBuilder {
                         busEdgeCount++;
                     }
 
-                    // Add bidirectional walking edges
                     int walkEdgeCount = 0;
                     for (TransitGraphDataRepository.WalkingEdgeRecord edge : walkingEdges) {
                         adj.computeIfAbsent(edge.stopId1(), k -> new ArrayList<>())

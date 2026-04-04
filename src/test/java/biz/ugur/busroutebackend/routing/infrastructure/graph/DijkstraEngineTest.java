@@ -20,19 +20,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Unit tests for DijkstraEngine using a small synthetic in-memory graph.
- *
- * Test graph topology:
- *
- *   A --[R1,2min]--> B --[R1,2min]--> C
- *                                     |
- *                              [R2,2min]
- *                                     |
- *                                     D --[R2,2min]--> E
- *
- *   A --[walking,3min]--> F --[R3,2min]--> E  (alternative path with walk)
- */
+
 class DijkstraEngineTest {
 
     private static final String ROUTE1_ID = "route-1";
@@ -62,7 +50,6 @@ class DijkstraEngineTest {
         assertThat(paths).isNotEmpty();
         TransitPath best = paths.get(0);
         assertThat(best.busSegmentCount()).isEqualTo(1);
-        // A→B→C = 4 min
         List<TransitPathSegment> collapsed = best.collapsed();
         TransitPathSegment bus = collapsed.stream().filter(TransitPathSegment::isBusRide).findFirst().orElseThrow();
         assertThat(bus.fromStopId()).isEqualTo(A);
@@ -75,7 +62,6 @@ class DijkstraEngineTest {
         List<TransitPath> paths = engine.findPaths(graph, A, E);
 
         assertThat(paths).isNotEmpty();
-        // Should find A→B→C (R1) + C→D→E (R2): 1 transfer
         boolean found = paths.stream().anyMatch(p -> p.busSegmentCount() == 2);
         assertThat(found).isTrue();
 
@@ -105,18 +91,14 @@ class DijkstraEngineTest {
 
     @Test
     void findPaths_withWalking_findsAlternativePath() {
-        // F is reachable from A by walking; R3 goes F→E
-        // This should appear as an alternative K-path
         List<TransitPath> paths = engine.findPaths(graph, A, E);
         assertThat(paths).isNotEmpty();
-        // At least one path should exist
         assertThat(paths.size()).isGreaterThanOrEqualTo(1);
     }
 
     @Test
     void findPaths_kPaths_returnsDifferentRoutes() {
         List<TransitPath> paths = engine.findPaths(graph, A, E);
-        // Both R1+R2 and R3 paths should appear
         assertThat(paths.size()).isGreaterThanOrEqualTo(2);
 
         boolean hasR1Route = paths.stream()
@@ -136,21 +118,18 @@ class DijkstraEngineTest {
         assertThat(paths).isNotEmpty();
 
         TransitPath path = paths.get(0);
-        // Raw segments: A→B (R1), B→C (R1) — 2 hops
         long rawBusHops = path.segments().stream().filter(TransitPathSegment::isBusRide).count();
         assertThat(rawBusHops).isEqualTo(2);
 
-        // Collapsed: A→C (R1) — 1 merged segment
         List<TransitPathSegment> collapsed = path.collapsed();
         long collapsedBusSegs = collapsed.stream().filter(TransitPathSegment::isBusRide).count();
         assertThat(collapsedBusSegs).isEqualTo(1);
         TransitPathSegment merged = collapsed.stream().filter(TransitPathSegment::isBusRide).findFirst().orElseThrow();
         assertThat(merged.fromStopId()).isEqualTo(A);
         assertThat(merged.toStopId()).isEqualTo(C);
-        assertThat(merged.costMinutes()).isEqualTo(4); // 2+2
+        assertThat(merged.costMinutes()).isEqualTo(4); 
     }
 
-    // ─── Graph builder ────────────────────────────────────────────────────────
 
     private TransitGraph buildTestGraph() {
         Map<String, BusStop> stops = new HashMap<>();
@@ -166,18 +145,14 @@ class DijkstraEngineTest {
         routes.put(ROUTE2_ID, makeRoute(ROUTE2_ID, "2"));
         routes.put(ROUTE3_ID, makeRoute(ROUTE3_ID, "3"));
 
-        // Route 1: A → B → C
         adj.get(A).add(new TransitEdge(B, EdgeType.BUS_RIDE, 2, "1", ROUTE1_ID));
         adj.get(B).add(new TransitEdge(C, EdgeType.BUS_RIDE, 2, "1", ROUTE1_ID));
 
-        // Route 2: C → D → E
         adj.get(C).add(new TransitEdge(D, EdgeType.BUS_RIDE, 2, "2", ROUTE2_ID));
         adj.get(D).add(new TransitEdge(E, EdgeType.BUS_RIDE, 2, "2", ROUTE2_ID));
 
-        // Route 3: F → E (alternative to reach E)
         adj.get(F).add(new TransitEdge(E, EdgeType.BUS_RIDE, 2, "3", ROUTE3_ID));
 
-        // Walking: A ↔ F (3 min)
         adj.get(A).add(new TransitEdge(F, EdgeType.WALKING, 3, null, null));
         adj.get(F).add(new TransitEdge(A, EdgeType.WALKING, 3, null, null));
 

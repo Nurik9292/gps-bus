@@ -50,7 +50,6 @@ public class UpdateCurrentAdminProfileUseCase extends BaseUseCase<Mono<UpdateCur
                             .flatMap(admin -> {
                                 Admin updatedAdmin = admin.updateProfile(request.username(), request.fullName());
 
-                                // Update password if provided
                                 if (request.newPassword() != null && !request.newPassword().trim().isEmpty()) {
                                     log.info("Updating password for admin: {}", adminId);
                                     String encodedPassword = passwordEncoder.encode(request.newPassword());

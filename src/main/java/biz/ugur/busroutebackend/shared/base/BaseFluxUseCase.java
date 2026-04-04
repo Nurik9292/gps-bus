@@ -34,14 +34,11 @@ public abstract class BaseFluxUseCase<T, R> implements UseCase<T, Flux<R>> {
     protected abstract String getBoundedContext();
 
     protected void logStart(T request, Object correlationId) {
-        // Override if needed
     }
 
     protected void logComplete(T request, Object correlationId) {
-        // Override if needed
     }
 
     protected void logError(T request, Object correlationId, Throwable error) {
-        // Override if needed
     }
 }

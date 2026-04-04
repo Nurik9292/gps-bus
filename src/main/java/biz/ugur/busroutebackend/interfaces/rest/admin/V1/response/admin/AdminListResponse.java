@@ -9,15 +9,7 @@ import lombok.ToString;
 
 import java.util.List;
 
-/**
- * REST response DTO for admin list with pagination.
- * Part of the Interfaces layer (REST API).
- *
- * Following Clean Architecture:
- * - Interfaces layer DTO (converts from application layer DTOs)
- * - Contains JSON annotations for API contract
- * - Immutable response object
- */
+
 @Getter
 @ToString
 @EqualsAndHashCode

@@ -24,7 +24,7 @@ public class NearbyStopsService {
     private final DistanceCalculationService distanceService;
 
     private static final double SEARCH_RADIUS_KM =
-        GeoConstants.MAX_SEARCH_RADIUS_METERS / GeoConstants.METERS_PER_KILOMETER; // 5km
+        GeoConstants.MAX_SEARCH_RADIUS_METERS / GeoConstants.METERS_PER_KILOMETER; 
 
     private static final int MAX_STOPS_PER_LOCATION = 15;
 

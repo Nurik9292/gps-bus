@@ -23,7 +23,7 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class GetIntegrationClientTokenUseCase {
 
-    private static final Long ACCESS_TOKEN_EXPIRATION_SECONDS = 2678400L; // 31 days
+    private static final Long ACCESS_TOKEN_EXPIRATION_SECONDS = 2678400L;
 
     private final ExternalServiceRepository externalServiceRepository;
     private final ClientRepository clientRepository;

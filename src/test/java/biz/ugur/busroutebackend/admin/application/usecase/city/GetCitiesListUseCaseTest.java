@@ -37,28 +37,23 @@ class GetCitiesListUseCaseTest {
 
     @Test
     void shouldReturnActiveCitiesWhenActiveOnlyIsTrue() {
-        // Given
         City city1 = City.create("Ashgabat", "Aşgabat", 1);
         City city2 = City.create("Mary", "Mary", 2);
         City city3 = City.create("Turkmenabat", "Türkmenabat", 3);
 
         when(cityRepository.findActiveCities()).thenReturn(Flux.just(city1, city2, city3));
 
-        // When
         Mono<List<CityResult>> result = getCitiesListUseCase.process(Mono.just(true));
 
-        // Then
         StepVerifier.create(result)
             .assertNext(cities -> {
                 assertNotNull(cities);
                 assertEquals(3, cities.size());
 
-                // Verify cities are sorted by displayOrder
                 assertEquals("Ashgabat", cities.get(0).name());
                 assertEquals("Mary", cities.get(1).name());
                 assertEquals("Turkmenabat", cities.get(2).name());
 
-                // Verify all fields are present
                 cities.forEach(city -> {
                     assertNotNull(city.id());
                     assertNotNull(city.name());
@@ -74,23 +69,19 @@ class GetCitiesListUseCaseTest {
 
     @Test
     void shouldReturnAllCitiesWhenActiveOnlyIsFalse() {
-        // Given
         City city1 = City.create("Ashgabat", "Aşgabat", 1);
         City city2 = City.create("Mary", "Mary", 2).deactivate();
         City city3 = City.create("Turkmenabat", "Türkmenabat", 3);
 
         when(cityRepository.findAll()).thenReturn(Flux.just(city1, city2, city3));
 
-        // When
         Mono<List<CityResult>> result = getCitiesListUseCase.process(Mono.just(false));
 
-        // Then
         StepVerifier.create(result)
             .assertNext(cities -> {
                 assertNotNull(cities);
                 assertEquals(3, cities.size());
 
-                // Verify includes both active and inactive cities
                 assertTrue(cities.stream().anyMatch(c -> c.name().equals("Mary") && !c.isActive()));
                 assertTrue(cities.stream().anyMatch(c -> c.name().equals("Ashgabat") && c.isActive()));
             })
@@ -102,13 +93,10 @@ class GetCitiesListUseCaseTest {
 
     @Test
     void shouldReturnEmptyListWhenNoCitiesExist() {
-        // Given
         when(cityRepository.findActiveCities()).thenReturn(Flux.empty());
 
-        // When
         Mono<List<CityResult>> result = getCitiesListUseCase.process(Mono.just(true));
 
-        // Then
         StepVerifier.create(result)
             .assertNext(cities -> {
                 assertNotNull(cities);
@@ -121,23 +109,19 @@ class GetCitiesListUseCaseTest {
 
     @Test
     void shouldSortCitiesByDisplayOrderThenName() {
-        // Given
         City city1 = City.create("Zebra City", "Zebra", 2);
         City city2 = City.create("Alpha City", "Alpha", 1);
         City city3 = City.create("Beta City", "Beta", 1);
 
         when(cityRepository.findActiveCities()).thenReturn(Flux.just(city1, city2, city3));
 
-        // When
         Mono<List<CityResult>> result = getCitiesListUseCase.process(Mono.just(true));
 
-        // Then
         StepVerifier.create(result)
             .assertNext(cities -> {
                 assertNotNull(cities);
                 assertEquals(3, cities.size());
 
-                // Should be sorted by displayOrder first, then by name
                 assertEquals("Alpha City", cities.get(0).name());
                 assertEquals(1, cities.get(0).displayOrder());
 
@@ -152,7 +136,6 @@ class GetCitiesListUseCaseTest {
 
     @Test
     void shouldHandleCitiesWithNullDisplayOrder() {
-        // Given
         City city1 = City.create("City With Order", "City", 1);
         City city2 = City.builder()
             .id(CityId.generate())
@@ -164,20 +147,16 @@ class GetCitiesListUseCaseTest {
 
         when(cityRepository.findActiveCities()).thenReturn(Flux.just(city1, city2));
 
-        // When
         Mono<List<CityResult>> result = getCitiesListUseCase.process(Mono.just(true));
 
-        // Then
         StepVerifier.create(result)
             .assertNext(cities -> {
                 assertNotNull(cities);
                 assertEquals(2, cities.size());
 
-                // Cities with displayOrder should come first
                 assertEquals("City With Order", cities.get(0).name());
                 assertEquals(1, cities.get(0).displayOrder());
 
-                // Cities with null displayOrder should come last
                 assertEquals("City Without Order", cities.get(1).name());
                 assertNull(cities.get(1).displayOrder());
             })
@@ -186,25 +165,20 @@ class GetCitiesListUseCaseTest {
 
     @Test
     void shouldReturnCorrectBoundContext() {
-        // When
         String boundContext = getCitiesListUseCase.getBoundContext();
 
-        // Then
         assertNotNull(boundContext);
         assertEquals("admin", boundContext);
     }
 
     @Test
     void shouldIncludeAllCityFieldsInResult() {
-        // Given
         City city = City.create("Ashgabat", "Aşgabat", 1);
 
         when(cityRepository.findActiveCities()).thenReturn(Flux.just(city));
 
-        // When
         Mono<List<CityResult>> result = getCitiesListUseCase.process(Mono.just(true));
 
-        // Then
         StepVerifier.create(result)
             .assertNext(cities -> {
                 assertEquals(1, cities.size());

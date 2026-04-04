@@ -15,11 +15,6 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 public class RedisDistributedLock {
 
-    /**
-     * Lua script for atomic lock release.
-     * Checks if the lock value matches before deleting.
-     * Returns 1 if released, 0 if not owned or doesn't exist.
-     */
     private static final String RELEASE_LOCK_SCRIPT = """
             if redis.call("get", KEYS[1]) == ARGV[1] then
                 return redis.call("del", KEYS[1])
@@ -132,7 +127,6 @@ public class RedisDistributedLock {
 
         String key = buildKey(handle.lockName());
 
-        // Use Lua script for atomic check-and-delete
         return redisTemplate.execute(releaseLockScript, List.of(key), List.of(handle.lockValue()))
                 .next()
                 .map(result -> {

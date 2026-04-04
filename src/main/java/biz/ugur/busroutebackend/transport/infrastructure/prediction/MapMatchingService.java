@@ -6,27 +6,13 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-/**
- * Pure-Java geometry utilities for map matching and route-aware interpolation.
- * All calculations run in-memory — no database calls.
- */
 @Service
 @Slf4j
 public class MapMatchingService {
 
-    /** If the GPS point is further than this from the route, do not snap */
-    static final double MAX_SNAP_DISTANCE_METERS = 100.0;
+  
+    static final double MAX_SNAP_DISTANCE_METERS = 150.0;
 
-    // ---- Public API ----
-
-    /**
-     * Projects {@code (gpsLat, gpsLon)} onto the nearest segment of {@code routePoints}.
-     * {@code totalRouteDistanceMeters} must be pre-computed (from {@code RouteGeometryCache})
-     * to avoid an O(n) scan on every call.
-     * Returns the snapped position with its fraction along the route (0.0–1.0).
-     * If the nearest segment is more than {@link #MAX_SNAP_DISTANCE_METERS} away,
-     * {@link SnappedResult#snapped} is {@code false} and the original GPS is returned unchanged.
-     */
     public SnappedResult snapToNearestSegment(double gpsLat, double gpsLon,
                                                List<double[]> routePoints,
                                                double totalRouteDistanceMeters) {
@@ -63,13 +49,60 @@ public class MapMatchingService {
         return new SnappedResult(bestLat, bestLon, bestFraction, minDist, true);
     }
 
-    /**
-     * Interpolates the geographical position at {@code fraction} (0.0–1.0) along {@code routePoints}.
-     * {@code totalRouteDistanceMeters} must be pre-computed (from {@code RouteGeometryCache}).
-     * Returns the last point if fraction ≥ 1.0, first point if ≤ 0.0.
-     *
-     * @return {@code [lat, lon]} pair
-     */
+
+    public SnappedResult snapToNearestSegment(double gpsLat, double gpsLon,
+                                               List<double[]> routePoints,
+                                               double totalRouteDistanceMeters,
+                                               double lastKnownFraction,
+                                               double windowFraction) {
+        if (lastKnownFraction < 0 || windowFraction <= 0) {
+            return snapToNearestSegment(gpsLat, gpsLon, routePoints, totalRouteDistanceMeters);
+        }
+
+        if (routePoints == null || routePoints.size() < 2 || totalRouteDistanceMeters == 0) {
+            return snapToNearestSegment(gpsLat, gpsLon, routePoints, totalRouteDistanceMeters);
+        }
+
+        double fracMin = Math.max(0, lastKnownFraction - windowFraction);
+        double fracMax = Math.min(1, lastKnownFraction + windowFraction);
+
+        double minDist = Double.MAX_VALUE;
+        double bestLat = gpsLat, bestLon = gpsLon, bestFraction = 0;
+        double accumLen = 0;
+
+        for (int i = 0; i < routePoints.size() - 1; i++) {
+            double[] a = routePoints.get(i);
+            double[] b = routePoints.get(i + 1);
+            double segLen = haversine(a, b);
+
+            double segFracStart = accumLen / totalRouteDistanceMeters;
+            double segFracEnd = (accumLen + segLen) / totalRouteDistanceMeters;
+
+            boolean overlaps = segFracStart <= fracMax && segFracEnd >= fracMin;
+            if (overlaps) {
+                ProjectionResult proj = projectPointOnSegment(gpsLat, gpsLon, a, b);
+                if (proj.distance < minDist) {
+                    minDist = proj.distance;
+                    bestLat = proj.lat;
+                    bestLon = proj.lon;
+                    bestFraction = (accumLen + segLen * proj.t) / totalRouteDistanceMeters;
+                }
+            }
+
+            accumLen += segLen;
+        }
+
+        if (minDist <= MAX_SNAP_DISTANCE_METERS) {
+            log.debug(String.format("[GPS_PIPELINE] SNAP_CONTINUITY window=[%.4f..%.4f] dist=%.1fm frac=%.4f",
+                    fracMin, fracMax, minDist, bestFraction));
+            return new SnappedResult(bestLat, bestLon, bestFraction, minDist, true);
+        }
+
+        log.debug(String.format("[GPS_PIPELINE] SNAP_CONTINUITY_MISS window=[%.4f..%.4f] → global search",
+                fracMin, fracMax));
+        return snapToNearestSegment(gpsLat, gpsLon, routePoints, totalRouteDistanceMeters);
+    }
+
     public double[] interpolateRoutePoint(List<double[]> routePoints, double fraction,
                                           double totalRouteDistanceMeters) {
         if (routePoints == null || routePoints.isEmpty()) return null;
@@ -97,12 +130,7 @@ public class MapMatchingService {
         return routePoints.get(routePoints.size() - 1).clone();
     }
 
-    /**
-     * Derives the vehicle heading (degrees, 0=North, 90=East) from the direction of
-     * the route segment at the given {@code fraction}.
-     * {@code totalRouteDistanceMeters} must be pre-computed (from {@code RouteGeometryCache}).
-     * For backward direction the bearing is reversed by 180°.
-     */
+  
     public double calculateCourseFromRoute(List<double[]> routePoints, double fraction,
                                            int direction, double totalRouteDistanceMeters) {
         if (routePoints == null || routePoints.size() < 2) return 0;
@@ -110,7 +138,7 @@ public class MapMatchingService {
         double target  = fraction * totalRouteDistanceMeters;
         double accum   = 0;
 
-        int segIndex = routePoints.size() - 2; // default: last segment
+        int segIndex = routePoints.size() - 2;
         for (int i = 0; i < routePoints.size() - 1; i++) {
             double segLen = haversine(routePoints.get(i), routePoints.get(i + 1));
             accum += segLen;
@@ -127,23 +155,13 @@ public class MapMatchingService {
         return (direction == 1) ? (bearing + 180) % 360 : bearing;
     }
 
-    // ---- Private geometry helpers ----
-
-    /**
-     * Projects point {@code (lat, lon)} onto segment {@code a→b}.
-     * Parameter {@code t} is computed in metric space (metres) to avoid distortion
-     * from unequal degree sizes (1° lat ≈ 111 km, 1° lon ≈ 88 km at lat 38°).
-     * Without this correction the projected point is skewed toward the wrong end
-     * of diagonal segments, causing snap errors of 20–30 m on long straight sections.
-     */
     private ProjectionResult projectPointOnSegment(double lat, double lon,
                                                     double[] a, double[] b) {
-        // Convert degree deltas to approximate metres using midpoint latitude.
         double midLat = (a[0] + b[0]) / 2.0;
         double metersPerDegreeLon = METRES_PER_DEGREE_LAT * Math.cos(Math.toRadians(midLat));
 
-        double dyM = (b[0] - a[0]) * METRES_PER_DEGREE_LAT; // lat delta in metres
-        double dxM = (b[1] - a[1]) * metersPerDegreeLon;     // lon delta in metres
+        double dyM = (b[0] - a[0]) * METRES_PER_DEGREE_LAT;
+        double dxM = (b[1] - a[1]) * metersPerDegreeLon;     
 
         if (dyM == 0 && dxM == 0) {
             return new ProjectionResult(a[0], a[1], haversine(new double[]{lat, lon}, a), 0);
@@ -168,9 +186,7 @@ public class MapMatchingService {
         return DistanceCalculationService.haversineDistanceMeters(a[0], a[1], b[0], b[1]);
     }
 
-    /**
-     * Forward azimuth (bearing) from point A to point B, in degrees [0, 360).
-     */
+   
     private static double bearingDegrees(double lat1, double lon1, double lat2, double lon2) {
         double dLon = Math.toRadians(lon2 - lon1);
         double rlat1 = Math.toRadians(lat1);
@@ -183,7 +199,6 @@ public class MapMatchingService {
         return (bearing + 360) % 360;
     }
 
-    // ---- Result types ----
 
     public record SnappedResult(double latitude, double longitude,
                                  double fraction, double distanceMeters,

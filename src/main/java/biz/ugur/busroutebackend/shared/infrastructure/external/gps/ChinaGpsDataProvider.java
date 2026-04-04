@@ -17,7 +17,10 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -30,6 +33,7 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
     private static final String API_PATH = "/api/vehicleinfo/v1/tkm/getVehicleRealTimeData";
     private static final DateTimeFormatter REPORT_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter ISO_OFFSET_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
     private final String token;
 
@@ -66,6 +70,7 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
         }
 
         logFetch(deviceIds.size());
+        log.debug("[GPS_PIPELINE] CHINA_FETCH_START devices={}", deviceIds.size());
 
         ChinaGpsRequestDTO request = ChinaGpsRequestDTO.fromDeviceIds(deviceIds);
 
@@ -85,6 +90,9 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
                 .doOnSuccess(positions -> {
                     logSuccess(positions.size(), deviceIds.size());
                     logMissingDevices(requestedDeviceIds, positions);
+                    int missing = requestedDeviceIds.size() - positions.size();
+                    log.debug("[GPS_PIPELINE] CHINA_FETCH_DONE received={} requested={} missing={}",
+                            positions.size(), deviceIds.size(), missing);
                 })
                 .onErrorResume(error -> handleError(error, deviceIds.size()));
     }
@@ -148,7 +156,7 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
         List<GpsPositionDTO> latestPositions = getLatestPositionsByUniqueId(allPositions);
         latestPositions.forEach(this::transformPosition);
 
-        log.debug("[CHINA] Processed {} total records -> {} unique vehicles",
+        log.debug("[GPS_PIPELINE] CHINA_DEDUP raw={} unique={}",
                 allPositions.size(), latestPositions.size());
 
         return latestPositions;
@@ -201,13 +209,10 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
     }
 
     private void transformPosition(GpsPositionDTO position) {
-        if (position.getUtcTime() != null && position.getFixTime() == null) {
-            try {
-                position.setFixTime(LocalDateTime.parse(
-                        position.getUtcTime(),
-                        DateTimeFormatter.ISO_DATE_TIME));
-            } catch (Exception e) {
-                log.warn("[CHINA] Failed to parse utcTime: {}", position.getUtcTime());
+        if (position.getUtcTime() != null) {
+            LocalDateTime utc = parseAsUtc(position.getUtcTime());
+            if (utc != null) {
+                position.setFixTime(utc);
             }
         }
 
@@ -215,6 +220,23 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
                 position.getAttributes() != null &&
                 position.getAttributes().getUniqueId() != null) {
             position.setDeviceId(position.getAttributes().getUniqueId());
+        }
+    }
+
+ 
+    private LocalDateTime parseAsUtc(String timeStr) {
+        if (timeStr == null || timeStr.isBlank()) return null;
+        try {
+            return OffsetDateTime.parse(timeStr, ISO_OFFSET_FORMATTER)
+                    .withOffsetSameInstant(ZoneOffset.UTC)
+                    .toLocalDateTime();
+        } catch (DateTimeParseException e1) {
+            try {
+                return LocalDateTime.parse(timeStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (DateTimeParseException e2) {
+                log.warn("[CHINA] Cannot parse utcTime '{}': {}", timeStr, e2.getMessage());
+                return null;
+            }
         }
     }
 }

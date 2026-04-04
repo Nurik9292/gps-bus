@@ -38,7 +38,6 @@ public class RouteGeometryTrimmingService {
                 return buildMinimalGeometry(fromStop, toStop);
             }
 
-            // Find nearest segment indices WITHOUT mutating the list
             int fromSegment = findNearestSegmentIndex(coordinates, fromStop);
             int toSegment = findNearestSegmentIndex(coordinates, toStop);
 
@@ -52,14 +51,12 @@ public class RouteGeometryTrimmingService {
             double[] toPoint = {toStop.getLongitude().doubleValue(), toStop.getLatitude().doubleValue()};
 
             if (fromSegment <= toSegment) {
-                // Forward direction: fromStop is earlier in the geometry
                 trimmedCoordinates.add(fromPoint);
                 for (int i = fromSegment + 1; i <= toSegment; i++) {
                     trimmedCoordinates.add(coordinates.get(i));
                 }
                 trimmedCoordinates.add(toPoint);
             } else {
-                // Backward direction: fromStop is later in the geometry — reverse the slice
                 trimmedCoordinates.add(fromPoint);
                 for (int i = fromSegment; i > toSegment; i--) {
                     trimmedCoordinates.add(coordinates.get(i));
@@ -154,10 +151,6 @@ public class RouteGeometryTrimmingService {
         return nearestIndex;
     }
 
-    /**
-     * Selects the correct geometry (forward or backward) so that fromStop appears
-     * before toStop along the route. Falls back to forward if neither matches.
-     */
     public String selectGeometryForDirection(String forwardGeom, String backwardGeom,
                                              BusStop fromStop, BusStop toStop) {
         if (forwardGeom != null && !forwardGeom.isBlank()) {
@@ -187,14 +180,9 @@ public class RouteGeometryTrimmingService {
             }
         }
 
-        // Fallback: return whichever is non-null
         return forwardGeom != null ? forwardGeom : backwardGeom;
     }
 
-    /**
-     * Calculates total distance in meters for a WKT LINESTRING by summing
-     * Haversine distances between consecutive coordinate pairs.
-     */
     public int calculateGeometryDistanceMeters(String wkt) {
         if (wkt == null || wkt.isBlank()) return 0;
         try {

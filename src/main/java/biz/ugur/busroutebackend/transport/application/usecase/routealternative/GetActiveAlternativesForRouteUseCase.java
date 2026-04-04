@@ -20,11 +20,6 @@ import reactor.core.publisher.Mono;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * Use case for mobile: gets active alternative routes for a given primary route.
- * This is used when the primary route is inactive and the mobile app needs
- * to show available alternatives to the user.
- */
 @Service
 @Slf4j
 public class GetActiveAlternativesForRouteUseCase extends BaseFluxUseCase<GetActiveAlternativesForRouteUseCase.Request, RouteData> {
@@ -58,7 +53,6 @@ public class GetActiveAlternativesForRouteUseCase extends BaseFluxUseCase<GetAct
         return routeAlternativeRepository.findByPrimaryRouteId(primaryRouteId)
                 .collectList()
                 .flatMapMany(alternatives -> {
-                    // Sort by priority
                     List<RouteAlternative> sorted = alternatives.stream()
                             .sorted(Comparator.comparingInt(RouteAlternative::getPriority))
                             .toList();

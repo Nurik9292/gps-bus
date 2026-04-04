@@ -54,8 +54,6 @@ public class OneTransferRouteSearchService {
                         stopsContext.fromStops(), stopsContext.toStops(), MAX_TRANSFER_DISTANCE_KM)
                 .filter(validator::isOneTransferRouteViable)
                 .collectList()
-                // Sort by proximity to fromLocation, then take MAX_RESULTS — BEFORE building options.
-                // This prevents createOption (OSRM + ETA calls) from running on all SQL results.
                 .map(routes -> sortByProximity(routes, context.fromLocation())
                         .stream().limit(MAX_RESULTS).toList())
                 .flatMapMany(Flux::fromIterable)

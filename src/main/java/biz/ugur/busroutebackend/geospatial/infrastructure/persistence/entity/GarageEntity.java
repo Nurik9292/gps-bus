@@ -10,9 +10,7 @@ import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
 
-/**
- * Persistence entity for Garage
- */
+
 @Data
 @Builder
 @NoArgsConstructor

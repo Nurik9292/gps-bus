@@ -40,8 +40,6 @@ public class Distance extends ValueObject implements Comparable<Distance> {
         return new Distance(0.0);
     }
 
-    // ========== Conversion Methods ==========
-
     public double toKilometers() {
         return meters / GeoConstants.METERS_PER_KILOMETER;
     }
@@ -61,8 +59,6 @@ public class Distance extends ValueObject implements Comparable<Distance> {
     public int toMetersInt() {
         return (int) Math.round(meters);
     }
-
-    // ========== Comparison Methods ==========
 
     public boolean isLessThan(Distance other) {
         return this.meters < other.meters;
@@ -89,14 +85,12 @@ public class Distance extends ValueObject implements Comparable<Distance> {
     }
 
     public boolean isWalkable() {
-        return isWalkable(2000.0); // Default 2km
+        return isWalkable(2000.0); 
     }
 
     public boolean isWalkable(double maxWalkableMeters) {
         return meters <= maxWalkableMeters;
     }
-
-    // ========== Arithmetic Operations ==========
 
     public Distance add(Distance other) {
         return Distance.ofMeters(this.meters + other.meters);
@@ -135,8 +129,6 @@ public class Distance extends ValueObject implements Comparable<Distance> {
         return this.meters >= other.meters ? this : other;
     }
 
-    // ========== Time Calculations ==========
-
     public int toWalkingTimeMinutes() {
         return (int) Math.ceil(meters / GeoConstants.AVERAGE_WALKING_SPEED_M_PER_MIN);
     }
@@ -150,8 +142,6 @@ public class Distance extends ValueObject implements Comparable<Distance> {
         double hours = toKilometers() / speedKmh;
         return (int) Math.ceil(hours * 60.0);
     }
-
-    // ========== Formatting ==========
 
     @Override
     public String toString() {
@@ -197,8 +187,6 @@ public class Distance extends ValueObject implements Comparable<Distance> {
     public int compareTo(Distance other) {
         return Double.compare(this.meters, other.meters);
     }
-
-    // ========== Static Utility Methods ==========
 
     public static Distance sum(Distance... distances) {
         double total = 0;

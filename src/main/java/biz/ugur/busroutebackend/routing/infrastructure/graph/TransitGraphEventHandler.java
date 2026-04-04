@@ -15,11 +15,7 @@ import jakarta.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Listens to transport domain events and invalidates the transit graph cache
- * when stops or route geometry changes. A background rebuild is triggered
- * immediately after invalidation so the next route search doesn't stall.
- */
+
 @Component
 @ConditionalOnProperty(name = "routing.dijkstra.enabled", havingValue = "true")
 @Slf4j

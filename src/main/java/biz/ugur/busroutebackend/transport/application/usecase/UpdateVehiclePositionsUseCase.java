@@ -39,6 +39,7 @@ import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,12 +47,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 @Service
 @Slf4j
 public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionDTO>, VehiclePositionUpdateResult> {
 
     private static final long FORCE_PUBLISH_INTERVAL_SECONDS = 5;
+    private static final long MAX_GPS_AGE_SECONDS = 600;
 
     private final ConcurrentHashMap<String, Instant> lastPublishedTime = new ConcurrentHashMap<>();
 
@@ -124,7 +127,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
     private Mono<VehiclePositionUpdateResult> processInternal(List<GpsPositionDTO> gpsPositions) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-            log.debug("Processing {} GPS positions (batch mode) - CorrelationId: {}", gpsPositions.size(), correlationId);
+            log.debug("[GPS_PIPELINE] USE_CASE_INPUT total={} correlationId={}", gpsPositions.size(), correlationId);
 
             List<GpsPositionDTO> validPositions = new ArrayList<>();
             Map<GpsValidationResult, Long> validationCounts = new EnumMap<>(GpsValidationResult.class);
@@ -143,35 +146,45 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             validationMetricsRecorder.recordBatch(validationCounts);
 
             long invalidCount = gpsPositions.size() - validPositions.size();
-            if (invalidCount > 0) {
-                log.debug("Validation: total={}, valid={}, invalid={}",
-                        gpsPositions.size(), validPositions.size(), invalidCount);
-            }
+            log.debug("[GPS_PIPELINE] VALIDATION total={} valid={} invalid={}",
+                    gpsPositions.size(), validPositions.size(), invalidCount);
 
             if (validPositions.isEmpty()) {
                 log.warn("All positions failed validation: {}", validationCounts);
                 return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, gpsPositions.size() - validPositions.size(), 0, LocalDateTime.now(), List.of()));
             }
 
-            List<String> deviceIds = validPositions.stream()
+            final LocalDateTime staleCutoff = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(MAX_GPS_AGE_SECONDS);
+            final List<GpsPositionDTO> freshPositions = validPositions.stream()
+                    .filter(pos -> pos.getFixTime() == null || !pos.getFixTime().isBefore(staleCutoff))
+                    .toList();
+            if (freshPositions.size() < validPositions.size()) {
+                log.debug("[GPS_PIPELINE] STALE_FILTER dropped={}/{} (age > {}s)",
+                        validPositions.size() - freshPositions.size(), validPositions.size(), MAX_GPS_AGE_SECONDS);
+            }
+            log.debug("[GPS_PIPELINE] STALE_FILTER passed={} dropped={}",
+                    freshPositions.size(), validPositions.size() - freshPositions.size());
+            if (freshPositions.isEmpty()) {
+                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validPositions.size(), 0, LocalDateTime.now(), List.of()));
+            }
+
+            List<String> deviceIds = freshPositions.stream()
                     .map(GpsPositionDTO::getDeviceId)
                     .filter(deviceId -> deviceId != null && !deviceId.isBlank())
                     .distinct()
                     .toList();
 
             if (deviceIds.isEmpty()) {
-                log.warn("No valid device IDs found after filtering {} positions", validPositions.size());
-                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validPositions.size(), 0, LocalDateTime.now(), List.of()));
+                log.warn("No valid device IDs found after filtering {} positions", freshPositions.size());
+                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, freshPositions.size(), 0, LocalDateTime.now(), List.of()));
             }
 
-            final int validCount = validPositions.size();
-            return filterOutliers(validPositions)
+            final int validCount = freshPositions.size();
+            return filterOutliers(freshPositions)
                     .flatMap(filteredPositions -> {
                         int outlierCount = validCount - filteredPositions.size();
-                        if (outlierCount > 0) {
-                            log.debug("Outlier filter: {} of {} positions filtered",
-                                    outlierCount, validCount);
-                        }
+                        log.debug("[GPS_PIPELINE] OUTLIER_FILTER passed={} rejected={}",
+                                filteredPositions.size(), outlierCount);
 
                         if (filteredPositions.isEmpty()) {
                             log.warn("All {} positions were filtered as outliers", validCount);
@@ -230,7 +243,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         boolean isTeleportation = type == OutlierDetectionResult.OutlierType.SPEED_EXCEEDED;
                         boolean isFrozen = type == OutlierDetectionResult.OutlierType.FROZEN_COORDINATES_WITH_MOTION;
 
-                        // Teleportation: reject when rejectOutliers=true (default)
                         if (isTeleportation && rejectOutliers) {
                             teleportRejected++;
                             log.warn("[GPS_ANOMALY|SOURCE:SERVER] TELEPORTATION_REJECTED: " +
@@ -241,7 +253,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             continue;
                         }
 
-                        // Frozen coords + motion: reject only if explicitly configured (default: pass through)
                         if (isFrozen && rejectFrozenMotion) {
                             frozenRejected++;
                             continue;
@@ -265,8 +276,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private Mono<OutlierDetectionResult> detectOutlierForPosition(GpsPositionDTO position, int historyLimit) {
         String deviceId = position.getDeviceId();
 
-        // publishOn: Redis response arrives on lettuce-epollEventLoop — must switch thread
-        // before CPU work (Haversine, outlier logic) to avoid blocking the Redis event loop.
         return gpsHistoryService.getHistoryList(deviceId, historyLimit)
                 .publishOn(Schedulers.boundedElastic())
                 .map(history -> outlierDetector.detectWithHistory(
@@ -275,7 +284,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         position.getLongitude(),
                         position.getFixTime(),
                         history,
-                        position.getSpeed()   // pass reported speed for frozen-coords detection
+                        position.getSpeed() 
                 ))
                 .onErrorResume(error -> {
                     log.warn("Failed to check outlier for device {}: {}", deviceId, error.getMessage());
@@ -292,18 +301,22 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             String deviceId = position.getDeviceId();
             GpsPositionDTO existing = latestPositionsByDevice.get(deviceId);
 
-            if (existing == null || position.getFixTime().isAfter(existing.getFixTime())) {
+            if (existing == null
+                    || position.getFixTime() != null
+                    && (existing.getFixTime() == null
+                        || position.getFixTime().isAfter(existing.getFixTime()))) {
                 latestPositionsByDevice.put(deviceId, position);
             }
         }
 
-        log.debug("Batched {} updates into {} unique vehicles",
+        log.debug("[GPS_PIPELINE] PROCESS_BATCH input={} unique_vehicles={}",
                 validPositions.size(), latestPositionsByDevice.size());
 
-        // Vehicles with significant position change → need DB update, direction/garage detection, history
         List<Vehicle> vehiclesToUpdate = new ArrayList<>();
+        List<Vehicle> vehiclesForDetection = new ArrayList<>();
         List<Vehicle> vehiclesToCreate = new ArrayList<>();
         List<VehicleUpdateStatus> statuses = new ArrayList<>();
+        Map<String, Double> estimatedBearings = new HashMap<>();
 
         for (GpsPositionDTO gpsPosition : latestPositionsByDevice.values()) {
             try {
@@ -329,11 +342,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             updatedVehicle.getSpeedKmh()
                     );
 
-                    // Only run expensive pipeline (direction, garage, DB write) when position changed.
-                    // Stationary vehicles skip DB writes — reduces PostgreSQL write load significantly.
                     if (hasSignificantChange) {
-                        // Detect frozen coordinates with motion at server processing level.
-                        // If position didn't change but vehicle reports motion — stale GPS fix from provider.
                         if (Boolean.TRUE.equals(updatedVehicle.getIsInMotion())
                                 && oldLatitude != null && oldLongitude != null
                                 && !positionChangeDetector.hasSignificantPositionChange(
@@ -349,6 +358,23 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                     String.format("%.6f", updatedVehicle.getCurrentLongitude()));
                         }
                         vehiclesToUpdate.add(updatedVehicle);
+
+                        boolean hasCourse = updatedVehicle.getCourse() != null
+                                && updatedVehicle.getCourse() > 0;
+                        if (!hasCourse && oldLatitude != null && oldLongitude != null) {
+                            double bearing = computeBearing(oldLatitude, oldLongitude,
+                                    updatedVehicle.getCurrentLatitude(),
+                                    updatedVehicle.getCurrentLongitude());
+                            vehiclesForDetection.add(
+                                    updatedVehicle.toBuilder().course(bearing).build());
+                            estimatedBearings.put(updatedVehicle.getId().getValue(), bearing);
+                            log.debug("[GPS_PIPELINE] DIR_BEARING vehicle={} plate={} bearing={} (pos-delta)",
+                                    updatedVehicle.getId().getValue(),
+                                    updatedVehicle.getLicensePlate(),
+                                    String.format("%.1f°", bearing));
+                        } else {
+                            vehiclesForDetection.add(updatedVehicle);
+                        }
                     }
 
                     String vehicleId = updatedVehicle.getId().getValue();
@@ -357,6 +383,10 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
                     if (shouldPublish) {
                         lastPublishedTime.put(vehicleId, Instant.now());
+                        log.debug("[GPS_PIPELINE] WS_PUBLISH vehicle={} plate={} lat={} lon={} speed={} moved={}",
+                                vehicleId, updatedVehicle.getLicensePlate(),
+                                updatedVehicle.getCurrentLatitude(), updatedVehicle.getCurrentLongitude(),
+                                updatedVehicle.getSpeedKmh(), hasSignificantChange);
 
                         VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
                                 vehicleId,
@@ -374,8 +404,9 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         domainEventPublisher.publish(event);
                     }
 
-                    // Feed real GPS data into the prediction service on every update
-                    if (updatedVehicle.getCurrentLatitude() != null && updatedVehicle.getCurrentLongitude() != null) {
+                    if (!hasSignificantChange
+                            && updatedVehicle.getCurrentLatitude() != null
+                            && updatedVehicle.getCurrentLongitude() != null) {
                         predictionService.onGpsUpdate(
                                 vehicleId,
                                 updatedVehicle.getLicensePlate(),
@@ -383,10 +414,12 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 updatedVehicle.getCurrentLatitude(),
                                 updatedVehicle.getCurrentLongitude(),
                                 updatedVehicle.getSpeedKmh() != null ? updatedVehicle.getSpeedKmh() : 0.0,
-                                updatedVehicle.getCourse() != null ? updatedVehicle.getCourse() : 0.0,
+                                (updatedVehicle.getCourse() != null && updatedVehicle.getCourse() > 0.0)
+                                        ? updatedVehicle.getCourse()
+                                        : estimatedBearings.getOrDefault(vehicleId, 0.0),
                                 Boolean.TRUE.equals(updatedVehicle.getIsInMotion()),
                                 updatedVehicle.getLastPositionUpdate() != null
-                                        ? updatedVehicle.getLastPositionUpdate().toInstant(java.time.ZoneOffset.UTC)
+                                        ? updatedVehicle.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
                                         : Instant.now(),
                                 updatedVehicle.getCurrentDirection() != null ? updatedVehicle.getCurrentDirection() : 0
                         );
@@ -431,7 +464,22 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
         Mono<List<Vehicle>> vehiclesWithDirections = vehiclesToUpdate.isEmpty() ?
                 Mono.just(List.of()) :
-                directionDetectionService.updateVehicleDirectionsBatch(vehiclesToUpdate)
+                directionDetectionService.updateVehicleDirectionsBatch(vehiclesForDetection)
+                        .map(detectedVehicles -> {
+                            Map<String, Vehicle> detectedById = detectedVehicles.stream()
+                                    .collect(java.util.stream.Collectors.toMap(
+                                            v -> v.getId().getValue(), v -> v));
+                            return vehiclesToUpdate.stream()
+                                    .map(v -> {
+                                        Vehicle detected = detectedById.get(v.getId().getValue());
+                                        if (detected != null && detected.getCurrentDirection() != null) {
+                                            return v.updateDirection(detected.getLastStopSequence(),
+                                                    detected.getCurrentDirection());
+                                        }
+                                        return v;
+                                    })
+                                    .collect(java.util.stream.Collectors.toList());
+                        })
                         .doOnNext(updated -> log.debug("Direction detection completed for {} vehicles", updated.size()));
 
         Mono<List<Vehicle>> vehiclesWithGarageDetection = vehiclesWithDirections.flatMap(vehicles -> {
@@ -446,13 +494,40 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         });
 
         return vehiclesWithGarageDetection.flatMap(updatedVehicles -> {
+            for (Vehicle v : updatedVehicles) {
+                if (v.getCurrentLatitude() != null && v.getCurrentLongitude() != null) {
+                    predictionService.onGpsUpdate(
+                            v.getId().getValue(),
+                            v.getLicensePlate(),
+                            v.getRouteNumber(),
+                            v.getCurrentLatitude(),
+                            v.getCurrentLongitude(),
+                            v.getSpeedKmh() != null ? v.getSpeedKmh() : 0.0,
+                            (v.getCourse() != null && v.getCourse() > 0.0)
+                                    ? v.getCourse()
+                                    : estimatedBearings.getOrDefault(v.getId().getValue(), 0.0),
+                            Boolean.TRUE.equals(v.getIsInMotion()),
+                            v.getLastPositionUpdate() != null
+                                    ? v.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
+                                    : Instant.now(),
+                            v.getCurrentDirection() != null ? v.getCurrentDirection() : 0
+                    );
+                }
+            }
+
+            Map<String, Integer> directionFixes = predictionService.drainPendingDirectionFixes();
+            Mono<Integer> dirFixMono = directionFixes.isEmpty()
+                    ? Mono.just(0)
+                    : vehicleRepository.batchUpdateDirections(directionFixes)
+                            .doOnNext(n -> log.debug("[GPS_PIPELINE] DIR_AUTO_FIX applied {} direction corrections", n));
+
             Mono<Integer> updateMono = updatedVehicles.isEmpty() ?
                     Mono.just(0) : vehicleRepository.batchUpdate(updatedVehicles);
 
             Mono<List<Vehicle>> insertMono = vehiclesToCreate.isEmpty() ?
                     Mono.just(List.of()) : vehicleRepository.batchInsert(vehiclesToCreate).collectList();
 
-            return Mono.zip(updateMono, insertMono)
+            return Mono.zip(updateMono, insertMono, dirFixMono)
                     .flatMap(tuple -> {
                         long vehiclesWithPosition = updatedVehicles.stream()
                                 .filter(Vehicle::hasPosition)
@@ -465,7 +540,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         return Flux.fromIterable(updatedVehicles)
                                 .filter(Vehicle::hasPosition)
                                 .flatMap(v -> gpsHistoryService.addPoint(
-                                        v.getDeviceId(),   // KEY FIX: use deviceId (IMEI), not vehicleId (UUID)
+                                        v.getDeviceId(),  
                                         v.getCurrentLatitude(),
                                         v.getCurrentLongitude(),
                                         v.getSpeedKmh(),
@@ -477,7 +552,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 }));
                     })
                     .map(tuple -> {
-                        log.debug("Batch operations: {} updated, {} created", tuple.getT1(), tuple.getT2().size());
+                        log.debug("Batch operations: {} updated, {} created, {} direction fixes",
+                                tuple.getT1(), tuple.getT2().size(), tuple.getT3());
                         cleanupStalePublishTimes();
                         return createResult(statuses);
                     });
@@ -486,6 +562,9 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
 
     private boolean shouldForcePublishForVehicle(String vehicleId) {
+        if (predictionService.hasActiveState(vehicleId)) {
+            return false;
+        }
         Instant lastPublished = lastPublishedTime.get(vehicleId);
         if (lastPublished == null) {
             return true;
@@ -495,8 +574,18 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     }
 
     private void cleanupStalePublishTimes() {
-        Instant cutoff = Instant.now().minusSeconds(300); // 5 минут
+        Instant cutoff = Instant.now().minusSeconds(300);
         lastPublishedTime.entrySet().removeIf(entry -> entry.getValue().isBefore(cutoff));
+    }
+
+    private static double computeBearing(double lat1, double lon1, double lat2, double lon2) {
+        double lat1r = Math.toRadians(lat1);
+        double lat2r = Math.toRadians(lat2);
+        double dLon  = Math.toRadians(lon2 - lon1);
+        double x = Math.sin(dLon) * Math.cos(lat2r);
+        double y = Math.cos(lat1r) * Math.sin(lat2r)
+                 - Math.sin(lat1r) * Math.cos(lat2r) * Math.cos(dLon);
+        return (Math.toDegrees(Math.atan2(x, y)) + 360) % 360;
     }
 
     private VehiclePositionUpdateResult createResult(List<VehicleUpdateStatus> statuses) {

@@ -74,9 +74,9 @@ public class GetAllBusRoutesUseCase extends BaseUseCase<Mono<Void>, RouteList> {
                             .map(routeResults -> new RouteList(
                                     routeResults,
                                     activeCount,
-                                    1,  // current page (no pagination for this endpoint)
-                                    routeResults.size(),  // page size (all items)
-                                    totalCount  // total items in database
+                                    1, 
+                                    routeResults.size(), 
+                                    totalCount 
                             ))
                             .doOnSuccess(result -> log.debug(
                                     "Retrieved {} routes ({} active, {} total)",

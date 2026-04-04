@@ -11,7 +11,7 @@ import java.util.List;
 public class RouteSegmentDTO {
 
     @JsonProperty("type")
-    private String type; // "walking", "bus_ride", "transfer"
+    private String type; 
 
     @JsonProperty("description")
     private String description;

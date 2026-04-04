@@ -12,12 +12,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Singleton cache for the in-memory transit graph.
- * The graph is built once at startup and refreshed every 30 minutes.
- * Concurrent rebuild requests share the same Mono (no duplicate DB queries).
- * Only active when routing.dijkstra.enabled=true.
- */
+
 @Component
 @ConditionalOnProperty(name = "routing.dijkstra.enabled", havingValue = "true")
 @Slf4j
@@ -54,7 +49,6 @@ public class TransitGraphCache {
     }
 
     private synchronized Mono<TransitGraph> rebuildGraph() {
-        // Double-checked locking: re-read inside synchronized block
         TransitGraph existing = graphRef.get();
         if (existing != null && !existing.isExpired(TTL)) {
             return Mono.just(existing);
@@ -79,7 +73,7 @@ public class TransitGraphCache {
                         buildingMono = null;
                     }
                 })
-                .cache(); // All subscribers share the same result
+                .cache(); 
 
         return buildingMono;
     }

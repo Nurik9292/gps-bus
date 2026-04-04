@@ -9,11 +9,11 @@ import java.security.SecureRandom;
 import java.util.Base64;
 
 @Getter
-@ToString(exclude = "value") // Don't log token value
+@ToString(exclude = "value") 
 @EqualsAndHashCode
 public class ApiToken implements Serializable {
 
-    private static final int TOKEN_LENGTH = 48; // 48 bytes = 64 characters in base64
+    private static final int TOKEN_LENGTH = 48; 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final String value;

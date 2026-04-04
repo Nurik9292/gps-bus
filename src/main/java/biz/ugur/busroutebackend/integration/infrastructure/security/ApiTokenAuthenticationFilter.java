@@ -24,7 +24,7 @@ import java.util.Set;
 public class ApiTokenAuthenticationFilter implements WebFilter {
 
     private static final String TOKEN_PREFIX = "Bearer ";
-    private static final String API_TOKEN_PREFIX = "brt_"; // Bus Route Token
+    private static final String API_TOKEN_PREFIX = "brt_";
 
     private final ExternalServiceRepository externalServiceRepository;
     private final ApiTokenRateLimiter rateLimiter;

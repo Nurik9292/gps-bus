@@ -53,13 +53,12 @@ public class GetAllBannersUseCase extends BaseUseCase<Mono<Boolean>, BannerList>
                         var banners = tuple.getT1();
                         Long activeCount = tuple.getT2();
 
-                        // Create fake pagination for "all" endpoint
                         return BannerList.of(
                             banners,
                             activeCount,
-                            1,  // Single page
-                            banners.size(),  // Page size = total items
-                            banners.size()  // Total items
+                            1,  
+                            banners.size(), 
+                            banners.size() 
                         );
                     })
                     .doOnSuccess(response -> log.debug("Retrieved {} banners ({} active)",

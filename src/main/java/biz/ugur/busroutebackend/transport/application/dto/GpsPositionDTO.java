@@ -53,7 +53,6 @@ public class GpsPositionDTO {
         if (attributes != null && attributes.getMotion() != null) {
             return attributes.getMotion();
         }
-        // Fallback: считаем что движется если скорость > 0
         return speed != null && speed > 0;
     }
 

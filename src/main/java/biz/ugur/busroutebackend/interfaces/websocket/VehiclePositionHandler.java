@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePositionBroadcaster {
 
     private static final Duration SESSION_TIMEOUT = Duration.ofMinutes(5);
-    /** Real GPS messages older than this threshold are dropped before reaching WebSocket clients. */
     private static final Duration MAX_GPS_AGE = Duration.ofMinutes(10);
 
     private static final long CLEANUP_INTERVAL_MS = 60_000;
@@ -50,10 +49,8 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
     private final AtomicInteger sessionCounter = new AtomicInteger(0);
     private final AtomicLong totalExpiredSessions = new AtomicLong(0);
 
-    // directBestEffort: без буфера, медленные подписчики просто пропускают обновления.
-    // Для GPS-позиций промежуточные обновления не важны — важна только последняя позиция.
     private final Sinks.Many<VehiclePositionWebSocketMessage> broadcastSink =
-            Sinks.many().multicast().directBestEffort();
+            Sinks.many().multicast().onBackpressureBuffer();
 
     public VehiclePositionHandler(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                   ReactiveRedisTemplate<String, Object> redisTemplate,
@@ -396,12 +393,13 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                                 msg.getLicensePlate(), msg.getRouteNumber());
                         return false;
                     }
+                    log.debug("[GPS_PIPELINE] REDIS_RECV vehicle={} plate={} route={} lat={} lon={}",
+                            msg.getVehicleId(), msg.getLicensePlate(), msg.getRouteNumber(),
+                            msg.getLatitude(), msg.getLongitude());
                     return true;
                 })
-                // Fix 2: Drop real GPS messages with stale timestamps (>10 min old).
-                // Predicted messages always use LocalDateTime.now() so they are never stale.
                 .filter(msg -> {
-                    if (Boolean.TRUE.equals(msg.getPredicted())) return true; // predictions are always fresh
+                    if (Boolean.TRUE.equals(msg.getPredicted())) return true;
                     if (msg.getTimestamp() == null) return true;
                     LocalDateTime cutoff = LocalDateTime.now(ZoneOffset.UTC).minus(MAX_GPS_AGE);
                     if (msg.getTimestamp().isBefore(cutoff)) {
@@ -414,8 +412,6 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                 .subscribe(
                         this::emitWithMetrics,
                         error -> {
-                            // After MAX_VALUE retries (never reached), just log.
-                            // In practice retryWhen above handles reconnection indefinitely.
                             log.error("Redis vehicle-position subscription permanently failed: {}", error.getMessage());
                         },
                         () -> log.info("Redis vehicle-position subscription completed")
@@ -424,13 +420,7 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
 
 
     private void emitWithMetrics(VehiclePositionWebSocketMessage message) {
-        Sinks.EmitResult result;
-        int retries = 0;
-        do {
-            result = broadcastSink.tryEmitNext(message);
-            retries++;
-        } while (result == Sinks.EmitResult.FAIL_NON_SERIALIZED && retries < 10);
-
+        Sinks.EmitResult result = broadcastSink.tryEmitNext(message);
         if (result == Sinks.EmitResult.OK) {
             bufferMetrics.recordEmitted();
         } else if (result != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
@@ -449,13 +439,12 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
         emitWithMetrics(message);
     }
 
-    /**
-     * {@inheritDoc}
-     * Writes directly to the in-process broadcast sink — no Redis round-trip.
-     * Used by the prediction subsystem to avoid polluting Redis pub/sub.
-     */
     @Override
     public void broadcastDirect(VehiclePositionWebSocketMessage message) {
+        log.debug("[GPS_PIPELINE] WS_SINK vehicle={} plate={} type={} sessions={}",
+                message.getVehicleId(), message.getLicensePlate(),
+                Boolean.TRUE.equals(message.getPredicted()) ? "PRED" : "GPS",
+                activeSessions.size());
         broadcastVehiclePosition(message);
     }
 

@@ -6,9 +6,7 @@ import lombok.Data;
 import java.time.Instant;
 import java.time.LocalDateTime;
 
-/**
- * DTO representing bus arrival information at a specific stop.
- */
+
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class BusArrivalInfo {

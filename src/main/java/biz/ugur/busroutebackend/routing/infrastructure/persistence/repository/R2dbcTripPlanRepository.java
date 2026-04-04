@@ -175,8 +175,8 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
                         row.get("total_searches", Long.class),
                         row.get("successful_searches", Long.class),
                         row.get("avg_options_found", Double.class),
-                        0.0, // averageTravelTime - requires additional logic
-                        "Unknown" // mostPopularRoute - requires additional logic
+                        0.0,
+                        "Unknown" 
                 ))
                 .all();
     }
@@ -205,7 +205,6 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
                     .version(0L)
                     .build();
 
-            // Convert to domain model using mapper
             return mapper.toDomain(entity);
         };
     }

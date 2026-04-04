@@ -25,13 +25,10 @@ class FlexibleLocalDateTimeDeserializerTest {
 
     @Test
     void shouldDeserializeIso8601WithMillisecondsAndTimezone() throws IOException {
-        // Given: Date string from admin panel in ISO 8601 format with milliseconds and timezone
         String json = "{\"date\":\"2025-12-08T09:03:00.000Z\"}";
 
-        // When
         TestDto result = objectMapper.readValue(json, TestDto.class);
 
-        // Then
         assertThat(result.date).isNotNull();
         assertThat(result.date.getYear()).isEqualTo(2025);
         assertThat(result.date.getMonthValue()).isEqualTo(12);
@@ -43,13 +40,10 @@ class FlexibleLocalDateTimeDeserializerTest {
 
     @Test
     void shouldDeserializeIso8601WithTimezoneOffset() throws IOException {
-        // Given
         String json = "{\"date\":\"2025-12-08T09:03:00+05:00\"}";
 
-        // When
         TestDto result = objectMapper.readValue(json, TestDto.class);
 
-        // Then
         assertThat(result.date).isNotNull();
         assertThat(result.date.getYear()).isEqualTo(2025);
         assertThat(result.date.getMonthValue()).isEqualTo(12);
@@ -60,78 +54,60 @@ class FlexibleLocalDateTimeDeserializerTest {
 
     @Test
     void shouldDeserializeStandardFormat() throws IOException {
-        // Given
         String json = "{\"date\":\"2025-12-08T09:03:00\"}";
 
-        // When
         TestDto result = objectMapper.readValue(json, TestDto.class);
 
-        // Then
         assertThat(result.date).isNotNull();
         assertThat(result.date).isEqualTo(LocalDateTime.of(2025, 12, 8, 9, 3, 0));
     }
 
     @Test
     void shouldDeserializeFormatWithoutSeconds() throws IOException {
-        // Given
         String json = "{\"date\":\"2025-12-08T09:03\"}";
 
-        // When
         TestDto result = objectMapper.readValue(json, TestDto.class);
 
-        // Then
         assertThat(result.date).isNotNull();
         assertThat(result.date).isEqualTo(LocalDateTime.of(2025, 12, 8, 9, 3, 0));
     }
 
     @Test
     void shouldDeserializeDateOnly() throws IOException {
-        // Given
         String json = "{\"date\":\"2025-12-08\"}";
 
-        // When
         TestDto result = objectMapper.readValue(json, TestDto.class);
 
-        // Then
         assertThat(result.date).isNotNull();
         assertThat(result.date).isEqualTo(LocalDateTime.of(2025, 12, 8, 0, 0, 0));
     }
 
     @Test
     void shouldHandleNullValue() throws IOException {
-        // Given
         String json = "{\"date\":null}";
 
-        // When
         TestDto result = objectMapper.readValue(json, TestDto.class);
 
-        // Then
         assertThat(result.date).isNull();
     }
 
     @Test
     void shouldHandleEmptyString() throws IOException {
-        // Given
         String json = "{\"date\":\"\"}";
 
-        // When
         TestDto result = objectMapper.readValue(json, TestDto.class);
 
-        // Then
         assertThat(result.date).isNull();
     }
 
     @Test
     void shouldThrowExceptionForInvalidFormat() {
-        // Given
         String json = "{\"date\":\"invalid-date\"}";
 
-        // When/Then
         assertThatThrownBy(() -> objectMapper.readValue(json, TestDto.class))
                 .hasMessageContaining("Unable to parse date: invalid-date");
     }
 
-    // Test DTO
     static class TestDto {
         public LocalDateTime date;
     }

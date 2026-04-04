@@ -350,7 +350,7 @@ distributed-lock:
   acquire-timeout: ${DISTRIBUTED_LOCK_ACQUIRE_TIMEOUT:10s}
   retry-interval: ${DISTRIBUTED_LOCK_RETRY_INTERVAL:100ms}
   key-prefix: ${DISTRIBUTED_LOCK_KEY_PREFIX:lock:}
-  gps-scheduler-lock-timeout: ${GPS_SCHEDULER_LOCK_TIMEOUT:3m}
+  gps-scheduler-lock-timeout: ${GPS_SCHEDULER_LOCK_TIMEOUT:30s}
 
 resilience4j:
   circuitbreaker:
@@ -566,8 +566,10 @@ ugur:
     enabled: ${PREDICTION_ENABLED:true}
     # How often the prediction scheduler fires (milliseconds)
     interval-ms: ${PREDICTION_INTERVAL_MS:1000}
-    # Max age of a GPS fix; older states are skipped (milliseconds)
-    max-age-ms: ${PREDICTION_MAX_AGE_MS:10000}
+    # Max age of a GPS fix; older states are skipped (milliseconds).
+    # TUGDK provider sends batches every 6–10 s; 10 000 ms was too tight —
+    # vehicles landed exactly on the boundary and flickered in/out of prediction.
+    max-age-ms: ${PREDICTION_MAX_AGE_MS:15000}
     # Minimum speed below which dead reckoning is not applied (km/h)
     min-speed-kmh: ${PREDICTION_MIN_SPEED_KMH:3.0}
     # Per-cycle velocity decay factor applied to speedKmh

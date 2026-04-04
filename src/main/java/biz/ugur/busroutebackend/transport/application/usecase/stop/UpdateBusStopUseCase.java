@@ -64,7 +64,6 @@ public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopData
                 validateCoordinates(command.latitude(), command.longitude());
             }
 
-            // updateInfo returns a NEW immutable object - we must capture it!
             BusStop updatedStop = existingStop.updateInfo(
                     command.stopName(),
                     command.nameEn(),
@@ -101,14 +100,8 @@ public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopData
                 });
     }
 
-    /**
-     * Validate bus stop coordinates.
-     * Now uses centralized TurkmenistanBounds for strict validation (bus stops are fixed infrastructure).
-     *
-     * @since 1.5.0 (Phase 3 - migrated to use TurkmenistanBounds)
-     */
+
     private void validateCoordinates(BigDecimal latitude, BigDecimal longitude) {
-        // Use strict bounds for bus stops (they are fixed infrastructure)
         TurkmenistanBounds.validateStrictBounds(latitude, longitude);
     }
 }

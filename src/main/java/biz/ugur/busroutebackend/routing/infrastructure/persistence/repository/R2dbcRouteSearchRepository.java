@@ -167,9 +167,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
             return Flux.empty();
         }
 
-        // P1 OPTIMIZATION NOTE: maxTransferDistanceKm is used for pre-filtering stops by caller
-        // The fromStops and toStops lists are already filtered to be within maxTransferDistanceKm
-        // This ensures users don't have to walk too far to/from bus stops
         log.debug("Searching one-transfer routes: {} from, {} to, max walking distance {}km",
                 fromStopIds.length, toStopIds.length, maxTransferDistanceKm);
 
@@ -184,9 +181,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
     }
 
     private String buildOneTransferRoutesQuery() {
-        // P2 OPTIMIZATION: Extract duplicate vehicle count subquery to CTE
-        // Old: Same subquery executed 8 times (4 UNION sections × 2 routes each)
-        // New: Calculate once in CTE, reference in all JOINs
         return """
             WITH route_vehicle_counts AS (
                 SELECT assigned_route_id, COUNT(*) as vehicle_count
@@ -855,9 +849,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
     }
 
     private TwoTransferRouteResult mapToTwoTransferRouteResult(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
-        // CRITICAL FIX: Implemented proper mapping for two-transfer routes
 
-        // Build three routes
         BusRoute firstRoute = BusRoute.builder()
                 .id(BusRouteId.of(row.get("first_route_id", String.class)))
                 .routeNumber(row.get("first_route_number", String.class))
@@ -879,7 +871,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 .routeColor(row.get("third_route_color", String.class))
                 .build();
 
-        // Build four stops
         BusStop fromStop = BusStop.builder()
                 .id(new BusStopId(row.get("from_stop_id", String.class)))
                 .stopName(row.get("from_stop_name", String.class))

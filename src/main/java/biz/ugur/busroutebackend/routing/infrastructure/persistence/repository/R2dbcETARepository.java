@@ -186,13 +186,6 @@ public class R2dbcETARepository implements ETARepository {
     }
 
 
-    /**
-     * Adjusts travel time based on current traffic conditions using configured multipliers.
-     * Takes into account time of day (rush hours, night) and weekend factors.
-     *
-     * @param baseTime the base travel time in minutes
-     * @return adjusted travel time accounting for traffic conditions
-     */
     private int adjustForTrafficConditions(int baseTime) {
         LocalDateTime now = LocalDateTime.now();
         int hour = now.getHour();

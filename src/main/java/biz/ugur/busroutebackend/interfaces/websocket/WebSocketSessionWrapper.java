@@ -95,7 +95,6 @@ public class WebSocketSessionWrapper {
     }
 
     private String getRouteFromMessage(VehiclePositionWebSocketMessage message) {
-        // В реальной реализации нужно получить номер маршрута из базы данных по vehicleId
         return "";
     }
 

@@ -398,18 +398,14 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .course(row.get("course", Double.class))
                 .currentDirection(safeGet(row, "current_direction", Integer.class, null))
                 .lastStopSequence(safeGet(row, "last_stop_sequence", Integer.class, null))
-                // Garage tracking fields
                 .lastGarageId(safeGet(row, "last_garage_id", String.class, null))
                 .garageEntryTime(safeGet(row, "garage_entry_time", LocalDateTime.class, null))
                 .garageExitTime(safeGet(row, "garage_exit_time", LocalDateTime.class, null))
                 .isInGarage(safeGet(row, "is_in_garage", Boolean.class, false))
-                // Route source fields
                 .routeSource(safeGet(row, "route_source", String.class, null))
                 .routeConfidence(safeGet(row, "route_confidence", Integer.class, 0))
                 .gpsDetectionEnabled(safeGet(row, "gps_detection_enabled", Boolean.class, true))
-                // GPS provider
                 .gpsProvider(safeGet(row, "gps_provider", String.class, "CHINA"))
-                // Metadata
                 .createdAt(safeGet(row, "created_at", LocalDateTime.class, null))
                 .updatedAt(safeGet(row, "updated_at", LocalDateTime.class, null))
                 .version(safeGet(row, "version", Long.class, 0L))
@@ -486,6 +482,26 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .map(BatchUpdateResult::successCount);
     }
 
+    @Override
+    @Transactional
+    public Mono<Integer> batchUpdateDirections(Map<String, Integer> vehicleIdToDirection) {
+        if (vehicleIdToDirection == null || vehicleIdToDirection.isEmpty()) {
+            return Mono.just(0);
+        }
+
+        String sql = "UPDATE vehicles SET current_direction = :dir, updated_at = NOW() WHERE id = :id::uuid";
+
+        return Flux.fromIterable(vehicleIdToDirection.entrySet())
+                .flatMap(entry -> databaseClient.sql(sql)
+                        .bind("dir", entry.getValue())
+                        .bind("id", entry.getKey())
+                        .fetch()
+                        .rowsUpdated()
+                        .map(Long::intValue))
+                .reduce(0, Integer::sum)
+                .doOnNext(n -> log.debug("[GPS_PIPELINE] DIR_AUTO_FIX updated direction for {} vehicles", n));
+    }
+
     private Mono<BatchUpdateResult> updateWithRetry(Vehicle vehicle) {
         return updateSingleVehicle(vehicle)
                 .map(rowsUpdated -> BatchUpdateResult.success())
@@ -514,10 +530,6 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                         });
     }
 
-    /**
-     * Internal result for batch update operations.
-     * Tracks both successful updates and optimistic lock conflicts.
-     */
     private record BatchUpdateResult(int successCount, int conflictCount) {
 
         static BatchUpdateResult empty() {
@@ -574,7 +586,6 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .rowsUpdated()
                 .flatMap(rowsUpdated -> {
                     if (rowsUpdated == 0) {
-                        // No rows updated means version mismatch (optimistic lock failure)
                         return Mono.error(new org.springframework.dao.OptimisticLockingFailureException(
                                 String.format("Optimistic lock failure for Vehicle with id: %s (expected version: %d)",
                                         vehicle.getId(), vehicle.getVersion())));

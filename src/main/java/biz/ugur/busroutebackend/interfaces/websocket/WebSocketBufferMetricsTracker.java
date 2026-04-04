@@ -81,7 +81,7 @@ public class WebSocketBufferMetricsTracker {
         lastLoggedDropCount.set(0);
     }
 
-    @Scheduled(fixedRate = 60000) // Every minute
+    @Scheduled(fixedRate = 60000) 
     public void logHealthStatus() {
         BufferHealthStats stats = getStats();
 

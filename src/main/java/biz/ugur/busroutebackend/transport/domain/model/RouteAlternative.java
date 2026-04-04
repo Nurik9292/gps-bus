@@ -10,10 +10,7 @@ import lombok.Getter;
 
 import java.time.LocalDateTime;
 
-/**
- * Represents a link between a primary route and its alternative route.
- * Alternative routes can be used when the primary route is closed or during holidays.
- */
+
 @Builder(toBuilder = true)
 @Getter
 @EqualsAndHashCode(callSuper = false)
@@ -30,9 +27,6 @@ public class RouteAlternative extends Entity<RouteAlternativeId> implements Base
     private LocalDateTime updatedAt;
     private Long version;
 
-    /**
-     * Create a new route alternative link.
-     */
     public static RouteAlternative create(
             BusRouteId primaryRouteId,
             BusRouteId alternativeRouteId,
@@ -55,9 +49,6 @@ public class RouteAlternative extends Entity<RouteAlternativeId> implements Base
                 .build();
     }
 
-    /**
-     * Restore from persistence.
-     */
     public static RouteAlternative restore(
             RouteAlternativeId id,
             BusRouteId primaryRouteId,
@@ -84,9 +75,6 @@ public class RouteAlternative extends Entity<RouteAlternativeId> implements Base
                 .build();
     }
 
-    /**
-     * Update the alternative link details.
-     */
     public RouteAlternative update(
             Integer priority,
             String description,
@@ -101,9 +89,6 @@ public class RouteAlternative extends Entity<RouteAlternativeId> implements Base
                 .build();
     }
 
-    /**
-     * Update priority only.
-     */
     public RouteAlternative updatePriority(Integer priority) {
         if (priority == null || priority < 1) {
             throw new IllegalArgumentException("Priority must be a positive integer");

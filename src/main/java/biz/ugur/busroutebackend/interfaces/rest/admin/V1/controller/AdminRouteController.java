@@ -85,10 +85,7 @@ public class AdminRouteController extends BasePaginatedController {
               .map(BusRouteListResponse::fromResult));
     }
 
-    /**
-     * Lightweight endpoint for select boxes.
-     * Returns only id, routeNumber, and routeName for all active routes.
-     */
+ 
     @GetMapping("/select-options")
     public Mono<ResponseEntity<ApiResponse<List<RouteSelectOption>>>> getSelectOptions() {
         return ok(busRouteRepository.findActiveRoutes()

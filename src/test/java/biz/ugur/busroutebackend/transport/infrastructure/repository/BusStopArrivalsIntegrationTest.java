@@ -23,13 +23,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Integration tests for ETA (Estimated Time of Arrival) calculation
- * using real PostGIS database with test data based on stop-legacy-661.
- *
- * Run with: INTEGRATION_TEST=true ./mvnw test -Dtest=BusStopArrivalsIntegrationTest
- * Requires running database: make dev-up
- */
+
 @DataR2dbcTest
 @ActiveProfiles("test")
 @EnabledIfEnvironmentVariable(named = "INTEGRATION_TEST", matches = "true")
@@ -46,7 +40,6 @@ class BusStopArrivalsIntegrationTest {
         registry.add("spring.r2dbc.username", () -> "bus_route_user");
         registry.add("spring.r2dbc.password", () -> "bus_route_pass");
 
-        // ETA Properties
         registry.add("app.eta.position.max-age-minutes", () -> 10);
         registry.add("app.eta.position.at-stop-distance-meters", () -> 200);
         registry.add("app.eta.position.max-eta-minutes", () -> 60);
@@ -75,10 +68,8 @@ class BusStopArrivalsIntegrationTest {
         BusStopEntityMapper mapper = new BusStopEntityMapper();
         repository = new R2dbcBusStopRepository(databaseClient, mapper, etaProperties);
 
-        // Clean up test data
         cleanupTestData();
 
-        // Insert test data
         insertTestData();
     }
 
@@ -90,7 +81,6 @@ class BusStopArrivalsIntegrationTest {
     }
 
     private void insertTestData() {
-        // Insert target test stop
         databaseClient.sql("""
             INSERT INTO bus_stops (id, stop_name, stop_code, latitude, longitude, is_active, city_id)
             VALUES (:id, :name, :code, :lat, :lon, true, 'city-001')
@@ -102,7 +92,6 @@ class BusStopArrivalsIntegrationTest {
                 .bind("lon", STOP_LON)
                 .then().block();
 
-        // Insert test routes
         String routeGeometry = "LINESTRING(58.4100 37.8900, 58.3900 37.8950, 58.3807 37.8959, 58.3700 37.9000, 58.3500 37.9100)";
 
         databaseClient.sql("""
@@ -121,7 +110,6 @@ class BusStopArrivalsIntegrationTest {
                 .bind("geometry", routeGeometry)
                 .then().block();
 
-        // Insert route_stops
         databaseClient.sql("""
             INSERT INTO route_stops (id, route_id, stop_id, direction, stop_sequence, distance_from_start_meters)
             VALUES ('test-rs-1', 'test-route-1', :stopId, 0, 17, 6800)
@@ -155,7 +143,6 @@ class BusStopArrivalsIntegrationTest {
     @Test
     @DisplayName("Should return correct ETA for nearby vehicle (< 300m)")
     void shouldReturnOneMinuteForNearbyVehicle() {
-        // Insert vehicle 150 meters from stop
         insertVehicle("test-v-nearby", "1111 AGJ", 37.8945, 58.3808, 30, true,
                      "test-route-1", 0, 15);
 
@@ -175,8 +162,6 @@ class BusStopArrivalsIntegrationTest {
     @Test
     @DisplayName("Should calculate correct ETA for moving vehicle 2km away")
     void shouldCalculateCorrectETAForMovingVehicle() {
-        // Insert vehicle ~2km from stop, moving at 30 km/h
-        // 2000m / (30 km/h * 1000 / 60) = 2000 / 500 = 4 minutes
         insertVehicle("test-v-moving", "2222 AGJ", 37.9100, 58.3950, 30, true,
                      "test-route-1", 0, 10);
 
@@ -186,7 +171,6 @@ class BusStopArrivalsIntegrationTest {
                 .assertNext(arrivals -> {
                     assertFalse(arrivals.isEmpty(), "Should have arrivals");
                     BusArrivalInfo arrival = arrivals.get(0);
-                    // ETA should be approximately 3-5 minutes for 2km at 30 km/h
                     assertTrue(arrival.getEstimatedArrivalMinutes() >= 2 &&
                               arrival.getEstimatedArrivalMinutes() <= 8,
                             "ETA should be between 2 and 8 minutes, was: " + arrival.getEstimatedArrivalMinutes());
@@ -198,9 +182,6 @@ class BusStopArrivalsIntegrationTest {
     @Test
     @DisplayName("Should calculate correct ETA for stationary vehicle using default speed")
     void shouldCalculateETAForStationaryVehicle() {
-        // Insert stationary vehicle ~3km from stop
-        // Should use default speed (25 km/h = 416 m/min)
-        // 3000m / 416 = ~7 minutes
         insertVehicle("test-v-stationary", "3333 AGJ", 37.9200, 58.4000, 0, false,
                      "test-route-1", 0, 8);
 
@@ -210,7 +191,6 @@ class BusStopArrivalsIntegrationTest {
                 .assertNext(arrivals -> {
                     assertFalse(arrivals.isEmpty(), "Should have arrivals");
                     BusArrivalInfo arrival = arrivals.get(0);
-                    // ETA should be approximately 6-10 minutes for 3km at 25 km/h
                     assertTrue(arrival.getEstimatedArrivalMinutes() >= 5 &&
                               arrival.getEstimatedArrivalMinutes() <= 15,
                             "ETA should be between 5 and 15 minutes, was: " + arrival.getEstimatedArrivalMinutes());
@@ -221,9 +201,8 @@ class BusStopArrivalsIntegrationTest {
     @Test
     @DisplayName("Should filter out vehicles that already passed the stop")
     void shouldFilterOutVehiclesThatPassedStop() {
-        // Insert vehicle with last_stop_sequence >= target sequence (17)
         insertVehicle("test-v-passed", "4444 AGJ", 37.8900, 58.3700, 25, true,
-                     "test-route-1", 0, 20); // sequence 20 > target 17
+                     "test-route-1", 0, 20); 
 
         BusStopId stopId = BusStopId.of(TEST_STOP_ID);
 
@@ -236,11 +215,9 @@ class BusStopArrivalsIntegrationTest {
     @Test
     @DisplayName("Should return vehicles from multiple routes sorted by ETA")
     void shouldReturnVehiclesFromMultipleRoutes() {
-        // Insert vehicle on route 29 - farther
         insertVehicle("test-v-route29", "5555 AGJ", 37.9200, 58.4100, 25, true,
                      "test-route-1", 0, 10);
 
-        // Insert vehicle on route 14 - closer
         insertVehicle("test-v-route14", "6666 AGJ", 37.9000, 58.3850, 30, true,
                      "test-route-2", 0, 12);
 
@@ -250,7 +227,6 @@ class BusStopArrivalsIntegrationTest {
                 .assertNext(arrivals -> {
                     assertEquals(2, arrivals.size(), "Should have 2 arrivals from different routes");
 
-                    // Verify routes are different
                     List<String> routeNumbers = arrivals.stream()
                             .map(BusArrivalInfo::getRouteNumber)
                             .distinct()
@@ -263,7 +239,6 @@ class BusStopArrivalsIntegrationTest {
     @Test
     @DisplayName("Should not return vehicles with old position data")
     void shouldNotReturnVehiclesWithOldPositionData() {
-        // Insert vehicle with old position update (> maxAgeMinutes)
         databaseClient.sql("""
             INSERT INTO vehicles (id, device_id, license_plate, current_latitude, current_longitude,
                                  speed_kmh, is_in_motion, assigned_route_id, current_direction,
@@ -284,9 +259,8 @@ class BusStopArrivalsIntegrationTest {
     @Test
     @DisplayName("Should filter by direction when vehicle has direction set")
     void shouldFilterByDirection() {
-        // Insert vehicle going in opposite direction
         insertVehicle("test-v-opposite", "8888 AGJ", 37.9100, 58.3900, 30, true,
-                     "test-route-1", 1, 10); // direction 1 != stop direction 0
+                     "test-route-1", 1, 10); 
 
         BusStopId stopId = BusStopId.of(TEST_STOP_ID);
 
@@ -299,7 +273,6 @@ class BusStopArrivalsIntegrationTest {
     @Test
     @DisplayName("Should include vehicle with null direction (not yet determined)")
     void shouldIncludeVehicleWithNullDirection() {
-        // Insert vehicle with no direction set
         databaseClient.sql("""
             INSERT INTO vehicles (id, device_id, license_plate, current_latitude, current_longitude,
                                  speed_kmh, is_in_motion, assigned_route_id, current_direction,
@@ -320,7 +293,6 @@ class BusStopArrivalsIntegrationTest {
     @Test
     @DisplayName("Should handle far away vehicles correctly (not show 1 minute)")
     void shouldNotShowOneMinuteForFarVehicles() {
-        // Insert vehicle 5km away - should NOT show 1 minute
         insertVehicle("test-v-far", "1010 AGJ", 37.9400, 58.4200, 20, true,
                      "test-route-1", 0, 5);
 

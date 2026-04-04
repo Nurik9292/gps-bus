@@ -100,9 +100,7 @@ public class GlobalExceptionHandler {
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
 
-    // ========================================
-    // Admin Not Found Exception
-    // ========================================
+  
 
     @ExceptionHandler(AdminNotFoundException.class)
     public Mono<ResponseEntity<ErrorResponse>> handleAdminNotFoundException(

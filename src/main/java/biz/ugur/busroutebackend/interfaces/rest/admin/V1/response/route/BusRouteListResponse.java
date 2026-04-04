@@ -9,15 +9,6 @@ import lombok.ToString;
 
 import java.util.List;
 
-/**
- * REST response DTO for bus route list with pagination.
- * Part of the Interfaces layer (REST API).
- *
- * Following Clean Architecture:
- * - Interfaces layer DTO (converts from application layer DTOs)
- * - Contains JSON annotations for API contract
- * - Immutable response object
- */
 @Getter
 @ToString
 @EqualsAndHashCode
@@ -32,21 +23,13 @@ public class BusRouteListResponse {
     @JsonProperty("pagination")
     private final PaginationInfo pagination;
 
-    /**
-     * Constructor with pagination support.
-     */
     public BusRouteListResponse(List<BusRouteResponse> routes, Long activeCount, PaginationInfo pagination) {
         this.routes = routes;
         this.activeCount = activeCount;
         this.pagination = pagination;
     }
 
-    /**
-     * Factory method to create response from application layer DTO.
-     *
-     * @param routeList The RouteList DTO from application layer
-     * @return BusRouteListResponse for REST API
-     */
+ 
     public static BusRouteListResponse fromResult(RouteList routeList) {
         return new BusRouteListResponse(
                 routeList.getRoutes()

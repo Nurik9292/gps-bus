@@ -20,7 +20,6 @@ class AdminTest {
 
     @BeforeEach
     void setUp() {
-        // Simple test password encoder that prefixes with "encoded:"
         passwordEncoder = new PasswordEncoder() {
             @Override
             public String encode(String rawPassword) {
@@ -162,7 +161,7 @@ class AdminTest {
 
         assertNotNull(updatedAdmin);
         assertNotSame(adminWithAvatar, updatedAdmin);
-        assertEquals("avatar.jpg", adminWithAvatar.getAvatar());  // Original unchanged
+        assertEquals("avatar.jpg", adminWithAvatar.getAvatar()); 
         assertNull(updatedAdmin.getAvatar());
 
         assertEquals(1, updatedAdmin.getDomainEvents().size());

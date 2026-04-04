@@ -9,16 +9,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/**
- * In-memory transit graph.
- * Contains all active stops, routes, and directed edges (bus rides + walking connections).
- * Loaded at startup and refreshed periodically.
- */
 public class TransitGraph {
 
-    private final Map<String, BusStop> stops;       // stopId → BusStop
-    private final Map<String, BusRoute> routes;     // routeId → BusRoute
-    private final Map<String, List<TransitEdge>> adj; // stopId → outgoing edges
+    private final Map<String, BusStop> stops;      
+    private final Map<String, BusRoute> routes;    
+    private final Map<String, List<TransitEdge>> adj; 
     private final LocalDateTime builtAt;
     private final int stopCount;
     private final int edgeCount;

@@ -12,10 +12,6 @@ import reactor.core.publisher.Mono;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * Use case for retrieving active cities for mobile clients.
- * Returns only active cities sorted by display order.
- */
 @Service
 @Slf4j
 public class GetMobileCitiesUseCase extends BaseUseCase<Void, List<MobileCityResult>> {
