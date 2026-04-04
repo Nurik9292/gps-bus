@@ -21,7 +21,7 @@ public class VehiclePositionPredictionService {
     private static final double METRES_PER_DEGREE_LAT = 111_320.0;
     private static final double DT_SECONDS = 1.0;
 
-    /** GPS within this distance from prediction → smooth blend; farther → smooth correction. */
+    /** GPS within this distance from unsnapped prediction → smooth blend in blendOrAccept. */
     private static final double MAX_CORRECTION_DISTANCE_METERS = 50.0;
     /** Max bus speed for outlier detection: 25 m/s = 90 km/h. */
     private static final double MAX_BUS_SPEED_MS = 25.0;
@@ -31,8 +31,6 @@ public class VehiclePositionPredictionService {
     private static final double OUTLIER_TOLERANCE = 1.0;
     /** If GPS heading differs from route heading by more than this → flip direction. */
     private static final double DIRECTION_FLIP_THRESHOLD_DEG = 90.0;
-    /** Number of prediction cycles over which a large GPS jump is smoothed. */
-    private static final int SMOOTH_CORRECTION_CYCLES = 5;
     /** GPS older than this is rejected by prediction engine (same as WebSocket stale filter). */
     private static final long MAX_GPS_AGE_MS = 10 * 60 * 1000L; // 10 minutes
     /** If snapped GPS is this far from predicted → override realIsAhead (bus turned around). */
@@ -108,9 +106,6 @@ public class VehiclePositionPredictionService {
         double predictedLat;
         double predictedLon;
         double fraction;
-        boolean needsSmoothCorrection = false;
-        double smoothTargetLat = latitude;
-        double smoothTargetLon = longitude;
 
         List<double[]> routeCoords = null;
         double totalDist = 0;
@@ -179,31 +174,14 @@ public class VehiclePositionPredictionService {
                 }
 
                 if (realIsAhead) {
-                    // Fix #3: If snap position is far from current predicted (>MAX_CORRECTION),
-                    // use smooth correction instead of instant jump to avoid visual teleportation.
-                    if (existing != null) {
-                        double snapDist = DistanceCalculationService.haversineDistanceMeters(
-                                existing.getPredictedLatitude(), existing.getPredictedLongitude(),
-                                snap.latitude(), snap.longitude());
-                        if (snapDist > MAX_CORRECTION_DISTANCE_METERS) {
-                            needsSmoothCorrection = true;
-                            smoothTargetLat = snap.latitude();
-                            smoothTargetLon = snap.longitude();
-                            log.debug("Snap correction started for vehicle {}: {}m to route snap",
-                                    vehicleId, (int) snapDist);
-                        }
-                    }
-                    predictedLat = needsSmoothCorrection && existing != null
-                            ? existing.getPredictedLatitude() : snap.latitude();
-                    predictedLon = needsSmoothCorrection && existing != null
-                            ? existing.getPredictedLongitude() : snap.longitude();
-                    // When smooth correction is active, keep the old fraction so the route
-                    // interpolation stays in sync with the position being smoothed.
-                    // The fraction advances naturally each prediction tick, converging toward
-                    // the real GPS fraction as the position blends toward the snap point.
-                    fraction = needsSmoothCorrection && existing != null && existing.getFractionOnRoute() >= 0
-                            ? existing.getFractionOnRoute()
-                            : realFraction;
+                    // Snap directly to the route snap point — no smooth correction.
+                    // Smooth correction was removed because it competes with the route-advance
+                    // logic: once the bus passes the (fixed) correction target the correction
+                    // pulls backward, creating oscillation. A direct snap to the route point
+                    // is visually acceptable because the snapped position stays on the road.
+                    predictedLat = snap.latitude();
+                    predictedLon = snap.longitude();
+                    fraction = realFraction;
                     course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction, totalDist);
                 } else {
                     predictedLat = existing.getPredictedLatitude();
@@ -249,13 +227,6 @@ public class VehiclePositionPredictionService {
                 .totalRouteDistanceMeters(totalDist)
                 .fractionOnRoute(fraction)
                 .direction(direction);
-
-        if (needsSmoothCorrection) {
-            // smoothTargetLat/Lon is set to snap position (route-aware) or real GPS (dead-reckoning)
-            builder.correctionTargetLat(smoothTargetLat)
-                   .correctionTargetLon(smoothTargetLon)
-                   .correctionCyclesLeft(SMOOTH_CORRECTION_CYCLES);
-        }
 
         vehicleStates.put(vehicleId, builder.lastReceivedAt(Instant.now()).build());
         log.trace("GPS stored: vehicleId={}, speed={}km/h, inMotion={}, fraction={}",
@@ -335,8 +306,7 @@ public class VehiclePositionPredictionService {
     }
 
     private VehiclePredictionState advanceState(VehiclePredictionState state) {
-        VehiclePredictionState advanced = advancePositionOnly(state);
-        return applySmoothCorrection(advanced);
+        return advancePositionOnly(state);
     }
 
     /** Advances the predicted position by one DT_SECONDS step (route-aware or dead-reckoning). */
@@ -384,26 +354,6 @@ public class VehiclePositionPredictionService {
                 .speedKmh(decayedSpeedKmh)
                 .predictedLatitude(state.getPredictedLatitude() + dLat)
                 .predictedLongitude(state.getPredictedLongitude() + dLon)
-                .build();
-    }
-
-    /**
-     * Fix 3: Gradually blends the predicted position toward the GPS correction target.
-     * Each cycle moves 1/N of the remaining distance, giving a smooth visual transition.
-     */
-    private VehiclePredictionState applySmoothCorrection(VehiclePredictionState state) {
-        if (state.getCorrectionCyclesLeft() <= 0) return state;
-
-        double alpha  = 1.0 / state.getCorrectionCyclesLeft();
-        double corrLat = state.getPredictedLatitude()
-                + alpha * (state.getCorrectionTargetLat() - state.getPredictedLatitude());
-        double corrLon = state.getPredictedLongitude()
-                + alpha * (state.getCorrectionTargetLon() - state.getPredictedLongitude());
-
-        return state.toBuilder()
-                .predictedLatitude(corrLat)
-                .predictedLongitude(corrLon)
-                .correctionCyclesLeft(state.getCorrectionCyclesLeft() - 1)
                 .build();
     }
 
