@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.shared.infrastructure.external.gps.mapper;
 
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.dto.TugdkGpsResponseDTO;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
+import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -42,6 +43,7 @@ public class TugdkGpsPositionMapper {
         try {
             GpsPositionDTO dto = new GpsPositionDTO();
 
+            dto.setGpsProvider(GpsProviderType.TUGDK);
             dto.setDeviceId(source.getAttributes().getUniqueId());
 
             dto.setLatitude(source.getLatitude());

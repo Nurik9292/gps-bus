@@ -50,7 +50,7 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
     private final AtomicLong totalExpiredSessions = new AtomicLong(0);
 
     private final Sinks.Many<VehiclePositionWebSocketMessage> broadcastSink =
-            Sinks.many().multicast().onBackpressureBuffer();
+            Sinks.many().multicast().onBackpressureBuffer(4096, false);
 
     public VehiclePositionHandler(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                   ReactiveRedisTemplate<String, Object> redisTemplate,

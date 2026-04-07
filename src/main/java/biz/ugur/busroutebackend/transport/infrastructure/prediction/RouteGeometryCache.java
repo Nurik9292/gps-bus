@@ -3,12 +3,16 @@ package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.OptionalDouble;
 import java.util.concurrent.ConcurrentHashMap;
 
 
@@ -21,8 +25,11 @@ public class RouteGeometryCache {
 
     public static final String BACKWARD = "_1";
 
-    private final ConcurrentHashMap<String, List<double[]>> pointsCache    = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, Double>         distanceCache  = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, List<double[]>>    pointsCache        = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Double>            distanceCache      = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, double[]>          stopFractionsCache = new ConcurrentHashMap<>();
+    /** Full stop metadata sorted by distanceFromStartMeters ascending. */
+    private final ConcurrentHashMap<String, List<RouteStopInfo>> routeStopsCache  = new ConcurrentHashMap<>();
 
     private final BusRouteRepository busRouteRepository;
 
@@ -39,6 +46,7 @@ public class RouteGeometryCache {
     private void loadWithRetry() {
         busRouteRepository.findActiveRoutes()
                 .doOnNext(this::cacheRoute)
+                .flatMap(route -> loadStopFractions(route.getRouteNumber()))
                 .retryWhen(reactor.util.retry.Retry.backoff(5, Duration.ofSeconds(2))
                         .maxBackoff(Duration.ofSeconds(32))
                         .doBeforeRetry(signal -> log.warn(
@@ -50,10 +58,44 @@ public class RouteGeometryCache {
                         "Route geometry cache failed after all retries — prediction will use dead-reckoning: {}",
                         e.getMessage()))
                 .subscribe(
-                        route -> {},
+                        ignored -> {},
                         error -> log.error("Route geometry cache init error (all retries exhausted)", error),
-                        () -> log.info("Route geometry cache loaded: {} entries", pointsCache.size())
+                        () -> log.info("Route geometry cache loaded: {} geometry entries, {} stop-fraction entries",
+                                pointsCache.size(), stopFractionsCache.size())
                 );
+    }
+
+    private reactor.core.publisher.Mono<Void> loadStopFractions(String routeNumber) {
+        return reactor.core.publisher.Flux.fromIterable(List.of(0, 1))
+                .flatMap(dir -> busRouteRepository.getRouteStopsInfoByNumber(routeNumber, dir)
+                        .collectList()
+                        .doOnSuccess(stops -> cacheStopFractions(routeNumber, dir, stops)))
+                .then()
+                .onErrorResume(e -> {
+                    log.debug("Stop fractions load skipped for route {}: {}", routeNumber, e.getMessage());
+                    return reactor.core.publisher.Mono.empty();
+                });
+    }
+
+    private void cacheStopFractions(String routeNumber, int direction, List<RouteStopInfo> stops) {
+        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+        double totalDistance = distanceCache.getOrDefault(key, 0.0);
+        if (totalDistance <= 0 || stops == null || stops.isEmpty()) return;
+
+        List<RouteStopInfo> sorted = stops.stream()
+                .filter(s -> s.getDistanceFromStartMeters() != null && s.getDistanceFromStartMeters() >= 0)
+                .sorted(Comparator.comparingInt(RouteStopInfo::getDistanceFromStartMeters))
+                .toList();
+
+        double[] fractions = sorted.stream()
+                .mapToDouble(s -> s.getDistanceFromStartMeters() / totalDistance)
+                .toArray();
+
+        if (fractions.length > 0) {
+            stopFractionsCache.put(key, fractions);
+            routeStopsCache.put(key, sorted);
+            log.debug("Cached {} stop fractions for route {} dir={}", fractions.length, routeNumber, direction);
+        }
     }
 
 
@@ -69,12 +111,52 @@ public class RouteGeometryCache {
     }
 
  
+    public double[] getStopFractions(String routeNumber, int direction) {
+        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+        return stopFractionsCache.get(key);
+    }
+
+    /**
+     * Returns all stops for route+direction sorted by distance from start (ascending).
+     */
+    public List<RouteStopInfo> getRouteStops(String routeNumber, int direction) {
+        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+        List<RouteStopInfo> stops = routeStopsCache.get(key);
+        return stops != null ? stops : Collections.emptyList();
+    }
+
+    /**
+     * Returns stops ahead of {@code currentFraction} on the given route+direction,
+     * sorted ascending by fraction (closest first).
+     */
+    public List<RouteStopInfo> getStopsAhead(String routeNumber, int direction, double currentFraction) {
+        double totalDistance = getTotalDistance(routeNumber, direction);
+        if (totalDistance <= 0) return Collections.emptyList();
+        return getRouteStops(routeNumber, direction).stream()
+                .filter(s -> s.getDistanceFromStartMeters() / totalDistance > currentFraction + 0.0001)
+                .toList();
+    }
+
+    /**
+     * Returns fraction (0–1) of a specific stop on the route, or empty if not found.
+     */
+    public OptionalDouble getStopFraction(String routeNumber, int direction, String stopId) {
+        double totalDistance = getTotalDistance(routeNumber, direction);
+        if (totalDistance <= 0) return OptionalDouble.empty();
+        return getRouteStops(routeNumber, direction).stream()
+                .filter(s -> stopId.equals(s.getStopId()) && s.getDistanceFromStartMeters() != null)
+                .mapToDouble(s -> s.getDistanceFromStartMeters() / totalDistance)
+                .findFirst();
+    }
+
     public void refreshRoute(String routeNumber) {
         busRouteRepository.findByRouteNumber(routeNumber)
                 .doOnNext(this::cacheRoute)
+                .flatMap(route -> loadStopFractions(routeNumber))
                 .subscribe(
-                        route -> log.info("Refreshed route geometry cache for route {}", routeNumber),
-                        error -> log.error("Failed to refresh route {}: {}", routeNumber, error.getMessage())
+                        ignored -> {},
+                        error -> log.error("Failed to refresh route {}: {}", routeNumber, error.getMessage()),
+                        () -> log.info("Refreshed route geometry cache for route {}", routeNumber)
                 );
     }
 

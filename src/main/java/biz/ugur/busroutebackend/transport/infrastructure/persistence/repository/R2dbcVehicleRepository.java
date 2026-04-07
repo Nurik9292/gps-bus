@@ -489,7 +489,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             return Mono.just(0);
         }
 
-        String sql = "UPDATE vehicles SET current_direction = :dir, updated_at = NOW() WHERE id = :id::uuid";
+        String sql = "UPDATE vehicles SET current_direction = :dir, updated_at = NOW() WHERE id = :id";
 
         return Flux.fromIterable(vehicleIdToDirection.entrySet())
                 .flatMap(entry -> databaseClient.sql(sql)
@@ -503,31 +503,22 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
     }
 
     private Mono<BatchUpdateResult> updateWithRetry(Vehicle vehicle) {
+        // Optimistic lock conflicts cannot be resolved by retrying with the same
+        // vehicle object (version is stale), so we skip the retry and treat any
+        // optimistic-lock failure — direct or wrapped in RetryExhaustedException — as
+        // a harmless conflict: the concurrent writer already persisted a newer position.
         return updateSingleVehicle(vehicle)
                 .map(rowsUpdated -> BatchUpdateResult.success())
-                .retryWhen(Retry.backoff(MAX_RETRIES, Duration.ofMillis(10))
-                        .maxBackoff(Duration.ofMillis(100))
-                        .jitter(0.5)
-                        .filter(throwable -> throwable instanceof org.springframework.dao.OptimisticLockingFailureException)
-                        .doBeforeRetry(signal -> {
-                            int attempt = (int) signal.totalRetries() + 1;
-                            metricsRecorder.recordRetry(ENTITY_TYPE, vehicle.getId().getValue(), attempt, MAX_RETRIES);
-                        })
-                        .doAfterRetry(signal -> {
-                            if (signal.failure() == null) {
-                                metricsRecorder.recordSuccessAfterRetry(
-                                        ENTITY_TYPE,
-                                        vehicle.getId().getValue(),
-                                        (int) signal.totalRetries() + 1
-                                );
-                            }
-                        })
-                )
-                .onErrorResume(org.springframework.dao.OptimisticLockingFailureException.class,
-                        error -> {
-                            metricsRecorder.recordFailureAfterRetries(ENTITY_TYPE, vehicle.getId().getValue(), MAX_RETRIES);
-                            return Mono.just(BatchUpdateResult.conflict());
-                        });
+                .onErrorResume(error -> {
+                    Throwable root = error.getCause() != null ? error.getCause() : error;
+                    if (root instanceof org.springframework.dao.OptimisticLockingFailureException) {
+                        log.debug("Optimistic lock conflict for vehicle {} (version {}), skipping — concurrent update won",
+                                vehicle.getId(), vehicle.getVersion());
+                        metricsRecorder.recordFailureAfterRetries(ENTITY_TYPE, vehicle.getId().getValue(), 0);
+                        return Mono.just(BatchUpdateResult.conflict());
+                    }
+                    return Mono.error(error);
+                });
     }
 
     private record BatchUpdateResult(int successCount, int conflictCount) {

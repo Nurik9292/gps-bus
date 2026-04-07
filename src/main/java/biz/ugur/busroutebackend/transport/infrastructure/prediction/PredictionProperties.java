@@ -24,4 +24,8 @@ public class PredictionProperties {
     private double correctionFactor = 0.7;
 
     private boolean snapToRoute = true;
+
+    private double stopDecelerationZoneMeters = 80.0;
+
+    private double stopDecelerationMinFactor = 0.15;
 }

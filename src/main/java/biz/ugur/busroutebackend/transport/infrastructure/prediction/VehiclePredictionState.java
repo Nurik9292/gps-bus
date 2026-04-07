@@ -37,6 +37,14 @@ public class VehiclePredictionState {
     @Builder.Default
     private double lastGpsFraction = -1;
 
+    /** Последняя фракция GPS которую SNAP_IMPLAUSIBLE отверг. */
+    @Builder.Default
+    private double lastRejectedGpsFraction = -1;
+
+    /** Сколько раз подряд SNAP_IMPLAUSIBLE отверг GPS вблизи lastRejectedGpsFraction. */
+    @Builder.Default
+    private int consecutiveImplausibleCount = 0;
+
     @Builder.Default
     private int direction = 0;
 

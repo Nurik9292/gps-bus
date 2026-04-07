@@ -154,7 +154,10 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
         }
 
         List<GpsPositionDTO> latestPositions = getLatestPositionsByUniqueId(allPositions);
-        latestPositions.forEach(this::transformPosition);
+        latestPositions.forEach(pos -> {
+            transformPosition(pos);
+            pos.setGpsProvider(biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType.CHINA);
+        });
 
         log.debug("[GPS_PIPELINE] CHINA_DEDUP raw={} unique={}",
                 allPositions.size(), latestPositions.size());

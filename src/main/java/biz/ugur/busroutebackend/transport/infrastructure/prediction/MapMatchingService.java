@@ -152,7 +152,9 @@ public class MapMatchingService {
         double[] b = routePoints.get(segIndex + 1);
         double bearing = bearingDegrees(a[0], a[1], b[0], b[1]);
 
-        return (direction == 1) ? (bearing + 180) % 360 : bearing;
+        // Both forward and backward geometries are stored in their natural traversal order
+        // (start→end of each trip). The bearing directly represents the travel direction.
+        return bearing;
     }
 
     private ProjectionResult projectPointOnSegment(double lat, double lon,

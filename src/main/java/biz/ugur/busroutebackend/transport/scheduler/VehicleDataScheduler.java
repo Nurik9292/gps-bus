@@ -16,6 +16,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -183,21 +184,50 @@ public class VehicleDataScheduler {
     }
 
     private Mono<List<GpsPositionDTO>> fetchPositionsIfNotEmpty(Map<GpsProviderType, List<String>> devicesByProvider) {
-        if (devicesByProvider.isEmpty()) {
-            log.warn("No device IDs found in database, skipping GPS update");
+        int totalDevices = devicesByProvider.values().stream().mapToInt(List::size).sum();
+
+        // Bootstrap: find enabled providers that have zero known devices in DB
+        List<reactor.core.publisher.Mono<List<GpsPositionDTO>>> extraFetches =
+                gpsDataAggregator.getEnabledProviders().stream()
+                        .filter(p -> !devicesByProvider.containsKey(p.getProviderType()))
+                        .peek(p -> log.info("[GPS_PIPELINE] BOOTSTRAP provider={} (0 devices in DB, calling fetchAllPositions)",
+                                p.getProviderType().getCode()))
+                        .map(p -> p.fetchAllPositions()
+                                .onErrorResume(e -> {
+                                    log.warn("[GPS_PIPELINE] BOOTSTRAP provider={} failed: {}",
+                                            p.getProviderType().getCode(), e.getMessage());
+                                    return reactor.core.publisher.Mono.just(List.of());
+                                }))
+                        .toList();
+
+        if (devicesByProvider.isEmpty() && extraFetches.isEmpty()) {
+            log.warn("No device IDs found in database and no enabled providers, skipping GPS update");
             return Mono.just(List.of());
         }
 
-        int totalDevices = devicesByProvider.values().stream().mapToInt(List::size).sum();
+        Mono<List<GpsPositionDTO>> normalFetch = devicesByProvider.isEmpty()
+                ? Mono.just(List.of())
+                : gpsDataAggregator.fetchPositionsGroupedByProvider(devicesByProvider)
+                        .doOnNext(positions -> {
+                            int missing = totalDevices - positions.size();
+                            if (missing > 0) {
+                                log.warn("GPS API returned {} of {} positions. Missing {} devices",
+                                        positions.size(), totalDevices, missing);
+                            }
+                        });
 
-        return gpsDataAggregator.fetchPositionsGroupedByProvider(devicesByProvider)
-                .doOnNext(positions -> {
-                    int missing = totalDevices - positions.size();
-                    if (missing > 0) {
-                        log.warn("GPS API returned {} of {} positions. Missing {} devices",
-                                positions.size(), totalDevices, missing);
-                    }
-                });
+        if (extraFetches.isEmpty()) {
+            return normalFetch;
+        }
+
+        List<Mono<List<GpsPositionDTO>>> allFetches = new java.util.ArrayList<>();
+        allFetches.add(normalFetch);
+        allFetches.addAll(extraFetches);
+
+        return Flux.fromIterable(allFetches)
+                .flatMap(m -> m)
+                .flatMapIterable(list -> list)
+                .collectList();
     }
 
     private Mono<VehiclePositionUpdateResult> processBatch(List<GpsPositionDTO> batch, Duration timeout) {

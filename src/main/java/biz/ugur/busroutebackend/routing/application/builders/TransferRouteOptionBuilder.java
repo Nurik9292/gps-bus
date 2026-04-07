@@ -92,11 +92,10 @@ public class TransferRouteOptionBuilder {
             WalkingRouteService.WalkingRouteResult walkToFirst = tuple.getT2();
             WalkingRouteService.WalkingRouteResult walkFromLast = tuple.getT3();
 
-            String firstRouteGeometry = getCorrectRouteGeometry(transferRoute.firstRoute());
-            Integer firstRouteDistance = getCorrectRouteDistance(transferRoute.firstRoute());
-
-            String secondRouteGeometry = getCorrectRouteGeometry(transferRoute.secondRoute());
-            Integer secondRouteDistance = getCorrectRouteDistance(transferRoute.secondRoute());
+            String firstRouteGeometry = selectGeometryForDirection(
+                    transferRoute.firstRoute(), transferRoute.fromStop(), transferRoute.transferStop());
+            String secondRouteGeometry = selectGeometryForDirection(
+                    transferRoute.secondRoute(), transferRoute.transferStop(), transferRoute.toStop());
 
             String firstRouteTrimmed = trimRouteGeometry(
                     firstRouteGeometry,
@@ -109,6 +108,12 @@ public class TransferRouteOptionBuilder {
                     transferRoute.transferStop(),
                     transferRoute.toStop()
             );
+
+            int firstCalcDist = geometryTrimmingService.calculateGeometryDistanceMeters(firstRouteTrimmed);
+            Integer firstRouteDistance = firstCalcDist > 0 ? firstCalcDist : null;
+
+            int secondCalcDist = geometryTrimmingService.calculateGeometryDistanceMeters(secondRouteTrimmed);
+            Integer secondRouteDistance = secondCalcDist > 0 ? secondCalcDist : null;
 
             String transferStopName = transferRoute.transferStop().getStopName();
             String lastStopName = transferRoute.toStop().getStopName();
@@ -171,9 +176,12 @@ public class TransferRouteOptionBuilder {
             WalkingRouteService.WalkingRouteResult walkToFirst = tuple.getT2();
             WalkingRouteService.WalkingRouteResult walkFromFinal = tuple.getT3();
 
-            String firstRouteGeometry = getCorrectRouteGeometry(twoTransferRoute.firstRoute());
-            String secondRouteGeometry = getCorrectRouteGeometry(twoTransferRoute.secondRoute());
-            String thirdRouteGeometry = getCorrectRouteGeometry(twoTransferRoute.thirdRoute());
+            String firstRouteGeometry = selectGeometryForDirection(
+                    twoTransferRoute.firstRoute(), twoTransferRoute.fromStop(), twoTransferRoute.firstTransferStop());
+            String secondRouteGeometry = selectGeometryForDirection(
+                    twoTransferRoute.secondRoute(), twoTransferRoute.firstTransferStop(), twoTransferRoute.secondTransferStop());
+            String thirdRouteGeometry = selectGeometryForDirection(
+                    twoTransferRoute.thirdRoute(), twoTransferRoute.secondTransferStop(), twoTransferRoute.toStop());
 
             String firstRouteTrimmed = trimRouteGeometry(
                     firstRouteGeometry,
@@ -193,6 +201,15 @@ public class TransferRouteOptionBuilder {
                     twoTransferRoute.toStop()
             );
 
+            int firstCalcDist2 = geometryTrimmingService.calculateGeometryDistanceMeters(firstRouteTrimmed);
+            Integer firstRouteDistance2 = firstCalcDist2 > 0 ? firstCalcDist2 : null;
+
+            int secondCalcDist2 = geometryTrimmingService.calculateGeometryDistanceMeters(secondRouteTrimmed);
+            Integer secondRouteDistance2 = secondCalcDist2 > 0 ? secondCalcDist2 : null;
+
+            int thirdCalcDist2 = geometryTrimmingService.calculateGeometryDistanceMeters(thirdRouteTrimmed);
+            Integer thirdRouteDistance2 = thirdCalcDist2 > 0 ? thirdCalcDist2 : null;
+
             String firstTransferStopName = twoTransferRoute.firstTransferStop().getStopName();
             String secondTransferStopName = twoTransferRoute.secondTransferStop().getStopName();
             String finalStopName = twoTransferRoute.toStop().getStopName();
@@ -202,7 +219,7 @@ public class TransferRouteOptionBuilder {
             RouteSegment walkToSeg2 = routeSegmentFactory.createWalkingSegment(context.fromLocation(), firstStopLocation, walkingToFirst, walkToFirst);
             walkToSeg2.setToLocationName(fromStopName);
 
-            RouteSegment firstBusSeg2 = createBusSegmentWithGeometry(firstStopLocation, firstTransferLocation, twoTransferRoute.firstRouteTravelMinutes(), firstRouteNumber, firstRouteTrimmed, getCorrectRouteDistance(twoTransferRoute.firstRoute()));
+            RouteSegment firstBusSeg2 = createBusSegmentWithGeometry(firstStopLocation, firstTransferLocation, twoTransferRoute.firstRouteTravelMinutes(), firstRouteNumber, firstRouteTrimmed, firstRouteDistance2);
             firstBusSeg2.setFromLocationName(fromStopName);
             firstBusSeg2.setToLocationName(firstTransferStopName);
 
@@ -210,7 +227,7 @@ public class TransferRouteOptionBuilder {
             transfer1Seg.setFromLocationName(firstTransferStopName);
             transfer1Seg.setToLocationName(firstTransferStopName);
 
-            RouteSegment secondBusSeg2 = createBusSegmentWithGeometry(firstTransferLocation, secondTransferLocation, twoTransferRoute.secondRouteTravelMinutes(), secondRouteNum, secondRouteTrimmed, getCorrectRouteDistance(twoTransferRoute.secondRoute()));
+            RouteSegment secondBusSeg2 = createBusSegmentWithGeometry(firstTransferLocation, secondTransferLocation, twoTransferRoute.secondRouteTravelMinutes(), secondRouteNum, secondRouteTrimmed, secondRouteDistance2);
             secondBusSeg2.setFromLocationName(firstTransferStopName);
             secondBusSeg2.setToLocationName(secondTransferStopName);
 
@@ -218,7 +235,7 @@ public class TransferRouteOptionBuilder {
             transfer2Seg.setFromLocationName(secondTransferStopName);
             transfer2Seg.setToLocationName(secondTransferStopName);
 
-            RouteSegment thirdBusSeg2 = createBusSegmentWithGeometry(secondTransferLocation, finalStopLocation, twoTransferRoute.thirdRouteTravelMinutes(), thirdRouteNum, thirdRouteTrimmed, getCorrectRouteDistance(twoTransferRoute.thirdRoute()));
+            RouteSegment thirdBusSeg2 = createBusSegmentWithGeometry(secondTransferLocation, finalStopLocation, twoTransferRoute.thirdRouteTravelMinutes(), thirdRouteNum, thirdRouteTrimmed, thirdRouteDistance2);
             thirdBusSeg2.setFromLocationName(secondTransferStopName);
             thirdBusSeg2.setToLocationName(finalStopName);
 
@@ -242,49 +259,16 @@ public class TransferRouteOptionBuilder {
         );
     }
 
-    private String getCorrectRouteGeometry(BusRoute route) {
-        if (route.hasForwardGeometry() && route.getRouteGeometryForward() != null) {
-            String forwardGeom = route.getRouteGeometryForward();
-            if (!forwardGeom.isEmpty()) {
-                return forwardGeom;
-            }
+    private String selectGeometryForDirection(BusRoute route, BusStop fromStop, BusStop toStop) {
+        String forwardGeom = route.hasForwardGeometry() ? route.getRouteGeometryForward() : null;
+        String backwardGeom = route.hasBackwardGeometry() ? route.getRouteGeometryBackward() : null;
+
+        if (forwardGeom == null && backwardGeom == null) {
+            log.warn("⚠️ No geometry found for route {}", route.getRouteNumber());
+            return null;
         }
 
-        if (route.hasBackwardGeometry() && route.getRouteGeometryBackward() != null) {
-            String backwardGeom = route.getRouteGeometryBackward();
-            if (!backwardGeom.isEmpty()) {
-                log.debug("✅ Using BACKWARD geometry for route {}", route.getRouteNumber());
-                return backwardGeom;
-            }
-        }
-
-        log.warn("⚠️ No geometry found for route {}", route.getRouteNumber());
-        return null;
-    }
-
-    private Integer getCorrectRouteDistance(BusRoute route) {
-        if (route.getTotalDistanceForwardMeters() != null &&
-                route.getTotalDistanceForwardMeters() > 0) {
-            return route.getTotalDistanceForwardMeters();
-        }
-
-        if (route.getTotalDistanceBackwardMeters() != null &&
-                route.getTotalDistanceBackwardMeters() > 0) {
-            log.debug("✅ Using BACKWARD distance for route {}", route.getRouteNumber());
-            return route.getTotalDistanceBackwardMeters();
-        }
-
-        return null;
-    }
-
-    private String determineDirection(BusRoute route) {
-        if (route.getRouteGeometryForward() != null && !route.getRouteGeometryForward().isEmpty()) {
-            return "FORWARD";
-        }
-        if (route.getRouteGeometryBackward() != null && !route.getRouteGeometryBackward().isEmpty()) {
-            return "BACKWARD";
-        }
-        return "UNKNOWN";
+        return geometryTrimmingService.selectGeometryForDirection(forwardGeom, backwardGeom, fromStop, toStop);
     }
 
     private String trimRouteGeometry(String originalGeometry, BusStop fromStop, BusStop toStop) {

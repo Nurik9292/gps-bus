@@ -62,6 +62,10 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
 
     public static Vehicle create(String deviceId, String licensePlate) {
+        return create(deviceId, licensePlate, GpsProviderType.defaultProvider());
+    }
+
+    public static Vehicle create(String deviceId, String licensePlate, GpsProviderType gpsProvider) {
         String validatedDeviceId = VehicleValidationService.validateDeviceId(deviceId);
         String validatedLicensePlate = VehicleValidationService.validateLicensePlate(licensePlate);
 
@@ -83,7 +87,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .routeSource(RouteSource.UNKNOWN)
                 .routeConfidence(0)
                 .gpsDetectionEnabled(true)
-                .gpsProvider(GpsProviderType.defaultProvider())
+                .gpsProvider(gpsProvider != null ? gpsProvider : GpsProviderType.defaultProvider())
                 .version(0L)
                 .build();
 

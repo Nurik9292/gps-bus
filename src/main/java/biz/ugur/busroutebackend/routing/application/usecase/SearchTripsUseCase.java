@@ -145,6 +145,8 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
                 !response.getTripOptions().isEmpty();
     }
 
+    private static final double MIN_ROUTE_DISTANCE_METERS = 500.0;
+
     private ValidationResult validateRequest(TripSearchRequest request) {
         if (request.getFrom() == null || request.getTo() == null) {
             return ValidationResult.invalid(
@@ -155,6 +157,12 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
         if (!isLocationInTurkmenistan(request.getFrom()) || !isLocationInTurkmenistan(request.getTo())) {
             return ValidationResult.invalid(
                     TripPlanningException.PlanningErrorType.LOCATION_OUT_OF_BOUNDS
+            );
+        }
+
+        if (calculateDistance(request.getFrom(), request.getTo()) < MIN_ROUTE_DISTANCE_METERS) {
+            return ValidationResult.invalid(
+                    TripPlanningException.PlanningErrorType.DISTANCE_TOO_SHORT
             );
         }
 

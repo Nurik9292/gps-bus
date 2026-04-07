@@ -569,7 +569,10 @@ ugur:
     # Max age of a GPS fix; older states are skipped (milliseconds).
     # TUGDK provider sends batches every 6–10 s; 10 000 ms was too tight —
     # vehicles landed exactly on the boundary and flickered in/out of prediction.
-    max-age-ms: ${PREDICTION_MAX_AGE_MS:15000}
+    # Set to 180 000 ms (3 min) so that during GPS gaps the bus gradually
+    # decelerates via decay-factor (0.98/s → speed reaches min-speed-kmh ~2.5 min)
+    # instead of freezing after 15 s. Reduces visible teleport on GPS resume.
+    max-age-ms: ${PREDICTION_MAX_AGE_MS:180000}
     # Minimum speed below which dead reckoning is not applied (km/h)
     min-speed-kmh: ${PREDICTION_MIN_SPEED_KMH:3.0}
     # Per-cycle velocity decay factor applied to speedKmh
@@ -578,3 +581,7 @@ ugur:
     correction-factor: ${PREDICTION_CORRECTION_FACTOR:0.7}
     # Phase 2: snap predicted position to nearest route geometry
     snap-to-route: ${PREDICTION_SNAP_TO_ROUTE:true}
+    # Stop-aware speed decay: distance zone (meters) before a stop in which speed reduces
+    stop-deceleration-zone-meters: ${PREDICTION_STOP_DECEL_ZONE:80.0}
+    # Minimum speed multiplier at the stop itself (fraction of current speed)
+    stop-deceleration-min-factor: ${PREDICTION_STOP_DECEL_MIN:0.15}

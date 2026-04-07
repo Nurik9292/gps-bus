@@ -1,12 +1,17 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TimePeriod;
+import biz.ugur.busroutebackend.routing.infrastructure.config.ETAProperties;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.DirectVehiclePositionBroadcaster;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage;
+import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage.NextStopEta;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -41,15 +46,59 @@ public class VehiclePositionPredictionService {
     private final DirectVehiclePositionBroadcaster directBroadcaster;
     private final RouteGeometryCache routeGeometryCache;
     private final MapMatchingService mapMatchingService;
+    private final VehiclePredictionStateRepository stateRepository;
+    private final ETAProperties etaProperties;
 
     public VehiclePositionPredictionService(PredictionProperties properties,
                                              DirectVehiclePositionBroadcaster directBroadcaster,
                                              RouteGeometryCache routeGeometryCache,
-                                             MapMatchingService mapMatchingService) {
+                                             MapMatchingService mapMatchingService,
+                                             VehiclePredictionStateRepository stateRepository,
+                                             ETAProperties etaProperties) {
         this.properties = properties;
         this.directBroadcaster = directBroadcaster;
         this.routeGeometryCache = routeGeometryCache;
         this.mapMatchingService = mapMatchingService;
+        this.stateRepository = stateRepository;
+        this.etaProperties = etaProperties;
+    }
+
+    @PostConstruct
+    public void restoreFromRedis() {
+        if (!properties.isEnabled()) return;
+
+        stateRepository.loadAll()
+                .filter(state -> state.getVehicleId() != null)
+                .map(state -> {
+                    // Reload route geometry from in-memory cache (it may not be loaded yet,
+                    // in which case routeCoordinates stays null and prediction falls back to dead-reckoning
+                    // until the next real GPS update arrives).
+                    if (state.getRouteNumber() != null) {
+                        List<double[]> coords = routeGeometryCache.getPoints(
+                                state.getRouteNumber(), state.getDirection());
+                        double totalDist = routeGeometryCache.getTotalDistance(
+                                state.getRouteNumber(), state.getDirection());
+                        if (coords != null) {
+                            return state.toBuilder()
+                                    .routeCoordinates(coords)
+                                    .totalRouteDistanceMeters(totalDist)
+                                    .build();
+                        }
+                    }
+                    return state;
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe(
+                        state -> {
+                            vehicleStates.put(state.getVehicleId(), state);
+                            log.debug("Restored prediction state: vehicle={} route={} frac={}",
+                                    state.getVehicleId(), state.getRouteNumber(),
+                                    state.getFractionOnRoute() >= 0
+                                            ? String.format("%.4f", state.getFractionOnRoute()) : "-");
+                        },
+                        err -> log.warn("Error restoring prediction states: {}", err.getMessage()),
+                        () -> log.info("Prediction states restored from Redis: {} vehicles", vehicleStates.size())
+                );
     }
 
 
@@ -119,6 +168,8 @@ public class VehiclePositionPredictionService {
         double predictedLat;
         double predictedLon;
         double fraction;
+        double newRejectedFrac = existing != null ? existing.getLastRejectedGpsFraction() : -1;
+        int newImplausibleCount = existing != null ? existing.getConsecutiveImplausibleCount() : 0;
 
         List<double[]> routeCoords = null;
         double totalDist = 0;
@@ -144,6 +195,7 @@ public class VehiclePositionPredictionService {
                     : mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, totalDist);
 
             boolean headingCorrected = false;
+            boolean fracCorrected = false;
 
             if (snap.snapped() && course > 1.0) {
                 double routeHeading = mapMatchingService.calculateCourseFromRoute(
@@ -185,8 +237,8 @@ public class VehiclePositionPredictionService {
                     double fracDelta = realFraction - lastGpsFrac;
                     boolean gpsFracIncreasing = fracDelta > 0.005;
                     boolean gpsFracDecreasing = fracDelta < -0.005;
-                    boolean gpsMoveAgainstDir = (direction == 0 && gpsFracDecreasing)
-                            || (direction == 1 && gpsFracIncreasing);
+                    // Fraction always increases: "against direction" means GPS fraction is decreasing.
+                    boolean gpsMoveAgainstDir = gpsFracDecreasing;
                     boolean plausibleJump = Math.abs(fracDelta) <= 0.25;
 
                     if (gpsMoveAgainstDir && plausibleJump) {
@@ -207,6 +259,7 @@ public class VehiclePositionPredictionService {
                                 totalDist = correctedDist;
                                 snap = correctedSnap;
                                 realFraction = snap.fraction();
+                                fracCorrected = true;
                             }
                         }
                     } else if (gpsMoveAgainstDir) {
@@ -216,34 +269,75 @@ public class VehiclePositionPredictionService {
                 }
 
                 boolean plausibleSnap = true;
-                if (!headingCorrected && existing != null && existing.getLastGpsFraction() >= 0) {
+                boolean overrideActive = false;
+
+                boolean routeChanged = existing != null
+                        && existing.getRouteNumber() != null
+                        && !existing.getRouteNumber().equals(routeNumber);
+                if (routeChanged) {
+                    // Route reassignment — fractions from different geometries are incomparable.
+                    // Reset rejection tracking so SNAP_IMPLAUSIBLE doesn't block the correct new position.
+                    newRejectedFrac = -1;
+                    newImplausibleCount = 0;
+                    log.debug("[GPS_PIPELINE] ROUTE_CHANGE vehicle={} route={}→{} frac={} — resetting snap state",
+                            vehicleId, existing.getRouteNumber(), routeNumber,
+                            String.format("%.4f", realFraction));
+                }
+
+                if (!headingCorrected && !fracCorrected && !routeChanged && existing != null && existing.getLastGpsFraction() >= 0) {
                     double jumpSize = Math.abs(realFraction - existing.getLastGpsFraction());
                     if (jumpSize > 0.25) {
-                        plausibleSnap = false;
-                        log.debug("[GPS_PIPELINE] SNAP_IMPLAUSIBLE vehicle={} route={} dir={} lastFrac={}→newFrac={} jump={} — keeping predicted",
-                                vehicleId, routeNumber, direction,
-                                String.format("%.4f", existing.getLastGpsFraction()),
-                                String.format("%.4f", realFraction),
-                                String.format("%.4f", jumpSize));
+                        // Check if GPS is consistently reporting the same location across multiple updates.
+                        // If so, the vehicle physically moved there — force-accept after threshold.
+                        boolean sameRejectedLocation = existing.getLastRejectedGpsFraction() >= 0
+                                && Math.abs(realFraction - existing.getLastRejectedGpsFraction()) < 0.05;
+                        if (sameRejectedLocation) {
+                            newImplausibleCount = existing.getConsecutiveImplausibleCount() + 1;
+                        } else {
+                            newImplausibleCount = 1;
+                        }
+                        newRejectedFrac = realFraction;
+
+                        if (newImplausibleCount >= 3) {
+                            // Vehicle has consistently reported this location — accept it as ground truth.
+                            // overrideActive bypasses the realIsAhead check so we always use real GPS position.
+                            log.info("[GPS_PIPELINE] SNAP_IMPLAUSIBLE_OVERRIDE vehicle={} route={} dir={} frac={}→{} jump={} ({}x consistent GPS)",
+                                    vehicleId, routeNumber, direction,
+                                    String.format("%.4f", existing.getLastGpsFraction()),
+                                    String.format("%.4f", realFraction),
+                                    String.format("%.4f", jumpSize),
+                                    newImplausibleCount);
+                            newImplausibleCount = 0;
+                            newRejectedFrac = -1;
+                            overrideActive = true;
+                        } else {
+                            plausibleSnap = false;
+                            log.debug("[GPS_PIPELINE] SNAP_IMPLAUSIBLE vehicle={} route={} dir={} lastFrac={}→newFrac={} jump={} ({}/3) — keeping predicted",
+                                    vehicleId, routeNumber, direction,
+                                    String.format("%.4f", existing.getLastGpsFraction()),
+                                    String.format("%.4f", realFraction),
+                                    String.format("%.4f", jumpSize),
+                                    newImplausibleCount);
+                        }
+                    } else {
+                        // Normal snap — clear rejection tracking
+                        newRejectedFrac = -1;
+                        newImplausibleCount = 0;
                     }
                 }
 
-                boolean realIsAhead = plausibleSnap && (
-                        (predictedFraction < 0)
-                        || (direction == 0 && realFraction >= predictedFraction)
-                        || (direction == 1 && realFraction <= predictedFraction));
-
-                // No distance-based override here.
-                // Accepting GPS when it is behind predicted causes backward teleportation
-                // for fast buses (prediction advances 150m+ per 5-second GPS cycle).
-                // Direction changes are handled by DIR_CORRECT_FRAC and heading correction.
-                // Route-end wrap-around is handled by isAtRouteBoundary (resets fraction to -1).
+                // overrideActive: GPS force-accepted regardless of ahead/behind check.
+                // Fraction always increases (both forward and backward geometries are traversed 0→1).
+                boolean realIsAhead = overrideActive || (plausibleSnap && (
+                        predictedFraction < 0 || realFraction >= predictedFraction));
 
                 if (realIsAhead) {
                     predictedLat = snap.latitude();
                     predictedLon = snap.longitude();
                     fraction = realFraction;
                     course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction, totalDist);
+                    newRejectedFrac = -1;
+                    newImplausibleCount = 0;
                 } else {
                     predictedLat = existing.getPredictedLatitude();
                     predictedLon = existing.getPredictedLongitude();
@@ -330,15 +424,21 @@ public class VehiclePositionPredictionService {
                 .routeCoordinates(routeCoords)
                 .totalRouteDistanceMeters(totalDist)
                 .fractionOnRoute(fraction)
-                .lastGpsFraction(fraction)  
+                .lastGpsFraction(fraction)
+                .lastRejectedGpsFraction(newRejectedFrac)
+                .consecutiveImplausibleCount(newImplausibleCount)
                 .direction(direction);
 
-        vehicleStates.put(vehicleId, builder.lastReceivedAt(Instant.now()).build());
+        VehiclePredictionState builtState = builder.lastReceivedAt(Instant.now()).build();
+        vehicleStates.put(vehicleId, builtState);
         log.debug("[GPS_PIPELINE] GPS_STORED vehicle={} plate={} route={} speed={}km/h inMotion={} frac={} mode={}",
                 vehicleId, licensePlate, routeNumber,
                 String.format("%.1f", speedKmh), inMotion,
                 fraction >= 0 ? String.format("%.4f", fraction) : "-",
                 fraction >= 0 ? "SNAPPED" : "DEAD_RECKONING");
+        stateRepository.save(builtState)
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe(null, err -> log.debug("Redis state save failed for {}: {}", vehicleId, err.getMessage()));
     }
 
     public Mono<Void> predictNextPositions() {
@@ -390,7 +490,13 @@ public class VehiclePositionPredictionService {
         Instant cutoff = Instant.now().minusSeconds(300);
         vehicleStates.entrySet().removeIf(e -> {
             Instant received = e.getValue().getLastReceivedAt();
-            return received != null && received.isBefore(cutoff);
+            boolean stale = received != null && received.isBefore(cutoff);
+            if (stale) {
+                stateRepository.delete(e.getKey())
+                        .subscribeOn(Schedulers.boundedElastic())
+                        .subscribe();
+            }
+            return stale;
         });
         consecutiveOppositeSnaps.keySet().retainAll(vehicleStates.keySet());
     }
@@ -399,9 +505,8 @@ public class VehiclePositionPredictionService {
         if (state.getRouteCoordinates() == null || state.getFractionOnRoute() < 0) {
             return false;
         }
-        double f = state.getFractionOnRoute();
-        return (state.getDirection() == 0 && f >= 1.0)
-                || (state.getDirection() == 1 && f <= 0.0);
+        // Fraction always increases toward 1.0 for both directions.
+        return state.getFractionOnRoute() >= 1.0;
     }
 
     private VehiclePredictionState advanceState(VehiclePredictionState state) {
@@ -415,15 +520,13 @@ public class VehiclePositionPredictionService {
         double totalRouteDistance = state.getTotalRouteDistanceMeters();
 
         if (routeCoords != null && state.getFractionOnRoute() >= 0 && totalRouteDistance > 0) {
-            double speedMs = decayedSpeedKmh / 3.6;
+            double stopFactor = computeStopDecelerationFactor(state, totalRouteDistance);
+            double speedMs = (decayedSpeedKmh * stopFactor) / 3.6;
             double fractionDelta = speedMs * DT_SECONDS / totalRouteDistance;
 
-            double newFraction;
-            if (state.getDirection() == 0) {
-                newFraction = Math.min(state.getFractionOnRoute() + fractionDelta, 1.0);
-            } else {
-                newFraction = Math.max(state.getFractionOnRoute() - fractionDelta, 0.0);
-            }
+            // Both forward and backward geometries are stored start→end in natural traversal order.
+            // Fraction always increases toward 1.0 regardless of direction.
+            double newFraction = Math.min(state.getFractionOnRoute() + fractionDelta, 1.0);
 
             double[] coords = mapMatchingService.interpolateRoutePoint(routeCoords, newFraction, totalRouteDistance);
             if (coords == null) return state;
@@ -460,6 +563,7 @@ public class VehiclePositionPredictionService {
 
     private Mono<Void> broadcastPrediction(VehiclePredictionState state) {
         Double fractionValue = (state.getFractionOnRoute() >= 0) ? state.getFractionOnRoute() : null;
+        List<NextStopEta> nextStops = computeNextStopsEta(state, 3);
 
         VehiclePositionWebSocketMessage msg = new VehiclePositionWebSocketMessage(
                 state.getVehicleId(),
@@ -472,7 +576,7 @@ public class VehiclePositionPredictionService {
                 LocalDateTime.now(),
                 state.getCourse(),
                 state.getDirection() == 0,
-                null,
+                nextStops.isEmpty() ? null : nextStops,
                 Boolean.TRUE,
                 fractionValue
         );
@@ -480,17 +584,47 @@ public class VehiclePositionPredictionService {
         return Mono.fromRunnable(() -> {
             try {
                 directBroadcaster.broadcastDirect(msg);
-                log.debug("[GPS_PIPELINE] WS_PRED vehicle={} plate={} mode={} frac={} lat={} lon={} speed={}km/h",
+                log.debug("[GPS_PIPELINE] WS_PRED vehicle={} plate={} mode={} frac={} lat={} lon={} speed={}km/h eta_stops={}",
                         state.getVehicleId(), state.getLicensePlate(),
                         fractionValue != null ? "SNAPPED" : "DEAD_RECKONING",
                         fractionValue != null ? String.format("%.4f", fractionValue) : "-",
                         String.format("%.6f", state.getPredictedLatitude()),
                         String.format("%.6f", state.getPredictedLongitude()),
-                        String.format("%.1f", state.getSpeedKmh()));
+                        String.format("%.1f", state.getSpeedKmh()),
+                        nextStops.size());
             } catch (Exception e) {
                 log.warn("Failed to broadcast prediction for vehicle {}: {}", state.getVehicleId(), e.getMessage());
             }
         });
+    }
+
+    private List<NextStopEta> computeNextStopsEta(VehiclePredictionState state, int maxStops) {
+        if (state.getFractionOnRoute() < 0 || state.getTotalRouteDistanceMeters() <= 0
+                || state.getRouteNumber() == null) {
+            return List.of();
+        }
+        LocalDateTime now = LocalDateTime.now();
+        TimePeriod period = TimePeriod.fromDateTime(now);
+        double speedKmh = state.getSpeedKmh();
+        if (speedKmh < etaProperties.getSpeed().getMovingThresholdKmh()) {
+            speedKmh = period.getAverageSpeedKmh();
+        }
+        double effectiveSpeed = speedKmh;
+        double totalDist = state.getTotalRouteDistanceMeters();
+        double currentFrac = state.getFractionOnRoute();
+        double trafficMult = period.getTrafficMultiplier(TimePeriod.isWeekend(now));
+
+        return routeGeometryCache.getStopsAhead(state.getRouteNumber(), state.getDirection(), currentFrac)
+                .stream()
+                .limit(maxStops)
+                .map(stop -> {
+                    double stopFrac = stop.getDistanceFromStartMeters() / totalDist;
+                    double distMeters = (stopFrac - currentFrac) * totalDist;
+                    int etaMin = (int) Math.max(1, Math.ceil(
+                            (distMeters / 1000.0 / effectiveSpeed) * 60.0 * trafficMult));
+                    return new NextStopEta(stop.getStopId(), stop.getStopName(), etaMin, (int) distMeters);
+                })
+                .toList();
     }
 
     private double blendOrAccept(VehiclePredictionState existing, double realLat, double realLon,
@@ -521,8 +655,34 @@ public class VehiclePositionPredictionService {
         return ageMs <= properties.getMaxAgeMs();
     }
 
+    /**
+     * Returns true only when prediction is actively broadcasting for this vehicle (moving + recent GPS).
+     * Stopped vehicles are not handled by prediction, so raw GPS force-publish should be allowed for them.
+     */
+    public boolean isActivelyPredicting(String vehicleId) {
+        if (!properties.isEnabled()) return false;
+        VehiclePredictionState state = vehicleStates.get(vehicleId);
+        if (state == null) return false;
+        long ageMs = Instant.now().toEpochMilli()
+                - (state.getLastReceivedAt() != null ? state.getLastReceivedAt().toEpochMilli() : 0);
+        return ageMs <= properties.getMaxAgeMs() && state.isInMotion();
+    }
+
     public int getActiveStateCount() {
         return vehicleStates.size();
+    }
+
+    /**
+     * Returns a snapshot of all current prediction states for ETA calculations.
+     * Only includes states with a valid fractionOnRoute and within maxAgeMs.
+     */
+    public List<VehiclePredictionState> getActiveStates() {
+        if (!properties.isEnabled()) return List.of();
+        Instant cutoff = Instant.now().minusMillis(properties.getMaxAgeMs());
+        return vehicleStates.values().stream()
+                .filter(s -> s.getLastReceivedAt() != null && s.getLastReceivedAt().isAfter(cutoff))
+                .filter(s -> s.getFractionOnRoute() >= 0)
+                .toList();
     }
 
     public Map<String, Integer> drainPendingDirectionFixes() {
@@ -532,5 +692,46 @@ public class VehiclePositionPredictionService {
         Map<String, Integer> result = new java.util.HashMap<>(pendingDirectionFixes);
         pendingDirectionFixes.clear();
         return result;
+    }
+
+    /**
+     * Вычисляет коэффициент замедления (0.0–1.0) при приближении к следующей остановке.
+     * Если ТС находится в зоне замедления (< stopDecelerationZoneMeters от остановки),
+     * скорость плавно снижается до stopDecelerationMinFactor×speedKmh.
+     */
+    private double computeStopDecelerationFactor(VehiclePredictionState state, double totalRouteDistance) {
+        if (state.getRouteNumber() == null) return 1.0;
+
+        double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteNumber(), state.getDirection());
+        if (stopFractions == null || stopFractions.length == 0) return 1.0;
+
+        double currentFraction = state.getFractionOnRoute();
+        double nextStopFraction = findNextStopFraction(stopFractions, currentFraction, state.getDirection());
+        if (nextStopFraction < 0) return 1.0;
+
+        double distToStop = Math.abs(nextStopFraction - currentFraction) * totalRouteDistance;
+        double zone = properties.getStopDecelerationZoneMeters();
+        if (distToStop >= zone) return 1.0;
+
+        double minFactor = properties.getStopDecelerationMinFactor();
+        double factor = minFactor + (1.0 - minFactor) * (distToStop / zone);
+        log.trace("[STOP_DECAY] vehicle={} route={} distToStop={}m factor={}",
+                state.getVehicleId(), state.getRouteNumber(),
+                String.format("%.1f", distToStop), String.format("%.2f", factor));
+        return factor;
+    }
+
+    /**
+     * Находит ближайшую следующую остановку в направлении движения ТС.
+     * Для direction=0 (вперёд): ищем минимальную фракцию > currentFraction.
+     * Для direction=1 (назад):  ищем максимальную фракцию < currentFraction.
+     * @return фракция остановки, или -1 если не найдена
+     */
+    private double findNextStopFraction(double[] sortedFractions, double currentFraction, int direction) {
+        // Fraction always increases (both directions), so next stop is always at higher fraction.
+        for (double f : sortedFractions) {
+            if (f > currentFraction + 0.001) return f;
+        }
+        return -1;
     }
 }

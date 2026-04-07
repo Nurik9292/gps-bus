@@ -404,8 +404,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         domainEventPublisher.publish(event);
                     }
 
-                    if (!hasSignificantChange
-                            && updatedVehicle.getCurrentLatitude() != null
+                    if (updatedVehicle.getCurrentLatitude() != null
                             && updatedVehicle.getCurrentLongitude() != null) {
                         predictionService.onGpsUpdate(
                                 vehicleId,
@@ -435,7 +434,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     licensePlateExtractor.extractFromGpsData(gpsPosition)
                             .ifPresentOrElse(
                                     licensePlate -> {
-                                        Vehicle newVehicle = Vehicle.create(gpsPosition.getDeviceId(), licensePlate);
+                                        Vehicle newVehicle = Vehicle.create(gpsPosition.getDeviceId(), licensePlate,
+                                                gpsPosition.getGpsProvider());
                                         Vehicle positionedVehicle = newVehicle.updatePosition(
                                                 gpsPosition.getLatitude(),
                                                 gpsPosition.getLongitude(),
@@ -562,7 +562,9 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
 
     private boolean shouldForcePublishForVehicle(String vehicleId) {
-        if (predictionService.hasActiveState(vehicleId)) {
+        // Only suppress force-publish when prediction is actively broadcasting (vehicle is moving).
+        // Stopped vehicles are not handled by prediction — they need raw GPS force-publish.
+        if (predictionService.isActivelyPredicting(vehicleId)) {
             return false;
         }
         Instant lastPublished = lastPublishedTime.get(vehicleId);

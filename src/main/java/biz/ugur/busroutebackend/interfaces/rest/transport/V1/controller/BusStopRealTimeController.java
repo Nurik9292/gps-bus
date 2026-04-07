@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.transport.V1.controller;
 
+import biz.ugur.busroutebackend.admin.domain.exceptions.BusStopException;
 import biz.ugur.busroutebackend.interfaces.rest.transport.V1.response.BusStopArrivalsResponse;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import biz.ugur.busroutebackend.transport.application.dto.NearbyStopArrivalsResponse;
@@ -8,6 +9,9 @@ import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
+import java.util.Collections;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -35,7 +39,10 @@ public class BusStopRealTimeController extends BaseController {
 
     @GetMapping("/{stopId}/arrivals")
     public Mono<ResponseEntity<ApiResponse<BusStopArrivalsResponse>>> getStopArrivals(@PathVariable String stopId) {
-        return ok(busStopRealTimeService.getStopArrivals(stopId));
+        return busStopRealTimeService.getStopArrivals(stopId)
+                .onErrorReturn(BusStopException.class,
+                        new BusStopArrivalsResponse(stopId, null, 0.0, 0.0, Collections.emptyList(), LocalDateTime.now()))
+                .flatMap(data -> Mono.just(ResponseEntity.ok(ApiResponse.success(data))));
     }
 
     @GetMapping("/nearby/arrivals")
