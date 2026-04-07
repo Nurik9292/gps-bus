@@ -206,6 +206,50 @@
         .route-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
         .route-btn.searching { background: var(--orange); border-color: var(--orange); color: white; animation: pulse 1s infinite; }
 
+        /* ===== WS SUBSCRIBE PANEL ===== */
+        .ws-subscribe {
+            display: flex; align-items: center; gap: 8px;
+            padding: 0 12px; border-left: 1px solid var(--border);
+        }
+        .ws-subscribe-label {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px;
+            color: var(--text-dim); white-space: nowrap;
+        }
+        .ws-subscribe input {
+            background: var(--surface2); border: 1px solid var(--border);
+            color: var(--text); padding: 5px 10px; border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace; font-size: 13px;
+            width: 120px; outline: none;
+        }
+        .ws-subscribe input:focus { border-color: var(--green); box-shadow: 0 0 0 2px rgba(34,197,94,0.2); }
+        .ws-subscribe input::placeholder { color: var(--text-dim); }
+
+        .ws-route-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+
+        .ws-tag {
+            padding: 3px 10px; border-radius: 12px; font-size: 12px;
+            font-weight: 700; cursor: pointer; border: 2px solid rgba(255,255,255,0.3);
+            font-family: 'JetBrains Mono', monospace;
+            transition: transform 0.15s;
+            box-shadow: 0 0 8px rgba(34,197,94,0.4);
+        }
+        .ws-tag:hover { transform: scale(1.1); }
+        .ws-tag .x { margin-left: 4px; opacity: 0.7; }
+
+        .ws-status-badge {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px;
+            padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+        }
+        .ws-status-badge.all { background: rgba(99,102,241,0.2); color: var(--accent); border: 1px solid var(--accent); }
+        .ws-status-badge.filtered { background: rgba(34,197,94,0.2); color: var(--green); border: 1px solid var(--green); animation: pulse 2s infinite; }
+
+        .ws-clear-btn {
+            background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4);
+            color: var(--red); padding: 4px 10px; border-radius: 6px;
+            font-size: 12px; cursor: pointer; white-space: nowrap; transition: all 0.2s;
+        }
+        .ws-clear-btn:hover { background: rgba(239,68,68,0.3); }
+
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
 
         /* Route results panel */
@@ -285,9 +329,19 @@
 <div class="top-bar">
     <div class="logo">UGUR GPS</div>
     <div class="route-filter">
-        <input type="text" id="route-input" placeholder="Фильтр маршрута (напр. 29, 38)">
+        <input type="text" id="route-input" placeholder="Визуал фильтр (напр. 29)">
         <div class="route-tags" id="route-tags"></div>
     </div>
+
+    <!-- WS Subscribe section -->
+    <div class="ws-subscribe">
+        <span class="ws-subscribe-label">WS:</span>
+        <input type="text" id="ws-route-input" placeholder="160, 29..." title="Enter — подписаться на маршрут через WebSocket">
+        <div class="ws-route-tags" id="ws-route-tags"></div>
+        <span class="ws-status-badge all" id="ws-status-badge">ВСЕ ТС</span>
+        <button class="ws-clear-btn" id="ws-clear-btn" onclick="clearWsRoutes()" style="display:none">Сбросить</button>
+    </div>
+
     <button class="route-btn" id="route-mode-btn" onclick="toggleRouteMode()">🗺 Маршрут</button>
     <div class="stats-bar">
         <div class="stat-item">
@@ -378,6 +432,7 @@
     let stopMarkers = {};
     let stops = [];
     let activeRouteFilters = new Set();
+    let wsSubscribedRoutes = new Set();  // WebSocket server-side subscription
     let updateCounter = 0;
     let lastCounterReset = Date.now();
 
@@ -483,9 +538,16 @@
     }
 
     // ===== WEBSOCKET =====
+    function buildWsUrl() {
+        if (wsSubscribedRoutes.size > 0) {
+            return WS_URL + '?routes=' + [...wsSubscribedRoutes].join(',');
+        }
+        return WS_URL;
+    }
+
     function connectWebSocket() {
         setWsStatus(false);
-        ws = new WebSocket(WS_URL);
+        ws = new WebSocket(buildWsUrl());
 
         ws.onopen = () => { setWsStatus(true); };
 
@@ -502,7 +564,23 @@
         };
 
         ws.onerror = () => setWsStatus(false);
-        ws.onclose = () => { setWsStatus(false); setTimeout(connectWebSocket, 3000); };
+        ws.onclose = () => {
+            setWsStatus(false);
+            setTimeout(connectWebSocket, 3000);
+        };
+    }
+
+    function reconnectWebSocket() {
+        if (ws) {
+            ws.onclose = null; // prevent auto-reconnect loop
+            ws.close();
+        }
+        // Clear all vehicle markers and data when switching subscription
+        Object.values(vehicleMarkers).forEach(m => map.removeLayer(m));
+        vehicleMarkers = {};
+        vehicles = {};
+        updateStats();
+        connectWebSocket();
     }
 
     function setWsStatus(connected) {
@@ -510,6 +588,54 @@
         const label = document.getElementById('ws-label');
         dot.className = 'stat-dot ' + (connected ? 'on' : 'off');
         label.textContent = connected ? 'LIVE' : 'OFF';
+    }
+
+    // ===== WS ROUTE SUBSCRIPTION =====
+    function addWsRoute(routeNum) {
+        routeNum = routeNum.trim().toUpperCase();
+        if (!routeNum || wsSubscribedRoutes.has(routeNum)) return;
+        wsSubscribedRoutes.add(routeNum);
+        renderWsRouteTags();
+        reconnectWebSocket();
+    }
+
+    function removeWsRoute(routeNum) {
+        wsSubscribedRoutes.delete(routeNum);
+        renderWsRouteTags();
+        reconnectWebSocket();
+    }
+
+    function clearWsRoutes() {
+        wsSubscribedRoutes.clear();
+        renderWsRouteTags();
+        reconnectWebSocket();
+    }
+
+    function renderWsRouteTags() {
+        const container = document.getElementById('ws-route-tags');
+        const badge = document.getElementById('ws-status-badge');
+        const clearBtn = document.getElementById('ws-clear-btn');
+
+        container.innerHTML = '';
+        wsSubscribedRoutes.forEach(r => {
+            const tag = document.createElement('button');
+            tag.className = 'ws-tag';
+            tag.style.background = getRouteColor(r);
+            tag.style.color = 'white';
+            tag.innerHTML = `${r}<span class="x">✕</span>`;
+            tag.onclick = () => removeWsRoute(r);
+            container.appendChild(tag);
+        });
+
+        if (wsSubscribedRoutes.size > 0) {
+            badge.className = 'ws-status-badge filtered';
+            badge.textContent = `МАР. ${[...wsSubscribedRoutes].join('+')}`;
+            clearBtn.style.display = '';
+        } else {
+            badge.className = 'ws-status-badge all';
+            badge.textContent = 'ВСЕ ТС';
+            clearBtn.style.display = 'none';
+        }
     }
 
     // ===== PROCESS VEHICLE =====
@@ -591,6 +717,19 @@
         }
         requestAnimationFrame(step);
     }
+
+    // ===== WS ROUTE INPUT =====
+    const wsRouteInput = document.getElementById('ws-route-input');
+    wsRouteInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const val = wsRouteInput.value.trim();
+            if (val) {
+                // Support comma-separated: "160, 29"
+                val.split(',').forEach(r => addWsRoute(r.trim()));
+            }
+            wsRouteInput.value = '';
+        }
+    });
 
     // ===== ROUTE FILTER =====
     const routeInput = document.getElementById('route-input');
