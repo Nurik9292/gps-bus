@@ -342,21 +342,28 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             updatedVehicle.getSpeedKmh()
                     );
 
+                    // Detect frozen-coords anomaly outside the block so the flag is visible to WS publish logic.
+                    boolean frozenCoordsWithMotion = hasSignificantChange
+                            && Boolean.TRUE.equals(updatedVehicle.getIsInMotion())
+                            && oldLatitude != null && oldLongitude != null
+                            && !positionChangeDetector.hasSignificantPositionChange(
+                                    oldLatitude, oldLongitude,
+                                    updatedVehicle.getCurrentLatitude(),
+                                    updatedVehicle.getCurrentLongitude());
+
+                    if (frozenCoordsWithMotion) {
+                        log.warn("[GPS_ANOMALY|SOURCE:SERVER] FROZEN_COORDS_WITH_MOTION: " +
+                                        "device={}, plate={}, speed={}km/h, coords=({},{}) — suppressing WS publish",
+                                gpsPosition.getDeviceId(),
+                                updatedVehicle.getLicensePlate(),
+                                String.format("%.1f", updatedVehicle.getSpeedKmh()),
+                                String.format("%.6f", updatedVehicle.getCurrentLatitude()),
+                                String.format("%.6f", updatedVehicle.getCurrentLongitude()));
+                    }
+
                     if (hasSignificantChange) {
-                        if (Boolean.TRUE.equals(updatedVehicle.getIsInMotion())
-                                && oldLatitude != null && oldLongitude != null
-                                && !positionChangeDetector.hasSignificantPositionChange(
-                                        oldLatitude, oldLongitude,
-                                        updatedVehicle.getCurrentLatitude(),
-                                        updatedVehicle.getCurrentLongitude())) {
-                            log.warn("[GPS_ANOMALY|SOURCE:SERVER] FROZEN_COORDS_WITH_MOTION: " +
-                                            "device={}, plate={}, speed={}km/h, coords=({},{})",
-                                    gpsPosition.getDeviceId(),
-                                    updatedVehicle.getLicensePlate(),
-                                    String.format("%.1f", updatedVehicle.getSpeedKmh()),
-                                    String.format("%.6f", updatedVehicle.getCurrentLatitude()),
-                                    String.format("%.6f", updatedVehicle.getCurrentLongitude()));
-                        }
+                        // Always add to vehiclesToUpdate so DB updated_at stays fresh (needed by hasRecentPosition).
+                        // WS publish is suppressed below for frozen-coords anomalies.
                         vehiclesToUpdate.add(updatedVehicle);
 
                         boolean hasCourse = updatedVehicle.getCourse() != null
@@ -379,7 +386,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
                     String vehicleId = updatedVehicle.getId().getValue();
                     boolean shouldForcePublish = shouldForcePublishForVehicle(vehicleId);
-                    boolean shouldPublish = hasSignificantChange || shouldForcePublish;
+                    boolean shouldPublish = (hasSignificantChange || shouldForcePublish) && !frozenCoordsWithMotion;
 
                     if (shouldPublish) {
                         lastPublishedTime.put(vehicleId, Instant.now());

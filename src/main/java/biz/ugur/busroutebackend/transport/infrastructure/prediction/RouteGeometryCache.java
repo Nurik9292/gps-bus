@@ -28,7 +28,6 @@ public class RouteGeometryCache {
     private final ConcurrentHashMap<String, List<double[]>>    pointsCache        = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Double>            distanceCache      = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, double[]>          stopFractionsCache = new ConcurrentHashMap<>();
-    /** Full stop metadata sorted by distanceFromStartMeters ascending. */
     private final ConcurrentHashMap<String, List<RouteStopInfo>> routeStopsCache  = new ConcurrentHashMap<>();
 
     private final BusRouteRepository busRouteRepository;
@@ -116,19 +115,14 @@ public class RouteGeometryCache {
         return stopFractionsCache.get(key);
     }
 
-    /**
-     * Returns all stops for route+direction sorted by distance from start (ascending).
-     */
+   
     public List<RouteStopInfo> getRouteStops(String routeNumber, int direction) {
         String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
         List<RouteStopInfo> stops = routeStopsCache.get(key);
         return stops != null ? stops : Collections.emptyList();
     }
 
-    /**
-     * Returns stops ahead of {@code currentFraction} on the given route+direction,
-     * sorted ascending by fraction (closest first).
-     */
+   
     public List<RouteStopInfo> getStopsAhead(String routeNumber, int direction, double currentFraction) {
         double totalDistance = getTotalDistance(routeNumber, direction);
         if (totalDistance <= 0) return Collections.emptyList();
@@ -137,9 +131,7 @@ public class RouteGeometryCache {
                 .toList();
     }
 
-    /**
-     * Returns fraction (0–1) of a specific stop on the route, or empty if not found.
-     */
+ 
     public OptionalDouble getStopFraction(String routeNumber, int direction, String stopId) {
         double totalDistance = getTotalDistance(routeNumber, direction);
         if (totalDistance <= 0) return OptionalDouble.empty();

@@ -54,6 +54,11 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("fraction")
     private final Double fraction;
 
+    /** Position confidence level: HIGH, MEDIUM, LOW, STALE.
+     *  Flutter can use this to adjust marker opacity or trigger UI hints. */
+    @JsonProperty("confidence")
+    private final String confidence;
+
     @JsonCreator
     public VehiclePositionWebSocketMessage(
             @JsonProperty("vehicle_id") String vehicleId,
@@ -67,7 +72,7 @@ public class VehiclePositionWebSocketMessage {
             @JsonProperty("dir") Double course,
             @JsonProperty("line") Boolean line) {
         this(vehicleId, licensePlate, routeNumber, latitude, longitude,
-                speedKmh, isInMotion, timestamp, course, line, null, null, null);
+                speedKmh, isInMotion, timestamp, course, line, null, null, null, null);
     }
 
     public VehiclePositionWebSocketMessage(
@@ -83,7 +88,7 @@ public class VehiclePositionWebSocketMessage {
             Boolean line,
             List<NextStopEta> nextStops) {
         this(vehicleId, licensePlate, routeNumber, latitude, longitude,
-                speedKmh, isInMotion, timestamp, course, line, nextStops, null, null);
+                speedKmh, isInMotion, timestamp, course, line, nextStops, null, null, null);
     }
 
     public VehiclePositionWebSocketMessage(
@@ -100,6 +105,25 @@ public class VehiclePositionWebSocketMessage {
             List<NextStopEta> nextStops,
             Boolean predicted,
             Double fraction) {
+        this(vehicleId, licensePlate, routeNumber, latitude, longitude,
+                speedKmh, isInMotion, timestamp, course, line, nextStops, predicted, fraction, null);
+    }
+
+    public VehiclePositionWebSocketMessage(
+            String vehicleId,
+            String licensePlate,
+            String routeNumber,
+            Double latitude,
+            Double longitude,
+            Double speedKmh,
+            Boolean isInMotion,
+            LocalDateTime timestamp,
+            Double course,
+            Boolean line,
+            List<NextStopEta> nextStops,
+            Boolean predicted,
+            Double fraction,
+            String confidence) {
         this.vehicleId = vehicleId;
         this.licensePlate = licensePlate;
         this.routeNumber = routeNumber;
@@ -113,6 +137,7 @@ public class VehiclePositionWebSocketMessage {
         this.nextStops = nextStops;
         this.predicted = predicted;
         this.fraction = fraction;
+        this.confidence = confidence;
     }
 
 
