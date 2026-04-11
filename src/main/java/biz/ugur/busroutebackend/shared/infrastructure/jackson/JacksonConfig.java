@@ -46,7 +46,7 @@ public class JacksonConfig implements WebFluxConfigurer {
     public void configureHttpMessageCodecs(ServerCodecConfigurer configurer) {
         ObjectMapper mapper = objectMapper();
 
-        configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024); // 10MB
+        configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024);
         configurer.defaultCodecs().enableLoggingRequestDetails(true);
 
         configurer.defaultCodecs().jackson2JsonEncoder(new Jackson2JsonEncoder(mapper));

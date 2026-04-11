@@ -46,17 +46,13 @@ public class AdminRouteAlternativeController extends BaseController {
         return AdminRouteAlternativeController.class.getSimpleName();
     }
 
-    /**
-     * Get all route alternatives.
-     */
+   
     @GetMapping
     public Mono<ResponseEntity<ApiResponse<List<RouteAlternativeDTO>>>> getAllAlternatives() {
         return okList(getAllRouteAlternativesUseCase.execute(null));
     }
 
-    /**
-     * Get alternatives for a specific primary route.
-     */
+  
     @GetMapping("/by-route/{primaryRouteId}")
     public Mono<ResponseEntity<ApiResponse<List<RouteAlternativeDTO>>>> getAlternativesByRoute(
             @PathVariable String primaryRouteId) {
@@ -64,9 +60,7 @@ public class AdminRouteAlternativeController extends BaseController {
                 new GetRouteAlternativesUseCase.Request(primaryRouteId)));
     }
 
-    /**
-     * Create a new route alternative link.
-     */
+
     @PostMapping
     public Mono<ResponseEntity<ApiResponse<RouteAlternativeDTO>>> createAlternative(
             @Valid @RequestBody CreateRouteAlternativeRequest request) {
@@ -81,9 +75,7 @@ public class AdminRouteAlternativeController extends BaseController {
                 )));
     }
 
-    /**
-     * Update an existing route alternative.
-     */
+ 
     @PutMapping("/{id}")
     public Mono<ResponseEntity<ApiResponse<RouteAlternativeDTO>>> updateAlternative(
             @PathVariable String id,
@@ -98,9 +90,7 @@ public class AdminRouteAlternativeController extends BaseController {
                 )));
     }
 
-    /**
-     * Delete a route alternative.
-     */
+  
     @DeleteMapping("/{id}")
     public Mono<ResponseEntity<Void>> deleteAlternative(@PathVariable String id) {
         return deleteRouteAlternativeUseCase.execute(

@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.transport.application.dto;
 
 
+import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -12,6 +13,8 @@ public class GpsPositionDTO {
 
     @JsonProperty("deviceId")
     private String deviceId;
+
+    private GpsProviderType gpsProvider;
 
     @JsonProperty("latitude")
     private Double latitude;
@@ -53,7 +56,6 @@ public class GpsPositionDTO {
         if (attributes != null && attributes.getMotion() != null) {
             return attributes.getMotion();
         }
-        // Fallback: считаем что движется если скорость > 0
         return speed != null && speed > 0;
     }
 

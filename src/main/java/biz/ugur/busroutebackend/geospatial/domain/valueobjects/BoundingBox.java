@@ -112,7 +112,7 @@ public class BoundingBox extends ValueObject {
     }
 
     public double getApproximateHeightKm() {
-        return getHeightDegrees() * 111.32; // km per degree of latitude
+        return getHeightDegrees() * 111.32;
     }
 
     public double getApproximateAreaKm2() {
@@ -183,7 +183,6 @@ public class BoundingBox extends ValueObject {
             );
         }
 
-        // Validate global bounds
         if (minLat.compareTo(BigDecimal.valueOf(-90)) < 0 ||
             maxLat.compareTo(BigDecimal.valueOf(90)) > 0) {
             throw new IllegalArgumentException(

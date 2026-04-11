@@ -59,8 +59,6 @@ public class ApiVersionInterceptor implements WebFilter {
     }
 
     private HandlerMethod getHandlerMethod(ServerWebExchange exchange) {
-        // Реализация получения HandlerMethod для WebFlux
-        // Может потребоваться дополнительная настройка
         return null;
     }
 }

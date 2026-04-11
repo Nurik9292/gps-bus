@@ -51,7 +51,7 @@ public class TripOptionDTO {
         this.routeSegments = routeSegments;
         this.estimatedDeparture = LocalDateTime.now().plusMinutes(5);
         this.estimatedArrival = estimatedDeparture.plusMinutes(totalTravelMinutes);
-        this.costEstimate = new CostEstimate(transfersCount + 1); // One fare per route
+        this.costEstimate = new CostEstimate(transfersCount + 1);
     }
 
     @Data
@@ -64,7 +64,7 @@ public class TripOptionDTO {
 
         public CostEstimate(int numberOfFares) {
             this.numberOfFares = numberOfFares;
-            this.totalFareManat = numberOfFares * 1.0; // 1 manat per fare
+            this.totalFareManat = numberOfFares * 1.0;
         }
     }
 }

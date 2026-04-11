@@ -18,7 +18,7 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("license_plate")
     private final String licensePlate;
 
-    @JsonProperty("rout_number")
+    @JsonProperty("route_number")
     private final String routeNumber;
 
     @JsonProperty("latitude")
@@ -48,11 +48,22 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("next_stops")
     private final List<NextStopEta> nextStops;
 
+    @JsonProperty("predicted")
+    private final Boolean predicted;
+
+    @JsonProperty("fraction")
+    private final Double fraction;
+
+    /** Position confidence level: HIGH, MEDIUM, LOW, STALE.
+     *  Flutter can use this to adjust marker opacity or trigger UI hints. */
+    @JsonProperty("confidence")
+    private final String confidence;
+
     @JsonCreator
     public VehiclePositionWebSocketMessage(
             @JsonProperty("vehicle_id") String vehicleId,
             @JsonProperty("license_plate") String licensePlate,
-            @JsonProperty("rout_number") String routeNumber,
+            @JsonProperty("route_number") String routeNumber,
             @JsonProperty("latitude") Double latitude,
             @JsonProperty("longitude") Double longitude,
             @JsonProperty("speed_kmh") Double speedKmh,
@@ -61,7 +72,7 @@ public class VehiclePositionWebSocketMessage {
             @JsonProperty("dir") Double course,
             @JsonProperty("line") Boolean line) {
         this(vehicleId, licensePlate, routeNumber, latitude, longitude,
-                speedKmh, isInMotion, timestamp, course, line, null);
+                speedKmh, isInMotion, timestamp, course, line, null, null, null, null);
     }
 
     public VehiclePositionWebSocketMessage(
@@ -76,6 +87,43 @@ public class VehiclePositionWebSocketMessage {
             Double course,
             Boolean line,
             List<NextStopEta> nextStops) {
+        this(vehicleId, licensePlate, routeNumber, latitude, longitude,
+                speedKmh, isInMotion, timestamp, course, line, nextStops, null, null, null);
+    }
+
+    public VehiclePositionWebSocketMessage(
+            String vehicleId,
+            String licensePlate,
+            String routeNumber,
+            Double latitude,
+            Double longitude,
+            Double speedKmh,
+            Boolean isInMotion,
+            LocalDateTime timestamp,
+            Double course,
+            Boolean line,
+            List<NextStopEta> nextStops,
+            Boolean predicted,
+            Double fraction) {
+        this(vehicleId, licensePlate, routeNumber, latitude, longitude,
+                speedKmh, isInMotion, timestamp, course, line, nextStops, predicted, fraction, null);
+    }
+
+    public VehiclePositionWebSocketMessage(
+            String vehicleId,
+            String licensePlate,
+            String routeNumber,
+            Double latitude,
+            Double longitude,
+            Double speedKmh,
+            Boolean isInMotion,
+            LocalDateTime timestamp,
+            Double course,
+            Boolean line,
+            List<NextStopEta> nextStops,
+            Boolean predicted,
+            Double fraction,
+            String confidence) {
         this.vehicleId = vehicleId;
         this.licensePlate = licensePlate;
         this.routeNumber = routeNumber;
@@ -87,6 +135,9 @@ public class VehiclePositionWebSocketMessage {
         this.course = course;
         this.line = line;
         this.nextStops = nextStops;
+        this.predicted = predicted;
+        this.fraction = fraction;
+        this.confidence = confidence;
     }
 
 

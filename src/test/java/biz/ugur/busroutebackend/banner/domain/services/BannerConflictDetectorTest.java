@@ -173,7 +173,6 @@ class BannerConflictDetectorTest {
         Banner banner1 = createBanner("Banner 1", BannerType.MAIN, now, now.plusDays(5), 1);
         Banner banner2 = createBanner("Banner 2", BannerType.MAIN, now.plusDays(2), now.plusDays(7), 2);
 
-        // Should NOT throw because display orders are different
         assertDoesNotThrow(() ->
                 detector.validateNoConflicts(banner2, List.of(banner1))
         );
@@ -217,7 +216,6 @@ class BannerConflictDetectorTest {
 
         List<Banner> conflicts = detector.findAllConflicts(newBanner, List.of(banner1, banner2, banner3));
 
-        // Should find only banner2 (same type + same display order + overlapping period)
         assertEquals(1, conflicts.size());
         assertTrue(conflicts.contains(banner2));
     }

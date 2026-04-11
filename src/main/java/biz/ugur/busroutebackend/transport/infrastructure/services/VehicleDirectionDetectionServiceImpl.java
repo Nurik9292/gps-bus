@@ -44,7 +44,6 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
             );
         }
 
-        // No course data, use nearest stop based detection
         return routeStopRepository.findNearestStopSequence(
                 vehicle.getAssignedRouteId().getValue(),
                 vehicle.getCurrentLatitude(),
@@ -75,7 +74,6 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
             return Mono.just(Map.of());
         }
 
-        // Separate vehicles with course data from those without
         List<VehiclePositionKey> withCourse = positionKeys.stream()
                 .filter(p -> p.course() != null && p.course() > 0)
                 .toList();

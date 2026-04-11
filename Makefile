@@ -85,14 +85,23 @@ docker-prod-deploy:
 
 osrm-setup: ## Download and preprocess Turkmenistan OSM data for OSRM foot routing
 	@mkdir -p docker/osrm/data
-	@echo "Downloading Turkmenistan OSM data (~150MB)..."
+	@if [ ! -f docker/osrm/data/turkmenistan.osm.pbf ]; then \
+		echo "Downloading Turkmenistan OSM data (~150MB)..."; \
+		curl -L --progress-bar -o docker/osrm/data/turkmenistan.osm.pbf \
+			https://download.geofabrik.de/asia/turkmenistan-latest.osm.pbf; \
+	else \
+		echo "PBF file already exists, skipping download"; \
+	fi
+	@echo "Extracting graph for foot routing..."
 	docker run --rm -v $(PWD)/docker/osrm/data:/data osrm/osrm-backend:latest \
-		sh -c "wget -q --show-progress -O /data/turkmenistan.osm.pbf \
-		https://download.geofabrik.de/asia/turkmenistan-latest.osm.pbf && \
-		echo 'Extracting...' && osrm-extract -p /opt/foot.lua /data/turkmenistan.osm.pbf && \
-		echo 'Partitioning...' && osrm-partition /data/turkmenistan.osrm && \
-		echo 'Customizing...' && osrm-customize /data/turkmenistan.osrm && \
-		echo 'OSRM data ready!'"
+		osrm-extract -p /opt/foot.lua /data/turkmenistan.osm.pbf
+	@echo "Partitioning..."
+	docker run --rm -v $(PWD)/docker/osrm/data:/data osrm/osrm-backend:latest \
+		osrm-partition /data/turkmenistan.osrm
+	@echo "Customizing..."
+	docker run --rm -v $(PWD)/docker/osrm/data:/data osrm/osrm-backend:latest \
+		osrm-customize /data/turkmenistan.osrm
+	@echo "OSRM data ready! Now run: docker-compose up -d osrm"
 
 run: ## Run application with .env variables loaded
 	./mvnw spring-boot:run

@@ -54,7 +54,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         repository = new R2dbcAdminBannerRepository(databaseClient);
         now = LocalDateTime.now();
 
-        // Create minimal banners table schema
         String createTableSql = """
             CREATE TABLE IF NOT EXISTS banners (
                 id UUID PRIMARY KEY,
@@ -80,7 +79,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        // Clean up test data
         databaseClient.sql("DROP TABLE IF EXISTS banners CASCADE")
                 .then()
                 .block();
@@ -88,7 +86,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
 
     @Test
     void save_ShouldPersistBannerSuccessfully() {
-        // Given
         Banner banner = Banner.create(
                 BannerTitle.of("Test Banner"),
                 BannerType.MAIN,
@@ -101,7 +98,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 true
         );
 
-        // When & Then
         StepVerifier.create(repository.save(banner))
                 .assertNext(savedBanner -> {
                     assertNotNull(savedBanner);
@@ -115,7 +111,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
 
     @Test
     void findById_ShouldRetrieveExistingBanner() {
-        // Given
         Banner banner = Banner.create(
                 BannerTitle.of("Test Banner"),
                 BannerType.MAIN,
@@ -131,7 +126,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         Banner savedBanner = repository.save(banner).block();
         assertNotNull(savedBanner);
 
-        // When & Then
         StepVerifier.create(repository.findById(savedBanner.getId()))
                 .assertNext(found -> {
                     assertEquals(savedBanner.getId(), found.getId());
@@ -142,17 +136,14 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
 
     @Test
     void findById_ShouldReturnEmptyForNonExistentBanner() {
-        // Given
         BannerId nonExistentId = BannerId.generate();
 
-        // When & Then
         StepVerifier.create(repository.findById(nonExistentId))
                 .verifyComplete();
     }
 
     @Test
     void update_ShouldUpdateBannerSuccessfully() {
-        // Given - Create and save initial banner
         Banner banner = Banner.create(
                 BannerTitle.of("Original Title"),
                 BannerType.MAIN,
@@ -168,7 +159,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         Banner savedBanner = repository.save(banner).block();
         assertNotNull(savedBanner);
 
-        // When - Update the banner
         Banner updatedBanner = savedBanner.updateBanner(
                 BannerTitle.of("Updated Title"),
                 BannerType.MAIN,
@@ -180,7 +170,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 null
         );
 
-        // Then
         StepVerifier.create(repository.save(updatedBanner))
                 .assertNext(saved -> {
                     assertEquals("Updated Title", saved.getTitle().getValue());
@@ -193,7 +182,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
 
     @Test
     void delete_ShouldRemoveBannerSuccessfully() {
-        // Given
         Banner banner = Banner.create(
                 BannerTitle.of("To Delete"),
                 BannerType.MAIN,
@@ -209,18 +197,15 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         Banner savedBanner = repository.save(banner).block();
         assertNotNull(savedBanner);
 
-        // When
         StepVerifier.create(repository.deleteById(savedBanner.getId()))
                 .verifyComplete();
 
-        // Then - Verify banner is deleted
         StepVerifier.create(repository.findById(savedBanner.getId()))
                 .verifyComplete();
     }
 
     @Test
     void findActiveBanners_ShouldReturnOnlyActiveBannersInPeriod() {
-        // Given - Create active banner within period
         Banner activeBanner = Banner.create(
                 BannerTitle.of("Active Banner"),
                 BannerType.MAIN,
@@ -234,7 +219,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         );
         repository.save(activeBanner).block();
 
-        // Create inactive banner
         Banner inactiveBanner = Banner.create(
                 BannerTitle.of("Inactive Banner"),
                 BannerType.MAIN,
@@ -249,7 +233,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         Banner deactivated = inactiveBanner.deactivate();
         repository.save(deactivated).block();
 
-        // Create future banner
         Banner futureBanner = Banner.create(
                 BannerTitle.of("Future Banner"),
                 BannerType.MAIN,
@@ -263,7 +246,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         );
         repository.save(futureBanner).block();
 
-        // When & Then
         StepVerifier.create(repository.findActiveBanners())
                 .assertNext(banner -> {
                     assertEquals("Active Banner", banner.getTitle().getValue());
@@ -274,7 +256,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
 
     @Test
     void countActiveBanners_ShouldReturnCorrectCount() {
-        // Given - Create 2 active banners
         Banner banner1 = Banner.create(
                 BannerTitle.of("Active 1"),
                 BannerType.MAIN,
@@ -301,7 +282,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         );
         repository.save(banner2).block();
 
-        // Create inactive banner
         Banner inactive = Banner.create(
                 BannerTitle.of("Inactive"),
                 BannerType.MAIN,
@@ -315,7 +295,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         ).deactivate();
         repository.save(inactive).block();
 
-        // When & Then
         StepVerifier.create(repository.countActiveBanners())
                 .assertNext(count -> assertEquals(2L, count))
                 .verifyComplete();
@@ -323,7 +302,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
 
     @Test
     void findByTypeAndActive_ShouldFilterByTypeCorrectly() {
-        // Given - Create banners of different types
         Banner mainBanner = Banner.create(
                 BannerTitle.of("Main Banner"),
                 BannerType.MAIN,
@@ -350,7 +328,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         );
         repository.save(routesBanner).block();
 
-        // When & Then - Find MAIN type
         StepVerifier.create(repository.findByTypeAndActive(BannerType.MAIN))
                 .assertNext(banner -> {
                     assertEquals("Main Banner", banner.getTitle().getValue());
@@ -358,7 +335,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 })
                 .verifyComplete();
 
-        // Find ROUTES type
         StepVerifier.create(repository.findByTypeAndActive(BannerType.ROUTES))
                 .assertNext(banner -> {
                     assertEquals("Routes Banner", banner.getTitle().getValue());
@@ -369,7 +345,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
 
     @Test
     void countByType_ShouldReturnCorrectCountForType() {
-        // Given - Create 2 MAIN banners and 1 ROUTES banner
         Banner main1 = Banner.create(
                 BannerTitle.of("Main 1"),
                 BannerType.MAIN,
@@ -409,7 +384,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         );
         repository.save(routes1).block();
 
-        // When & Then
         StepVerifier.create(repository.countByType(BannerType.MAIN))
                 .assertNext(count -> assertEquals(2L, count))
                 .verifyComplete();
@@ -421,7 +395,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
 
     @Test
     void findAll_ShouldReturnAllBanners() {
-        // Given
         Banner banner1 = Banner.create(
                 BannerTitle.of("Banner 1"),
                 BannerType.MAIN,
@@ -448,7 +421,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
         );
         repository.save(banner2).block();
 
-        // When & Then
         StepVerifier.create(repository.findAll())
                 .expectNextCount(2)
                 .verifyComplete();
@@ -456,7 +428,6 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
 
     @Test
     void saveAndRetrieve_ShouldPreserveAllBannerProperties() {
-        // Given
         LocalDateTime startDate = now.minusDays(1);
         LocalDateTime endDate = now.plusDays(7);
 
@@ -472,11 +443,9 @@ class R2dbcAdminBannerRepositoryIntegrationTest {
                 true
         );
 
-        // When
         Banner saved = repository.save(banner).block();
         assertNotNull(saved);
 
-        // Then - Retrieve and verify all properties
         StepVerifier.create(repository.findById(saved.getId()))
                 .assertNext(retrieved -> {
                     assertEquals("Complete Banner", retrieved.getTitle().getValue());

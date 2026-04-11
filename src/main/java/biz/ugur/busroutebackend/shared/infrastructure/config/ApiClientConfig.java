@@ -40,7 +40,7 @@ public class ApiClientConfig {
         return WebClient.builder()
                 .baseUrl(baseUrl)
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
                 .build();
     }
 

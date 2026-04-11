@@ -150,4 +150,20 @@ public final class RedisKeyRegistry {
         private Analytics() {
         }
     }
+
+    public static final class Prediction {
+        private static final String STATE_PREFIX = "prediction:state";
+        public static final Duration STATE_TTL = Duration.ofMinutes(5);
+
+        public static String state(String vehicleId) {
+            return STATE_PREFIX + ":" + vehicleId;
+        }
+
+        public static String statePattern() {
+            return STATE_PREFIX + ":*";
+        }
+
+        private Prediction() {
+        }
+    }
 }

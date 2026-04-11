@@ -10,7 +10,7 @@ public class IntegrationClientNotFoundException extends ExternalServiceException
     private final String identifierType;
 
     private IntegrationClientNotFoundException(String identifier, String identifierType, String message) {
-        super("CLIENT_NOT_FOUND", message, Severity.WARNING);
+        super("CLIENT.NOT_FOUND", message, Severity.WARNING);
         this.identifier = identifier;
         this.identifierType = identifierType;
     }

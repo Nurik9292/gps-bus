@@ -9,7 +9,6 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 public class StopFavoriteMapper {
 
     private StopFavoriteMapper() {
-        // Utility class - prevent instantiation
     }
 
     public static StopFavorite toDomain(StopFavoriteEntity entity) {

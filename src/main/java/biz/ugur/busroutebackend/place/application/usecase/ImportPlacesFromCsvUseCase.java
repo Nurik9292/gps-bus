@@ -67,7 +67,7 @@ public class ImportPlacesFromCsvUseCase extends BaseUseCase<Mono<ImportPlacesFro
             List<String[]> rows = new ArrayList<>();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(new java.io.ByteArrayInputStream(content), StandardCharsets.UTF_8))) {
-                String line = reader.readLine(); // skip header
+                String line = reader.readLine();
                 while ((line = reader.readLine()) != null) {
                     if (!line.trim().isEmpty()) {
                         rows.add(parseCsvLine(line));
@@ -89,7 +89,7 @@ public class ImportPlacesFromCsvUseCase extends BaseUseCase<Mono<ImportPlacesFro
                 .concatMap(tuple -> {
                     long idx = tuple.getT1();
                     String[] fields = tuple.getT2();
-                    int rowNum = (int) idx + 2; // +2 for 1-based + header
+                    int rowNum = (int) idx + 2; 
 
                     return processPlaceRow(fields, rowNum, defaultCityId)
                             .doOnSuccess(v -> imported[0]++)
@@ -105,7 +105,6 @@ public class ImportPlacesFromCsvUseCase extends BaseUseCase<Mono<ImportPlacesFro
     }
 
     private Mono<Place> processPlaceRow(String[] fields, int rowNum, String defaultCityId) {
-        // Expected: name,name_en,name_tm,category,address,latitude,longitude,aliases
         if (fields.length < 7) {
             return Mono.error(new IllegalArgumentException("Not enough columns (expected at least 7)"));
         }

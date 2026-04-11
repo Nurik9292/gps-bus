@@ -11,9 +11,6 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Repository for API usage logs
- */
 @Repository
 @RequiredArgsConstructor
 @Slf4j

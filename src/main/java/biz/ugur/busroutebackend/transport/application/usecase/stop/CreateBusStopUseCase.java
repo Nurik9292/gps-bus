@@ -86,7 +86,6 @@ public class CreateBusStopUseCase extends BaseUseCase<Mono<CreateStop>, StopData
     }
 
     private void validateCoordinates(BigDecimal latitude, BigDecimal longitude) {
-        // Use centralized validation for bus stop coordinates (strict bounds)
         TurkmenistanBounds.validateStrictBounds(latitude, longitude);
     }
 

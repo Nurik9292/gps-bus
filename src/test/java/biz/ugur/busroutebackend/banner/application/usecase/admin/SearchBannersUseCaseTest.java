@@ -385,7 +385,6 @@ class SearchBannersUseCaseTest {
             .assertNext(response -> assertNotNull(response))
             .verifyComplete();
 
-        // Проверяем Pageable
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(bannerRepository).findBySpecification(any(Specification.class), pageableCaptor.capture());
 

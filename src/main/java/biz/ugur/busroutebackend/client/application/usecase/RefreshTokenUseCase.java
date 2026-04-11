@@ -41,23 +41,19 @@ public class RefreshTokenUseCase extends BaseUseCase<Mono<RefreshTokenUseCase.Co
             .flatMap(correlationId -> {
                 log.info("[RefreshToken] CorrelationId: {} - Refreshing token", correlationId);
 
-                // Step 1: Validate refresh token with JWT service
                 return jwtTokenService.validateRefreshToken(cmd.refreshToken())
                     .flatMap(clientId -> {
                         log.debug("[RefreshToken] Token validated for clientId: {}", clientId);
 
-                        // Step 2: Load client from repository
                         return clientRepository.findById(ClientId.of(clientId))
                             .switchIfEmpty(Mono.error(new IllegalArgumentException("Client not found")))
                             .flatMap(client -> {
 
-                                // Step 3: Domain validation - check if refresh token matches
                                 if (!client.isRefreshTokenValid(cmd.refreshToken())) {
                                     log.warn("[RefreshToken] Invalid refresh token for client: {}", clientId);
                                     return Mono.error(new IllegalArgumentException("Invalid refresh token"));
                                 }
 
-                                // Step 4: Generate new tokens
                                 return Mono.zip(
                                     jwtTokenService.generateAccessToken(clientId),
                                     jwtTokenService.generateRefreshToken(clientId)
@@ -65,10 +61,8 @@ public class RefreshTokenUseCase extends BaseUseCase<Mono<RefreshTokenUseCase.Co
                                     String newAccessToken = tokens.getT1();
                                     String newRefreshToken = tokens.getT2();
 
-                                    // Step 5: Update domain model
                                     client.updateTokens(newAccessToken, newRefreshToken);
 
-                                    // Step 6: Persist
                                     return clientRepository.save(client)
                                         .doOnSuccess(saved ->
                                             log.info("[RefreshToken] Tokens refreshed successfully for client: {}", clientId))

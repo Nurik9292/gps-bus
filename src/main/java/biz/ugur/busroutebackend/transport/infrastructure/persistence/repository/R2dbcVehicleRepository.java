@@ -398,18 +398,14 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .course(row.get("course", Double.class))
                 .currentDirection(safeGet(row, "current_direction", Integer.class, null))
                 .lastStopSequence(safeGet(row, "last_stop_sequence", Integer.class, null))
-                // Garage tracking fields
                 .lastGarageId(safeGet(row, "last_garage_id", String.class, null))
                 .garageEntryTime(safeGet(row, "garage_entry_time", LocalDateTime.class, null))
                 .garageExitTime(safeGet(row, "garage_exit_time", LocalDateTime.class, null))
                 .isInGarage(safeGet(row, "is_in_garage", Boolean.class, false))
-                // Route source fields
                 .routeSource(safeGet(row, "route_source", String.class, null))
                 .routeConfidence(safeGet(row, "route_confidence", Integer.class, 0))
                 .gpsDetectionEnabled(safeGet(row, "gps_detection_enabled", Boolean.class, true))
-                // GPS provider
                 .gpsProvider(safeGet(row, "gps_provider", String.class, "CHINA"))
-                // Metadata
                 .createdAt(safeGet(row, "created_at", LocalDateTime.class, null))
                 .updatedAt(safeGet(row, "updated_at", LocalDateTime.class, null))
                 .version(safeGet(row, "version", Long.class, 0L))
@@ -486,38 +482,45 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .map(BatchUpdateResult::successCount);
     }
 
-    private Mono<BatchUpdateResult> updateWithRetry(Vehicle vehicle) {
-        return updateSingleVehicle(vehicle)
-                .map(rowsUpdated -> BatchUpdateResult.success())
-                .retryWhen(Retry.backoff(MAX_RETRIES, Duration.ofMillis(10))
-                        .maxBackoff(Duration.ofMillis(100))
-                        .jitter(0.5)
-                        .filter(throwable -> throwable instanceof org.springframework.dao.OptimisticLockingFailureException)
-                        .doBeforeRetry(signal -> {
-                            int attempt = (int) signal.totalRetries() + 1;
-                            metricsRecorder.recordRetry(ENTITY_TYPE, vehicle.getId().getValue(), attempt, MAX_RETRIES);
-                        })
-                        .doAfterRetry(signal -> {
-                            if (signal.failure() == null) {
-                                metricsRecorder.recordSuccessAfterRetry(
-                                        ENTITY_TYPE,
-                                        vehicle.getId().getValue(),
-                                        (int) signal.totalRetries() + 1
-                                );
-                            }
-                        })
-                )
-                .onErrorResume(org.springframework.dao.OptimisticLockingFailureException.class,
-                        error -> {
-                            metricsRecorder.recordFailureAfterRetries(ENTITY_TYPE, vehicle.getId().getValue(), MAX_RETRIES);
-                            return Mono.just(BatchUpdateResult.conflict());
-                        });
+    @Override
+    @Transactional
+    public Mono<Integer> batchUpdateDirections(Map<String, Integer> vehicleIdToDirection) {
+        if (vehicleIdToDirection == null || vehicleIdToDirection.isEmpty()) {
+            return Mono.just(0);
+        }
+
+        String sql = "UPDATE vehicles SET current_direction = :dir, updated_at = NOW() WHERE id = :id";
+
+        return Flux.fromIterable(vehicleIdToDirection.entrySet())
+                .flatMap(entry -> databaseClient.sql(sql)
+                        .bind("dir", entry.getValue())
+                        .bind("id", entry.getKey())
+                        .fetch()
+                        .rowsUpdated()
+                        .map(Long::intValue))
+                .reduce(0, Integer::sum)
+                .doOnNext(n -> log.debug("[GPS_PIPELINE] DIR_AUTO_FIX updated direction for {} vehicles", n));
     }
 
-    /**
-     * Internal result for batch update operations.
-     * Tracks both successful updates and optimistic lock conflicts.
-     */
+    private Mono<BatchUpdateResult> updateWithRetry(Vehicle vehicle) {
+        // Optimistic lock conflicts cannot be resolved by retrying with the same
+        // vehicle object (version is stale), so we skip the retry and treat any
+        // optimistic-lock failure — direct or wrapped in RetryExhaustedException — as
+        // a harmless conflict: the concurrent writer already persisted a newer position.
+        return updateSingleVehicle(vehicle)
+                .map(rowsUpdated -> BatchUpdateResult.success())
+                .onErrorResume(error -> {
+                    Throwable root = error.getCause() != null ? error.getCause() : error;
+                    if (root instanceof org.springframework.dao.OptimisticLockingFailureException) {
+                        log.debug("Optimistic lock conflict for vehicle {} (version {}), skipping — concurrent update won",
+                                vehicle.getId(), vehicle.getVersion());
+                        metricsRecorder.recordFailureAfterRetries(ENTITY_TYPE, vehicle.getId().getValue(), 0);
+                        return Mono.just(BatchUpdateResult.conflict());
+                    }
+                    return Mono.error(error);
+                });
+    }
+
     private record BatchUpdateResult(int successCount, int conflictCount) {
 
         static BatchUpdateResult empty() {
@@ -574,7 +577,6 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .rowsUpdated()
                 .flatMap(rowsUpdated -> {
                     if (rowsUpdated == 0) {
-                        // No rows updated means version mismatch (optimistic lock failure)
                         return Mono.error(new org.springframework.dao.OptimisticLockingFailureException(
                                 String.format("Optimistic lock failure for Vehicle with id: %s (expected version: %d)",
                                         vehicle.getId(), vehicle.getVersion())));

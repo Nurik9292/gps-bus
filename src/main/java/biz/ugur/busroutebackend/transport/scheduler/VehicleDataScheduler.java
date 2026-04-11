@@ -16,6 +16,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -93,6 +94,7 @@ public class VehicleDataScheduler {
         }
 
         schedulerDisposable = Mono.delay(UPDATE_INTERVAL)
+                .publishOn(Schedulers.boundedElastic())
                 .flatMap(tick -> {
                     if (!isActiveHours()) {
                         log.debug("Outside active hours ({}-{}), skipping GPS update",
@@ -101,7 +103,6 @@ public class VehicleDataScheduler {
                     }
                     return executeWithLock();
                 })
-                .subscribeOn(Schedulers.boundedElastic())
                 .doFinally(signal -> scheduleNextUpdate())
                 .subscribe();
     }
@@ -114,9 +115,17 @@ public class VehicleDataScheduler {
     private Mono<Void> executeWithLock() {
         Duration lockTimeout = lockProperties.getGpsSchedulerLockTimeout();
 
+        Mono<RedisDistributedLock.LockHandle> lockMono = distributedLock
+                .tryAcquire(GPS_UPDATE_LOCK_NAME, lockTimeout)
+                .timeout(Duration.ofSeconds(5))
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[GPS_PIPELINE] LOCK_BLOCKED — cannot acquire '{}', held by another instance (TTL={}). GPS update skipped.",
+                            GPS_UPDATE_LOCK_NAME, lockTimeout);
+                    return Mono.empty();
+                }));
+
         return Mono.usingWhen(
-                distributedLock.tryAcquire(GPS_UPDATE_LOCK_NAME, lockTimeout)
-                        .timeout(Duration.ofSeconds(5)),
+                lockMono,
 
                 lockHandle -> {
                     Instant startTime = Instant.now();
@@ -148,12 +157,23 @@ public class VehicleDataScheduler {
         Duration batchTimeout = schedulerProperties.getGps().getBatchTimeout();
         Duration totalTimeout = schedulerProperties.getGps().getTotalTimeout();
 
+        log.debug("[GPS_PIPELINE] CYCLE_START providers={}", gpsDataAggregator.getEnabledProviderCount());
+
         return vehicleRepository.findAllDeviceIdsGroupedByProvider()
+                .doOnNext(grouped -> {
+                    int total = grouped.values().stream().mapToInt(List::size).sum();
+                    grouped.forEach((provider, ids) ->
+                            log.debug("[GPS_PIPELINE] FETCH_START provider={} devices={}",
+                                    provider.getCode(), ids.size()));
+                    log.debug("[GPS_PIPELINE] FETCH_START total_devices={}", total);
+                })
                 .flatMap(this::fetchPositionsIfNotEmpty)
+                .doOnNext(positions ->
+                        log.debug("[GPS_PIPELINE] FETCH_DONE received={}", positions.size()))
                 .flatMapIterable(positions -> positions)
                 .buffer(batchSize)
                 .parallel(parallelWorkers)
-                .runOn(Schedulers.parallel())
+                .runOn(Schedulers.boundedElastic()) 
                 .flatMap(batch -> processBatch(batch, batchTimeout))
                 .sequential()
                 .reduce(VehiclePositionUpdateResult.empty(), VehiclePositionUpdateResult::merge)
@@ -164,21 +184,50 @@ public class VehicleDataScheduler {
     }
 
     private Mono<List<GpsPositionDTO>> fetchPositionsIfNotEmpty(Map<GpsProviderType, List<String>> devicesByProvider) {
-        if (devicesByProvider.isEmpty()) {
-            log.warn("No device IDs found in database, skipping GPS update");
+        int totalDevices = devicesByProvider.values().stream().mapToInt(List::size).sum();
+
+        // Bootstrap: find enabled providers that have zero known devices in DB
+        List<reactor.core.publisher.Mono<List<GpsPositionDTO>>> extraFetches =
+                gpsDataAggregator.getEnabledProviders().stream()
+                        .filter(p -> !devicesByProvider.containsKey(p.getProviderType()))
+                        .peek(p -> log.info("[GPS_PIPELINE] BOOTSTRAP provider={} (0 devices in DB, calling fetchAllPositions)",
+                                p.getProviderType().getCode()))
+                        .map(p -> p.fetchAllPositions()
+                                .onErrorResume(e -> {
+                                    log.warn("[GPS_PIPELINE] BOOTSTRAP provider={} failed: {}",
+                                            p.getProviderType().getCode(), e.getMessage());
+                                    return reactor.core.publisher.Mono.just(List.of());
+                                }))
+                        .toList();
+
+        if (devicesByProvider.isEmpty() && extraFetches.isEmpty()) {
+            log.warn("No device IDs found in database and no enabled providers, skipping GPS update");
             return Mono.just(List.of());
         }
 
-        int totalDevices = devicesByProvider.values().stream().mapToInt(List::size).sum();
+        Mono<List<GpsPositionDTO>> normalFetch = devicesByProvider.isEmpty()
+                ? Mono.just(List.of())
+                : gpsDataAggregator.fetchPositionsGroupedByProvider(devicesByProvider)
+                        .doOnNext(positions -> {
+                            int missing = totalDevices - positions.size();
+                            if (missing > 0) {
+                                log.warn("GPS API returned {} of {} positions. Missing {} devices",
+                                        positions.size(), totalDevices, missing);
+                            }
+                        });
 
-        return gpsDataAggregator.fetchPositionsGroupedByProvider(devicesByProvider)
-                .doOnNext(positions -> {
-                    int missing = totalDevices - positions.size();
-                    if (missing > 0) {
-                        log.warn("GPS API returned {} of {} positions. Missing {} devices",
-                                positions.size(), totalDevices, missing);
-                    }
-                });
+        if (extraFetches.isEmpty()) {
+            return normalFetch;
+        }
+
+        List<Mono<List<GpsPositionDTO>>> allFetches = new java.util.ArrayList<>();
+        allFetches.add(normalFetch);
+        allFetches.addAll(extraFetches);
+
+        return Flux.fromIterable(allFetches)
+                .flatMap(m -> m)
+                .flatMapIterable(list -> list)
+                .collectList();
     }
 
     private Mono<VehiclePositionUpdateResult> processBatch(List<GpsPositionDTO> batch, Duration timeout) {
@@ -194,8 +243,9 @@ public class VehicleDataScheduler {
     private Mono<VehiclePositionUpdateResult> handleSuccess(VehiclePositionUpdateResult result, Instant startTime) {
         Duration duration = Duration.between(startTime, Instant.now());
 
-        log.debug("GPS update: {}ms, updated={}, failed={}",
-                duration.toMillis(), result.updatedCount(), result.failedCount());
+        log.debug("[GPS_PIPELINE] CYCLE_DONE duration={}ms updated={} created={} failed={} invalid={}",
+                duration.toMillis(), result.updatedCount(), result.createdCount(),
+                result.failedCount(), result.invalidCount());
 
         return statisticsService.saveUpdateStats(result, duration)
                 .thenReturn(result);
@@ -224,12 +274,15 @@ public class VehicleDataScheduler {
                     log.error("Health check failed: {}", error.getMessage());
                     return Mono.empty();
                 })
+                .subscribeOn(Schedulers.boundedElastic())
                 .subscribe();
     }
 
     @Scheduled(cron = "0 0 2 * * *")
     public void cleanupOldData() {
         log.info("Starting cleanup of old cached data");
-        statisticsService.cleanupOldStats().subscribe();
+        statisticsService.cleanupOldStats()
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe();
     }
 }

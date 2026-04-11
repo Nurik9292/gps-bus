@@ -198,7 +198,7 @@ public class ExternalService extends AggregateRoot<ExternalService, ExternalServ
 
     public boolean isEndpointAllowed(String endpoint) {
         if (allowedEndpoints == null || allowedEndpoints.isEmpty()) {
-            return true; // All endpoints allowed
+            return true; 
         }
 
         return allowedEndpoints.stream()

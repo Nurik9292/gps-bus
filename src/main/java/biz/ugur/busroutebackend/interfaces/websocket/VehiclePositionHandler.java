@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.interfaces.websocket;
 
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
 import biz.ugur.busroutebackend.transport.application.usecase.GetActiveVehiclesUseCase;
+import biz.ugur.busroutebackend.transport.infrastructure.messaging.DirectVehiclePositionBroadcaster;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,10 +17,13 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 import org.springframework.scheduling.annotation.Scheduled;
+import jakarta.annotation.PostConstruct;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,11 +33,10 @@ import java.util.stream.Collectors;
 
 @Component
 @Slf4j
-public class VehiclePositionHandler implements WebSocketHandler {
-
-    private static final int BUFFER_SIZE = 4096;
+public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePositionBroadcaster {
 
     private static final Duration SESSION_TIMEOUT = Duration.ofMinutes(5);
+    private static final Duration MAX_GPS_AGE = Duration.ofMinutes(10);
 
     private static final long CLEANUP_INTERVAL_MS = 60_000;
 
@@ -46,9 +49,9 @@ public class VehiclePositionHandler implements WebSocketHandler {
     private final AtomicInteger sessionCounter = new AtomicInteger(0);
     private final AtomicLong totalExpiredSessions = new AtomicLong(0);
 
-
     private final Sinks.Many<VehiclePositionWebSocketMessage> broadcastSink =
-            Sinks.many().multicast().onBackpressureBuffer(BUFFER_SIZE, false);
+            Sinks.many().multicast().onBackpressureBuffer(4096, false);
+
 
     public VehiclePositionHandler(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                   ReactiveRedisTemplate<String, Object> redisTemplate,
@@ -58,8 +61,15 @@ public class VehiclePositionHandler implements WebSocketHandler {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.bufferMetrics = bufferMetrics;
+    }
 
-        subscribeToRedisUpdates();
+    @PostConstruct
+    public void init() {
+        try {
+            subscribeToRedisUpdates();
+        } catch (Exception e) {
+            log.warn("Redis pub/sub unavailable at startup, WebSocket live updates disabled: {}", e.getMessage());
+        }
     }
 
 
@@ -221,7 +231,7 @@ public class VehiclePositionHandler implements WebSocketHandler {
                 })
                 .filter(positionMsg -> isPositionInScope(positionMsg, config))
                 .onBackpressureLatest()
-                .bufferTimeout(100, Duration.ofMillis(200))
+                .bufferTimeout(50, Duration.ofMillis(100))
                 .takeWhile(ignored -> session.isOpen())
                 .filter(updates -> !updates.isEmpty())
                 .onBackpressureDrop(dropped ->
@@ -344,6 +354,13 @@ public class VehiclePositionHandler implements WebSocketHandler {
 
     private void subscribeToRedisUpdates() {
         redisTemplate.listenToChannel("vehicle-position-updates")
+                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(2))
+                        .maxBackoff(Duration.ofSeconds(30))
+                        .doBeforeRetry(signal -> log.warn(
+                                "Redis vehicle-position-updates subscription lost (attempt {}), reconnecting in {}s: {}",
+                                signal.totalRetries() + 1,
+                                Math.min(2 << (int) Math.min(signal.totalRetries(), 4), 30),
+                                signal.failure().getMessage())))
                 .filter(Objects::nonNull)
                 .mapNotNull(message -> {
                     try {
@@ -377,39 +394,41 @@ public class VehiclePositionHandler implements WebSocketHandler {
                                 msg.getLicensePlate(), msg.getRouteNumber());
                         return false;
                     }
+                    log.debug("[GPS_PIPELINE] REDIS_RECV vehicle={} plate={} route={} lat={} lon={}",
+                            msg.getVehicleId(), msg.getLicensePlate(), msg.getRouteNumber(),
+                            msg.getLatitude(), msg.getLongitude());
+                    return true;
+                })
+                .filter(msg -> {
+                    if (Boolean.TRUE.equals(msg.getPredicted())) return true;
+                    if (msg.getTimestamp() == null) return true;
+                    LocalDateTime cutoff = LocalDateTime.now(ZoneOffset.UTC).minus(MAX_GPS_AGE);
+                    if (msg.getTimestamp().isBefore(cutoff)) {
+                        log.debug("Stale GPS dropped for vehicle {} (timestamp={})",
+                                msg.getVehicleId(), msg.getTimestamp());
+                        return false;
+                    }
                     return true;
                 })
                 .subscribe(
                         this::emitWithMetrics,
-                        error -> log.error("Redis subscription error: {}", error.getMessage()),
-                        () -> log.info("Redis subscription completed")
+                        error -> {
+                            log.error("Redis vehicle-position subscription permanently failed: {}", error.getMessage());
+                        },
+                        () -> log.info("Redis vehicle-position subscription completed")
                 );
     }
 
 
     private void emitWithMetrics(VehiclePositionWebSocketMessage message) {
-        broadcastSink.emitNext(message, (signalType, emitResult) -> {
-            if (emitResult == Sinks.EmitResult.OK) {
-                bufferMetrics.recordEmitted();
-                return false;
-            }
-
-            if (emitResult == Sinks.EmitResult.FAIL_NON_SERIALIZED) {
-                return true;
-            }
-
-            if (emitResult == Sinks.EmitResult.FAIL_OVERFLOW) {
-                bufferMetrics.recordDropped(message.getVehicleId());
-                return false;
-            }
-
-            if (emitResult != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
-                    && emitResult != Sinks.EmitResult.FAIL_CANCELLED) {
-                log.warn("Failed to emit position update for vehicle {}: {}",
-                        message.getVehicleId(), emitResult);
-            }
-            return false;
-        });
+        Sinks.EmitResult result = broadcastSink.tryEmitNext(message);
+        if (result == Sinks.EmitResult.OK) {
+            bufferMetrics.recordEmitted();
+        } else if (result != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
+                && result != Sinks.EmitResult.FAIL_CANCELLED) {
+            bufferMetrics.recordDropped(message.getVehicleId());
+            log.debug("Dropped position update for vehicle {}: {}", message.getVehicleId(), result);
+        }
     }
 
     public void broadcastVehiclePosition(VehiclePositionWebSocketMessage message) {
@@ -419,6 +438,15 @@ public class VehiclePositionHandler implements WebSocketHandler {
         }
 
         emitWithMetrics(message);
+    }
+
+    @Override
+    public void broadcastDirect(VehiclePositionWebSocketMessage message) {
+        log.debug("[GPS_PIPELINE] WS_SINK vehicle={} plate={} type={} sessions={}",
+                message.getVehicleId(), message.getLicensePlate(),
+                Boolean.TRUE.equals(message.getPredicted()) ? "PRED" : "GPS",
+                activeSessions.size());
+        broadcastVehiclePosition(message);
     }
 
     public WebSocketBufferMetricsTracker.BufferHealthStats getBufferStats() {

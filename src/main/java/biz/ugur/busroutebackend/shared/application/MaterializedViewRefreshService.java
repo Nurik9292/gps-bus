@@ -53,7 +53,7 @@ public class MaterializedViewRefreshService {
                 );
     }
 
-    @Scheduled(fixedRate = 600000, initialDelay = 300000) // every 10 min
+    @Scheduled(fixedRate = 600000, initialDelay = 300000) 
     public void refreshSearchHourlyStats() {
         refreshView("mv_search_hourly_stats", "Search Hourly Stats")
                 .subscribe(
@@ -71,7 +71,7 @@ public class MaterializedViewRefreshService {
                 );
     }
 
-    @Scheduled(fixedRate = 1800000, initialDelay = 420000) // every 30 min
+    @Scheduled(fixedRate = 1800000, initialDelay = 420000)
     public void refreshPopularODPairs() {
         refreshView("mv_popular_od_pairs", "Popular OD Pairs")
                 .subscribe(

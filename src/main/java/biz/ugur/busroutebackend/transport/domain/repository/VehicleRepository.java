@@ -50,6 +50,8 @@ public interface VehicleRepository extends BaseRepository<Vehicle, VehicleId> {
 
     Mono<Integer> batchUpdate(List<Vehicle> vehicles);
 
+    Mono<Integer> batchUpdateDirections(Map<String, Integer> vehicleIdToDirection);
+
     Flux<Vehicle> batchInsert(List<Vehicle> vehicles);
 
     Flux<Vehicle> findBySpecification(Specification<Vehicle> specification);

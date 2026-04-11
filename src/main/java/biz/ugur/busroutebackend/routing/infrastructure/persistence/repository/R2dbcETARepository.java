@@ -113,7 +113,7 @@ public class R2dbcETARepository implements ETARepository {
                 .map(row -> {
                     Integer baseTime = row.get("base_wait_time", Integer.class);
                     Integer adjustment = row.get("time_adjustment", Integer.class);
-                    Integer vehiclesCount = row.get("vehicles_count", Integer.class);
+                    Long vehiclesCount = row.get("vehicles_count", Long.class);
                     String category = row.get("category", String.class);
 
                     int waitTime = (baseTime != null ? baseTime : 10) + (adjustment != null ? adjustment : 0);
@@ -186,13 +186,6 @@ public class R2dbcETARepository implements ETARepository {
     }
 
 
-    /**
-     * Adjusts travel time based on current traffic conditions using configured multipliers.
-     * Takes into account time of day (rush hours, night) and weekend factors.
-     *
-     * @param baseTime the base travel time in minutes
-     * @return adjusted travel time accounting for traffic conditions
-     */
     private int adjustForTrafficConditions(int baseTime) {
         LocalDateTime now = LocalDateTime.now();
         int hour = now.getHour();

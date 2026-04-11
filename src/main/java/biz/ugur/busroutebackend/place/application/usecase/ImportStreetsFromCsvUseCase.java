@@ -65,7 +65,7 @@ public class ImportStreetsFromCsvUseCase extends BaseUseCase<Mono<ImportStreetsF
             List<String[]> rows = new ArrayList<>();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(new java.io.ByteArrayInputStream(content), StandardCharsets.UTF_8))) {
-                String line = reader.readLine(); // skip header
+                String line = reader.readLine(); 
                 while ((line = reader.readLine()) != null) {
                     if (!line.trim().isEmpty()) {
                         rows.add(ImportPlacesFromCsvUseCase.parseCsvLine(line));
@@ -103,7 +103,6 @@ public class ImportStreetsFromCsvUseCase extends BaseUseCase<Mono<ImportStreetsF
     }
 
     private Mono<Street> processStreetRow(String[] fields, int rowNum, String defaultCityId) {
-        // Expected: name,name_en,name_tm,aliases
         if (fields.length < 1) {
             return Mono.error(new IllegalArgumentException("Not enough columns"));
         }

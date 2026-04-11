@@ -59,7 +59,7 @@ public class DetectRouteByGpsUseCase extends BaseUseCase<DetectRouteByGpsUseCase
 
     @Override
     protected Mono<Result> process(Request request) {
-        return gpsHistoryService.hasEnoughPoints(request.vehicleId(), minGpsPoints)
+        return gpsHistoryService.hasEnoughPoints(request.vehicle().getDeviceId(), minGpsPoints)
                 .flatMap(hasEnough -> {
                     if (!hasEnough) {
                         return Mono.just(Result.insufficientData("Not enough GPS points"));
@@ -69,7 +69,7 @@ public class DetectRouteByGpsUseCase extends BaseUseCase<DetectRouteByGpsUseCase
     }
 
     private Mono<Result> detectAndAssign(Vehicle vehicle) {
-        return gpsHistoryService.getHistoryList(vehicle.getId().getValue(), 50)
+        return gpsHistoryService.getHistoryList(vehicle.getDeviceId(), 50)
                 .flatMap(gpsPoints -> {
                     if (gpsPoints.isEmpty()) {
                         return Mono.just(Result.insufficientData("No GPS history"));
@@ -189,11 +189,7 @@ public class DetectRouteByGpsUseCase extends BaseUseCase<DetectRouteByGpsUseCase
         return "transport";
     }
 
-    public record Request(Vehicle vehicle) {
-        public String vehicleId() {
-            return vehicle.getId().getValue();
-        }
-    }
+    public record Request(Vehicle vehicle) {}
 
     public record Result(
             ResultType type,

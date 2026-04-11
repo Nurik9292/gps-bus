@@ -9,7 +9,6 @@ import biz.ugur.busroutebackend.client.infrastructure.persistence.entity.ClientE
 public class ClientMapper {
 
     private ClientMapper() {
-        // Utility class - prevent instantiation
     }
 
     public static Client toDomain(ClientEntity entity) {

@@ -38,7 +38,8 @@ public class TransportDomainConfig {
                 properties.getMaxImpliedSpeedKmh(),
                 properties.getMinTimeDifference().toSeconds(),
                 properties.getMaxTimeDifference().toSeconds(),
-                properties.getMinDistanceMeters()
+                properties.getMinDistanceMeters(),
+                properties.getMinSpeedForFrozenDetectionKmh()
         );
     }
 

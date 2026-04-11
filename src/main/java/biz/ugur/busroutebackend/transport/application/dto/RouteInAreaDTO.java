@@ -34,7 +34,7 @@ public class RouteInAreaDTO {
     private Long vehiclesInMotionCount;
 
     @JsonProperty("estimated_frequency_minutes")
-    private Integer estimatedFrequencyMinutes; // Примерная частота автобусов
+    private Integer estimatedFrequencyMinutes;
 
     public RouteInAreaDTO(String routeId, String routeNumber, String routeName,
                           String routeColor, Integer direction, RoutePointDTO nearestPoint,

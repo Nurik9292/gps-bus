@@ -30,7 +30,6 @@ public class RouteGeometryRequest {
             return false;
         }
 
-        // Проверяем каждую координату
         for (Double[] coord : forwardCoordinates) {
             if (coord == null || coord.length != 2) {
                 return false;
@@ -38,13 +37,11 @@ public class RouteGeometryRequest {
             double lat = coord[0];
             double lon = coord[1];
 
-            // Координаты должны быть в пределах Туркменистана
             if (lat < 35.0 || lat > 43.0 || lon < 52.0 || lon > 67.0) {
                 return false;
             }
         }
 
-        // Проверяем обратные координаты если есть
         if (backwardCoordinates != null) {
             for (Double[] coord : backwardCoordinates) {
                 if (coord == null || coord.length != 2) {

@@ -55,7 +55,6 @@ class GetBannerByIdUseCaseTest {
 
     @Test
     void shouldGetBannerByIdSuccessfully() {
-        // Given
         Banner banner = mock(Banner.class);
         BannerPeriod period = mock(BannerPeriod.class);
 
@@ -93,10 +92,8 @@ class GetBannerByIdUseCaseTest {
         when(adminBannerRepository.findById(BannerId.of(BANNER_ID))).thenReturn(Mono.just(banner));
         when(bannerResponseMapper.toResponse(banner)).thenReturn(Mono.just(bannerResponse));
 
-        // When
         Mono<BannerResponse> result = getBannerByIdUseCase.execute(Mono.just(BANNER_ID));
 
-        // Then
         StepVerifier.create(result)
                 .assertNext(response -> {
                     assertNotNull(response);
@@ -118,14 +115,11 @@ class GetBannerByIdUseCaseTest {
 
     @Test
     void shouldThrowExceptionWhenBannerNotFound() {
-        // Given
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(adminBannerRepository.findById(BannerId.of(BANNER_ID))).thenReturn(Mono.empty());
 
-        // When
         Mono<BannerResponse> result = getBannerByIdUseCase.execute(Mono.just(BANNER_ID));
 
-        // Then
         StepVerifier.create(result)
                 .expectErrorSatisfies(error -> {
                     assertNotNull(error);
@@ -141,10 +135,8 @@ class GetBannerByIdUseCaseTest {
 
     @Test
     void shouldReturnCorrectBoundContext() {
-        // When
         String boundContext = getBannerByIdUseCase.getBoundContext();
 
-        // Then
         assertNotNull(boundContext);
         assertEquals("admin", boundContext);
     }

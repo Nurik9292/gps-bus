@@ -11,22 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-/**
- * Phase 1.2: DeleteBusRouteUseCase - Business Validation
- *
- * Use Case: Delete a bus route
- *
- * Business Rules:
- * 1. Route must exist
- * 2. Route must not have active vehicles assigned
- * 3. If route has active vehicles, deletion is prevented
- *
- * SOLID Principles:
- * - SRP: Single responsibility - delete route with validation
- * - DIP: Depends on abstractions (BusRouteRepository, VehicleRepository)
- *
- * Phase 2.3: Added Security Context Integration for audit logging
- */
+
 @Service
 @Slf4j
 public class DeleteBusRouteUseCase extends BaseUseCase<String, Void> {
@@ -60,7 +45,6 @@ public class DeleteBusRouteUseCase extends BaseUseCase<String, Void> {
     private Mono<Void> processInternal(String routeId) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
 
-            // Phase 2.3: Get current user for audit logging
             return securityContextService.getCurrentUsername()
                 .defaultIfEmpty("system")
                 .flatMap(username -> {
@@ -72,7 +56,6 @@ public class DeleteBusRouteUseCase extends BaseUseCase<String, Void> {
                     .flatMap(busRoute -> {
                         log.debug("[DeleteBusRoute] Route found: {}, checking for active vehicles", routeId);
 
-                        // Phase 1.2: Business Validation - Check if route has active vehicles
                         return vehicleRepository.findByAssignedRouteId(BusRouteId.of(routeId))
                                 .filter(vehicle -> Boolean.TRUE.equals(vehicle.getIsActive()))
                                 .count()
@@ -92,7 +75,6 @@ public class DeleteBusRouteUseCase extends BaseUseCase<String, Void> {
                                 });
                     })
                     .flatMap(v -> {
-                        // Phase 2.3: Audit log successful deletion
                         return securityContextService.logAudit("DELETE_ROUTE", "route:" + routeId, correlationId.value())
                                 .thenReturn(v);
                     })

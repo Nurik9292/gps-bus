@@ -43,35 +43,30 @@ public class RouteSearchResultDTO {
         String routeNameLower = routeName.toLowerCase();
         String routeNumberLower = routeNumber.toLowerCase();
 
-        // Точное совпадение номера маршрута
         if (routeNumberLower.equals(query)) {
             this.relevanceScore = 100.0;
             this.matchType = "number";
             return;
         }
 
-        // Номер маршрута содержит запрос
         if (routeNumberLower.contains(query)) {
             this.relevanceScore = 90.0;
             this.matchType = "number";
             return;
         }
 
-        // Название маршрута начинается с запроса
         if (routeNameLower.startsWith(query)) {
             this.relevanceScore = 80.0;
             this.matchType = "name";
             return;
         }
 
-        // Название маршрута содержит запрос
         if (routeNameLower.contains(query)) {
             this.relevanceScore = 70.0;
             this.matchType = "name";
             return;
         }
 
-        // Название содержит отдельные слова из запроса
         String[] queryWords = query.split("\\s+");
         int matchedWords = 0;
         for (String word : queryWords) {

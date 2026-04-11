@@ -70,7 +70,7 @@ class CreateRouteAssignmentUseCaseTest {
     void setUp() {
         vehicleId = VehicleId.generate();
         routeId = BusRouteId.generate();
-        defaultExpiresAt = Instant.now().plusSeconds(28800); // 8 hours from now
+        defaultExpiresAt = Instant.now().plusSeconds(28800);
 
         mockVehicle = Vehicle.builder()
                 .id(vehicleId)

@@ -24,7 +24,7 @@ import java.util.Set;
 public class ApiTokenAuthenticationFilter implements WebFilter {
 
     private static final String TOKEN_PREFIX = "Bearer ";
-    private static final String API_TOKEN_PREFIX = "brt_"; // Bus Route Token
+    private static final String API_TOKEN_PREFIX = "brt_";
 
     private final ExternalServiceRepository externalServiceRepository;
     private final ApiTokenRateLimiter rateLimiter;
@@ -41,7 +41,7 @@ public class ApiTokenAuthenticationFilter implements WebFilter {
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
 
-        if (isExcludedPath(path) || !isMobileApiPath(path)) {
+        if (isExcludedPath(path) || !isApiTokenProtectedPath(path)) {
             return chain.filter(exchange);
         }
 
@@ -145,8 +145,8 @@ public class ApiTokenAuthenticationFilter implements WebFilter {
         return EXCLUDED_PATHS.stream().anyMatch(path::startsWith);
     }
 
-    private boolean isMobileApiPath(String path) {
-        return path.startsWith("/api/v1/mobile/");
+    private boolean isApiTokenProtectedPath(String path) {
+        return path.startsWith("/api/v1/mobile/") || path.startsWith("/api/v1/integration/");
     }
 
     private ExternalService getServiceFromPrincipal(ApiTokenPrincipal principal) {

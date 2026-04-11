@@ -33,7 +33,7 @@ public class ExternalServiceDTOMapper {
                 .id(service.getId().getValue())
                 .name(service.getName())
                 .description(service.getDescription())
-                .apiToken(service.getApiToken().getValue()) // Full token
+                .apiToken(service.getApiToken().getValue())
                 .maskedToken(service.getApiToken().getMaskedValue())
                 .isActive(service.getIsActive())
                 .allowedEndpoints(service.getAllowedEndpoints())

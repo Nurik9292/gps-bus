@@ -29,7 +29,6 @@ public class TripSearchResponse {
     @JsonProperty("summary")
     private SearchSummary summary;
 
-    // Конструктор для успешных ответов
     public TripSearchResponse(String status, String message, List<TripOptionDTO> tripOptions) {
         this.status = status;
         this.message = message;
@@ -39,7 +38,6 @@ public class TripSearchResponse {
         this.summary = new SearchSummary(this.tripOptions);
     }
 
-    // Конструктор для ответов с ошибками
     public TripSearchResponse(String status, String message, String errorType) {
         this.status = status;
         this.message = message;

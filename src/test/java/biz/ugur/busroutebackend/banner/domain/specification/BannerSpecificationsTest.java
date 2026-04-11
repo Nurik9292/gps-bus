@@ -115,7 +115,7 @@ class BannerSpecificationsTest {
 
         SqlCriteria criteria = mainSpec.toSqlCriteria();
         assertEquals("type = :type", criteria.getWhereClause());
-        assertEquals("main", criteria.getParameters().get("type")); // lowercase как в БД
+        assertEquals("main", criteria.getParameters().get("type"));
     }
 
     @Test
@@ -136,7 +136,6 @@ class BannerSpecificationsTest {
     @Test
     @DisplayName("periodExpiresWithinDays() - должна находить истекающие баннеры")
     void testPeriodExpiresWithinDays() {
-        // Создаем баннер, который истекает через 3 дня
         LocalDateTime now = LocalDateTime.now();
         Banner soonExpiringBanner = Banner.create(
             BannerTitle.of("Скоро истекающий"),
@@ -170,7 +169,6 @@ class BannerSpecificationsTest {
         assertTrue(spec.isSatisfiedBy(activeBanner), "Баннер с 'Активный баннер' должен найтись по запросу 'активный'");
         assertFalse(spec.isSatisfiedBy(inactiveBanner), "Баннер с 'Неактивный баннер' не должен найтись по запросу 'активный'");
 
-        // Case-insensitive поиск
         Specification<Banner> upperCaseSpec = BannerSpecifications.titleContains("АКТИВНЫЙ");
         assertTrue(upperCaseSpec.isSatisfiedBy(activeBanner), "Поиск должен быть case-insensitive");
 
@@ -227,7 +225,6 @@ class BannerSpecificationsTest {
     @Test
     @DisplayName("Комбинирование спецификаций через .or()")
     void testOrCombination() {
-        // Комбинируем: типа MAIN ИЛИ типа POPUP
         Specification<Banner> spec = BannerSpecifications.hasType(BannerType.MAIN)
             .or(BannerSpecifications.hasType(BannerType.POPUP));
 

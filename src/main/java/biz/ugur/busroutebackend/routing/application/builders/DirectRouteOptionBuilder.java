@@ -1,16 +1,15 @@
 package biz.ugur.busroutebackend.routing.application.builders;
 
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.factory.RouteSegmentFactory;
 import biz.ugur.busroutebackend.routing.application.factory.TripOptionFactory;
-import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import biz.ugur.busroutebackend.routing.infrastructure.services.RouteGeometryTrimmingService;
-import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -46,10 +45,11 @@ public class DirectRouteOptionBuilder {
 
     public Mono<TripOption> createOption(RouteCalculationService.DirectRouteResult directRoute,
                                          SearchContext context) {
-        return buildDirectOption(directRoute, context)
+        log.info("[{}] Creating option for route {}", context.searchId(), directRoute.route().getRouteNumber());
+        return Mono.defer(() -> buildDirectOption(directRoute, context))
                 .onErrorResume(error -> {
-                    log.debug("Failed to create direct option for route {}: {}",
-                            directRoute.route().getRouteNumber(), error.getMessage());
+                    log.warn("[{}] Failed to create direct option for route {}: {}",
+                            context.searchId(), directRoute.route().getRouteNumber(), error.getMessage());
                     return Mono.empty();
                 });
     }
@@ -72,20 +72,34 @@ public class DirectRouteOptionBuilder {
         String fromStopName = directRoute.fromStop().getStopName();
         String toStopName = directRoute.toStop().getStopName();
         LocalDateTime departureTime = LocalDateTime.now();
+        long startTime = System.currentTimeMillis();
 
-        return Mono.zip(
-                etaCalculationService.calculateTravelTimeMinutes(routeNumber, fromStopName, toStopName),
-                etaCalculationService.calculateWaitingTimeMinutes(routeNumber, fromStopName, departureTime),
-                walkingRouteService.getWalkingRoute(context.fromLocation(), fromStopLocation),
-                walkingRouteService.getWalkingRoute(toStopLocation, context.toLocation())
-        ).map(tuple -> {
+        Mono<Integer> travelTime = etaCalculationService.calculateTravelTimeMinutes(routeNumber, fromStopName, toStopName)
+                .doOnSuccess(t -> log.info("[{}] ETA travelTime completed for route {} in {}ms",
+                        context.searchId(), routeNumber, System.currentTimeMillis() - startTime));
+
+        Mono<Integer> waitingTime = etaCalculationService.calculateWaitingTimeMinutes(routeNumber, fromStopName, departureTime)
+                .doOnSuccess(t -> log.info("[{}] ETA waitingTime completed for route {} in {}ms",
+                        context.searchId(), routeNumber, System.currentTimeMillis() - startTime));
+
+        Mono<WalkingRouteService.WalkingRouteResult> walkTo = walkingRouteService.getWalkingRoute(context.fromLocation(), fromStopLocation)
+                .doOnSuccess(t -> log.info("[{}] OSRM walkTo completed for route {} in {}ms",
+                        context.searchId(), routeNumber, System.currentTimeMillis() - startTime));
+
+        Mono<WalkingRouteService.WalkingRouteResult> walkFrom = walkingRouteService.getWalkingRoute(toStopLocation, context.toLocation())
+                .doOnSuccess(t -> log.info("[{}] OSRM walkFrom completed for route {} in {}ms",
+                        context.searchId(), routeNumber, System.currentTimeMillis() - startTime));
+
+        return Mono.zip(travelTime, waitingTime, walkTo, walkFrom)
+                .doOnSuccess(t -> log.info("[{}] All async calls completed for route {} in {}ms",
+                        context.searchId(), routeNumber, System.currentTimeMillis() - startTime))
+                .map(tuple -> {
             int busRideTime = tuple.getT1();
             int initialWaitingMinutes = tuple.getT2();
             WalkingRouteService.WalkingRouteResult walkToStop = tuple.getT3();
             WalkingRouteService.WalkingRouteResult walkFromStop = tuple.getT4();
 
             String routeGeometry = getCorrectRouteGeometry(directRoute);
-            Integer routeDistance = getCorrectRouteDistance(directRoute);
 
             String trimmedGeometry = trimRouteGeometry(
                     routeGeometry,
@@ -93,62 +107,38 @@ public class DirectRouteOptionBuilder {
                     directRoute.toStop()
             );
 
-            List<RouteSegment> segments = List.of(
-                    routeSegmentFactory.createWalkingSegment(context.fromLocation(), fromStopLocation, walkingToStop, walkToStop),
-                    createBusSegmentWithGeometry(
-                            fromStopLocation,
-                            toStopLocation,
-                            busRideTime,
-                            routeNumber,
-                            trimmedGeometry,
-                            routeDistance),
-                    routeSegmentFactory.createWalkingSegment(toStopLocation, context.toLocation(), walkingFromStop, walkFromStop)
-            );
+            int calculatedDistance = geometryTrimmingService.calculateGeometryDistanceMeters(trimmedGeometry);
+            Integer routeDistance = calculatedDistance > 0 ? calculatedDistance : null;
 
-            log.debug("Creating direct option for route {} with waiting time {} min",
-                    routeNumber, initialWaitingMinutes);
+            RouteSegment walkToSeg = routeSegmentFactory.createWalkingSegment(context.fromLocation(), fromStopLocation, walkingToStop, walkToStop);
+            walkToSeg.setToLocationName(fromStopName);
+
+            RouteSegment busSeg = createBusSegmentWithGeometry(fromStopLocation, toStopLocation, busRideTime, routeNumber, trimmedGeometry, routeDistance);
+            busSeg.setFromLocationName(fromStopName);
+            busSeg.setToLocationName(toStopName);
+
+            RouteSegment walkFromSeg = routeSegmentFactory.createWalkingSegment(toStopLocation, context.toLocation(), walkingFromStop, walkFromStop);
+            walkFromSeg.setFromLocationName(toStopName);
+
+            List<RouteSegment> segments = List.of(walkToSeg, busSeg, walkFromSeg);
 
             return tripOptionFactory.createDirectOption(segments, initialWaitingMinutes, departureTime);
         });
     }
 
     private String getCorrectRouteGeometry(RouteCalculationService.DirectRouteResult directRoute) {
-        if (directRoute.route().hasForwardGeometry() &&
-                directRoute.route().getRouteGeometryForward() != null) {
-            String forwardGeom = directRoute.route().getRouteGeometryForward();
-            if (!forwardGeom.isEmpty()) {
-                return forwardGeom;
-            }
+        String forwardGeom = directRoute.route().hasForwardGeometry()
+                ? directRoute.route().getRouteGeometryForward() : null;
+        String backwardGeom = directRoute.route().hasBackwardGeometry()
+                ? directRoute.route().getRouteGeometryBackward() : null;
+
+        if (forwardGeom == null && backwardGeom == null) {
+            log.warn("⚠️ No geometry found for route {}", directRoute.route().getRouteNumber());
+            return null;
         }
 
-        if (directRoute.route().hasBackwardGeometry() &&
-                directRoute.route().getRouteGeometryBackward() != null) {
-            String backwardGeom = directRoute.route().getRouteGeometryBackward();
-            if (!backwardGeom.isEmpty()) {
-                log.debug("✅ Using BACKWARD geometry for route {}",
-                        directRoute.route().getRouteNumber());
-                return backwardGeom;
-            }
-        }
-
-        log.warn("⚠️ No geometry found for route {}", directRoute.route().getRouteNumber());
-        return null;
-    }
-
-    private Integer getCorrectRouteDistance(RouteCalculationService.DirectRouteResult directRoute) {
-        if (directRoute.route().getTotalDistanceForwardMeters() != null &&
-                directRoute.route().getTotalDistanceForwardMeters() > 0) {
-            return directRoute.route().getTotalDistanceForwardMeters();
-        }
-
-        if (directRoute.route().getTotalDistanceBackwardMeters() != null &&
-                directRoute.route().getTotalDistanceBackwardMeters() > 0) {
-            log.debug("✅ Using BACKWARD distance for route {}",
-                    directRoute.route().getRouteNumber());
-            return directRoute.route().getTotalDistanceBackwardMeters();
-        }
-
-        return null;
+        return geometryTrimmingService.selectGeometryForDirection(
+                forwardGeom, backwardGeom, directRoute.fromStop(), directRoute.toStop());
     }
 
 

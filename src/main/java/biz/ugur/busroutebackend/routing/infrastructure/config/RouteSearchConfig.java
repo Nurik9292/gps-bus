@@ -18,10 +18,10 @@ public class RouteSearchConfig {
     private int maxOneTransferRoutes = 8;
     private int maxTwoTransferRoutes = 4;
 
-    private Duration directSearchTimeout = Duration.ofSeconds(8);
-    private Duration oneTransferSearchTimeout = Duration.ofSeconds(12);
-    private Duration twoTransferSearchTimeout = Duration.ofSeconds(15);
-    private Duration totalSearchTimeout = Duration.ofSeconds(20);
+    private Duration directSearchTimeout = Duration.ofSeconds(15);
+    private Duration oneTransferSearchTimeout = Duration.ofSeconds(20);
+    private Duration twoTransferSearchTimeout = Duration.ofSeconds(25);
+    private Duration totalSearchTimeout = Duration.ofSeconds(30);
 
     private int maxWalkingTimeMinutes = 15;
     private int maxTwoTransferWalkingTimeMinutes = 18;

@@ -52,13 +52,12 @@ public class GetBannersByTypeUseCase extends BaseUseCase<Mono<String>, BannerLis
                         Long totalOfType = tuple.getT1().getT2();
                         Long totalActive = tuple.getT2();
 
-                        // Create fake pagination for "all by type" endpoint
                         return BannerList.of(
                             banners,
-                            totalActive,  // Total active banners across all types
-                            1,  // Single page
-                            banners.size(),  // Page size = total items
-                            totalOfType  // Total items of this type
+                            totalActive, 
+                            1,
+                            banners.size(), 
+                            totalOfType 
                         );
                     })
                     .doOnSuccess(response -> log.debug("Retrieved {} banners of type {} ({} total active)",

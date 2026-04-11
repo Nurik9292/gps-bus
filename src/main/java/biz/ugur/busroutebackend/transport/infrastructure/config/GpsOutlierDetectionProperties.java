@@ -28,4 +28,8 @@ public class GpsOutlierDetectionProperties {
     private boolean rejectOutliers = false;
 
     private int historyPointsToCheck = 3;
+
+    private double minSpeedForFrozenDetectionKmh = 10.0;
+
+    private boolean rejectFrozenMotion = false;
 }

@@ -67,7 +67,7 @@ public class DeactivateVehicleUseCase extends BaseUseCase<DeactivateVehicleUseCa
                                         saved.getId().getValue(),
                                         saved.getLicensePlate(),
                                         deactivatedCount,
-                                        0, // deprecated field - no longer tracking immediate separately
+                                        0,
                                         true,
                                         null
                                 );

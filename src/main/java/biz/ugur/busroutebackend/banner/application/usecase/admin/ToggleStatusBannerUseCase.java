@@ -59,7 +59,6 @@ public class ToggleStatusBannerUseCase extends BaseUseCase<Mono<ToggleStatusBann
     }
 
     private Mono<Banner> updateBanner(Banner banner, Boolean active) {
-        // Banner is immutable - activate() and deactivate() return new instances
         Banner updatedBanner = Objects.requireNonNullElse(active, false)
                 ? banner.activate()
                 : banner.deactivate();

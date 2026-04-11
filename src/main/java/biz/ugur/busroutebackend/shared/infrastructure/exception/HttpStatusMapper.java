@@ -70,6 +70,7 @@ public class HttpStatusMapper {
             case String s when s.endsWith(".AUTHENTICATION_ERROR") -> HttpStatus.UNAUTHORIZED;
             case String s when s.endsWith(".TOKEN_ERROR") -> HttpStatus.UNAUTHORIZED;
             case String s when s.endsWith(".ACCESS_DENIED") -> HttpStatus.FORBIDDEN;
+            case String s when s.endsWith(".FORBIDDEN") -> HttpStatus.FORBIDDEN;
             default -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
     }

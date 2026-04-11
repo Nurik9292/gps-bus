@@ -24,9 +24,9 @@ public class NearbyStopsService {
     private final DistanceCalculationService distanceService;
 
     private static final double SEARCH_RADIUS_KM =
-        GeoConstants.MAX_SEARCH_RADIUS_METERS / GeoConstants.METERS_PER_KILOMETER; // 5km
+        GeoConstants.MAX_SEARCH_RADIUS_METERS / GeoConstants.METERS_PER_KILOMETER; 
 
-    private static final int MAX_STOPS_PER_LOCATION = 50;
+    private static final int MAX_STOPS_PER_LOCATION = 15;
 
     private static final double[] LAYERED_SEARCH_RADIUSES = GeoConstants.LAYERED_SEARCH_RADIUSES_KM;
     private static final int[] MAX_STOPS_PER_LAYER = GeoConstants.MAX_STOPS_PER_LAYER;
@@ -38,6 +38,7 @@ public class NearbyStopsService {
     }
 
     public Mono<StopsContext> findStopsForBothLocations(SearchContext context) {
+        log.info(">>> findStopsForBothLocations starting");
         return Mono.zip(
                         findNearbyStops(context.fromLocation(), "origin"),
                         findNearbyStops(context.toLocation(), "destination")
@@ -80,28 +81,15 @@ public class NearbyStopsService {
     }
 
     private Mono<List<BusStop>> findNearbyStops(Coordinates location, String locationType) {
-        log.debug("Finding {} stops near ({}, {}) within {}km",
-                locationType, location.getLatitudeAsDouble(), location.getLongitudeAsDouble(), SEARCH_RADIUS_KM);
+        log.info(">>> findNearbyStops {} calling routeCalculationService", locationType);
 
         return routeCalculationService.findNearbyStops(location, SEARCH_RADIUS_KM)
                 .filter(this::isStopAccessible)
                 .sort((stop1, stop2) -> compareStopsByEnhancedPriority(stop1, stop2, location))
                 .take(MAX_STOPS_PER_LOCATION)
                 .collectList()
-                .doOnNext(stops -> {
-                    log.info("Found {} {} stops near ({}, {})", stops.size(), locationType,
-                            location.getLatitudeAsDouble(), location.getLongitudeAsDouble());
-                    stops.forEach(stop -> {
-                        double distance = distanceService.calculateDistance(
-                                location.getLatitudeAsDouble(), location.getLongitudeAsDouble(),
-                                stop.getLatitude().doubleValue(), stop.getLongitude().doubleValue()
-                        ).getMeters();
-                        log.info("STOP DEBUG: {} ({}) at ({}, {}) - distance: {:.0f}m, major: {}, routes: {}",
-                                stop.getId().getValue(), stop.getStopName(),
-                                stop.getLatitude(), stop.getLongitude(),
-                                distance, stop.getIsMajorStop(), stop.getServingRoutesCount());
-                    });
-                });
+                .doOnNext(stops -> log.debug("Found {} {} stops near ({}, {})", stops.size(), locationType,
+                        location.getLatitudeAsDouble(), location.getLongitudeAsDouble()));
     }
 
     private int compareStopsByEnhancedPriority(BusStop stop1, BusStop stop2, Coordinates location) {

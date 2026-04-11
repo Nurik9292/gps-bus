@@ -73,9 +73,6 @@ public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteD
     }
 
     private Mono<BusRoute> updateBusRoute(BusRoute exsistBusRoute, UpdateRoute command) {
-        // BusRoute is immutable - all update methods return NEW instances
-
-        // Update basic info first (returns new object)
         BusRoute updatedRoute = exsistBusRoute.updateBasicInfo(
                 command.routeNumber(),
                 command.routeName(),
@@ -85,13 +82,11 @@ public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteD
                 command.estimatedDurationMinutes(),
                 command.cityId());
 
-        // Update active status (returns new object)
         if (command.isActive())
             updatedRoute = updatedRoute.activate();
         else
             updatedRoute = updatedRoute.deactivate();
 
-        // Update geometry if provided (returns new object)
         if (hasValidGeometry(command)) {
             updatedRoute = updateRouteGeometry(updatedRoute, command);
         }

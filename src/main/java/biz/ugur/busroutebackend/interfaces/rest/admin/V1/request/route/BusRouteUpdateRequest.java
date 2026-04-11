@@ -50,7 +50,7 @@ public class BusRouteUpdateRequest {
     private List<String> backwardStopIds;
 
     @JsonProperty("forward_geometry")
-    private List<List<Double>> forwardGeometry; // [[lat, lon], [lat, lon], ...]
+    private List<List<Double>> forwardGeometry;
 
     @JsonProperty("backward_geometry")
     private List<List<Double>> backwardGeometry;

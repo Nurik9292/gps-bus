@@ -35,43 +35,57 @@ public class RouteGeometryTrimmingService {
             List<double[]> coordinates = parseWktLineString(fullGeometryWkt);
             if (coordinates.size() < 2) {
                 log.warn("Invalid geometry: less than 2 points");
-                return fullGeometryWkt;
+                return buildMinimalGeometry(fromStop, toStop);
             }
 
-            int startIndex = insertStopIntoGeometry(coordinates, fromStop);
-            int endIndex = insertStopIntoGeometry(coordinates, toStop);
+            int fromSegment = findNearestSegmentIndex(coordinates, fromStop);
+            int toSegment = findNearestSegmentIndex(coordinates, toStop);
 
-            if (startIndex < 0 || endIndex < 0) {
-                log.warn("Could not find geometry points near stops");
-                return fullGeometryWkt;
+            if (fromSegment < 0 || toSegment < 0) {
+                log.warn("Could not find geometry segments near stops");
+                return buildMinimalGeometry(fromStop, toStop);
             }
 
-            if (startIndex > endIndex) {
-                Collections.reverse(coordinates);
-                startIndex = coordinates.size() - 1 - startIndex;
-                endIndex = coordinates.size() - 1 - endIndex;
-            }
+            List<double[]> trimmedCoordinates = new ArrayList<>();
+            double[] fromPoint = {fromStop.getLongitude().doubleValue(), fromStop.getLatitude().doubleValue()};
+            double[] toPoint = {toStop.getLongitude().doubleValue(), toStop.getLatitude().doubleValue()};
 
-            List<double[]> trimmedCoordinates = new ArrayList<>(coordinates.subList(startIndex, endIndex + 1));
+            if (fromSegment <= toSegment) {
+                trimmedCoordinates.add(fromPoint);
+                for (int i = fromSegment + 1; i <= toSegment; i++) {
+                    trimmedCoordinates.add(coordinates.get(i));
+                }
+                trimmedCoordinates.add(toPoint);
+            } else {
+                trimmedCoordinates.add(fromPoint);
+                for (int i = fromSegment; i > toSegment; i--) {
+                    trimmedCoordinates.add(coordinates.get(i));
+                }
+                trimmedCoordinates.add(toPoint);
+            }
 
             if (trimmedCoordinates.size() < 2) {
-                log.warn("Trimmed geometry too short: {} points", trimmedCoordinates.size());
-                return fullGeometryWkt;
+                return buildMinimalGeometry(fromStop, toStop);
             }
 
             String trimmedWkt = coordinatesToWkt(trimmedCoordinates);
-
-            log.info("✅ GEOMETRY TRIMMED EXACT: {} → {} points ({}% reduction)",
-                    coordinates.size(),
-                    trimmedCoordinates.size(),
-                    Math.round((1.0 - (double) trimmedCoordinates.size() / coordinates.size()) * 100));
-
+            log.info("✅ GEOMETRY TRIMMED: {} → {} points (direction: {})",
+                    coordinates.size(), trimmedCoordinates.size(),
+                    fromSegment <= toSegment ? "forward" : "backward");
             return trimmedWkt;
 
         } catch (Exception e) {
             log.error("Failed to trim route geometry: {}", e.getMessage(), e);
-            return fullGeometryWkt;
+            return buildMinimalGeometry(fromStop, toStop);
         }
+    }
+
+    private String buildMinimalGeometry(BusStop fromStop, BusStop toStop) {
+        double fromLon = fromStop.getLongitude().doubleValue();
+        double fromLat = fromStop.getLatitude().doubleValue();
+        double toLon = toStop.getLongitude().doubleValue();
+        double toLat = toStop.getLatitude().doubleValue();
+        return String.format("LINESTRING(%.7f %.7f,%.7f %.7f)", fromLon, fromLat, toLon, toLat);
     }
 
 
@@ -117,12 +131,12 @@ public class RouteGeometryTrimmingService {
         return distance.getMeters();
     }
 
-    private int insertStopIntoGeometry(List<double[]> coordinates, BusStop stop) {
+    private int findNearestSegmentIndex(List<double[]> coordinates, BusStop stop) {
         double stopLat = stop.getLatitude().doubleValue();
         double stopLon = stop.getLongitude().doubleValue();
 
         double minDistance = Double.MAX_VALUE;
-        int insertIndex = -1;
+        int nearestIndex = -1;
 
         for (int i = 0; i < coordinates.size() - 1; i++) {
             double dist = distancePointToSegment(stopLat, stopLon,
@@ -130,16 +144,60 @@ public class RouteGeometryTrimmingService {
                     coordinates.get(i + 1)[1], coordinates.get(i + 1)[0]);
             if (dist < minDistance) {
                 minDistance = dist;
-                insertIndex = i;
+                nearestIndex = i;
             }
         }
 
-        if (insertIndex != -1) {
-            coordinates.add(insertIndex + 1, new double[]{stopLon, stopLat});
-            return insertIndex + 1;
+        return nearestIndex;
+    }
+
+    public String selectGeometryForDirection(String forwardGeom, String backwardGeom,
+                                             BusStop fromStop, BusStop toStop) {
+        if (forwardGeom != null && !forwardGeom.isBlank()) {
+            try {
+                List<double[]> coords = parseWktLineString(forwardGeom);
+                int fromIdx = findNearestSegmentIndex(coords, fromStop);
+                int toIdx = findNearestSegmentIndex(coords, toStop);
+                if (fromIdx >= 0 && toIdx >= 0 && fromIdx <= toIdx) {
+                    return forwardGeom;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to check forward geometry direction: {}", e.getMessage());
+            }
         }
 
-        return -1;
+        if (backwardGeom != null && !backwardGeom.isBlank()) {
+            try {
+                List<double[]> coords = parseWktLineString(backwardGeom);
+                int fromIdx = findNearestSegmentIndex(coords, fromStop);
+                int toIdx = findNearestSegmentIndex(coords, toStop);
+                if (fromIdx >= 0 && toIdx >= 0 && fromIdx <= toIdx) {
+                    log.debug("Using BACKWARD geometry: fromIdx={}, toIdx={}", fromIdx, toIdx);
+                    return backwardGeom;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to check backward geometry direction: {}", e.getMessage());
+            }
+        }
+
+        return forwardGeom != null ? forwardGeom : backwardGeom;
+    }
+
+    public int calculateGeometryDistanceMeters(String wkt) {
+        if (wkt == null || wkt.isBlank()) return 0;
+        try {
+            List<double[]> coords = parseWktLineString(wkt);
+            double total = 0;
+            for (int i = 0; i < coords.size() - 1; i++) {
+                double lon1 = coords.get(i)[0], lat1 = coords.get(i)[1];
+                double lon2 = coords.get(i + 1)[0], lat2 = coords.get(i + 1)[1];
+                total += calculateHaversineDistance(lat1, lon1, lat2, lon2);
+            }
+            return (int) Math.round(total);
+        } catch (Exception e) {
+            log.warn("Failed to calculate geometry distance: {}", e.getMessage());
+            return 0;
+        }
     }
 
     private double distancePointToSegment(double px, double py,

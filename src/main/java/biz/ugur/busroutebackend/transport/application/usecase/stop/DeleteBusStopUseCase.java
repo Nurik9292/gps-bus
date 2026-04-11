@@ -14,22 +14,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-/**
- * Phase 1.2: DeleteBusStopUseCase - Business Validation
- *
- * Use Case: Delete a bus stop
- *
- * Business Rules:
- * 1. Stop must exist
- * 2. Stop must not be used in any active routes
- * 3. If stop is used in active routes, deletion is prevented
- *
- * SOLID Principles:
- * - SRP: Single responsibility - delete stop with validation
- * - DIP: Depends on abstractions (BusStopRepository, RouteStopRepository, BusRouteRepository)
- *
- * Phase 2.3: Added Security Context Integration for audit logging
- */
+
 @Service
 @Slf4j
 public class DeleteBusStopUseCase extends BaseUseCase<Mono<String>, Void> {
@@ -64,8 +49,7 @@ public class DeleteBusStopUseCase extends BaseUseCase<Mono<String>, Void> {
 
     private Mono<Void> processInternal(String stopId) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
-
-            // Phase 2.3: Get current user for audit logging
+          
             return securityContextService.getCurrentUsername()
                 .defaultIfEmpty("system")
                 .flatMap(username -> {
@@ -77,15 +61,12 @@ public class DeleteBusStopUseCase extends BaseUseCase<Mono<String>, Void> {
                     .flatMap(busStop -> {
                         log.debug("[DeleteBusStop] Stop found: {}, checking if used in active routes", stopId);
 
-                        // Phase 1.2: Business Validation - Check if stop is used in active routes
-                        // Get routes for both directions (0 = forward, 1 = backward)
                         return Flux.merge(
                                 routeStopRepository.getStopRoutesDetail(stopId, 0),
                                 routeStopRepository.getStopRoutesDetail(stopId, 1)
                         )
                         .distinct(stopRouteDetail -> stopRouteDetail.getRouteId())
                         .flatMap(stopRouteDetail -> {
-                            // Check if this route is active
                             return busRouteRepository.findById(BusRouteId.of(stopRouteDetail.getRouteId()))
                                     .filter(route -> Boolean.TRUE.equals(route.getIsActive()))
                                     .map(route -> stopRouteDetail.getRouteNumber());
@@ -110,7 +91,6 @@ public class DeleteBusStopUseCase extends BaseUseCase<Mono<String>, Void> {
                         });
                     })
                     .flatMap(v -> {
-                        // Phase 2.3: Audit log successful deletion
                         return securityContextService.logAudit("DELETE_STOP", "stop:" + stopId, correlationId.value())
                                 .thenReturn(v);
                     })

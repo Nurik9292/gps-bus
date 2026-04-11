@@ -45,8 +45,8 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
             """;
 
         String id = UUID.randomUUID().toString();
-        int estimatedTime = sequence * 2; // 2 минуты на остановку (заглушка)
-        int distance = sequence * 500; // 500 метров между остановками (заглушка)
+        int estimatedTime = sequence * 2; 
+        int distance = sequence * 500; 
 
         return databaseClient.sql(sql)
                 .bind("id", id)
@@ -290,13 +290,15 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
             )
             SELECT
                 CASE
-                    -- Switch to other direction if it's significantly closer (20m threshold)
-                    WHEN o.distance < c.distance - 20
+                    -- Switch to other direction only when it's clearly closer (60m threshold).
+                    -- A larger threshold gives stronger hysteresis at route turning points where
+                    -- forward/backward stops share the same physical location.
+                    WHEN o.distance < c.distance - 60
                     THEN o.stop_sequence
                     ELSE c.stop_sequence
                 END as stop_sequence,
                 CASE
-                    WHEN o.distance < c.distance - 20
+                    WHEN o.distance < c.distance - 60
                     THEN o.direction
                     ELSE c.direction
                 END as direction

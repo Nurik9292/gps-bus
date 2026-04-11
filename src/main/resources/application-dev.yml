@@ -52,6 +52,7 @@ logging:
     biz.ugur.busroutebackend.transport.infrastructure.messaging.VehicleEventHandler: INFO
     biz.ugur.busroutebackend.interfaces.websocket.VehiclePositionHandler: DEBUG
     biz.ugur.busroutebackend.transport.scheduler.VehicleDataScheduler: INFO
+    biz.ugur.busroutebackend.transport.infrastructure.prediction: DEBUG
     org.springframework.context.event: DEBUG
 
 external:

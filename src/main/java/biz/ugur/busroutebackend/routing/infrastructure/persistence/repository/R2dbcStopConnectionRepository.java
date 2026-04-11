@@ -20,8 +20,6 @@ public class R2dbcStopConnectionRepository implements StopConnectionRepository {
 
     @Override
     public Flux<StopConnection> findAllConnections() {
-        // CRITICAL FIX: Added LIMIT to prevent OutOfMemoryError
-        // Without limit, this could load millions of rows (100 routes * 50 stops * 50 stops = 250k records)
         String sql = """
             SELECT
                 rs1.stop_id as from_stop_id,
@@ -55,7 +53,6 @@ public class R2dbcStopConnectionRepository implements StopConnectionRepository {
 
     @Override
     public Flux<StopConnection> findConnectionsFromStop(String stopId) {
-        // Added LIMIT to prevent excessive results for major transfer hubs
         String sql = """
             SELECT
                 rs1.stop_id as from_stop_id,
@@ -106,10 +103,8 @@ public class R2dbcStopConnectionRepository implements StopConnectionRepository {
 
     @Override
     public Mono<ShortestPath> findShortestPath(String fromStopId, String toStopId, int maxTransfers) {
-        // This is a simplified implementation
-        // In production, you'd use a proper graph algorithm (like Dijkstra's)
         log.debug("Finding shortest path from {} to {} with max {} transfers", fromStopId, toStopId, maxTransfers);
 
-        return Mono.empty(); // Not implemented in this basic version
+        return Mono.empty();
     }
 }

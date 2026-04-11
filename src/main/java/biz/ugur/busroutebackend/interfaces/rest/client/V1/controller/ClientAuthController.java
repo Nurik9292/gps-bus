@@ -137,13 +137,9 @@ public class ClientAuthController extends BaseController {
 
 
 
-    /**
-     * Phase 1: Logout Endpoint
-     * Invalidates client's access and refresh tokens
-     */
+ 
     @PostMapping("/logout")
     public Mono<ResponseEntity<ApiResponse<LogoutResponse>>> logout(@RequestHeader("Authorization") String authHeader) {
-        // Extract token from "Bearer <token>" format
         String token = authHeader.replace("Bearer ", "").trim();
 
         return jwtTokenService.getClientIdFromToken(token)

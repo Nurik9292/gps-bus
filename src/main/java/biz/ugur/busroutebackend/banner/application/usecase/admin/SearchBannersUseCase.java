@@ -64,7 +64,7 @@ public class SearchBannersUseCase extends BaseUseCase<Mono<SearchBannersQuery>, 
             return bannersFlux
                     .collectList()
                     .zipWith(totalMatchingMono)
-                    .zipWith(bannerRepository.countActiveBanners())  // Get actual active count
+                    .zipWith(bannerRepository.countActiveBanners()) 
                     .map(tuple -> {
                         var banners = tuple.getT1().getT1();
                         Long totalMatching = tuple.getT1().getT2();
@@ -72,10 +72,10 @@ public class SearchBannersUseCase extends BaseUseCase<Mono<SearchBannersQuery>, 
 
                         return BannerList.of(
                             banners,
-                            activeCount,  // Total active banners (not search results count)
+                            activeCount, 
                             query.getPage(),
                             query.getSize(),
-                            totalMatching  // Total search results go to pagination
+                            totalMatching 
                         );
                     })
                     .doOnSuccess(response -> log.debug(
@@ -93,7 +93,7 @@ public class SearchBannersUseCase extends BaseUseCase<Mono<SearchBannersQuery>, 
         Specification<Banner> spec = new Specification<Banner>() {
             @Override
             public boolean isSatisfiedBy(Banner banner) {
-                return true; // Всегда true для начальной спецификации
+                return true;
             }
 
             @Override

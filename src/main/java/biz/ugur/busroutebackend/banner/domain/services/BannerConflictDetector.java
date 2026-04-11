@@ -45,8 +45,8 @@ public class BannerConflictDetector {
         }
 
         return existingBanners.stream()
-                .filter(existing -> !existing.getId().equals(banner.getId())) // Exclude self
-                .filter(existing -> existing.getType().equals(banner.getType())) // Same type only
+                .filter(existing -> !existing.getId().equals(banner.getId()))
+                .filter(existing -> existing.getType().equals(banner.getType())) 
                 .filter(existing -> periodsOverlap(banner.getPeriod(), existing.getPeriod()))
                 .findFirst();
     }
@@ -57,10 +57,10 @@ public class BannerConflictDetector {
         }
 
         return existingBanners.stream()
-                .filter(existing -> !existing.getId().equals(banner.getId())) // Exclude self
-                .filter(existing -> existing.getType().equals(banner.getType())) // Same type only
-                .filter(existing -> existing.getDisplayOrder().equals(banner.getDisplayOrder())) // Same display order
-                .filter(existing -> periodsOverlap(banner.getPeriod(), existing.getPeriod())) // Overlapping period
+                .filter(existing -> !existing.getId().equals(banner.getId())) 
+                .filter(existing -> existing.getType().equals(banner.getType()))
+                .filter(existing -> existing.getDisplayOrder().equals(banner.getDisplayOrder())) 
+                .filter(existing -> periodsOverlap(banner.getPeriod(), existing.getPeriod())) 
                 .findFirst();
     }
 

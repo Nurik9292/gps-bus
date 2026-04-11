@@ -29,7 +29,7 @@ public class StopBasedRouteSearchService {
     private static final int MAX_RESULTS = 6;
     private static final int MAX_STOP_LAYERS = 3;
 
-    private static final double[] LAYER_TRANSFER_DISTANCES = {0.3, 0.4, 0.5}; // км
+    private static final double[] LAYER_TRANSFER_DISTANCES = {0.3, 0.4, 0.5};
 
     public StopBasedRouteSearchService(RouteCalculationService routeCalculationService,
                                        NearbyStopsService nearbyStopsService,
@@ -89,7 +89,6 @@ public class StopBasedRouteSearchService {
     }
 
     private Mono<List<TripOption>> searchInLayer(SearchContext context, StopsContext stopsContext, int layerIndex) {
-        // Попытка найти прямые маршруты
         return findDirectRoutesInLayer(context, stopsContext)
                 .flatMap(directRoutes -> {
                     if (!directRoutes.isEmpty()) {
@@ -157,7 +156,7 @@ public class StopBasedRouteSearchService {
                 .filter(this::isTwoTransferRouteViable)
                 .flatMap(route -> transferOptionBuilder.createTwoTransferOption(route, context))
                 .filter(Objects::nonNull)
-                .take(MAX_RESULTS / 2) // Меньше результатов для двух пересадок
+                .take(MAX_RESULTS / 2)
                 .collectList()
                 .doOnNext(routes -> {
                     if (!routes.isEmpty()) {

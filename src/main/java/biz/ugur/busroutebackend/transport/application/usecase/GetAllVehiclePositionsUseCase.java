@@ -10,10 +10,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 
-/**
- * Use case for fetching GPS positions of all vehicles
- * Retrieves device IDs from database and fetches positions from external GPS API
- */
 @Service
 @Slf4j
 public class GetAllVehiclePositionsUseCase {
@@ -27,13 +23,6 @@ public class GetAllVehiclePositionsUseCase {
         this.gpsApiClient = gpsApiClient;
     }
 
-    /**
-     * Execute the use case with optional filtering
-     *
-     * @param limit Maximum number of vehicles (null = all)
-     * @param active Filter for active vehicles only (null = all)
-     * @return List of GPS positions
-     */
     public Mono<List<GpsPositionDTO>> execute(Integer limit, Boolean active) {
         log.debug("Fetching vehicle positions - limit: {}, active: {}", limit, active);
 
@@ -47,7 +36,6 @@ public class GetAllVehiclePositionsUseCase {
 
                     log.info("Found {} device IDs, fetching GPS positions", deviceIds.size());
 
-                    // Apply limit before fetching from external API (to reduce API calls)
                     List<String> limitedDeviceIds = limit != null && limit > 0 && limit < deviceIds.size()
                             ? deviceIds.subList(0, limit)
                             : deviceIds;
@@ -55,7 +43,6 @@ public class GetAllVehiclePositionsUseCase {
                     return gpsApiClient.fetchVehiclePositionsByIds(limitedDeviceIds)
                             .flatMapMany(Flux::fromIterable)
                             .filter(position -> {
-                                // Filter by active status if requested
                                 if (active != null && active) {
                                     return position.getAttributes() != null &&
                                            Boolean.TRUE.equals(position.getAttributes().getMotion());

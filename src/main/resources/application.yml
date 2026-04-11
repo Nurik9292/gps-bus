@@ -20,11 +20,12 @@ spring:
     port: ${DB_PORT:5432}
     database: ${DB_NAME:bus_route_db}
     pool:
-      initial-size: ${DB_POOL_MIN_IDLE:2}
-      max-size: ${DB_POOL_MAX_SIZE:15}
-      max-idle-time: 30m
-      max-acquire-time: 60s
-      max-create-connection-time: 60s
+      initial-size: ${DB_POOL_MIN_IDLE:5}
+      max-size: ${DB_POOL_MAX_SIZE:25}
+      max-idle-time: 30s
+      max-life-time: 300s
+      max-acquire-time: 5s
+      max-create-connection-time: 5s
       validation-query: SELECT 1
 
   data:
@@ -36,9 +37,9 @@ spring:
       timeout: 2000ms
       lettuce:
         pool:
-          max-active: 12
-          max-idle: 12
-          min-idle: 0
+          max-active: 30
+          max-idle: 20
+          min-idle: 2
 
   flyway:
     enabled: true
@@ -79,7 +80,7 @@ app:
   scheduler:
     gps:
       batch-size: ${SCHEDULER_GPS_BATCH_SIZE:100}
-      parallel-workers: ${SCHEDULER_GPS_PARALLEL_WORKERS:4}
+      parallel-workers: ${SCHEDULER_GPS_PARALLEL_WORKERS:2}
       batch-timeout: ${SCHEDULER_GPS_BATCH_TIMEOUT:30s}
       total-timeout: ${SCHEDULER_GPS_TOTAL_TIMEOUT:120s}
 
@@ -307,15 +308,19 @@ business:
     min-speed-for-motion-kmh: 3.0
 
   gps-outlier-detection:
-    # TODO: оптимизировать - всё ещё вызывает таймауты
-    enabled: ${GPS_OUTLIER_DETECTION_ENABLED:false}
+    enabled: ${GPS_OUTLIER_DETECTION_ENABLED:true}
     max-implied-speed-kmh: ${GPS_OUTLIER_MAX_SPEED:150.0}
     min-time-difference: ${GPS_OUTLIER_MIN_TIME_DIFF:3s}
     max-time-difference: ${GPS_OUTLIER_MAX_TIME_DIFF:60s}
     min-distance-meters: ${GPS_OUTLIER_MIN_DISTANCE:10.0}
     consecutive-outliers-for-alert: ${GPS_OUTLIER_CONSECUTIVE_ALERT:2}
-    reject-outliers: ${GPS_OUTLIER_REJECT:false}
+    # Teleportation (implied speed > max) must be rejected — we have history now
+    reject-outliers: ${GPS_OUTLIER_REJECT:true}
     history-points-to-check: ${GPS_OUTLIER_HISTORY_POINTS:3}
+    # Frozen GPS fix threshold: if reported speed > this but coords didn't change, flag as stale
+    min-speed-for-frozen-detection-kmh: ${GPS_OUTLIER_FROZEN_SPEED_THRESHOLD:10.0}
+    # Log frozen coords anomaly but still update speed/motion state (partial data > no data)
+    reject-frozen-motion: ${GPS_OUTLIER_REJECT_FROZEN:false}
 
 cache:
   redis:
@@ -345,7 +350,7 @@ distributed-lock:
   acquire-timeout: ${DISTRIBUTED_LOCK_ACQUIRE_TIMEOUT:10s}
   retry-interval: ${DISTRIBUTED_LOCK_RETRY_INTERVAL:100ms}
   key-prefix: ${DISTRIBUTED_LOCK_KEY_PREFIX:lock:}
-  gps-scheduler-lock-timeout: ${GPS_SCHEDULER_LOCK_TIMEOUT:3m}
+  gps-scheduler-lock-timeout: ${GPS_SCHEDULER_LOCK_TIMEOUT:30s}
 
 resilience4j:
   circuitbreaker:
@@ -512,6 +517,9 @@ server:
   max-http-request-header-size: 1MB
 
 routing:
+  dijkstra:
+    enabled: ${DIJKSTRA_ENABLED:true}
+
   stop-based-search:
     enabled: true
     timeout-seconds: 18
@@ -549,3 +557,31 @@ springdoc:
     - group: v1
       paths-to-match: /api/v1/**
       display-name: "API V1 (Current)"
+
+# ---------------------------------------------------------------
+# GPS Position Prediction (dead reckoning)
+# ---------------------------------------------------------------
+ugur:
+  prediction:
+    enabled: ${PREDICTION_ENABLED:true}
+    # How often the prediction scheduler fires (milliseconds)
+    interval-ms: ${PREDICTION_INTERVAL_MS:1000}
+    # Max age of a GPS fix; older states are skipped (milliseconds).
+    # TUGDK provider sends batches every 6–10 s; 10 000 ms was too tight —
+    # vehicles landed exactly on the boundary and flickered in/out of prediction.
+    # Set to 180 000 ms (3 min) so that during GPS gaps the bus gradually
+    # decelerates via decay-factor (0.98/s → speed reaches min-speed-kmh ~2.5 min)
+    # instead of freezing after 15 s. Reduces visible teleport on GPS resume.
+    max-age-ms: ${PREDICTION_MAX_AGE_MS:180000}
+    # Minimum speed below which dead reckoning is not applied (km/h)
+    min-speed-kmh: ${PREDICTION_MIN_SPEED_KMH:3.0}
+    # Per-cycle velocity decay factor applied to speedKmh
+    decay-factor: ${PREDICTION_DECAY_FACTOR:0.98}
+    # Blend factor when correcting predicted position on new GPS fix
+    correction-factor: ${PREDICTION_CORRECTION_FACTOR:0.7}
+    # Phase 2: snap predicted position to nearest route geometry
+    snap-to-route: ${PREDICTION_SNAP_TO_ROUTE:true}
+    # Stop-aware speed decay: distance zone (meters) before a stop in which speed reduces
+    stop-deceleration-zone-meters: ${PREDICTION_STOP_DECEL_ZONE:80.0}
+    # Minimum speed multiplier at the stop itself (fraction of current speed)
+    stop-deceleration-min-factor: ${PREDICTION_STOP_DECEL_MIN:0.15}

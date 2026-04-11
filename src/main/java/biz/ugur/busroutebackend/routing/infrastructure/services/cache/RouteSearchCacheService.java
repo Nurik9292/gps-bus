@@ -117,25 +117,13 @@ public class RouteSearchCacheService {
         return getCached(cacheKey, Boolean.class);
     }
 
-    // P2 OPTIMIZATION: Improved coordinate rounding for better cache hit rate
-    // Coordinate precision guide:
-    // - 6 decimal places = ~0.1m  (too precise for GPS, cache hit rate <1%)
-    // - 4 decimal places = ~11m   (good for trip search)
-    // - 3 decimal places = ~111m  (good for nearby stops, cache hit rate >80%)
 
-    /**
-     * Round coordinate to specified decimal places for consistent cache keys.
-     * GPS accuracy is typically 5-10m, so rounding improves cache hit rate.
-     */
     private double roundCoordinate(double coord, int decimalPlaces) {
         double multiplier = Math.pow(10, decimalPlaces);
         return Math.round(coord * multiplier) / multiplier;
     }
 
     public String buildNearbyStopsCacheKey(Coordinates location, double radiusKm) {
-        // P2 FIX: Use 3 decimal places (~111m precision) instead of 6 (~0.1m)
-        // This dramatically improves cache hit rate for users at the same location
-        // GPS drift of 5-10m won't create different cache keys
         double roundedLat = roundCoordinate(location.getLatitudeAsDouble(), 3);
         double roundedLon = roundCoordinate(location.getLongitudeAsDouble(), 3);
 
@@ -148,8 +136,6 @@ public class RouteSearchCacheService {
         Coordinates to = context.toLocation();
         TripSearchCriteria criteria = context.searchCriteria();
 
-        // P2 FIX: Use 3 decimal places for better cache hit rate
-        // ~111m precision is sufficient for route planning
         double fromLat = roundCoordinate(from.getLatitudeAsDouble(), 3);
         double fromLon = roundCoordinate(from.getLongitudeAsDouble(), 3);
         double toLat = roundCoordinate(to.getLatitudeAsDouble(), 3);

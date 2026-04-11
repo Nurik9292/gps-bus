@@ -821,7 +821,6 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
             LIMIT :maxStops
             """;
 
-        // Handle null direction - default to 0 (forward)
         Integer effectiveDirection = direction != null ? direction : 0;
         double correctionFactor = etaProperties.getFallback().getRouteDistanceCorrectionFactor();
 

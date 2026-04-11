@@ -25,6 +25,8 @@ public record OutlierDetectionResult(
 
         SPEED_EXCEEDED,
 
+        FROZEN_COORDINATES_WITH_MOTION,
+
         NO_HISTORY,
 
         TIME_GAP_TOO_LARGE,
@@ -121,6 +123,20 @@ public record OutlierDetectionResult(
         );
     }
 
+    public static OutlierDetectionResult frozenCoordinatesWithMotion(String deviceId, double distanceMeters,
+                                                                      double reportedSpeedKmh) {
+        return new OutlierDetectionResult(
+                true,
+                OutlierType.FROZEN_COORDINATES_WITH_MOTION,
+                0.0,
+                distanceMeters,
+                0,
+                reportedSpeedKmh,
+                deviceId,
+                LocalDateTime.now()
+        );
+    }
+
     public static OutlierDetectionResult disabled(String deviceId) {
         return new OutlierDetectionResult(
                 false,
@@ -135,7 +151,8 @@ public record OutlierDetectionResult(
     }
 
     public boolean wasEvaluated() {
-        return type == OutlierType.VALID || type == OutlierType.SPEED_EXCEEDED;
+        return type == OutlierType.VALID || type == OutlierType.SPEED_EXCEEDED
+                || type == OutlierType.FROZEN_COORDINATES_WITH_MOTION;
     }
 
     public String getDescription() {
@@ -144,6 +161,9 @@ public record OutlierDetectionResult(
                     impliedSpeedKmh, maxAllowedSpeedKmh);
             case SPEED_EXCEEDED -> String.format("OUTLIER: %.1f km/h implied exceeds max %.1f km/h (%.0fm in %ds)",
                     impliedSpeedKmh, maxAllowedSpeedKmh, distanceMeters, timeDifferenceSeconds);
+            case FROZEN_COORDINATES_WITH_MOTION -> String.format(
+                    "FROZEN: coordinates unchanged (%.1fm) but reported speed %.1f km/h — stale GPS fix",
+                    distanceMeters, maxAllowedSpeedKmh);
             case NO_HISTORY -> "No historical position available";
             case TIME_GAP_TOO_LARGE -> String.format("Time gap too large (%ds)", timeDifferenceSeconds);
             case TIME_GAP_TOO_SMALL -> String.format("Time gap too small (%ds)", timeDifferenceSeconds);

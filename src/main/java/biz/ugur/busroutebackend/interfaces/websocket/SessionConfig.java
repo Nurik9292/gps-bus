@@ -17,7 +17,7 @@ class SessionConfig {
 
     @Setter
     @Getter
-    private String subscriptionType = "all"; // "all", "routes", "bounds"
+    private String subscriptionType = "all";
 
     @Getter
     private Set<String> routeFilter;

@@ -26,7 +26,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
 
     private final DatabaseClient databaseClient;
 
-    private static final int DIRECT_ROUTES_LIMIT = 50;
+    private static final int DIRECT_ROUTES_LIMIT = 10;
     private static final int ONE_TRANSFER_LIMIT = 12;
     private static final int TWO_TRANSFER_LIMIT = 6;
 
@@ -34,7 +34,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
     @Override
     public Flux<DirectRouteResult> findDirectRoutes(List<BusStop> fromStops, List<BusStop> toStops) {
         if (fromStops.isEmpty() || toStops.isEmpty()) {
-            log.debug("Empty stop lists provided for direct route search");
+            log.info("Empty stop lists provided for direct route search");
             return Flux.empty();
         }
 
@@ -46,7 +46,8 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
             return Flux.empty();
         }
 
-        log.debug("Searching direct routes: {} from stops, {} to stops", fromStopIds.length, toStopIds.length);
+        log.info("Searching direct routes: {} from stops, {} to stops", fromStopIds.length, toStopIds.length);
+        long startTime = System.currentTimeMillis();
 
         return databaseClient.sql(buildDirectRoutesQuery())
                 .bind("fromStopIds", fromStopIds)
@@ -55,13 +56,11 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 .map(this::mapToDirectRouteResult)
                 .all()
                 .filter(Objects::nonNull)
-                .doOnComplete(() -> log.debug("Direct routes search completed"));
+                .doOnComplete(() -> log.info("Direct route SQL completed in {}ms",
+                        System.currentTimeMillis() - startTime));
     }
 
     private String buildDirectRoutesQuery() {
-        // P1 OPTIMIZATION: Removed UNION ALL duplication - combined both directions in single query
-        // Old: Two separate SELECTs with full table scans (one for direction=0, one for direction=1)
-        // New: Single query with CASE statements - 50% faster, simpler query plan
         return """
             WITH candidate_routes AS (
                 SELECT DISTINCT
@@ -69,10 +68,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     br.route_number,
                     br.route_name,
                     br.route_color,
-                    CASE
-                        WHEN rs1.direction = 0 THEN br.route_geometry_forward
-                        WHEN rs1.direction = 1 THEN br.route_geometry_backward
-                    END as route_geometry,
                     CASE
                         WHEN rs1.direction = 0 THEN br.total_distance_forward_meters
                         WHEN rs1.direction = 1 THEN br.total_distance_backward_meters
@@ -89,8 +84,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     rs2.stop_sequence as to_sequence,
                     rs1.direction,
                     ABS(rs2.stop_sequence - rs1.stop_sequence) * 2 as estimated_travel_minutes,
-                    ABS(rs2.distance_from_start_meters - rs1.distance_from_start_meters) as distance_meters,
-                    COUNT(v.id) FILTER (WHERE v.is_active = true) as active_vehicles_count
+                    ABS(rs2.distance_from_start_meters - rs1.distance_from_start_meters) as distance_meters
                 FROM route_stops rs1
                 JOIN route_stops rs2 ON rs1.route_id = rs2.route_id
                                     AND rs1.direction = rs2.direction
@@ -98,34 +92,23 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 JOIN bus_routes br ON rs1.route_id = br.id
                 JOIN bus_stops bs1 ON rs1.stop_id = bs1.id
                 JOIN bus_stops bs2 ON rs2.stop_id = bs2.id
-                LEFT JOIN vehicles v ON br.id = v.assigned_route_id
                 WHERE rs1.stop_id = ANY(:fromStopIds)
                   AND rs2.stop_id = ANY(:toStopIds)
                   AND br.is_active = true
                   AND bs1.is_active = true
                   AND bs2.is_active = true
-                  AND (
-                      (rs1.direction = 0 AND br.route_geometry_forward IS NOT NULL) OR
-                      (rs1.direction = 1 AND br.route_geometry_backward IS NOT NULL)
-                  )
                 GROUP BY br.id, br.route_number, br.route_name, br.route_color,
-                         br.route_geometry_forward, br.route_geometry_backward,
                          br.total_distance_forward_meters, br.total_distance_backward_meters,
                          rs1.stop_id, bs1.stop_name, bs1.latitude, bs1.longitude,
                          rs2.stop_id, bs2.stop_name, bs2.latitude, bs2.longitude,
                          rs1.stop_sequence, rs2.stop_sequence, rs1.direction,
                          rs1.distance_from_start_meters, rs2.distance_from_start_meters
-            ),
-            validated_routes AS (
-                SELECT cr.*
-                FROM candidate_routes cr
-                WHERE cr.estimated_travel_minutes >= 2
-                  AND cr.estimated_travel_minutes <= 120
-                  AND cr.distance_meters >= 100
             )
             SELECT *
-            FROM validated_routes
-            WHERE active_vehicles_count > 0 OR active_vehicles_count IS NOT NULL
+            FROM candidate_routes
+            WHERE estimated_travel_minutes >= 2
+              AND estimated_travel_minutes <= 120
+              AND distance_meters >= 100
             ORDER BY estimated_travel_minutes, distance_meters
             LIMIT :limit
             """;
@@ -133,7 +116,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
 
     private DirectRouteResult mapToDirectRouteResult(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
         Integer direction = row.get("direction", Integer.class);
-        String routeGeometry = row.get("route_geometry", String.class);
         Integer totalDistance = row.get("total_distance_meters", Integer.class);
 
         BusRoute route = BusRoute.builder()
@@ -143,8 +125,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 .routeColor(row.get("route_color", String.class) != null ?
                         row.get("route_color", String.class) : "#1976D2")
                 .isActive(true)
-                .routeGeometryForward(direction == 0 ? routeGeometry : null)
-                .routeGeometryBackward(direction == 1 ? routeGeometry : null)
                 .totalDistanceForwardMeters(direction == 0 ? totalDistance : null)
                 .totalDistanceBackwardMeters(direction == 1 ? totalDistance : null)
                 .build();
@@ -164,11 +144,9 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 .build();
 
         Integer estimatedMinutes = row.get("estimated_travel_minutes", Integer.class);
-        Long activeVehicles = row.get("active_vehicles_count", Long.class);
 
-        int adjustedMinutes = adjustTravelTimeByVehicleCount(estimatedMinutes, activeVehicles);
-
-        return new DirectRouteResult(route, fromStop, toStop, adjustedMinutes, 0.0, 0.0);
+        return new DirectRouteResult(route, fromStop, toStop,
+                estimatedMinutes != null ? estimatedMinutes : 10, 0.0, 0.0);
     }
 
 
@@ -189,9 +167,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
             return Flux.empty();
         }
 
-        // P1 OPTIMIZATION NOTE: maxTransferDistanceKm is used for pre-filtering stops by caller
-        // The fromStops and toStops lists are already filtered to be within maxTransferDistanceKm
-        // This ensures users don't have to walk too far to/from bus stops
         log.debug("Searching one-transfer routes: {} from, {} to, max walking distance {}km",
                 fromStopIds.length, toStopIds.length, maxTransferDistanceKm);
 
@@ -206,9 +181,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
     }
 
     private String buildOneTransferRoutesQuery() {
-        // P2 OPTIMIZATION: Extract duplicate vehicle count subquery to CTE
-        // Old: Same subquery executed 8 times (4 UNION sections × 2 routes each)
-        // New: Calculate once in CTE, reference in all JOINs
         return """
             WITH route_vehicle_counts AS (
                 SELECT assigned_route_id, COUNT(*) as vehicle_count
@@ -877,9 +849,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
     }
 
     private TwoTransferRouteResult mapToTwoTransferRouteResult(io.r2dbc.spi.Row row, io.r2dbc.spi.RowMetadata metadata) {
-        // CRITICAL FIX: Implemented proper mapping for two-transfer routes
 
-        // Build three routes
         BusRoute firstRoute = BusRoute.builder()
                 .id(BusRouteId.of(row.get("first_route_id", String.class)))
                 .routeNumber(row.get("first_route_number", String.class))
@@ -901,7 +871,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 .routeColor(row.get("third_route_color", String.class))
                 .build();
 
-        // Build four stops
         BusStop fromStop = BusStop.builder()
                 .id(new BusStopId(row.get("from_stop_id", String.class)))
                 .stopName(row.get("from_stop_name", String.class))

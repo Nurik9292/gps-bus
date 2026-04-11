@@ -147,8 +147,8 @@ public final class TurkmenistanBounds {
             """.formatted(
                 MIN_LATITUDE, MAX_LATITUDE,
                 MIN_LONGITUDE, MAX_LONGITUDE,
-                (MAX_LATITUDE.doubleValue() - MIN_LATITUDE.doubleValue()) * 111.0, // rough km
-                (MAX_LONGITUDE.doubleValue() - MIN_LONGITUDE.doubleValue()) * 85.0, // rough km at 40°N
+                (MAX_LATITUDE.doubleValue() - MIN_LATITUDE.doubleValue()) * 111.0,
+                (MAX_LONGITUDE.doubleValue() - MIN_LONGITUDE.doubleValue()) * 85.0, 
                 STRICT_MIN_LATITUDE, STRICT_MAX_LATITUDE,
                 STRICT_MIN_LONGITUDE, STRICT_MAX_LONGITUDE,
                 Cities.ASHGABAT_LAT, Cities.ASHGABAT_LON,

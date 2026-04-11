@@ -82,7 +82,6 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
 
         return checkCacheFirst(cacheKey, context)
                 .switchIfEmpty(performSearchAndCache(context, cacheKey))
-                .timeout(config.getTotalSearchTimeout())
                 .onErrorResume(error -> handleSearchError(error, context));
     }
 
@@ -101,6 +100,7 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
 
     private Mono<TripSearchResponse> performSearchAndCache(SearchContext context, String cacheKey) {
         return parallelSearchService.searchAllRoutes(context)
+                .timeout(config.getTotalSearchTimeout())
                 .flatMap(tripPlan -> saveTripPlan(tripPlan, context))
                 .flatMap(tripPlan -> responseBuilder.createSuccessResponse(tripPlan, context))
                 .flatMap(response -> cacheIfSuccessful(cacheKey, response, context))
@@ -155,13 +155,6 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
         if (!isLocationInTurkmenistan(request.getFrom()) || !isLocationInTurkmenistan(request.getTo())) {
             return ValidationResult.invalid(
                     TripPlanningException.PlanningErrorType.LOCATION_OUT_OF_BOUNDS
-            );
-        }
-
-        double distance = calculateDistance(request.getFrom(), request.getTo());
-        if (distance < 100) {
-            return ValidationResult.invalid(
-                    TripPlanningException.PlanningErrorType.DISTANCE_TOO_SHORT
             );
         }
 
@@ -222,8 +215,6 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
             return responseBuilder.createErrorResponseFromException(tripEx);
         }
 
-        // ТЕХНИЧЕСКИЕ ОШИБКИ → пробрасываем в GlobalExceptionHandler (HTTP 5xx)
-        // НЕ преобразуем в TripPlanningException!
         log.error("[{}] Technical error during trip search after {}ms: {}",
                 context.searchId(), duration, error.getMessage(), error);
 

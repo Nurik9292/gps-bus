@@ -57,7 +57,7 @@ public class GpsRouteDetectionScheduler {
         vehicleRepository.findActiveVehicles()
                 .filter(this::isEligibleForDetection)
                 .flatMap(vehicle ->
-                        gpsHistoryService.hasEnoughPoints(vehicle.getId().getValue(), minGpsPoints)
+                        gpsHistoryService.hasEnoughPoints(vehicle.getDeviceId(), minGpsPoints)
                                 .filter(Boolean::booleanValue)
                                 .flatMap(hasPoints -> processVehicle(vehicle))
                                 .onErrorResume(error -> {

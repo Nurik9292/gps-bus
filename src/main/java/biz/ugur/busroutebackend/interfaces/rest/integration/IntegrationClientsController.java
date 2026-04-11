@@ -18,11 +18,6 @@ import reactor.core.publisher.Mono;
 
 import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_INTEGRATION_CLIENTS;
 
-
-/**
- * REST API controller for managing clients via external service integration.
- * Allows external services with canManageClients=true to register, list, and authenticate clients.
- */
 @RestController
 @RequestMapping(V1_INTEGRATION_CLIENTS)
 @CrossOrigin(origins = "*")
@@ -48,10 +43,7 @@ public class IntegrationClientsController extends BasePaginatedController {
         return IntegrationClientsController.class.getSimpleName();
     }
 
-    /**
-     * Register a new client via external service.
-     * POST /api/v1/integration/clients
-     */
+
     @PostMapping
     @Operation(summary = "Register new client via external service")
     public Mono<ResponseEntity<ApiResponse<IntegrationClientDTO>>> registerClient(
@@ -62,10 +54,7 @@ public class IntegrationClientsController extends BasePaginatedController {
                 .flatMap(dto -> created(Mono.just(dto)));
     }
 
-    /**
-     * Get JWT token for a client using externalUserId.
-     * POST /api/v1/integration/clients/token
-     */
+
     @PostMapping("/token")
     @Operation(summary = "Get JWT token for a client")
     public Mono<ResponseEntity<ApiResponse<IntegrationClientTokenResponse>>> getClientToken(
@@ -76,10 +65,7 @@ public class IntegrationClientsController extends BasePaginatedController {
                 .flatMap(dto -> ok(Mono.just(dto)));
     }
 
-    /**
-     * Get JWT token for a specific client by clientId.
-     * POST /api/v1/integration/clients/{clientId}/token
-     */
+ 
     @PostMapping("/{clientId}/token")
     @Operation(summary = "Get JWT token for a specific client by ID")
     public Mono<ResponseEntity<ApiResponse<IntegrationClientTokenResponse>>> getClientTokenById(
@@ -92,10 +78,7 @@ public class IntegrationClientsController extends BasePaginatedController {
                 .flatMap(dto -> ok(Mono.just(dto)));
     }
 
-    /**
-     * List all clients created by this service.
-     * GET /api/v1/integration/clients?page=1&size=20
-     */
+  
     @GetMapping
     @Operation(summary = "List all clients created by this service")
     public Mono<ResponseEntity<ApiResponse<IntegrationClientsPagedList>>> getClients(
@@ -109,9 +92,6 @@ public class IntegrationClientsController extends BasePaginatedController {
                 .flatMap(pagedList -> okPaginated(Mono.just(pagedList)));
     }
 
-    /**
-     * Helper method to get current external service ID from security context.
-     */
     private Mono<String> getServiceId() {
         return ReactiveSecurityContextHolder.getContext()
                 .map(SecurityContext::getAuthentication)
