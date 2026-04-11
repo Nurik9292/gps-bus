@@ -139,7 +139,7 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
         Flux<VehiclePositionDTO> vehiclesFlux = getVehiclesForConfig(config);
 
         return vehiclesFlux
-                .take(100)
+                .take(2000)
                 .map(this::convertToWebSocketMessage)
                 .collectList()
                 .map(positions -> {
@@ -231,7 +231,11 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                 })
                 .filter(positionMsg -> isPositionInScope(positionMsg, config))
                 .onBackpressureLatest()
-                .bufferTimeout(50, Duration.ofMillis(100))
+                // Buffer enough to capture a full prediction tick (~300-600 vehicles/sec)
+                // plus a time window that matches the prediction tick interval (1000ms).
+                // Previously 50/100ms caused one tick to be split across 6+ batches, making
+                // clients see only slices of 50 vehicles at a time.
+                .bufferTimeout(1000, Duration.ofMillis(500))
                 .takeWhile(ignored -> session.isOpen())
                 .filter(updates -> !updates.isEmpty())
                 .onBackpressureDrop(dropped ->
