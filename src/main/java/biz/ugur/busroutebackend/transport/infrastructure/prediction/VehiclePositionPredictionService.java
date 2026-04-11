@@ -41,7 +41,6 @@ public class VehiclePositionPredictionService {
     private final ConcurrentHashMap<String, VehiclePredictionState> vehicleStates = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Integer> consecutiveOppositeSnaps = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Integer> pendingDirectionFixes = new ConcurrentHashMap<>();
-    /** Track last broadcast position per vehicle to detect WS-visible teleports. */
     private final ConcurrentHashMap<String, double[]> lastBroadcastPosition = new ConcurrentHashMap<>();
 
     private final PredictionProperties properties;
@@ -50,31 +49,42 @@ public class VehiclePositionPredictionService {
     private final MapMatchingService mapMatchingService;
     private final VehiclePredictionStateRepository stateRepository;
     private final ETAProperties etaProperties;
+    private final biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository dwellStatsRepository;
+
+    private final ConcurrentHashMap<String, biz.ugur.busroutebackend.transport.domain.valueobject.StopDwellStat> dwellStatsCache
+            = new ConcurrentHashMap<>();
 
     public VehiclePositionPredictionService(PredictionProperties properties,
                                              DirectVehiclePositionBroadcaster directBroadcaster,
                                              RouteGeometryCache routeGeometryCache,
                                              MapMatchingService mapMatchingService,
                                              VehiclePredictionStateRepository stateRepository,
-                                             ETAProperties etaProperties) {
+                                             ETAProperties etaProperties,
+                                             biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository dwellStatsRepository) {
         this.properties = properties;
         this.directBroadcaster = directBroadcaster;
         this.routeGeometryCache = routeGeometryCache;
         this.mapMatchingService = mapMatchingService;
         this.stateRepository = stateRepository;
         this.etaProperties = etaProperties;
+        this.dwellStatsRepository = dwellStatsRepository;
     }
 
     @PostConstruct
     public void restoreFromRedis() {
         if (!properties.isEnabled()) return;
 
+        dwellStatsRepository.findAll()
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe(
+                        stat -> dwellStatsCache.put(dwellKey(stat.getStopId(), stat.getRouteNumber(), stat.getDirection()), stat),
+                        err -> log.warn("Failed to load dwell stats: {}", err.getMessage()),
+                        () -> log.info("Loaded dwell stats cache: {} entries", dwellStatsCache.size())
+                );
+
         stateRepository.loadAll()
                 .filter(state -> state.getVehicleId() != null)
                 .map(state -> {
-                    // Reload route geometry from in-memory cache (it may not be loaded yet,
-                    // in which case routeCoordinates stays null and prediction falls back to dead-reckoning
-                    // until the next real GPS update arrives).
                     if (state.getRouteNumber() != null) {
                         List<double[]> coords = routeGeometryCache.getPoints(
                                 state.getRouteNumber(), state.getDirection());
@@ -89,10 +99,6 @@ public class VehiclePositionPredictionService {
                     }
                     return state;
                 })
-                // Mark restored states as stale so they are NOT broadcast until the first
-                // fresh GPS arrives. Without this, prediction would broadcast old Redis positions
-                // at startup → then snap to real GPS 6s later → visible teleport across the city.
-                // Setting lastReceivedAt far in the past makes the maxAgeMs filter exclude them.
                 .map(state -> state.toBuilder()
                         .lastReceivedAt(Instant.now().minusSeconds(properties.getMaxAgeMs() / 1000 + 60))
                         .build())
@@ -249,7 +255,6 @@ public class VehiclePositionPredictionService {
                     double fracDelta = realFraction - lastGpsFrac;
                     boolean gpsFracIncreasing = fracDelta > 0.005;
                     boolean gpsFracDecreasing = fracDelta < -0.005;
-                    // Fraction always increases: "against direction" means GPS fraction is decreasing.
                     boolean gpsMoveAgainstDir = gpsFracDecreasing;
                     boolean plausibleJump = Math.abs(fracDelta) <= 0.25;
 
@@ -289,8 +294,6 @@ public class VehiclePositionPredictionService {
                         && existing.getRouteNumber() != null
                         && !existing.getRouteNumber().equals(routeNumber);
                 if (routeChanged) {
-                    // Route reassignment — fractions from different geometries are incomparable.
-                    // Reset rejection tracking so SNAP_IMPLAUSIBLE doesn't block the correct new position.
                     newRejectedFrac = -1;
                     newImplausibleCount = 0;
                     log.debug("[GPS_PIPELINE] ROUTE_CHANGE vehicle={} route={}→{} frac={} — resetting snap state",
@@ -301,8 +304,6 @@ public class VehiclePositionPredictionService {
                 if (!headingCorrected && !fracCorrected && !routeChanged && existing != null && existing.getLastGpsFraction() >= 0) {
                     double jumpSize = Math.abs(realFraction - existing.getLastGpsFraction());
                     if (jumpSize > 0.25) {
-                        // Check if GPS is consistently reporting the same location across multiple updates.
-                        // If so, the vehicle physically moved there — force-accept after threshold.
                         boolean sameRejectedLocation = existing.getLastRejectedGpsFraction() >= 0
                                 && Math.abs(realFraction - existing.getLastRejectedGpsFraction()) < 0.05;
                         if (sameRejectedLocation) {
@@ -313,10 +314,6 @@ public class VehiclePositionPredictionService {
                         newRejectedFrac = realFraction;
 
                         if (newImplausibleCount >= 3) {
-                            // Vehicle has consistently reported a far-away position.
-                            // Instead of force-accepting (which causes km-scale teleports),
-                            // reset to dead-reckoning at the actual GPS position.
-                            // Next GPS update will attempt a fresh snap without lastGpsFraction bias.
                             log.info("[GPS_PIPELINE] SNAP_IMPLAUSIBLE_RESET vehicle={} route={} dir={} frac={}→{} jump={} ({}x) — resetting to dead-reckoning at GPS position",
                                     vehicleId, routeNumber, direction,
                                     String.format("%.4f", existing.getLastGpsFraction()),
@@ -336,16 +333,11 @@ public class VehiclePositionPredictionService {
                                     newImplausibleCount);
                         }
                     } else {
-                        // Normal snap — clear rejection tracking
                         newRejectedFrac = -1;
                         newImplausibleCount = 0;
                     }
                 }
 
-                // Fraction always increases (both forward and backward geometries are traversed 0→1).
-                // When direction was corrected (headingCorrected or fracCorrected), the new
-                // fraction is on a DIFFERENT geometry — comparing with old fraction is meaningless.
-                // Always accept the snapped position after direction change.
                 boolean realIsAhead = headingCorrected || fracCorrected
                         || (plausibleSnap && (predictedFraction < 0 || realFraction >= predictedFraction));
 
@@ -378,10 +370,6 @@ public class VehiclePositionPredictionService {
                             vehicleId, realFraction, predictedFraction);
                 }
 
-                // After 3+ consecutive implausible snaps, reset to dead-reckoning at raw GPS position.
-                // The bus is consistently at a location that doesn't match the current route/direction
-                // state. Instead of force-accepting (which teleports km-scale), we drop route-snap
-                // and place the marker at the actual GPS position. Next GPS will attempt a fresh snap.
                 if (resetToDR) {
                     predictedLat = latitude;
                     predictedLon = longitude;
@@ -452,8 +440,6 @@ public class VehiclePositionPredictionService {
             fraction = -1;
         }
 
-        // Instant snap: prediction position = snapped GPS position.
-        // Log teleports (large jumps) for diagnostics.
         if (existing != null
                 && existing.getPredictedLatitude() != 0.0
                 && existing.getPredictedLongitude() != 0.0) {
@@ -481,7 +467,6 @@ public class VehiclePositionPredictionService {
                 .lastGpsUpdate(timestamp)
                 .predictedLatitude(predictedLat)
                 .predictedLongitude(predictedLon)
-                // Clear dwell if GPS shows movement
                 .dwellStartedAt(speedKmh >= properties.getDwellSpeedThresholdKmh() ? null
                         : (existing != null ? existing.getDwellStartedAt() : null))
                 .dwellStopFraction(speedKmh >= properties.getDwellSpeedThresholdKmh() ? -1
@@ -525,7 +510,6 @@ public class VehiclePositionPredictionService {
             }
         });
 
-        // Moving vehicles: advance position conservatively and broadcast every tick.
         List<VehiclePredictionState> movingStates = vehicleStates.values().stream()
                 .filter(state -> state.isInMotion() && state.getSpeedKmh() >= minSpeed)
                 .filter(state -> state.getLastReceivedAt() != null
@@ -535,8 +519,6 @@ public class VehiclePositionPredictionService {
                         : true)
                 .toList();
 
-        // Stopped vehicles: broadcast at reduced frequency to keep Flutter markers alive.
-        // Without Path B (raw GPS broadcasts), stopped vehicles would disappear from the map.
         List<VehiclePredictionState> stoppedStates = vehicleStates.values().stream()
                 .filter(state -> !state.isInMotion() || state.getSpeedKmh() < minSpeed)
                 .filter(state -> state.getLastReceivedAt() != null
@@ -597,7 +579,6 @@ public class VehiclePositionPredictionService {
         if (state.getRouteCoordinates() == null || state.getFractionOnRoute() < 0) {
             return false;
         }
-        // Fraction always increases toward 1.0 for both directions.
         return state.getFractionOnRoute() >= 1.0;
     }
 
@@ -606,31 +587,19 @@ public class VehiclePositionPredictionService {
     }
 
     private VehiclePredictionState advancePositionOnly(VehiclePredictionState state) {
-        // Conservative speed: prediction moves slower than reported GPS speed.
-        // This guarantees "always lag, never lead" — the marker stays behind reality,
-        // so when fresh GPS arrives the snap is always FORWARD (natural-looking).
         double conservativeFactor = properties.getConservativeSpeedFactor();
 
-        // Adaptive decay: the longer since last GPS, the more aggressively we slow down.
-        // 0-aggressiveDecayAfterMs: normal decay (0.98/tick)
-        // aggressiveDecayAfterMs-stopAdvanceAfterMs: aggressive decay (0.90/tick)
-        // >stopAdvanceAfterMs: STOP advancing entirely (marker freezes)
         long msSinceGps = state.getLastReceivedAt() != null
                 ? Instant.now().toEpochMilli() - state.getLastReceivedAt().toEpochMilli()
                 : 0;
 
         if (msSinceGps > properties.getStopAdvanceAfterMs()) {
-            // No GPS for too long — freeze the marker
             return state;
         }
 
-        // Three-tier decay: fresh (no decay) → normal decay → aggressive decay → freeze
-        // 0 to freshGpsWindowMs (6s): constant speed, no decay — GPS is still fresh
-        // freshGpsWindowMs to aggressiveDecayAfterMs (6-10s): normal decay 0.98/tick
-        // aggressiveDecayAfterMs to stopAdvanceAfterMs (10-20s): aggressive decay 0.90/tick
         double decayFactor;
         if (msSinceGps <= properties.getFreshGpsWindowMs()) {
-            decayFactor = 1.0; // no decay while GPS is fresh
+            decayFactor = 1.0; 
         } else if (msSinceGps <= properties.getAggressiveDecayAfterMs()) {
             decayFactor = properties.getDecayFactor();
         } else {
@@ -639,9 +608,6 @@ public class VehiclePositionPredictionService {
 
         double decayedSpeedKmh = state.getSpeedKmh() * decayFactor;
 
-        // Near-stop precision: when the vehicle is close to the next stop,
-        // increase conservative factor toward 1.0 (marker tracks GPS more closely).
-        // Users at the stop need accurate visual position, not smooth-but-lagging.
         double adjustedConservative = conservativeFactor;
         List<double[]> routeCoords = state.getRouteCoordinates();
         double totalRouteDistance = state.getTotalRouteDistanceMeters();
@@ -649,7 +615,6 @@ public class VehiclePositionPredictionService {
         if (routeCoords != null && state.getFractionOnRoute() >= 0 && totalRouteDistance > 0) {
             double distToNextStop = computeDistanceToNextStop(state, totalRouteDistance);
             if (distToNextStop >= 0 && distToNextStop < 300.0) {
-                // Linearly interpolate: at 300m conservative=0.85, at 0m conservative=1.0
                 adjustedConservative = conservativeFactor + (1.0 - conservativeFactor) * (1.0 - distToNextStop / 300.0);
             }
         }
@@ -657,20 +622,20 @@ public class VehiclePositionPredictionService {
         double effectiveSpeedKmh = decayedSpeedKmh * adjustedConservative;
 
         if (routeCoords != null && state.getFractionOnRoute() >= 0 && totalRouteDistance > 0) {
-            // Dwell check: if the vehicle is currently dwelling at a stop, freeze prediction
-            // until dwell time expires or fresh GPS shows movement (speed > threshold).
             if (state.getDwellStartedAt() != null) {
                 long dwellMs = Instant.now().toEpochMilli() - state.getDwellStartedAt().toEpochMilli();
-                boolean dwellExpired = dwellMs >= (long)(properties.getDwellTimeSeconds() * 1000);
+                double expectedDwellSec = getHistoricalDwellSeconds(
+                        state.getDwellStopId(), state.getRouteNumber(), state.getDirection());
+                boolean dwellExpired = dwellMs >= (long)(expectedDwellSec * 1000);
                 boolean gpsShowsMovement = state.getRawGpsSpeedKmh() >= properties.getDwellSpeedThresholdKmh();
                 if (!dwellExpired && !gpsShowsMovement) {
-                    // Still dwelling — don't advance
                     return state;
                 }
-                // Dwell ended — clear dwell state and continue advancing
+                recordDwellObservation(state, dwellMs);
                 return state.toBuilder()
                         .dwellStartedAt(null)
                         .dwellStopFraction(-1)
+                        .dwellStopId(null)
                         .build();
             }
 
@@ -680,20 +645,20 @@ public class VehiclePositionPredictionService {
 
             double newFraction = Math.min(state.getFractionOnRoute() + fractionDelta, 1.0);
 
-            // Check if prediction crossed a stop — enter dwell mode
             double distToNextStop = computeDistanceToNextStop(state, totalRouteDistance);
             if (distToNextStop >= 0 && distToNextStop < properties.getDwellActivationDistanceMeters()
                     && state.getRawGpsSpeedKmh() < properties.getDwellSpeedThresholdKmh()) {
-                double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteNumber(), state.getDirection());
-                double nextStopFrac = stopFractions != null
-                        ? findNextStopFraction(stopFractions, state.getFractionOnRoute(), state.getDirection())
-                        : -1;
-                if (nextStopFrac >= 0) {
-                    log.debug("[GPS_PIPELINE] DWELL_START vehicle={} plate={} stop_frac={} dist={}m",
+                java.util.Optional<biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo> nextStopOpt =
+                        routeGeometryCache.getNextStop(state.getRouteNumber(), state.getDirection(),
+                                state.getFractionOnRoute());
+                if (nextStopOpt.isPresent()) {
+                    var nextStop = nextStopOpt.get();
+                    double nextStopFrac = nextStop.getDistanceFromStartMeters() / totalRouteDistance;
+                    log.debug("[GPS_PIPELINE] DWELL_START vehicle={} plate={} stop={} stop_frac={} dist={}m",
                             state.getVehicleId(), state.getLicensePlate(),
+                            nextStop.getStopId(),
                             String.format("%.4f", nextStopFrac),
                             String.format("%.0f", distToNextStop));
-                    // Snap to the stop and freeze
                     double[] stopCoords = mapMatchingService.interpolateRoutePoint(routeCoords, nextStopFrac, totalRouteDistance);
                     if (stopCoords != null) {
                         return state.toBuilder()
@@ -702,6 +667,7 @@ public class VehiclePositionPredictionService {
                                 .fractionOnRoute(nextStopFrac)
                                 .dwellStartedAt(Instant.now())
                                 .dwellStopFraction(nextStopFrac)
+                                .dwellStopId(nextStop.getStopId())
                                 .speedKmh(0)
                                 .build();
                     }
@@ -723,7 +689,6 @@ public class VehiclePositionPredictionService {
                     .build();
         }
 
-        // Dead-reckoning fallback (no route geometry)
         double speedMs = effectiveSpeedKmh / 3.6;
         double courseRad = Math.toRadians(state.getCourse());
         double dNorth = speedMs * DT_SECONDS * Math.cos(courseRad);
@@ -748,13 +713,8 @@ public class VehiclePositionPredictionService {
 
         double tolerance = properties.getTerminalFractionTolerance();
 
-        // Check BOTH current snap fraction AND existing predicted fraction for terminal proximity.
-        // Bus turnaround at terminal: predicted frac ≈ 1.0 (end of forward), GPS snaps to frac ≈ 0.0
-        // on the opposite direction. Either condition means "near terminal → flip is legitimate".
         boolean curNearTerminal = curFraction >= 0
                 && (curFraction <= tolerance || curFraction >= (1.0 - tolerance));
-        // Check both fractionOnRoute and lastGpsFraction — isAtRouteBoundary resets
-        // fractionOnRoute to -1 at boundary, but lastGpsFraction still has the last value.
         double predFrac = existing.getFractionOnRoute() >= 0
                 ? existing.getFractionOnRoute()
                 : existing.getLastGpsFraction();
@@ -809,10 +769,6 @@ public class VehiclePositionPredictionService {
 
         return Mono.fromRunnable(() -> {
             try {
-                // Final teleport guard: if this broadcast would move the marker >500m,
-                // suppress it. The marker stays at the last known good position.
-                // This prevents ALL visible teleports regardless of cause (direction bounce,
-                // snap ambiguity, route geometry issues, GPS outliers).
                 double[] prevPos = lastBroadcastPosition.get(state.getVehicleId());
                 if (prevPos != null) {
                     double jumpDist = DistanceCalculationService.haversineDistanceMeters(
@@ -829,9 +785,6 @@ public class VehiclePositionPredictionService {
                                 String.format("%.5f", state.getPredictedLongitude()),
                                 fractionValue != null ? String.format("%.4f", fractionValue) : "-",
                                 state.getDirection());
-                        // Do NOT update lastBroadcastPosition here.
-                        // Flutter still shows the OLD position — next broadcast must be
-                        // compared against what Flutter actually sees, not what we suppressed.
                         return;
                     }
                 }
@@ -854,9 +807,6 @@ public class VehiclePositionPredictionService {
     }
 
     private List<NextStopEta> computeNextStopsEta(VehiclePredictionState state, int maxStops) {
-        // Use lastGpsFraction (actual GPS-snapped position) for ETA, not fractionOnRoute
-        // (which lags behind due to conservative prediction). This gives accurate distance
-        // to upcoming stops based on where the bus ACTUALLY is, not where the marker shows.
         double trueFraction = state.getLastGpsFraction() >= 0
                 ? state.getLastGpsFraction()
                 : state.getFractionOnRoute();
@@ -866,7 +816,6 @@ public class VehiclePositionPredictionService {
         }
         LocalDateTime now = LocalDateTime.now();
         TimePeriod period = TimePeriod.fromDateTime(now);
-        // Use smoothed GPS speed for stable ETA (raw speed can spike 0→50→0)
         double speedKmh = state.getSmoothedSpeedKmh() > 0
                 ? state.getSmoothedSpeedKmh()
                 : state.getRawGpsSpeedKmh();
@@ -939,12 +888,7 @@ public class VehiclePositionPredictionService {
         return ageMs <= 30_000;
     }
 
-    /**
-     * Compute confidence level for a vehicle's position data.
-     * Used by notification systems to decide whether to trigger push notifications.
-     *
-     * @return confidence level, or STALE if vehicle not found
-     */
+   
     public PositionConfidence getConfidence(String vehicleId) {
         VehiclePredictionState state = vehicleStates.get(vehicleId);
         if (state == null) return PositionConfidence.STALE;
@@ -991,10 +935,6 @@ public class VehiclePositionPredictionService {
    
     private static final int SPEED_BUFFER_SIZE = 5;
 
-    /**
-     * Append the new speed to the circular buffer, returning a new array.
-     * Keeps the last SPEED_BUFFER_SIZE values.
-     */
     private double[] appendSpeedToBuffer(VehiclePredictionState existing, double newSpeed) {
         double[] prev = (existing != null) ? existing.getRecentSpeeds() : null;
         if (prev == null || prev.length == 0) {
@@ -1006,18 +946,12 @@ public class VehiclePositionPredictionService {
             buf[prev.length] = newSpeed;
             return buf;
         }
-        // Shift left, drop oldest
         double[] buf = new double[SPEED_BUFFER_SIZE];
         System.arraycopy(prev, 1, buf, 0, SPEED_BUFFER_SIZE - 1);
         buf[SPEED_BUFFER_SIZE - 1] = newSpeed;
         return buf;
     }
 
-    /**
-     * Compute smoothed speed as the average of recent GPS speeds.
-     * Eliminates sudden speed spikes (e.g. GPS reports 0→50→0→50)
-     * that would make prediction advance jerky.
-     */
     private double computeSmoothedSpeed(VehiclePredictionState existing, double newSpeed) {
         double[] buffer = appendSpeedToBuffer(existing, newSpeed);
         double sum = 0;
@@ -1025,10 +959,58 @@ public class VehiclePositionPredictionService {
         return sum / buffer.length;
     }
 
-    /**
-     * Returns the distance in meters to the next stop ahead on the route.
-     * Returns -1 if no stop is found or data is unavailable.
-     */
+    
+    private String dwellKey(String stopId, String routeNumber, int direction) {
+        return stopId + ":" + routeNumber + ":" + direction;
+    }
+
+    private double getHistoricalDwellSeconds(String stopId, String routeNumber, int direction) {
+        if (stopId == null || routeNumber == null) {
+            return properties.getDwellTimeSeconds();
+        }
+        var stat = dwellStatsCache.get(dwellKey(stopId, routeNumber, direction));
+        if (stat == null || stat.getSampleCount() < 3) {
+            return properties.getDwellTimeSeconds();
+        }
+        return stat.getAvgDwellSeconds();
+    }
+
+   
+    private void recordDwellObservation(VehiclePredictionState state, long dwellMs) {
+        String stopId = state.getDwellStopId();
+        if (stopId == null || state.getRouteNumber() == null) {
+            return;
+        }
+        double dwellSec = dwellMs / 1000.0;
+        if (dwellSec < 3 || dwellSec > 600) {
+            log.debug("[DWELL] skip record out-of-range: stop={} dwell={}s", stopId, dwellSec);
+            return;
+        }
+
+        String key = dwellKey(stopId, state.getRouteNumber(), state.getDirection());
+        var existing = dwellStatsCache.get(key);
+        var updated = existing != null
+                ? existing.withNewSample(dwellSec, Instant.now())
+                : biz.ugur.busroutebackend.transport.domain.valueobject.StopDwellStat
+                        .initial(stopId, state.getRouteNumber(), state.getDirection())
+                        .withNewSample(dwellSec, Instant.now());
+
+        dwellStatsCache.put(key, updated);
+
+        log.info("[DWELL] record stop={} route={} dir={} dwell={}s avg={}s samples={}",
+                stopId, state.getRouteNumber(), state.getDirection(),
+                String.format("%.1f", dwellSec),
+                String.format("%.1f", updated.getAvgDwellSeconds()),
+                updated.getSampleCount());
+
+        dwellStatsRepository.save(updated)
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe(
+                        null,
+                        err -> log.warn("[DWELL] failed to persist: stop={} err={}", stopId, err.getMessage())
+                );
+    }
+
     private double computeDistanceToNextStop(VehiclePredictionState state, double totalRouteDistance) {
         if (state.getRouteNumber() == null || totalRouteDistance <= 0) return -1;
         double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteNumber(), state.getDirection());
@@ -1063,7 +1045,6 @@ public class VehiclePositionPredictionService {
 
    
     private double findNextStopFraction(double[] sortedFractions, double currentFraction, int direction) {
-        // Fraction always increases (both directions), so next stop is always at higher fraction.
         for (double f : sortedFractions) {
             if (f > currentFraction + 0.001) return f;
         }

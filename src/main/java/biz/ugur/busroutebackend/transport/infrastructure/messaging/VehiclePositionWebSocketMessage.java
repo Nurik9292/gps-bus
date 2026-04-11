@@ -54,8 +54,6 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("fraction")
     private final Double fraction;
 
-    /** Position confidence level: HIGH, MEDIUM, LOW, STALE.
-     *  Flutter can use this to adjust marker opacity or trigger UI hints. */
     @JsonProperty("confidence")
     private final String confidence;
 

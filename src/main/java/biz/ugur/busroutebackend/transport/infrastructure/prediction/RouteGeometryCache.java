@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -122,13 +123,22 @@ public class RouteGeometryCache {
         return stops != null ? stops : Collections.emptyList();
     }
 
-   
+
     public List<RouteStopInfo> getStopsAhead(String routeNumber, int direction, double currentFraction) {
         double totalDistance = getTotalDistance(routeNumber, direction);
         if (totalDistance <= 0) return Collections.emptyList();
         return getRouteStops(routeNumber, direction).stream()
                 .filter(s -> s.getDistanceFromStartMeters() / totalDistance > currentFraction + 0.0001)
                 .toList();
+    }
+
+    public Optional<RouteStopInfo> getNextStop(String routeNumber, int direction, double currentFraction) {
+        double totalDistance = getTotalDistance(routeNumber, direction);
+        if (totalDistance <= 0) return Optional.empty();
+        return getRouteStops(routeNumber, direction).stream()
+                .filter(s -> s.getDistanceFromStartMeters() != null
+                        && s.getDistanceFromStartMeters() / totalDistance > currentFraction + 0.0001)
+                .findFirst();
     }
 
  
