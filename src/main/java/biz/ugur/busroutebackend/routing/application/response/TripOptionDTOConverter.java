@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.routing.application.dto.TripOptionDTO;
 import biz.ugur.busroutebackend.routing.domain.enums.SegmentType;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
+import biz.ugur.busroutebackend.routing.infrastructure.services.RealTimeETAService;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.Nullable;
@@ -21,9 +22,12 @@ import java.util.stream.Collectors;
 public class TripOptionDTOConverter {
 
     private final GeocodingService geocodingService;
+    private final RealTimeETAService realTimeETAService;
 
-    public TripOptionDTOConverter(@Nullable GeocodingService geocodingService) {
+    public TripOptionDTOConverter(@Nullable GeocodingService geocodingService,
+                                   RealTimeETAService realTimeETAService) {
         this.geocodingService = geocodingService;
+        this.realTimeETAService = realTimeETAService;
     }
 
     public Mono<TripOptionDTO> convertToDTO(TripOption tripOption) {
@@ -54,7 +58,39 @@ public class TripOptionDTOConverter {
             }
         }
 
-        return Mono.when(resolveFirst, resolveLast).thenReturn(buildDTO(tripOption, segments));
+        // Find the first BUS_RIDE segment to look up nearest real-time bus
+        Mono<TripOptionDTO.NearestBusDTO> nearestBusMono = findNearestBusForTrip(tripOption);
+
+        return Mono.when(resolveFirst, resolveLast)
+                .then(nearestBusMono.defaultIfEmpty(new TripOptionDTO.NearestBusDTO(null, null, null, 0, 0)))
+                .map(nearestBus -> {
+                    TripOptionDTO dto = buildDTO(tripOption, segments);
+                    if (nearestBus.getVehicleId() != null) {
+                        dto.setNearestBus(nearestBus);
+                    }
+                    return dto;
+                });
+    }
+
+    private Mono<TripOptionDTO.NearestBusDTO> findNearestBusForTrip(TripOption tripOption) {
+        // Find the first BUS_RIDE segment — that's where the user boards
+        return tripOption.getRouteSegments().stream()
+                .filter(s -> s.getType() == SegmentType.BUS_RIDE && s.getRouteNumber() != null)
+                .findFirst()
+                .map(busSegment -> realTimeETAService.findNearestBus(
+                                busSegment.getRouteNumber(),
+                                busSegment.getFromLocationName() != null
+                                        ? busSegment.getFromLocationName()
+                                        : "")
+                        .map(info -> new TripOptionDTO.NearestBusDTO(
+                                info.vehicleId(),
+                                info.licensePlate(),
+                                info.routeNumber(),
+                                info.etaMinutes(),
+                                info.distanceMeters()))
+                        .onErrorResume(e -> Mono.empty())
+                )
+                .orElse(Mono.empty());
     }
 
     private TripOptionDTO buildDTO(TripOption tripOption, List<RouteSegmentDTO> segments) {

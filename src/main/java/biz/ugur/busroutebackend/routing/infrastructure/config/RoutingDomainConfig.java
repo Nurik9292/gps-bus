@@ -22,8 +22,9 @@ public class RoutingDomainConfig {
                                                        ETARepository etaRepository,
                                                        ReactiveRedisTemplate<String, Object> redisTemplate,
                                                        DistanceCalculationService distanceService,
-                                                       ETAProperties etaProperties) {
-        return new LiveETACalculationService(vehicleRepository, etaRepository, redisTemplate, distanceService, etaProperties);
+                                                       ETAProperties etaProperties,
+                                                       biz.ugur.busroutebackend.routing.infrastructure.services.RealTimeETAService realTimeETAService) {
+        return new LiveETACalculationService(vehicleRepository, etaRepository, redisTemplate, distanceService, etaProperties, realTimeETAService);
     }
 
     @Bean

@@ -39,6 +39,25 @@ public class TripOptionDTO {
     @JsonProperty("cost_estimate")
     private CostEstimate costEstimate;
 
+    /** Real-time info about the nearest approaching bus for the first bus segment.
+     *  null if no real-time data is available. */
+    @JsonProperty("nearest_bus")
+    private NearestBusDTO nearestBus;
+
+    @Data
+    public static class NearestBusDTO {
+        @JsonProperty("vehicle_id")
+        private final String vehicleId;
+        @JsonProperty("license_plate")
+        private final String licensePlate;
+        @JsonProperty("route_number")
+        private final String routeNumber;
+        @JsonProperty("eta_minutes")
+        private final int etaMinutes;
+        @JsonProperty("distance_meters")
+        private final int distanceMeters;
+    }
+
     public TripOptionDTO(String optionId, String tripType, String summary,
                          int totalTravelMinutes, int totalWalkingMinutes,
                          int transfersCount, List<RouteSegmentDTO> routeSegments) {

@@ -26,6 +26,7 @@ public class LiveETACalculationService implements ETACalculationService {
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final DistanceCalculationService distanceService;
     private final ETAProperties etaProperties;
+    private final RealTimeETAService realTimeETAService;
 
     private static final double AVERAGE_WALKING_SPEED_M_PER_MIN = GeoConstants.AVERAGE_WALKING_SPEED_M_PER_MIN;
     private static final int MAX_REASONABLE_WALKING_TIME = GeoConstants.MAX_WALKING_TIME_MINUTES;
@@ -35,12 +36,14 @@ public class LiveETACalculationService implements ETACalculationService {
                                      ETARepository etaRepository,
                                      ReactiveRedisTemplate<String, Object> redisTemplate,
                                      DistanceCalculationService distanceService,
-                                     ETAProperties etaProperties) {
+                                     ETAProperties etaProperties,
+                                     RealTimeETAService realTimeETAService) {
         this.vehicleRepository = vehicleRepository;
         this.etaRepository = etaRepository;
         this.redisTemplate = redisTemplate;
         this.distanceService = distanceService;
         this.etaProperties = etaProperties;
+        this.realTimeETAService = realTimeETAService;
     }
 
     @Override
@@ -191,7 +194,12 @@ public class LiveETACalculationService implements ETACalculationService {
 
 
     private Mono<Integer> getVehicleBasedWaitingTime(String routeNumber, String stopName) {
-        return etaRepository.getVehicleBasedWaitingTime(routeNumber, stopName);
+        // Priority 1: real-time GPS-based ETA from prediction engine (most accurate)
+        return realTimeETAService.getWaitingTimeMinutes(routeNumber, stopName)
+                .switchIfEmpty(
+                        // Fallback: DB-based vehicle positions (less accurate but wider coverage)
+                        etaRepository.getVehicleBasedWaitingTime(routeNumber, stopName)
+                );
     }
 
 
