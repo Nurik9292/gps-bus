@@ -108,7 +108,13 @@ public class LiveETACalculationService implements ETACalculationService {
     public Mono<Integer> calculateTravelTimeMinutes(String routeNumber, String fromStopName, String toStopName) {
         log.debug("Calculating travel time for route {} from {} to {}", routeNumber, fromStopName, toStopName);
 
-        String cacheKey = String.format("travel_time:%s:%s:%s", routeNumber, fromStopName, toStopName);
+        // Include time period in cache key so morning (peak) and evening (off-peak) get different results
+        LocalDateTime now = LocalDateTime.now();
+        TimePeriod period = TimePeriod.fromDateTime(now);
+        boolean isWeekend = TimePeriod.isWeekend(now);
+        double trafficMult = period.getTrafficMultiplier(isWeekend);
+
+        String cacheKey = String.format("travel_time:%s:%s:%s:%s", routeNumber, fromStopName, toStopName, period.name());
         int cacheTtlMinutes = etaProperties.getCache().getTravelTimeTtlMinutes();
 
         return redisTemplate.opsForValue()
@@ -118,6 +124,13 @@ public class LiveETACalculationService implements ETACalculationService {
                 .switchIfEmpty(
                         calculateTravelTimeFromDatabase(routeNumber, fromStopName, toStopName)
                                 .timeout(Duration.ofSeconds(3), Mono.fromCallable(() -> etaProperties.getFallback().getDefaultTravelTimeMinutes()))
+                                .map(baseTravelTime -> {
+                                    // Apply time-of-day traffic multiplier
+                                    int adjusted = (int) Math.ceil(baseTravelTime * trafficMult);
+                                    log.debug("Travel time adjusted: base={}min × {}({}) = {}min",
+                                            baseTravelTime, trafficMult, period.name(), adjusted);
+                                    return adjusted;
+                                })
                                 .flatMap(travelTime ->
                                         redisTemplate.opsForValue()
                                                 .set(cacheKey, travelTime, Duration.ofMinutes(cacheTtlMinutes))
@@ -125,7 +138,7 @@ public class LiveETACalculationService implements ETACalculationService {
                                                 .thenReturn(travelTime)
                                 )
                 )
-                .doOnNext(travelMinutes -> log.debug("Estimated travel time: {} minutes", travelMinutes));
+                .doOnNext(travelMinutes -> log.debug("Estimated travel time: {} minutes (period={})", travelMinutes, period.name()));
     }
 
     @Override
