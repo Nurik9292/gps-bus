@@ -187,7 +187,7 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
         Coordinates to = context.toLocation();
         TripSearchCriteria criteria = context.searchCriteria();
 
-        return String.format("trip_search:%.4f:%.4f:%.4f:%.4f:%d:%d:%s:%s",
+        return String.format("trip_search:%.6f:%.6f:%.6f:%.6f:%d:%d:%s:%s",
                 from.getLatitudeAsDouble(), from.getLongitudeAsDouble(),
                 to.getLatitudeAsDouble(), to.getLongitudeAsDouble(),
                 criteria.getMaxWalkingDistanceMeters(),

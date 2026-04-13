@@ -27,7 +27,7 @@ public class TransitGraphBuilder {
     private final BusRouteRepository routeRepository;
     private final TransitGraphDataRepository graphDataRepository;
 
-    private static final double MAX_WALKING_METERS = 400.0;
+    private static final double MAX_WALKING_METERS = 800.0;
 
     public Mono<TransitGraph> build() {
         log.info("🔨 Building transit graph...");

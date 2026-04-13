@@ -26,6 +26,10 @@ public class DijkstraEngine {
     private static final int MAX_TRANSFERS = 2;
     private static final int K_PATHS = 3;
     private static final int ROUTE_PENALTY_MINUTES = 30;
+    /** Max iterations to prevent infinite loops on bad graph data. */
+    private static final int MAX_ITERATIONS = 50_000;
+    /** Max cost in minutes — paths beyond 3 hours are not useful. */
+    private static final int MAX_COST_MINUTES = 180;
 
     public List<TransitPath> findPaths(TransitGraph graph, String fromStopId, String toStopId) {
         return findPaths(graph, fromStopId, toStopId, K_PATHS);
@@ -61,8 +65,17 @@ public class DijkstraEngine {
         dist.put(startKey, 0);
         pq.offer(new DijkstraState(0, fromStopId, null, 0));
 
+        int iterations = 0;
         while (!pq.isEmpty()) {
+            if (++iterations > MAX_ITERATIONS) {
+                log.warn("Dijkstra exceeded {} iterations from {} to {} — aborting",
+                        MAX_ITERATIONS, fromStopId, toStopId);
+                return null;
+            }
+
             DijkstraState cur = pq.poll();
+            if (cur.cost > MAX_COST_MINUTES) continue;
+
             String curKey = stateKey(cur.stopId, cur.lastBusRouteId);
 
             Integer bestCost = dist.get(curKey);

@@ -4,6 +4,6 @@ public enum TripType {
     DIRECT,
     ONE_TRANSFER,
     TWO_TRANSFER,
-    TWO_TRANSFERS,
-    WALKING
+    WALKING,
+    WALKING_ONLY
 }

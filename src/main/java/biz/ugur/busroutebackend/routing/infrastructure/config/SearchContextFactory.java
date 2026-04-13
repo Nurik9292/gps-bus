@@ -19,9 +19,7 @@ public class SearchContextFactory {
     }
 
     private String generateSearchId(TripSearchRequest request) {
-        return String.format("SEARCH_%d_%s",
-                System.currentTimeMillis() % 100000,
-                Integer.toHexString(request.hashCode()).substring(0, 4).toUpperCase());
+        return "SEARCH_" + java.util.UUID.randomUUID().toString().substring(0, 12);
     }
 
     private Coordinates createCoordinatesFromDTO(TripSearchRequest.LocationDTO dto) {

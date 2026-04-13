@@ -21,6 +21,7 @@ public class ParallelRouteSearchService {
     private final DirectRouteSearchService directRouteSearch;
     private final OneTransferRouteSearchService oneTransferSearch;
     private final TwoTransferRouteSearchService twoTransferSearch;
+    private final WalkingOnlyRouteSearchService walkingOnlySearch;
     private final NearbyStopsService nearbyStopsService;
     private final TripPlanCombiner tripPlanCombiner;
     private final RouteDeduplicationService deduplicationService;
@@ -31,6 +32,7 @@ public class ParallelRouteSearchService {
     public ParallelRouteSearchService(DirectRouteSearchService directRouteSearch,
                                       OneTransferRouteSearchService oneTransferSearch,
                                       TwoTransferRouteSearchService twoTransferSearch,
+                                      WalkingOnlyRouteSearchService walkingOnlySearch,
                                       NearbyStopsService nearbyStopsService,
                                       TripPlanCombiner tripPlanCombiner,
                                       RouteDeduplicationService deduplicationService,
@@ -39,6 +41,7 @@ public class ParallelRouteSearchService {
         this.directRouteSearch = directRouteSearch;
         this.oneTransferSearch = oneTransferSearch;
         this.twoTransferSearch = twoTransferSearch;
+        this.walkingOnlySearch = walkingOnlySearch;
         this.nearbyStopsService = nearbyStopsService;
         this.tripPlanCombiner = tripPlanCombiner;
         this.deduplicationService = deduplicationService;
@@ -82,11 +85,13 @@ public class ParallelRouteSearchService {
         Mono<SearchResult> directSearch = directRouteSearch.search(context, stopsContext);
         Mono<SearchResult> oneTransferSearch = this.oneTransferSearch.search(context, stopsContext);
         Mono<SearchResult> twoTransferSearch = this.twoTransferSearch.search(context, stopsContext);
+        Mono<SearchResult> walkingOnlySearch = this.walkingOnlySearch.search(context)
+                .onErrorResume(e -> Mono.just(SearchResult.failed("walking_only", e.getMessage())));
 
         if (stopBasedSearch != null) {
             return executeEnhancedSearch(context, stopsContext, directSearch, oneTransferSearch, twoTransferSearch);
         } else {
-            return executeStandardSearch(context, directSearch, oneTransferSearch, twoTransferSearch);
+            return executeStandardSearch(context, directSearch, oneTransferSearch, twoTransferSearch, walkingOnlySearch);
         }
     }
 
@@ -117,23 +122,26 @@ public class ParallelRouteSearchService {
     private Mono<TripPlan> executeStandardSearch(SearchContext context,
                                                  Mono<SearchResult> directSearch,
                                                  Mono<SearchResult> oneTransferSearch,
-                                                 Mono<SearchResult> twoTransferSearch) {
+                                                 Mono<SearchResult> twoTransferSearch,
+                                                 Mono<SearchResult> walkingOnlySearch) {
         return directSearch.flatMap(directResult -> {
             log.info("[{}] 🔍 Direct search completed: {} options",
                     context.searchId(), directResult.getOptionsCount());
 
-            return Mono.zip(oneTransferSearch, twoTransferSearch)
-                    .map(transferResults -> {
-                        log.info("[{}] 🔍 Search results: direct={}, oneTransfer={}, twoTransfer={}",
+            return Mono.zip(oneTransferSearch, twoTransferSearch, walkingOnlySearch)
+                    .map(results -> {
+                        log.info("[{}] 🔍 Search results: direct={}, oneTransfer={}, twoTransfer={}, walkingOnly={}",
                                 context.searchId(),
                                 directResult.getOptionsCount(),
-                                transferResults.getT1().getOptionsCount(),
-                                transferResults.getT2().getOptionsCount());
+                                results.getT1().getOptionsCount(),
+                                results.getT2().getOptionsCount(),
+                                results.getT3().getOptionsCount());
 
                         List<SearchResult> allResults = List.of(
                                 directResult,
-                                transferResults.getT1(),
-                                transferResults.getT2()
+                                results.getT1(),
+                                results.getT2(),
+                                results.getT3()
                         );
 
                         return combineWithDeduplication(context, allResults);
