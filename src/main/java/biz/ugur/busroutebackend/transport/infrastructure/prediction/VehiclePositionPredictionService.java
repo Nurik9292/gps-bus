@@ -645,20 +645,26 @@ public class VehiclePositionPredictionService {
 
             double newFraction = Math.min(state.getFractionOnRoute() + fractionDelta, 1.0);
 
-            double distToNextStop = computeDistanceToNextStop(state, totalRouteDistance);
-            if (distToNextStop >= 0 && distToNextStop < properties.getDwellActivationDistanceMeters()
+            // Dwell detection: use TRUE GPS position (lastGpsFraction) not predicted fraction.
+            // Prediction lags behind GPS by 50-100m, so using predicted fraction would detect
+            // stops too late (bus already passed). GPS fraction reflects where the bus actually is.
+            double trueFrac = state.getLastGpsFraction() >= 0
+                    ? state.getLastGpsFraction()
+                    : state.getFractionOnRoute();
+            double distToNextStopTrue = computeDistanceToNextStopFromFraction(trueFrac, state, totalRouteDistance);
+            if (distToNextStopTrue >= 0 && distToNextStopTrue < properties.getDwellActivationDistanceMeters()
                     && state.getRawGpsSpeedKmh() < properties.getDwellSpeedThresholdKmh()) {
                 java.util.Optional<biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo> nextStopOpt =
-                        routeGeometryCache.getNextStop(state.getRouteNumber(), state.getDirection(),
-                                state.getFractionOnRoute());
+                        routeGeometryCache.getNextStop(state.getRouteNumber(), state.getDirection(), trueFrac);
                 if (nextStopOpt.isPresent()) {
                     var nextStop = nextStopOpt.get();
                     double nextStopFrac = nextStop.getDistanceFromStartMeters() / totalRouteDistance;
-                    log.debug("[GPS_PIPELINE] DWELL_START vehicle={} plate={} stop={} stop_frac={} dist={}m",
+                    log.info("[GPS_PIPELINE] DWELL_START vehicle={} plate={} stop={} stop_frac={} dist={}m gpsSpeed={}km/h",
                             state.getVehicleId(), state.getLicensePlate(),
                             nextStop.getStopId(),
                             String.format("%.4f", nextStopFrac),
-                            String.format("%.0f", distToNextStop));
+                            String.format("%.0f", distToNextStopTrue),
+                            String.format("%.1f", state.getRawGpsSpeedKmh()));
                     double[] stopCoords = mapMatchingService.interpolateRoutePoint(routeCoords, nextStopFrac, totalRouteDistance);
                     if (stopCoords != null) {
                         return state.toBuilder()
@@ -1009,6 +1015,16 @@ public class VehiclePositionPredictionService {
                         null,
                         err -> log.warn("[DWELL] failed to persist: stop={} err={}", stopId, err.getMessage())
                 );
+    }
+
+    /** Compute distance to next stop from an arbitrary fraction (not necessarily state.fractionOnRoute). */
+    private double computeDistanceToNextStopFromFraction(double fraction, VehiclePredictionState state, double totalRouteDistance) {
+        if (fraction < 0 || state.getRouteNumber() == null || totalRouteDistance <= 0) return -1;
+        double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteNumber(), state.getDirection());
+        if (stopFractions == null || stopFractions.length == 0) return -1;
+        double nextStopFrac = findNextStopFraction(stopFractions, fraction, state.getDirection());
+        if (nextStopFrac < 0) return -1;
+        return Math.abs(nextStopFrac - fraction) * totalRouteDistance;
     }
 
     private double computeDistanceToNextStop(VehiclePredictionState state, double totalRouteDistance) {
