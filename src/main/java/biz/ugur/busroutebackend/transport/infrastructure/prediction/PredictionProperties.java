@@ -29,6 +29,13 @@ public class PredictionProperties {
 
     private double stopDecelerationMinFactor = 0.15;
 
+    /** Distance after passing a stop where the bus accelerates back to cruising speed (meters). */
+    private double stopAccelerationZoneMeters = 60.0;
+
+    /** At the start of the acceleration zone (right after the stop), speed is this fraction
+     *  of the base speed. Linearly ramps up to 1.0 at the end of the zone. */
+    private double stopAccelerationMinFactor = 0.3;
+
     private long freshGpsWindowMs = 12_000;
 
     private long aggressiveDecayAfterMs = 10_000;

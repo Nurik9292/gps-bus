@@ -639,7 +639,12 @@ public class VehiclePositionPredictionService {
                         .build();
             }
 
-            double stopFactor = computeStopDecelerationFactor(state, totalRouteDistance);
+            double stopDecel = computeStopDecelerationFactor(state, totalRouteDistance);
+            double stopAccel = computeStopAccelerationFactor(state, totalRouteDistance);
+            // Use the MORE restrictive factor (min of decel and accel).
+            // Near a stop: decel dominates (slowing down). Just after a stop: accel dominates (speeding up).
+            // In between stops: both are 1.0.
+            double stopFactor = Math.min(stopDecel, stopAccel);
             double speedMs = (effectiveSpeedKmh * stopFactor) / 3.6;
             double fractionDelta = speedMs * DT_SECONDS / totalRouteDistance;
 
@@ -1067,6 +1072,38 @@ public class VehiclePositionPredictionService {
     }
 
    
+    /**
+     * Compute acceleration factor after passing a stop.
+     * Mirrors deceleration: speed ramps from stopAccelerationMinFactor → 1.0
+     * over stopAccelerationZoneMeters after the previous stop.
+     */
+    private double computeStopAccelerationFactor(VehiclePredictionState state, double totalRouteDistance) {
+        if (state.getRouteNumber() == null) return 1.0;
+        double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteNumber(), state.getDirection());
+        if (stopFractions == null || stopFractions.length == 0) return 1.0;
+
+        double currentFraction = state.getFractionOnRoute();
+        double prevStopFrac = findPreviousStopFraction(stopFractions, currentFraction);
+        if (prevStopFrac < 0) return 1.0;
+
+        double distFromStop = Math.abs(currentFraction - prevStopFrac) * totalRouteDistance;
+        double zone = properties.getStopAccelerationZoneMeters();
+        if (distFromStop >= zone) return 1.0;
+
+        double minFactor = properties.getStopAccelerationMinFactor();
+        return minFactor + (1.0 - minFactor) * (distFromStop / zone);
+    }
+
+    /** Find the fraction of the last stop BEHIND the current position. */
+    private double findPreviousStopFraction(double[] sortedFractions, double currentFraction) {
+        double prev = -1;
+        for (double f : sortedFractions) {
+            if (f >= currentFraction - 0.001) break;
+            prev = f;
+        }
+        return prev;
+    }
+
     private double findNextStopFraction(double[] sortedFractions, double currentFraction, int direction) {
         for (double f : sortedFractions) {
             if (f > currentFraction + 0.001) return f;
