@@ -753,6 +753,13 @@ public class VehiclePositionPredictionService {
     }
 
     private Mono<Void> broadcastPrediction(VehiclePredictionState state) {
+        // Skip "dead" vehicles: stopped with no route assignment (parked in garage, off duty).
+        // These clutter the map with static markers that are not useful to passengers.
+        if (!state.isInMotion() && state.getSpeedKmh() == 0
+                && (state.getRouteNumber() == null || state.getRouteNumber().isBlank())) {
+            return Mono.empty();
+        }
+
         Double fractionValue = (state.getFractionOnRoute() >= 0) ? state.getFractionOnRoute() : null;
         List<NextStopEta> nextStops = computeNextStopsEta(state, 3);
 

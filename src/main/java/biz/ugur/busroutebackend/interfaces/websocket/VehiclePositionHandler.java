@@ -165,17 +165,18 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
     private Flux<VehiclePositionDTO> getVehiclesForConfig(SessionConfig config) {
         String subscriptionType = config.getSubscriptionType();
 
+        Flux<VehiclePositionDTO> result;
         if ("routes".equals(subscriptionType)) {
             Set<String> routes = config.getRouteFilter();
             if (routes == null || routes.isEmpty()) {
                 return Flux.empty();
             }
-            return Flux.fromIterable(routes)
+            result = Flux.fromIterable(routes)
                     .flatMap(routeNumber ->
                             getActiveVehiclesUseCase.execute(GetActiveVehiclesUseCase.Query.byRoute(routeNumber)))
                     .distinct(VehiclePositionDTO::getVehicleId);
         } else if ("bounds".equals(subscriptionType)) {
-            return getActiveVehiclesUseCase.execute(null)
+            result = getActiveVehiclesUseCase.execute(null)
                     .filter(vehicle -> {
                         Double lat = vehicle.getCurrentLatitude();
                         Double lon = vehicle.getCurrentLongitude();
@@ -185,8 +186,18 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                         return config.isInBounds(lat, lon);
                     });
         } else {
-            return getActiveVehiclesUseCase.execute(null);
+            result = getActiveVehiclesUseCase.execute(null);
         }
+
+        // Filter out "dead" vehicles: stopped with no route (parked in garage, off duty).
+        return result.filter(v -> {
+            if (Boolean.FALSE.equals(v.getIsInMotion())
+                    && v.getSpeedKmh() != null && v.getSpeedKmh() == 0
+                    && (v.getRouteNumber() == null || v.getRouteNumber().isBlank())) {
+                return false;
+            }
+            return true;
+        });
     }
 
     private Mono<Void> sendCurrentPositionsForConfig(WebSocketSession session, SessionConfig config) {
@@ -401,6 +412,15 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                     log.debug("[GPS_PIPELINE] REDIS_RECV vehicle={} plate={} route={} lat={} lon={}",
                             msg.getVehicleId(), msg.getLicensePlate(), msg.getRouteNumber(),
                             msg.getLatitude(), msg.getLongitude());
+                    return true;
+                })
+                // Filter out "dead" vehicles: stopped with no route (parked/garage).
+                .filter(msg -> {
+                    if (Boolean.FALSE.equals(msg.getIsInMotion())
+                            && msg.getSpeedKmh() != null && msg.getSpeedKmh() == 0
+                            && (msg.getRouteNumber() == null || msg.getRouteNumber().isBlank())) {
+                        return false;
+                    }
                     return true;
                 })
                 .filter(msg -> {
