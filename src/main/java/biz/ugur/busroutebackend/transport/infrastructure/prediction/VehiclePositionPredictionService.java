@@ -354,7 +354,25 @@ public class VehiclePositionPredictionService {
                             realIsAhead);
                 }
 
-                if (realIsAhead) {
+                // Safety check: if the snap position is far from actual GPS,
+                // the snap is unreliable (wrong direction, looping route, etc.)
+                // → drop to dead-reckoning at the real GPS position.
+                double snapVsGpsDistance = DistanceCalculationService.haversineDistanceMeters(
+                        snap.latitude(), snap.longitude(), latitude, longitude);
+                if (snapVsGpsDistance > properties.getTeleportThresholdMeters()) {
+                    log.warn("[GPS_PIPELINE] SNAP_TOO_FAR_FROM_GPS vehicle={} plate={} route={} " +
+                                    "snapDist={}m gps=({},{}) snap=({},{}) frac={} — reset to dead-reckoning",
+                            vehicleId, licensePlate, routeNumber,
+                            String.format("%.0f", snapVsGpsDistance),
+                            String.format("%.5f", latitude), String.format("%.5f", longitude),
+                            String.format("%.5f", snap.latitude()), String.format("%.5f", snap.longitude()),
+                            String.format("%.4f", realFraction));
+                    predictedLat = latitude;
+                    predictedLon = longitude;
+                    fraction = -1;
+                    routeCoords = null;
+                    totalDist = 0;
+                } else if (realIsAhead) {
                     predictedLat = snap.latitude();
                     predictedLon = snap.longitude();
                     fraction = realFraction;
