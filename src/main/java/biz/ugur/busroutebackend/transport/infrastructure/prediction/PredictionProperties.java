@@ -47,7 +47,12 @@ public class PredictionProperties {
 
     private double dwellTimeSeconds = 15.0;
 
-    private double dwellActivationDistanceMeters = 30.0;
+    /** Distance to next stop at which dwell detection activates (meters).
+     *  Must be large enough to catch buses decelerating (prediction lags GPS by ~50-100m). */
+    private double dwellActivationDistanceMeters = 100.0;
 
-    private double dwellSpeedThresholdKmh = 5.0;
+    /** Speed below which dwell mode activates (km/h).
+     *  GPS often reports 8-15 km/h during deceleration at stops.
+     *  Must be high enough to catch the bus BEFORE it drops to 0 and exits moving state. */
+    private double dwellSpeedThresholdKmh = 15.0;
 }
