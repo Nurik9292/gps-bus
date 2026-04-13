@@ -182,12 +182,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
 
     private String buildOneTransferRoutesQuery() {
         return """
-            WITH route_vehicle_counts AS (
-                SELECT assigned_route_id, COUNT(*) as vehicle_count
-                FROM vehicles
-                WHERE is_active = true
-                GROUP BY assigned_route_id
-            )
             SELECT * FROM (
                 -- Forward-Forward
                 SELECT
@@ -204,8 +198,8 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     bs_to.latitude as to_lat, bs_to.longitude as to_lon,
                     ABS(rs1_end.stop_sequence - rs1_start.stop_sequence) * 2 as first_segment_minutes,
                     ABS(rs2_end.stop_sequence - rs2_start.stop_sequence) * 2 as second_segment_minutes,
-                    v1.vehicle_count as first_route_vehicles,
-                    v2.vehicle_count as second_route_vehicles,
+                    0 as first_route_vehicles,
+                    0 as second_route_vehicles,
                     'FF' as direction_combo
                 FROM route_stops rs1_start
                 JOIN route_stops rs1_end ON rs1_start.route_id = rs1_end.route_id
@@ -220,8 +214,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 JOIN bus_stops bs_from ON rs1_start.stop_id = bs_from.id
                 JOIN bus_stops bs_transfer ON rs1_end.stop_id = bs_transfer.id
                 JOIN bus_stops bs_to ON rs2_end.stop_id = bs_to.id
-                LEFT JOIN route_vehicle_counts v1 ON br1.id = v1.assigned_route_id
-                LEFT JOIN route_vehicle_counts v2 ON br2.id = v2.assigned_route_id
                 WHERE rs1_start.stop_id = ANY(:fromStopIds)
                   AND rs2_end.stop_id = ANY(:toStopIds)
                   AND br1.id != br2.id
@@ -239,7 +231,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     bs_to.id, bs_to.stop_name, bs_to.latitude, bs_to.longitude,
                     ABS(rs1_end.stop_sequence - rs1_start.stop_sequence) * 2,
                     ABS(rs2_end.stop_sequence - rs2_start.stop_sequence) * 2,
-                    v1.vehicle_count, v2.vehicle_count, 'FB'
+                    0, 0, 'FB'
                 FROM route_stops rs1_start
                 JOIN route_stops rs1_end ON rs1_start.route_id = rs1_end.route_id
                     AND rs1_start.direction = 0 AND rs1_end.direction = 0
@@ -253,8 +245,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 JOIN bus_stops bs_from ON rs1_start.stop_id = bs_from.id
                 JOIN bus_stops bs_transfer ON rs1_end.stop_id = bs_transfer.id
                 JOIN bus_stops bs_to ON rs2_end.stop_id = bs_to.id
-                LEFT JOIN route_vehicle_counts v1 ON br1.id = v1.assigned_route_id
-                LEFT JOIN route_vehicle_counts v2 ON br2.id = v2.assigned_route_id
                 WHERE rs1_start.stop_id = ANY(:fromStopIds)
                   AND rs2_end.stop_id = ANY(:toStopIds)
                   AND br1.id != br2.id
@@ -272,7 +262,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     bs_to.id, bs_to.stop_name, bs_to.latitude, bs_to.longitude,
                     ABS(rs1_end.stop_sequence - rs1_start.stop_sequence) * 2,
                     ABS(rs2_end.stop_sequence - rs2_start.stop_sequence) * 2,
-                    v1.vehicle_count, v2.vehicle_count, 'BF'
+                    0, 0, 'BF'
                 FROM route_stops rs1_start
                 JOIN route_stops rs1_end ON rs1_start.route_id = rs1_end.route_id
                     AND rs1_start.direction = 1 AND rs1_end.direction = 1
@@ -286,8 +276,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 JOIN bus_stops bs_from ON rs1_start.stop_id = bs_from.id
                 JOIN bus_stops bs_transfer ON rs1_end.stop_id = bs_transfer.id
                 JOIN bus_stops bs_to ON rs2_end.stop_id = bs_to.id
-                LEFT JOIN route_vehicle_counts v1 ON br1.id = v1.assigned_route_id
-                LEFT JOIN route_vehicle_counts v2 ON br2.id = v2.assigned_route_id
                 WHERE rs1_start.stop_id = ANY(:fromStopIds)
                   AND rs2_end.stop_id = ANY(:toStopIds)
                   AND br1.id != br2.id
@@ -305,7 +293,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     bs_to.id, bs_to.stop_name, bs_to.latitude, bs_to.longitude,
                     ABS(rs1_end.stop_sequence - rs1_start.stop_sequence) * 2,
                     ABS(rs2_end.stop_sequence - rs2_start.stop_sequence) * 2,
-                    v1.vehicle_count, v2.vehicle_count, 'BB'
+                    0, 0, 'BB'
                 FROM route_stops rs1_start
                 JOIN route_stops rs1_end ON rs1_start.route_id = rs1_end.route_id
                     AND rs1_start.direction = 1 AND rs1_end.direction = 1
@@ -319,8 +307,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 JOIN bus_stops bs_from ON rs1_start.stop_id = bs_from.id
                 JOIN bus_stops bs_transfer ON rs1_end.stop_id = bs_transfer.id
                 JOIN bus_stops bs_to ON rs2_end.stop_id = bs_to.id
-                LEFT JOIN route_vehicle_counts v1 ON br1.id = v1.assigned_route_id
-                LEFT JOIN route_vehicle_counts v2 ON br2.id = v2.assigned_route_id
                 WHERE rs1_start.stop_id = ANY(:fromStopIds)
                   AND rs2_end.stop_id = ANY(:toStopIds)
                   AND br1.id != br2.id
@@ -426,12 +412,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
 
     private String buildTwoTransferRoutesQuery() {
         return """
-            WITH route_vehicle_counts AS (
-                SELECT assigned_route_id, COUNT(*) as vehicle_count
-                FROM vehicles
-                WHERE is_active = true
-                GROUP BY assigned_route_id
-            )
             SELECT * FROM (
                 -- FFF: Forward-Forward-Forward
                 SELECT
@@ -468,9 +448,9 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 ABS(rs3_end.stop_sequence - rs3_start.stop_sequence) * 2 as third_segment_minutes,
 
                 -- Vehicle counts for wait time calculation
-                v1.vehicle_count as first_route_vehicles,
-                v2.vehicle_count as second_route_vehicles,
-                v3.vehicle_count as third_route_vehicles
+                0 as first_route_vehicles,
+                0 as second_route_vehicles,
+                0 as third_route_vehicles
 
             FROM route_stops rs1_start
 
@@ -529,7 +509,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     ABS(rs1_end.stop_sequence - rs1_start.stop_sequence) * 2,
                     ABS(rs2_end.stop_sequence - rs2_start.stop_sequence) * 2,
                     ABS(rs3_end.stop_sequence - rs3_start.stop_sequence) * 2,
-                    v1.vehicle_count, v2.vehicle_count, v3.vehicle_count
+                    0, 0, 0
                 FROM route_stops rs1_start
                 JOIN route_stops rs1_end ON rs1_start.route_id = rs1_end.route_id
                     AND rs1_start.direction = 0 AND rs1_end.direction = 0
@@ -549,9 +529,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     AND rs3_start.stop_sequence < rs3_end.stop_sequence
                 JOIN bus_routes br3 ON rs3_start.route_id = br3.id
                 JOIN bus_stops bs_to ON rs3_end.stop_id = bs_to.id
-                LEFT JOIN route_vehicle_counts v1 ON br1.id = v1.assigned_route_id
-                LEFT JOIN route_vehicle_counts v2 ON br2.id = v2.assigned_route_id
-                LEFT JOIN route_vehicle_counts v3 ON br3.id = v3.assigned_route_id
                 WHERE rs1_start.stop_id = ANY(:fromStopIds)
                   AND rs3_end.stop_id = ANY(:toStopIds)
                   AND br1.id != br2.id AND br2.id != br3.id AND br1.id != br3.id
@@ -576,7 +553,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     ABS(rs1_end.stop_sequence - rs1_start.stop_sequence) * 2,
                     ABS(rs2_end.stop_sequence - rs2_start.stop_sequence) * 2,
                     ABS(rs3_end.stop_sequence - rs3_start.stop_sequence) * 2,
-                    v1.vehicle_count, v2.vehicle_count, v3.vehicle_count
+                    0, 0, 0
                 FROM route_stops rs1_start
                 JOIN route_stops rs1_end ON rs1_start.route_id = rs1_end.route_id
                     AND rs1_start.direction = 0 AND rs1_end.direction = 0
@@ -596,9 +573,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     AND rs3_start.stop_sequence < rs3_end.stop_sequence
                 JOIN bus_routes br3 ON rs3_start.route_id = br3.id
                 JOIN bus_stops bs_to ON rs3_end.stop_id = bs_to.id
-                LEFT JOIN route_vehicle_counts v1 ON br1.id = v1.assigned_route_id
-                LEFT JOIN route_vehicle_counts v2 ON br2.id = v2.assigned_route_id
-                LEFT JOIN route_vehicle_counts v3 ON br3.id = v3.assigned_route_id
                 WHERE rs1_start.stop_id = ANY(:fromStopIds)
                   AND rs3_end.stop_id = ANY(:toStopIds)
                   AND br1.id != br2.id AND br2.id != br3.id AND br1.id != br3.id
@@ -623,7 +597,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     ABS(rs1_end.stop_sequence - rs1_start.stop_sequence) * 2,
                     ABS(rs2_end.stop_sequence - rs2_start.stop_sequence) * 2,
                     ABS(rs3_end.stop_sequence - rs3_start.stop_sequence) * 2,
-                    v1.vehicle_count, v2.vehicle_count, v3.vehicle_count
+                    0, 0, 0
                 FROM route_stops rs1_start
                 JOIN route_stops rs1_end ON rs1_start.route_id = rs1_end.route_id
                     AND rs1_start.direction = 0 AND rs1_end.direction = 0
@@ -643,9 +617,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     AND rs3_start.stop_sequence < rs3_end.stop_sequence
                 JOIN bus_routes br3 ON rs3_start.route_id = br3.id
                 JOIN bus_stops bs_to ON rs3_end.stop_id = bs_to.id
-                LEFT JOIN route_vehicle_counts v1 ON br1.id = v1.assigned_route_id
-                LEFT JOIN route_vehicle_counts v2 ON br2.id = v2.assigned_route_id
-                LEFT JOIN route_vehicle_counts v3 ON br3.id = v3.assigned_route_id
                 WHERE rs1_start.stop_id = ANY(:fromStopIds)
                   AND rs3_end.stop_id = ANY(:toStopIds)
                   AND br1.id != br2.id AND br2.id != br3.id AND br1.id != br3.id
@@ -670,7 +641,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     ABS(rs1_end.stop_sequence - rs1_start.stop_sequence) * 2,
                     ABS(rs2_end.stop_sequence - rs2_start.stop_sequence) * 2,
                     ABS(rs3_end.stop_sequence - rs3_start.stop_sequence) * 2,
-                    v1.vehicle_count, v2.vehicle_count, v3.vehicle_count
+                    0, 0, 0
                 FROM route_stops rs1_start
                 JOIN route_stops rs1_end ON rs1_start.route_id = rs1_end.route_id
                     AND rs1_start.direction = 1 AND rs1_end.direction = 1
@@ -690,9 +661,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     AND rs3_start.stop_sequence < rs3_end.stop_sequence
                 JOIN bus_routes br3 ON rs3_start.route_id = br3.id
                 JOIN bus_stops bs_to ON rs3_end.stop_id = bs_to.id
-                LEFT JOIN route_vehicle_counts v1 ON br1.id = v1.assigned_route_id
-                LEFT JOIN route_vehicle_counts v2 ON br2.id = v2.assigned_route_id
-                LEFT JOIN route_vehicle_counts v3 ON br3.id = v3.assigned_route_id
                 WHERE rs1_start.stop_id = ANY(:fromStopIds)
                   AND rs3_end.stop_id = ANY(:toStopIds)
                   AND br1.id != br2.id AND br2.id != br3.id AND br1.id != br3.id
@@ -717,7 +685,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     ABS(rs1_end.stop_sequence - rs1_start.stop_sequence) * 2,
                     ABS(rs2_end.stop_sequence - rs2_start.stop_sequence) * 2,
                     ABS(rs3_end.stop_sequence - rs3_start.stop_sequence) * 2,
-                    v1.vehicle_count, v2.vehicle_count, v3.vehicle_count
+                    0, 0, 0
                 FROM route_stops rs1_start
                 JOIN route_stops rs1_end ON rs1_start.route_id = rs1_end.route_id
                     AND rs1_start.direction = 1 AND rs1_end.direction = 1
@@ -737,9 +705,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     AND rs3_start.stop_sequence < rs3_end.stop_sequence
                 JOIN bus_routes br3 ON rs3_start.route_id = br3.id
                 JOIN bus_stops bs_to ON rs3_end.stop_id = bs_to.id
-                LEFT JOIN route_vehicle_counts v1 ON br1.id = v1.assigned_route_id
-                LEFT JOIN route_vehicle_counts v2 ON br2.id = v2.assigned_route_id
-                LEFT JOIN route_vehicle_counts v3 ON br3.id = v3.assigned_route_id
                 WHERE rs1_start.stop_id = ANY(:fromStopIds)
                   AND rs3_end.stop_id = ANY(:toStopIds)
                   AND br1.id != br2.id AND br2.id != br3.id AND br1.id != br3.id
@@ -764,7 +729,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     ABS(rs1_end.stop_sequence - rs1_start.stop_sequence) * 2,
                     ABS(rs2_end.stop_sequence - rs2_start.stop_sequence) * 2,
                     ABS(rs3_end.stop_sequence - rs3_start.stop_sequence) * 2,
-                    v1.vehicle_count, v2.vehicle_count, v3.vehicle_count
+                    0, 0, 0
                 FROM route_stops rs1_start
                 JOIN route_stops rs1_end ON rs1_start.route_id = rs1_end.route_id
                     AND rs1_start.direction = 1 AND rs1_end.direction = 1
@@ -784,9 +749,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     AND rs3_start.stop_sequence < rs3_end.stop_sequence
                 JOIN bus_routes br3 ON rs3_start.route_id = br3.id
                 JOIN bus_stops bs_to ON rs3_end.stop_id = bs_to.id
-                LEFT JOIN route_vehicle_counts v1 ON br1.id = v1.assigned_route_id
-                LEFT JOIN route_vehicle_counts v2 ON br2.id = v2.assigned_route_id
-                LEFT JOIN route_vehicle_counts v3 ON br3.id = v3.assigned_route_id
                 WHERE rs1_start.stop_id = ANY(:fromStopIds)
                   AND rs3_end.stop_id = ANY(:toStopIds)
                   AND br1.id != br2.id AND br2.id != br3.id AND br1.id != br3.id
@@ -811,7 +773,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     ABS(rs1_end.stop_sequence - rs1_start.stop_sequence) * 2,
                     ABS(rs2_end.stop_sequence - rs2_start.stop_sequence) * 2,
                     ABS(rs3_end.stop_sequence - rs3_start.stop_sequence) * 2,
-                    v1.vehicle_count, v2.vehicle_count, v3.vehicle_count
+                    0, 0, 0
                 FROM route_stops rs1_start
                 JOIN route_stops rs1_end ON rs1_start.route_id = rs1_end.route_id
                     AND rs1_start.direction = 1 AND rs1_end.direction = 1
@@ -831,9 +793,6 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                     AND rs3_start.stop_sequence < rs3_end.stop_sequence
                 JOIN bus_routes br3 ON rs3_start.route_id = br3.id
                 JOIN bus_stops bs_to ON rs3_end.stop_id = bs_to.id
-                LEFT JOIN route_vehicle_counts v1 ON br1.id = v1.assigned_route_id
-                LEFT JOIN route_vehicle_counts v2 ON br2.id = v2.assigned_route_id
-                LEFT JOIN route_vehicle_counts v3 ON br3.id = v3.assigned_route_id
                 WHERE rs1_start.stop_id = ANY(:fromStopIds)
                   AND rs3_end.stop_id = ANY(:toStopIds)
                   AND br1.id != br2.id AND br2.id != br3.id AND br1.id != br3.id

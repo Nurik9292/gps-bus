@@ -206,12 +206,24 @@ public class LiveETACalculationService implements ETACalculationService {
 
     private Mono<Integer> calculateTravelTimeFromDatabase(String routeNumber, String fromStopName, String toStopName) {
         return etaRepository.calculateTravelTimeFromDatabase(routeNumber, fromStopName, toStopName)
-                .switchIfEmpty(Mono.fromCallable(() -> {
-                    int fallbackTime = etaProperties.getFallback().getDefaultTravelTimeMinutes();
-                    log.warn("No route data found for {} from {} to {}, using fallback: {}min",
-                            routeNumber, fromStopName, toStopName, fallbackTime);
-                    return fallbackTime;
-                }));
+                .switchIfEmpty(
+                    // Fallback: estimate from stop count on this route instead of a fixed constant.
+                    // Uses minutesPerStop (default 2) × number of stops between from and to.
+                    etaRepository.countStopsBetween(routeNumber, fromStopName, toStopName)
+                        .map(stopCount -> {
+                            int perStop = etaProperties.getFallback().getMinutesPerStop();
+                            int estimated = Math.max(3, stopCount * perStop);
+                            log.warn("No travel time data for route {} from {} to {}, estimated from {} stops × {}min = {}min",
+                                    routeNumber, fromStopName, toStopName, stopCount, perStop, estimated);
+                            return estimated;
+                        })
+                        .switchIfEmpty(Mono.fromCallable(() -> {
+                            int fallbackTime = etaProperties.getFallback().getDefaultTravelTimeMinutes();
+                            log.warn("No route data at all for {} from {} to {}, using default fallback: {}min",
+                                    routeNumber, fromStopName, toStopName, fallbackTime);
+                            return fallbackTime;
+                        }))
+                );
     }
 
 

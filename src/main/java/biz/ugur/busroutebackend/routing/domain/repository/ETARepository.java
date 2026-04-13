@@ -11,4 +11,7 @@ public interface ETARepository {
     Mono<Integer> getStatisticalWaitingTime(String routeNumber, LocalDateTime currentTime);
 
     Mono<Integer> calculateTravelTimeFromDatabase(String routeNumber, String fromStopName, String toStopName);
+
+    /** Count stops between two named stops on a route (any direction). Used for ETA fallback estimation. */
+    Mono<Integer> countStopsBetween(String routeNumber, String fromStopName, String toStopName);
 }

@@ -201,4 +201,27 @@ public class R2dbcETARepository implements ETARepository {
 
         return adjustedTime;
     }
+
+    @Override
+    public Mono<Integer> countStopsBetween(String routeNumber, String fromStopName, String toStopName) {
+        String sql = """
+            SELECT ABS(rs_from.stop_sequence - rs_to.stop_sequence) AS stop_count
+            FROM route_stops rs_from
+            JOIN bus_stops bs_from ON rs_from.stop_id = bs_from.id
+            JOIN route_stops rs_to ON rs_from.route_id = rs_to.route_id AND rs_from.direction = rs_to.direction
+            JOIN bus_stops bs_to ON rs_to.stop_id = bs_to.id
+            JOIN bus_routes br ON rs_from.route_id = br.id
+            WHERE br.route_number = :routeNumber
+              AND bs_from.stop_name = :fromStopName
+              AND bs_to.stop_name = :toStopName
+            ORDER BY stop_count ASC
+            LIMIT 1
+            """;
+        return databaseClient.sql(sql)
+                .bind("routeNumber", routeNumber)
+                .bind("fromStopName", fromStopName)
+                .bind("toStopName", toStopName)
+                .map(row -> row.get("stop_count", Integer.class))
+                .one();
+    }
 }
