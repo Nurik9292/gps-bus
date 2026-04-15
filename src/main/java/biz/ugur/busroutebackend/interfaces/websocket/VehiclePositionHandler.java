@@ -37,6 +37,7 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
 
     private static final Duration SESSION_TIMEOUT = Duration.ofMinutes(5);
     private static final Duration MAX_GPS_AGE = Duration.ofMinutes(10);
+    private static final Duration MAX_INITIAL_POSITION_AGE = Duration.ofMinutes(5);
 
     private static final long CLEANUP_INTERVAL_MS = 60_000;
 
@@ -189,15 +190,21 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
             result = getActiveVehiclesUseCase.execute(null);
         }
 
-        // Filter out "dead" vehicles: stopped with no route (parked in garage, off duty).
-        return result.filter(v -> {
-            if (Boolean.FALSE.equals(v.getIsInMotion())
-                    && v.getSpeedKmh() != null && v.getSpeedKmh() == 0
-                    && (v.getRouteNumber() == null || v.getRouteNumber().isBlank())) {
-                return false;
-            }
-            return true;
-        });
+        LocalDateTime freshnessCutoff = LocalDateTime.now(ZoneOffset.UTC).minus(MAX_INITIAL_POSITION_AGE);
+        return result
+                // Drop "dead" vehicles: stopped with no route (parked in garage, off duty).
+                .filter(v -> {
+                    if (Boolean.FALSE.equals(v.getIsInMotion())
+                            && v.getSpeedKmh() != null && v.getSpeedKmh() == 0
+                            && (v.getRouteNumber() == null || v.getRouteNumber().isBlank())) {
+                        return false;
+                    }
+                    return true;
+                })
+                // Drop stale frozen positions (e.g. last GPS before night cutoff at 23:00).
+                // Without this, clients receive yesterday's coordinates from DB at any time.
+                .filter(v -> v.getLastPositionUpdate() != null
+                        && v.getLastPositionUpdate().isAfter(freshnessCutoff));
     }
 
     private Mono<Void> sendCurrentPositionsForConfig(WebSocketSession session, SessionConfig config) {
@@ -246,7 +253,7 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                 // plus a time window that matches the prediction tick interval (1000ms).
                 // Previously 50/100ms caused one tick to be split across 6+ batches, making
                 // clients see only slices of 50 vehicles at a time.
-                .bufferTimeout(1000, Duration.ofMillis(500))
+                .bufferTimeout(1000, Duration.ofMillis(1100))
                 .takeWhile(ignored -> session.isOpen())
                 .filter(updates -> !updates.isEmpty())
                 .onBackpressureDrop(dropped ->

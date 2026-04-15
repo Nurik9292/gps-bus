@@ -37,6 +37,11 @@ public class RealTimeETAService {
      * @return Mono with NearestBusInfo, or empty if no bus found
      */
     public Mono<NearestBusInfo> findNearestBus(String routeNumber, String stopName) {
+        return findNearestBus(routeNumber, stopName, Double.NaN, Double.NaN);
+    }
+
+    public Mono<NearestBusInfo> findNearestBus(String routeNumber, String stopName,
+                                                double stopLat, double stopLon) {
         return Mono.fromCallable(() -> {
             List<VehiclePredictionState> allStates = predictionService.getActiveStates();
             if (allStates.isEmpty()) return null;
@@ -57,7 +62,11 @@ public class RealTimeETAService {
             NearestBusInfo best = null;
 
             for (int direction = 0; direction <= 1; direction++) {
-                OptionalDouble stopFracOpt = routeGeometryCache.getStopFraction(routeNumber, direction, stopName);
+                OptionalDouble stopFracOpt = routeGeometryCache.getStopFractionByName(routeNumber, direction, stopName);
+                if (stopFracOpt.isEmpty() && !Double.isNaN(stopLat) && !Double.isNaN(stopLon)) {
+                    stopFracOpt = routeGeometryCache.getStopFractionByCoordinates(
+                            routeNumber, direction, stopLat, stopLon, 80.0);
+                }
                 if (stopFracOpt.isEmpty()) continue;
 
                 double stopFrac = stopFracOpt.getAsDouble();
@@ -68,20 +77,23 @@ public class RealTimeETAService {
                     if (vehicle.getDirection() != direction) continue;
 
                     double vehicleFrac = vehicle.getLastGpsFraction();
-                    // Vehicle must be BEFORE the stop (lower fraction) to be approaching
-                    if (vehicleFrac >= stopFrac) continue;
+                    // Vehicle must be BEFORE the stop (lower fraction) to be approaching.
+                    // Allow a tiny epsilon (0.5%) so a bus right AT the stop still counts.
+                    if (vehicleFrac >= stopFrac + 0.005) continue;
+                    if (vehicleFrac < stopFrac - 0.5) continue; // > half the route away → ignore
 
-                    double distanceMeters = (stopFrac - vehicleFrac) * totalDist;
-                    // Skip vehicles too far away (> 15 km)
-                    if (distanceMeters > 15000) continue;
+                    double distanceMeters = Math.max(0, (stopFrac - vehicleFrac) * totalDist);
+                    // Approaching bus must be within 5 km of the boarding stop
+                    if (distanceMeters > 5000) continue;
 
                     double speedKmh = vehicle.getSmoothedSpeedKmh() > 0
                             ? vehicle.getSmoothedSpeedKmh()
                             : vehicle.getRawGpsSpeedKmh();
-                    if (speedKmh < 1) continue;
+                    if (speedKmh < 5) continue; // ignore stopped/creeping buses
 
                     double etaMinutes = (distanceMeters / 1000.0) / speedKmh * 60.0;
                     int etaMin = (int) Math.ceil(etaMinutes);
+                    if (etaMin > 20) continue; // too far in the future to be useful
 
                     if (best == null || etaMin < best.etaMinutes()) {
                         best = new NearestBusInfo(
@@ -98,9 +110,9 @@ public class RealTimeETAService {
             }
 
             if (best != null) {
-                log.info("Real-time ETA: route={} stop={} → bus {} in {}min ({}m, {:.0f}km/h)",
+                log.info("Real-time ETA: route={} stop={} → bus {} in {}min ({}m, {}km/h)",
                         routeNumber, stopName, best.licensePlate(), best.etaMinutes(),
-                        best.distanceMeters(), best.speedKmh());
+                        best.distanceMeters(), Math.round(best.speedKmh()));
             }
 
             return best;

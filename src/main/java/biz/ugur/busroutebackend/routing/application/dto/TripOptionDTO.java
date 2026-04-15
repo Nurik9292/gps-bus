@@ -39,8 +39,6 @@ public class TripOptionDTO {
     @JsonProperty("cost_estimate")
     private CostEstimate costEstimate;
 
-    /** Real-time info about the nearest approaching bus for the first bus segment.
-     *  null if no real-time data is available. */
     @JsonProperty("nearest_bus")
     private NearestBusDTO nearestBus;
 

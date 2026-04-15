@@ -1,10 +1,3 @@
--- V51: Auto-densify route geometry on INSERT/UPDATE.
---
--- Without this trigger, newly created or updated routes may have large gaps
--- between geometry points (up to 500m+), causing imprecise GPS snap-to-route
--- and jumpy prediction. This trigger ensures all geometry is densified to
--- max 50m segments automatically, keeping both PostGIS and WKT columns in sync.
-
 CREATE OR REPLACE FUNCTION densify_route_geometry()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -18,8 +11,6 @@ BEGIN
         NEW.route_geometry_backward := ST_AsText(NEW.geometry_backward);
     END IF;
 
-    -- Recalculate total distance if it is missing or zero.
-    -- ST_Length on geography returns metres on the ellipsoid.
     IF NEW.geometry_forward IS NOT NULL
         AND (NEW.total_distance_forward_meters IS NULL OR NEW.total_distance_forward_meters = 0) THEN
         NEW.total_distance_forward_meters := ROUND(ST_Length(NEW.geometry_forward::geography))::INTEGER;

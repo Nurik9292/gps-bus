@@ -151,6 +151,45 @@ public class RouteGeometryCache {
                 .findFirst();
     }
 
+    public OptionalDouble getStopFractionByName(String routeNumber, int direction, String stopName) {
+        if (stopName == null || stopName.isBlank()) return OptionalDouble.empty();
+        double totalDistance = getTotalDistance(routeNumber, direction);
+        if (totalDistance <= 0) return OptionalDouble.empty();
+        return getRouteStops(routeNumber, direction).stream()
+                .filter(s -> stopName.equalsIgnoreCase(s.getStopName()) && s.getDistanceFromStartMeters() != null)
+                .mapToDouble(s -> s.getDistanceFromStartMeters() / totalDistance)
+                .findFirst();
+    }
+
+    public OptionalDouble getStopFractionByCoordinates(String routeNumber, int direction,
+                                                        double lat, double lon, double maxDistanceMeters) {
+        double totalDistance = getTotalDistance(routeNumber, direction);
+        if (totalDistance <= 0) return OptionalDouble.empty();
+        RouteStopInfo nearest = null;
+        double nearestDist = Double.MAX_VALUE;
+        for (RouteStopInfo s : getRouteStops(routeNumber, direction)) {
+            if (s.getDistanceFromStartMeters() == null) continue;
+            double dist = haversineMeters(lat, lon,
+                    s.getLatitude().doubleValue(), s.getLongitude().doubleValue());
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearest = s;
+            }
+        }
+        if (nearest == null || nearestDist > maxDistanceMeters) return OptionalDouble.empty();
+        return OptionalDouble.of(nearest.getDistanceFromStartMeters() / totalDistance);
+    }
+
+    private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+        double R = 6371000.0;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
     public void refreshRoute(String routeNumber) {
         busRouteRepository.findByRouteNumber(routeNumber)
                 .doOnNext(this::cacheRoute)

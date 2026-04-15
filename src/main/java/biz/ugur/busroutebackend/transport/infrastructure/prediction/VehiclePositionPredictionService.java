@@ -149,19 +149,40 @@ public class VehiclePositionPredictionService {
 
         if (existing != null) {
             long elapsedMs = timestamp.toEpochMilli() - existing.getLastGpsUpdate().toEpochMilli();
+
+            // Hard guard: >10 km jump in <10 s is physically impossible (implied speed > 3600 km/h).
+            // Reject regardless of other conditions. Catches GPS provider data corruption
+            // (device ID mix-ups, stale fixes from other vehicles).
+            if (elapsedMs > 0 && elapsedMs < 10_000) {
+                double distFromLastGps = DistanceCalculationService.haversineDistanceMeters(
+                        existing.getGpsLatitude(), existing.getGpsLongitude(), latitude, longitude);
+                if (distFromLastGps > 10_000) {
+                    log.warn("[GPS_PIPELINE] HARD_OUTLIER_REJECTED vehicle={} plate={}: {}m in {}ms " +
+                                    "(implied {}km/h) — baseline preserved",
+                            vehicleId, licensePlate,
+                            (int) distFromLastGps, elapsedMs,
+                            (int) (distFromLastGps / (elapsedMs / 1000.0) * 3.6));
+                    // Only bump timestamps — do NOT corrupt gps lat/lon baseline.
+                    vehicleStates.put(vehicleId, existing.toBuilder()
+                            .lastReceivedAt(Instant.now())
+                            .build());
+                    return;
+                }
+            }
+
             if (elapsedMs > 0 && elapsedMs < 300_000) {
                 double distFromLastGps = DistanceCalculationService.haversineDistanceMeters(
                         existing.getGpsLatitude(), existing.getGpsLongitude(), latitude, longitude);
                 double maxPossibleDist = (elapsedMs / 1000.0) * MAX_BUS_SPEED_MS * OUTLIER_TOLERANCE;
                 if (distFromLastGps > maxPossibleDist) {
-                    log.warn("GPS outlier rejected for vehicle {}: {}m in {}ms (max {}m at {}km/h×{})",
+                    log.warn("GPS outlier rejected for vehicle {}: {}m in {}ms (max {}m at {}km/h×{}) " +
+                                    "— baseline preserved",
                             vehicleId, (int) distFromLastGps, elapsedMs,
                             (int) maxPossibleDist, (int) (MAX_BUS_SPEED_MS * 3.6), OUTLIER_TOLERANCE);
+                    // Keep prior gpsLatitude/gpsLongitude so the next real GPS is compared to the
+                    // last trusted position, not to the rejected outlier.
                     vehicleStates.put(vehicleId, existing.toBuilder()
-                            .lastGpsUpdate(timestamp)
                             .lastReceivedAt(Instant.now())
-                            .gpsLatitude(latitude)
-                            .gpsLongitude(longitude)
                             .build());
                     return;
                 }
@@ -342,16 +363,25 @@ public class VehiclePositionPredictionService {
                         || (plausibleSnap && (predictedFraction < 0 || realFraction >= predictedFraction));
 
                 if (headingCorrected || fracCorrected) {
-                    log.warn("[GPS_PIPELINE] DIR_FLIP_ACCEPT vehicle={} plate={} route={} dir={} " +
-                                    "oldFrac={}→newFrac={} oldPos=({},{})→newPos=({},{}) realIsAhead={}",
-                            vehicleId, licensePlate, routeNumber, direction,
-                            String.format("%.4f", predictedFraction),
-                            String.format("%.4f", realFraction),
-                            existing != null ? String.format("%.5f", existing.getPredictedLatitude()) : "-",
-                            existing != null ? String.format("%.5f", existing.getPredictedLongitude()) : "-",
-                            String.format("%.5f", snap.latitude()),
-                            String.format("%.5f", snap.longitude()),
-                            realIsAhead);
+                    // Suppress noisy "no-op" flip logs for buses parked at terminals where snap
+                    // wobbles between directions but neither fraction nor position actually change.
+                    boolean noOpFlip = existing != null
+                            && Math.abs(predictedFraction - realFraction) < 0.01
+                            && DistanceCalculationService.haversineDistanceMeters(
+                                    existing.getPredictedLatitude(), existing.getPredictedLongitude(),
+                                    snap.latitude(), snap.longitude()) < 50.0;
+                    if (!noOpFlip) {
+                        log.warn("[GPS_PIPELINE] DIR_FLIP_ACCEPT vehicle={} plate={} route={} dir={} " +
+                                        "oldFrac={}→newFrac={} oldPos=({},{})→newPos=({},{}) realIsAhead={}",
+                                vehicleId, licensePlate, routeNumber, direction,
+                                String.format("%.4f", predictedFraction),
+                                String.format("%.4f", realFraction),
+                                existing != null ? String.format("%.5f", existing.getPredictedLatitude()) : "-",
+                                existing != null ? String.format("%.5f", existing.getPredictedLongitude()) : "-",
+                                String.format("%.5f", snap.latitude()),
+                                String.format("%.5f", snap.longitude()),
+                                realIsAhead);
+                    }
                 }
 
                 // Safety check: if the snap position is far from actual GPS,
@@ -521,8 +551,13 @@ public class VehiclePositionPredictionService {
         double minSpeed = properties.getMinSpeedKmh();
         long stoppedIntervalMs = properties.getStoppedBroadcastIntervalMs();
 
+        // Only release a terminal-pinned bus into dead-reckoning if it's actually moving.
+        // A parked bus sitting at the end of a route (frac=1.0, speed=0) was being reset every
+        // tick, then re-snapped to 1.0 on the next GPS — causing marker flicker and log spam.
         vehicleStates.values().forEach(state -> {
-            if (isAtRouteBoundary(state)) {
+            if (isAtRouteBoundary(state)
+                    && state.isInMotion()
+                    && state.getSpeedKmh() >= minSpeed) {
                 vehicleStates.put(state.getVehicleId(),
                         state.toBuilder().fractionOnRoute(-1).build());
             }
@@ -543,6 +578,15 @@ public class VehiclePositionPredictionService {
                         && (now.toEpochMilli() - state.getLastReceivedAt().toEpochMilli()) <= maxAgeMs)
                 .filter(state -> {
                     Instant lastBroadcast = state.getLastBroadcastAt();
+                    // Broadcast immediately if the predicted position moved significantly since
+                    // the last broadcast — otherwise clients only see the shift on page reload.
+                    double[] prev = lastBroadcastPosition.get(state.getVehicleId());
+                    if (prev != null) {
+                        double moved = DistanceCalculationService.haversineDistanceMeters(
+                                prev[0], prev[1],
+                                state.getPredictedLatitude(), state.getPredictedLongitude());
+                        if (moved > 5.0) return true;
+                    }
                     return lastBroadcast == null
                             || (now.toEpochMilli() - lastBroadcast.toEpochMilli()) >= stoppedIntervalMs;
                 })
@@ -650,10 +694,15 @@ public class VehiclePositionPredictionService {
                     return state;
                 }
                 recordDwellObservation(state, dwellMs);
+                // Restore speed from raw GPS so the next tick can advance the bus.
+                // Without this, speedKmh stays 0 (set when entering dwell) and prediction freezes
+                // until the next GPS update arrives.
+                double resumeSpeed = Math.max(state.getRawGpsSpeedKmh(), state.getSmoothedSpeedKmh());
                 return state.toBuilder()
                         .dwellStartedAt(null)
                         .dwellStopFraction(-1)
                         .dwellStopId(null)
+                        .speedKmh(resumeSpeed)
                         .build();
             }
 
@@ -810,7 +859,14 @@ public class VehiclePositionPredictionService {
                     double jumpDist = DistanceCalculationService.haversineDistanceMeters(
                             prevPos[0], prevPos[1],
                             state.getPredictedLatitude(), state.getPredictedLongitude());
-                    if (jumpDist > properties.getTeleportThresholdMeters()) {
+                    // Don't suppress jumps right after a fresh GPS update — the new predicted
+                    // position is the snapped real GPS, which can legitimately be hundreds of
+                    // metres away if updates arrive infrequently or speed is high.
+                    long msSinceGps = state.getLastReceivedAt() != null
+                            ? java.time.Instant.now().toEpochMilli() - state.getLastReceivedAt().toEpochMilli()
+                            : Long.MAX_VALUE;
+                    boolean freshGps = msSinceGps <= 5_000;
+                    if (!freshGps && jumpDist > properties.getTeleportThresholdMeters()) {
                         log.warn("[GPS_PIPELINE] WS_TELEPORT_SUPPRESSED vehicle={} plate={} dist={}m " +
                                         "from=({},{}) to=({},{}) frac={} dir={} — broadcast skipped",
                                 state.getVehicleId(), state.getLicensePlate(),

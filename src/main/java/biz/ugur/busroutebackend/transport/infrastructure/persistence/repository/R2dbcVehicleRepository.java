@@ -259,7 +259,15 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Flux<Vehicle> findVehiclesInMotion() {
-        String sql = "SELECT * FROM vehicles WHERE is_in_motion = true AND is_active = true";
+        // Filter by freshness: ignore vehicles whose last GPS update is older than 5 minutes
+        // (e.g. frozen state during the 23:00–06:00 night window when GPS scheduler is paused).
+        String sql = """
+                SELECT * FROM vehicles
+                WHERE is_in_motion = true
+                  AND is_active = true
+                  AND last_position_update IS NOT NULL
+                  AND last_position_update > NOW() - INTERVAL '5 minutes'
+                """;
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())

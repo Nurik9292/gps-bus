@@ -108,18 +108,6 @@ public class ClientAuthController extends BaseController {
             )));
     }
 
-    @PostMapping("/center-auth")
-    public Mono<ResponseEntity<ApiResponse<LoginResponse>>> centerLogin(@Valid @RequestBody CenterRequest request) {
-        return ok(Mono.just(new CenterRegisterClientUseCase.Command(request.phone()))
-               .as(centerRegisterClientUseCase::execute)
-               .map(result -> new LoginResponse(
-                       result.clientId(),
-                       result.accessToken(),
-                       result.refreshToken(),
-                       "Login successful",
-                       result.status()
-               )));
-    }
 
 
     @PostMapping("/refresh")

@@ -81,7 +81,13 @@ public class TripOptionDTOConverter {
                                 busSegment.getRouteNumber(),
                                 busSegment.getFromLocationName() != null
                                         ? busSegment.getFromLocationName()
-                                        : "")
+                                        : "",
+                                busSegment.getFromLocation() != null
+                                        ? busSegment.getFromLocation().getLatitudeAsDouble()
+                                        : Double.NaN,
+                                busSegment.getFromLocation() != null
+                                        ? busSegment.getFromLocation().getLongitudeAsDouble()
+                                        : Double.NaN)
                         .map(info -> new TripOptionDTO.NearestBusDTO(
                                 info.vehicleId(),
                                 info.licensePlate(),

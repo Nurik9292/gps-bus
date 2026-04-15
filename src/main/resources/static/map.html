@@ -30,11 +30,9 @@
 
         #map { height: 100vh; width: 100%; }
 
-        /* Dark map tiles */
         .leaflet-tile-pane { filter: brightness(0.85) contrast(1.1) saturate(0.8); }
         .leaflet-control-attribution { display: none !important; }
 
-        /* ===== TOP BAR ===== */
         .top-bar {
             position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
             background: linear-gradient(180deg, rgba(15,15,19,0.95), rgba(15,15,19,0.7));
@@ -155,6 +153,18 @@
         .bus-icon-v2.moving { box-shadow: 0 2px 12px rgba(0,0,0,0.4), 0 0 0 3px rgba(255,255,255,0.15); }
 
         .bus-icon-v2.filtered-out { opacity: 0.15; width: 16px; height: 16px; font-size: 0; border-width: 1.5px; }
+
+        .bus-icon-v2.highlighted {
+            width: 44px; height: 44px; font-size: 13px;
+            border: 3px solid #fbbf24;
+            box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.45), 0 0 20px rgba(251, 191, 36, 0.9);
+            animation: busPulse 1.2s ease-in-out infinite;
+            z-index: 999;
+        }
+        @keyframes busPulse {
+            0%, 100% { box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.45), 0 0 20px rgba(251, 191, 36, 0.9); }
+            50%      { box-shadow: 0 0 0 10px rgba(251, 191, 36, 0.15), 0 0 30px rgba(251, 191, 36, 1); }
+        }
 
         /* Direction arrow */
         .bus-arrow {
@@ -447,6 +457,7 @@
     let map, ws;
     let vehicles = {};        // id -> vehicle data
     let vehicleMarkers = {};  // id -> L.marker
+    let highlightedBusId = null;
     let stopMarkers = {};
     let stops = [];
     let activeRouteFilters = new Set();
@@ -688,6 +699,7 @@
                     icon.classList.toggle('moving', v.moving);
                     icon.classList.toggle('filtered-out', isFiltered);
                     icon.style.transform = v.moving ? `rotate(${v.course}deg)` : '';
+                    if (highlightedBusId === v.id) icon.classList.add('highlighted');
                 }
             }
 
@@ -907,6 +919,40 @@
     function clearRouteLayers() {
         routeLayers.forEach(l => map.removeLayer(l));
         routeLayers = [];
+        clearBusHighlight();
+    }
+
+    function clearBusHighlight() {
+        if (!highlightedBusId) return;
+        const prev = vehicleMarkers[highlightedBusId];
+        if (prev) {
+            const el = prev.getElement();
+            const icon = el && el.querySelector('.bus-icon-v2');
+            if (icon) icon.classList.remove('highlighted');
+        }
+        highlightedBusId = null;
+    }
+
+    function highlightNearestBus(busInfo) {
+        clearBusHighlight();
+        if (!busInfo || !busInfo.vehicle_id) return;
+        const marker = vehicleMarkers[busInfo.vehicle_id];
+        if (!marker) {
+            console.log('[highlight] vehicle not on map yet:', busInfo.vehicle_id);
+            return;
+        }
+        const el = marker.getElement();
+        const icon = el && el.querySelector('.bus-icon-v2');
+        if (icon) {
+            icon.classList.add('highlighted');
+            highlightedBusId = busInfo.vehicle_id;
+        }
+        marker.openPopup();
+        const latLng = marker.getLatLng();
+        const bounds = map.getBounds();
+        if (!bounds.contains(latLng)) {
+            map.panTo(latLng, { animate: true });
+        }
     }
 
     function pinIcon(color, label) {
@@ -1025,7 +1071,6 @@
                 return '';
             }).join('<span class="roc-sep">→</span>');
 
-            // Nearest bus real-time info
             const nearestBusHtml = nearestBus && nearestBus.vehicle_id
                 ? `<div class="roc-nearest-bus">
                     <span class="nearest-bus-icon">🚌</span>
@@ -1077,6 +1122,9 @@
         clearRouteLayers();
         const segments = option.route_segments || [];
         const allCoords = [];
+
+        // Highlight the nearest approaching bus on the map (if real-time data available)
+        highlightNearestBus(option.nearest_bus);
 
         segments.forEach(seg => {
             if (seg.type === 'walking') {

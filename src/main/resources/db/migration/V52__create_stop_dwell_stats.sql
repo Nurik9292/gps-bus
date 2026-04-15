@@ -1,10 +1,3 @@
--- Historical dwell-time statistics per bus stop.
--- Collected by DwellTimeCollectorService, consumed by VehiclePositionPredictionService
--- for accurate prediction pause duration at stops and ETA calculations.
---
--- Statistics are keyed by (stop_id, route_number, direction) because the same physical stop
--- can have different dwell times depending on which route is serving it and which direction.
-
 CREATE TABLE IF NOT EXISTS stop_dwell_stats (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     stop_id             VARCHAR(100) NOT NULL,

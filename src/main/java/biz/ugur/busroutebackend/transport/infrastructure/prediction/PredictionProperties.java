@@ -38,11 +38,16 @@ public class PredictionProperties {
 
     private long freshGpsWindowMs = 12_000;
 
-    private long aggressiveDecayAfterMs = 10_000;
+    /** After freshGpsWindowMs and before this threshold: normal decay (decayFactor).
+     *  After this threshold: aggressive decay (aggressiveDecayFactor).
+     *  MUST be greater than freshGpsWindowMs, otherwise the normal-decay branch is unreachable. */
+    private long aggressiveDecayAfterMs = 20_000;
   
     private double aggressiveDecayFactor = 0.90;
 
-    private long stopAdvanceAfterMs = 20_000;
+    /** After this many ms with no GPS, prediction stops advancing the position entirely.
+     *  MUST be greater than aggressiveDecayAfterMs to give the aggressive-decay branch room. */
+    private long stopAdvanceAfterMs = 30_000;
 
     private double teleportThresholdMeters = 300.0;
 
