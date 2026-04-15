@@ -585,3 +585,34 @@ ugur:
     stop-deceleration-zone-meters: ${PREDICTION_STOP_DECEL_ZONE:80.0}
     # Minimum speed multiplier at the stop itself (fraction of current speed)
     stop-deceleration-min-factor: ${PREDICTION_STOP_DECEL_MIN:0.15}
+
+# ============================================================================
+# Payment providers (sv_epg for Rysgal + Senagat, placeholders for BKB/Halk)
+# ============================================================================
+payment:
+  svepg:
+    timeout-millis: ${PAYMENT_TIMEOUT_MS:15000}
+    banks:
+      RYSGAL:
+        enabled: ${PAYMENT_RYSGAL_ENABLED:false}
+        base-url: ${PAYMENT_RYSGAL_URL:https://epg.rysgalbank.tm/epg/rest}
+        user-name: ${PAYMENT_RYSGAL_USER:duralgamAPI}
+        password: ${PAYMENT_RYSGAL_PASS:}
+        terminal-id: ${PAYMENT_RYSGAL_TERMINAL_ID:11014027}
+        pid: ${PAYMENT_RYSGAL_PID:109755}
+      SENAGAT:
+        enabled: ${PAYMENT_SENAGAT_ENABLED:false}
+        base-url: ${PAYMENT_SENAGAT_URL:https://epg.senagatbank.com.tm/epg/rest}
+        user-name: ${PAYMENT_SENAGAT_USER:takyk_duralga}
+        password: ${PAYMENT_SENAGAT_PASS:}
+      BKB:
+        enabled: ${PAYMENT_BKB_ENABLED:false}
+        base-url: ${PAYMENT_BKB_URL:}
+        user-name: ${PAYMENT_BKB_USER:}
+        password: ${PAYMENT_BKB_PASS:}
+      HALK:
+        enabled: ${PAYMENT_HALK_ENABLED:false}
+        base-url: ${PAYMENT_HALK_URL:}
+        user-name: ${PAYMENT_HALK_USER:}
+        password: ${PAYMENT_HALK_PASS:}
+
