@@ -83,4 +83,16 @@ public class ApiVersionConfig {
 
     public static final String ANALYTICS = "/analytics";
     public static final String V1_ADMIN_ANALYTICS = V1_ADMIN + ANALYTICS;
+
+    public static final String BUSINESSES = "/businesses";
+    public static final String AD_TARIFFS = "/ad-tariffs";
+    public static final String AD_PLACEMENTS = "/ad-placements";
+    public static final String ADS = "/ads";
+
+    public static final String V1_ADMIN_BUSINESSES     = V1_ADMIN + BUSINESSES;
+    public static final String V1_ADMIN_AD_TARIFFS     = V1_ADMIN + AD_TARIFFS;
+    public static final String V1_ADMIN_AD_PLACEMENTS  = V1_ADMIN + AD_PLACEMENTS;
+
+    public static final String V1_MOBILE_ADS           = V1_MOBILE + ADS;
+    public static final String V1_MOBILE_AD_TARIFFS    = V1_MOBILE + AD_TARIFFS;
 }
