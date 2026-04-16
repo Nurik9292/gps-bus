@@ -2,7 +2,9 @@ package biz.ugur.busroutebackend.advertising.domain.model;
 
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
+import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementApprovedEvent;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementCreatedEvent;
+import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementRejectedEvent;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementStatusChangedEvent;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.PlacementStateTransitionException;
@@ -18,14 +20,7 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * A concrete ad instance purchased by a business against a tariff.
- * Lifecycle: DRAFT → PENDING_PAYMENT → SCHEDULED → ACTIVE → EXPIRED/CANCELLED.
- *
- * <p>Payment module will trigger {@link #markAsScheduled()} once payment is captured.
- * A scheduler job will flip SCHEDULED → ACTIVE when {@link PlacementWindow#startsAt} is reached,
- * and ACTIVE → EXPIRED when {@link PlacementWindow#endsAt} passes.
- */
+
 @Builder(toBuilder = true)
 @Getter
 @EqualsAndHashCode(callSuper = false)
@@ -37,7 +32,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
     private final PlacementType placementType;
     private final PlacementStatus status;
 
-    // Creative
     private final String title;
     private final String content;
     private final String imageUrl;
@@ -46,13 +40,17 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
 
     private final PlacementWindow window;
 
-    // Runtime counters (updated by impression/click endpoints)
     private final Long impressionsCount;
     private final Long clicksCount;
 
-    // Comma-separated contexts e.g. "home,trip-search,notifications"; excludes map.html.
     private final String displayContexts;
     private final Integer displayOrder;
+
+    private final String rejectionReason;
+    private final LocalDateTime approvedAt;
+    private final String approvedByAdminId;
+    private final LocalDateTime rejectedAt;
+    private final String rejectedByAdminId;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -119,6 +117,11 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                        Long clicksCount,
                                        String displayContexts,
                                        Integer displayOrder,
+                                       String rejectionReason,
+                                       LocalDateTime approvedAt,
+                                       String approvedByAdminId,
+                                       LocalDateTime rejectedAt,
+                                       String rejectedByAdminId,
                                        LocalDateTime createdAt,
                                        LocalDateTime updatedAt,
                                        Long version) {
@@ -131,6 +134,11 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 .impressionsCount(impressionsCount != null ? impressionsCount : 0L)
                 .clicksCount(clicksCount != null ? clicksCount : 0L)
                 .displayContexts(displayContexts).displayOrder(displayOrder)
+                .rejectionReason(rejectionReason)
+                .approvedAt(approvedAt)
+                .approvedByAdminId(approvedByAdminId)
+                .rejectedAt(rejectedAt)
+                .rejectedByAdminId(rejectedByAdminId)
                 .createdAt(createdAt).updatedAt(updatedAt)
                 .version(version != null ? version : 0L)
                 .build();
@@ -141,6 +149,51 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
     public AdPlacement markAsActive()          { return transition(PlacementStatus.ACTIVE); }
     public AdPlacement markAsExpired()         { return transition(PlacementStatus.EXPIRED); }
     public AdPlacement cancel()                { return transition(PlacementStatus.CANCELLED); }
+
+    public AdPlacement approve(String adminId) {
+        if (adminId == null || adminId.isBlank()) {
+            throw new AdvertisingValidationException("adminId", "must not be blank");
+        }
+        if (this.status != PlacementStatus.DRAFT) {
+            throw new PlacementStateTransitionException(this.status, PlacementStatus.PENDING_PAYMENT);
+        }
+        AdPlacement next = this.toBuilder()
+                .status(PlacementStatus.PENDING_PAYMENT)
+                .approvedAt(LocalDateTime.now())
+                .approvedByAdminId(adminId)
+                .rejectionReason(null)
+                .rejectedAt(null)
+                .rejectedByAdminId(null)
+                .build();
+        next.registerEvent(new AdPlacementStatusChangedEvent(
+                this.id.getValue(), this.status, PlacementStatus.PENDING_PAYMENT));
+        next.registerEvent(new AdPlacementApprovedEvent(this.id.getValue(), adminId));
+        return next;
+    }
+
+    public AdPlacement reject(String adminId, String reason) {
+        if (adminId == null || adminId.isBlank()) {
+            throw new AdvertisingValidationException("adminId", "must not be blank");
+        }
+        String trimmedReason = reason != null ? reason.trim() : null;
+        if (trimmedReason == null || trimmedReason.isEmpty()) {
+            throw new AdvertisingValidationException("reason", "must not be blank");
+        }
+        if (this.status != PlacementStatus.DRAFT) {
+            throw new PlacementStateTransitionException(this.status, PlacementStatus.CANCELLED);
+        }
+        AdPlacement next = this.toBuilder()
+                .status(PlacementStatus.CANCELLED)
+                .rejectionReason(trimmedReason)
+                .rejectedAt(LocalDateTime.now())
+                .rejectedByAdminId(adminId)
+                .build();
+        next.registerEvent(new AdPlacementStatusChangedEvent(
+                this.id.getValue(), this.status, PlacementStatus.CANCELLED));
+        next.registerEvent(new AdPlacementRejectedEvent(
+                this.id.getValue(), adminId, trimmedReason));
+        return next;
+    }
 
     public AdPlacement recordImpression() {
         return this.toBuilder()

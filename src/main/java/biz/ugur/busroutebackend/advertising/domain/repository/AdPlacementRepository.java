@@ -11,6 +11,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 public interface AdPlacementRepository extends BaseRepository<AdPlacement, PlacementId> {
 
@@ -20,20 +21,13 @@ public interface AdPlacementRepository extends BaseRepository<AdPlacement, Place
 
     Flux<AdPlacement> findByStatus(PlacementStatus status, Pageable pageable);
 
-    /**
-     * Active placements of a given type whose display window contains the moment.
-     * Used by public endpoints serving ads to the mobile app.
-     */
+    Mono<Long> countByStatus(PlacementStatus status);
+
+    Mono<Map<PlacementStatus, Long>> countsByStatus();
+
     Flux<AdPlacement> findActiveByTypeAt(PlacementType placementType, LocalDateTime moment);
 
-    /**
-     * Placements due to start (SCHEDULED with startsAt ≤ moment).
-     * Used by a scheduler job to flip SCHEDULED → ACTIVE.
-     */
     Flux<AdPlacement> findDueToActivate(LocalDateTime moment);
 
-    /**
-     * Active placements with endsAt ≤ moment. Used to flip ACTIVE → EXPIRED.
-     */
     Flux<AdPlacement> findDueToExpire(LocalDateTime moment);
 }

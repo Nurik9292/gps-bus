@@ -33,6 +33,11 @@ public class AdPlacementEntity {
     @Column("clicks_count")              private Long clicksCount;
     @Column("display_contexts")          private String displayContexts;
     @Column("display_order")             private Integer displayOrder;
+    @Column("rejection_reason")          private String rejectionReason;
+    @Column("approved_at")               private LocalDateTime approvedAt;
+    @Column("approved_by_admin_id")      private String approvedByAdminId;
+    @Column("rejected_at")               private LocalDateTime rejectedAt;
+    @Column("rejected_by_admin_id")      private String rejectedByAdminId;
     @CreatedDate @Column("created_at")   private LocalDateTime createdAt;
     @LastModifiedDate @Column("updated_at") private LocalDateTime updatedAt;
     @Column("version")                   private Long version;

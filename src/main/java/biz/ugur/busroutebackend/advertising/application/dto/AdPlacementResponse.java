@@ -31,6 +31,20 @@ public record AdPlacementResponse(
         @JsonProperty("display_contexts")     String displayContexts,
         @JsonProperty("display_order")        Integer displayOrder,
 
+        @JsonProperty("rejection_reason")     String rejectionReason,
+
+        @JsonProperty("approved_at")
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+        LocalDateTime approvedAt,
+
+        @JsonProperty("approved_by_admin_id") String approvedByAdminId,
+
+        @JsonProperty("rejected_at")
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+        LocalDateTime rejectedAt,
+
+        @JsonProperty("rejected_by_admin_id") String rejectedByAdminId,
+
         @JsonProperty("created_at")
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
         LocalDateTime createdAt,
@@ -58,6 +72,11 @@ public record AdPlacementResponse(
                 p.getClicksCount() != null ? p.getClicksCount() : 0L,
                 p.getDisplayContexts(),
                 p.getDisplayOrder(),
+                p.getRejectionReason(),
+                p.getApprovedAt(),
+                p.getApprovedByAdminId(),
+                p.getRejectedAt(),
+                p.getRejectedByAdminId(),
                 p.getCreatedAt(),
                 p.getUpdatedAt()
         );

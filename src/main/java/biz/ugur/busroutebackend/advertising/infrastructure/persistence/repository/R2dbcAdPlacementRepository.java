@@ -12,6 +12,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.EnumMap;
+import java.util.Map;
 
 @Repository
 public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implements AdPlacementRepository {
@@ -42,6 +44,31 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
                 .bind("businessId", businessId.getValue())
                 .map(row -> row.get(0, Long.class))
                 .one();
+    }
+
+    @Override
+    public Mono<Long> countByStatus(PlacementStatus status) {
+        return databaseClient.sql("SELECT COUNT(*) FROM ad_placements WHERE status = :status")
+                .bind("status", status.name())
+                .map(row -> row.get(0, Long.class))
+                .one();
+    }
+
+    @Override
+    public Mono<Map<PlacementStatus, Long>> countsByStatus() {
+        return databaseClient.sql("SELECT status, COUNT(*) AS cnt FROM ad_placements GROUP BY status")
+                .map(row -> Map.entry(
+                        PlacementStatus.valueOf(row.get("status", String.class)),
+                        row.get("cnt", Long.class)))
+                .all()
+                .collect(() -> new EnumMap<PlacementStatus, Long>(PlacementStatus.class),
+                        (map, entry) -> map.put(entry.getKey(), entry.getValue()))
+                .map(map -> {
+                    for (PlacementStatus s : PlacementStatus.values()) {
+                        map.putIfAbsent(s, 0L);
+                    }
+                    return map;
+                });
     }
 
     @Override

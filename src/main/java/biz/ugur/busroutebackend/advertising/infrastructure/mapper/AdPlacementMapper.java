@@ -30,6 +30,11 @@ public final class AdPlacementMapper {
                 e.getClicksCount(),
                 e.getDisplayContexts(),
                 e.getDisplayOrder(),
+                e.getRejectionReason(),
+                e.getApprovedAt(),
+                e.getApprovedByAdminId(),
+                e.getRejectedAt(),
+                e.getRejectedByAdminId(),
                 e.getCreatedAt(),
                 e.getUpdatedAt(),
                 e.getVersion()
@@ -55,6 +60,11 @@ public final class AdPlacementMapper {
                 .clicksCount(p.getClicksCount())
                 .displayContexts(p.getDisplayContexts())
                 .displayOrder(p.getDisplayOrder())
+                .rejectionReason(p.getRejectionReason())
+                .approvedAt(p.getApprovedAt())
+                .approvedByAdminId(p.getApprovedByAdminId())
+                .rejectedAt(p.getRejectedAt())
+                .rejectedByAdminId(p.getRejectedByAdminId())
                 .createdAt(p.getCreatedAt())
                 .updatedAt(p.getUpdatedAt())
                 .version(p.getVersion())

@@ -44,6 +44,11 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
         columns.put("clicks_count", e.getClicksCount());
         columns.put("display_contexts", e.getDisplayContexts());
         columns.put("display_order", e.getDisplayOrder());
+        columns.put("rejection_reason", e.getRejectionReason());
+        columns.put("approved_at", e.getApprovedAt());
+        columns.put("approved_by_admin_id", e.getApprovedByAdminId());
+        columns.put("rejected_at", e.getRejectedAt());
+        columns.put("rejected_by_admin_id", e.getRejectedByAdminId());
         columns.put("created_at", e.getCreatedAt());
         columns.put("updated_at", e.getUpdatedAt());
         columns.put("version", e.getVersion());
@@ -68,6 +73,11 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
                 .clicksCount(row.get("clicks_count", Long.class))
                 .displayContexts(row.get("display_contexts", String.class))
                 .displayOrder(row.get("display_order", Integer.class))
+                .rejectionReason(row.get("rejection_reason", String.class))
+                .approvedAt(row.get("approved_at", LocalDateTime.class))
+                .approvedByAdminId(row.get("approved_by_admin_id", String.class))
+                .rejectedAt(row.get("rejected_at", LocalDateTime.class))
+                .rejectedByAdminId(row.get("rejected_by_admin_id", String.class))
                 .createdAt(row.get("created_at", LocalDateTime.class))
                 .updatedAt(row.get("updated_at", LocalDateTime.class))
                 .version(row.get("version", Long.class))
