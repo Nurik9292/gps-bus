@@ -587,7 +587,9 @@ ugur:
     stop-deceleration-min-factor: ${PREDICTION_STOP_DECEL_MIN:0.15}
 
 # ============================================================================
-# Payment providers (sv_epg for Rysgal + Senagat, placeholders for BKB/Halk)
+# Payment providers (sv_epg protocol for Rysgal + Senagat; placeholders for BKB/Halk)
+# All credentials come from environment variables — never commit real values here.
+# See .env.example for the full list.
 # ============================================================================
 payment:
   svepg:
@@ -595,15 +597,15 @@ payment:
     banks:
       RYSGAL:
         enabled: ${PAYMENT_RYSGAL_ENABLED:false}
-        base-url: ${PAYMENT_RYSGAL_URL:https://epg.rysgalbank.tm/epg/rest}
-        user-name: ${PAYMENT_RYSGAL_USER:duralgamAPI}
+        base-url: ${PAYMENT_RYSGAL_URL:}
+        user-name: ${PAYMENT_RYSGAL_USER:}
         password: ${PAYMENT_RYSGAL_PASS:}
-        terminal-id: ${PAYMENT_RYSGAL_TERMINAL_ID:11014027}
-        pid: ${PAYMENT_RYSGAL_PID:109755}
+        terminal-id: ${PAYMENT_RYSGAL_TERMINAL_ID:}
+        pid: ${PAYMENT_RYSGAL_PID:}
       SENAGAT:
         enabled: ${PAYMENT_SENAGAT_ENABLED:false}
-        base-url: ${PAYMENT_SENAGAT_URL:https://epg.senagatbank.com.tm/epg/rest}
-        user-name: ${PAYMENT_SENAGAT_USER:takyk_duralga}
+        base-url: ${PAYMENT_SENAGAT_URL:}
+        user-name: ${PAYMENT_SENAGAT_USER:}
         password: ${PAYMENT_SENAGAT_PASS:}
       BKB:
         enabled: ${PAYMENT_BKB_ENABLED:false}
