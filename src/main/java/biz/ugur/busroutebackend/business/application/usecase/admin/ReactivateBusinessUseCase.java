@@ -34,6 +34,7 @@ public class ReactivateBusinessUseCase extends BaseUseCase<String, BusinessRespo
                 .switchIfEmpty(Mono.error(new BusinessNotFoundException(businessId)))
                 .map(Business -> Business.reactivate())
                 .flatMap(businessRepository::save)
+                .transform(this::persistAndPublish)
                 .flatMap(businessResponseMapper::toResponse)
                 .doOnSuccess(r -> log.info("Business reactivated: id={}", r.id()));
     }

@@ -63,6 +63,7 @@ public class InitiatePaymentUseCase
                 LocalDateTime.now().plusMinutes(expiresInMinutes));
 
         return paymentRepository.save(draft)
+                .transform(this::persistAndPublish)
                 .flatMap(saved -> paymentOrchestrator.register(saved)
                         .flatMap(result -> {
                             Payment withProviderOrder = saved.attachProviderOrder(

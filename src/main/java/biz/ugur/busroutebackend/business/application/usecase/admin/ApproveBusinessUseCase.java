@@ -37,6 +37,7 @@ public class ApproveBusinessUseCase
                 .switchIfEmpty(Mono.error(new BusinessNotFoundException(req.businessId())))
                 .map(business -> business.approve(req.adminId()))
                 .flatMap(businessRepository::save)
+                .transform(this::persistAndPublish)
                 .flatMap(businessResponseMapper::toResponse)
                 .doOnSuccess(r -> log.info("Business approved: id={} by adminId={}",
                         r.id(), req.adminId()));

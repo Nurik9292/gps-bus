@@ -39,6 +39,7 @@ public class RefundPaymentUseCase extends BaseUseCase<String, PaymentResponse> {
                                 : Mono.error(new PaymentProviderException(
                                         res.errorCode(),
                                         "Refund failed: " + res.errorMessage()))))
+                .transform(this::persistAndPublish)
                 .map(PaymentResponse::fromDomain)
                 .doOnSuccess(r -> log.info("Payment refunded: id={}", r.id()));
     }

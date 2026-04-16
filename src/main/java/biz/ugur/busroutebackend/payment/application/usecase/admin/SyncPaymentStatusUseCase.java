@@ -45,7 +45,8 @@ public class SyncPaymentStatusUseCase extends BaseUseCase<String, PaymentRespons
                 .flatMap(payment -> payment.isTerminal()
                         ? Mono.just(payment)          // nothing to reconcile
                         : reconcile(payment))
-                .flatMap(p -> paymentRepository.save(p).thenReturn(p))
+                .flatMap(paymentRepository::save)
+                .transform(this::persistAndPublish)
                 .map(PaymentResponse::fromDomain);
     }
 

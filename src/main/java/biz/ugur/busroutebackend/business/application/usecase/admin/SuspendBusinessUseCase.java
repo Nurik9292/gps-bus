@@ -38,6 +38,7 @@ public class SuspendBusinessUseCase
                 .switchIfEmpty(Mono.error(new BusinessNotFoundException(req.businessId())))
                 .map(b -> b.suspend(req.command().reason()))
                 .flatMap(businessRepository::save)
+                .transform(this::persistAndPublish)
                 .flatMap(businessResponseMapper::toResponse)
                 .doOnSuccess(r -> log.info("Business suspended: id={}", r.id()));
     }

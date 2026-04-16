@@ -46,6 +46,7 @@ public class CreateBusinessUseCase extends BaseUseCase<Mono<CreateBusinessComman
             log.info("Creating business: correlationId={} name={}", correlationId, cmd.name());
             return businessFactory.create(cmd)
                     .flatMap(businessRepository::save)
+                    .transform(this::persistAndPublish)
                     .flatMap(businessResponseMapper::toResponse)
                     .doOnSuccess(r -> log.info("Business created: id={} name={}", r.id(), r.name()))
                     .doOnError(e -> log.warn("Business creation failed: {}", e.getMessage()));

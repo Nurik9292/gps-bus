@@ -38,6 +38,7 @@ public class RejectBusinessUseCase
                 .switchIfEmpty(Mono.error(new BusinessNotFoundException(req.businessId())))
                 .map(business -> business.reject(req.command().reason()))
                 .flatMap(businessRepository::save)
+                .transform(this::persistAndPublish)
                 .flatMap(businessResponseMapper::toResponse)
                 .doOnSuccess(r -> log.info("Business rejected: id={}", r.id()));
     }
