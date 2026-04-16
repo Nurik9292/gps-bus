@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.advertising.application.factory;
 
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementCommand;
+import biz.ugur.busroutebackend.advertising.application.processor.AdPlacementImageProcessor;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdTariffNotFoundException;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
@@ -19,11 +20,14 @@ public class AdPlacementFactory {
 
     private final BusinessRepository businessRepository;
     private final AdTariffRepository adTariffRepository;
+    private final AdPlacementImageProcessor imageProcessor;
 
     public AdPlacementFactory(BusinessRepository businessRepository,
-                               AdTariffRepository adTariffRepository) {
+                               AdTariffRepository adTariffRepository,
+                               AdPlacementImageProcessor imageProcessor) {
         this.businessRepository = businessRepository;
         this.adTariffRepository = adTariffRepository;
+        this.imageProcessor = imageProcessor;
     }
 
     public Mono<AdPlacement> create(CreateAdPlacementCommand cmd) {
@@ -37,19 +41,24 @@ public class AdPlacementFactory {
                         : Mono.error(new BusinessNotFoundException(cmd.businessId())))
                 .then(adTariffRepository.findById(tariffId)
                         .switchIfEmpty(Mono.error(new AdTariffNotFoundException(cmd.tariffId()))))
-                .map(tariff -> {
+                .flatMap(tariff -> {
                     if (tariff.getPlacementType() != type) {
-                        throw new AdvertisingValidationException("placement_type",
+                        return Mono.error(new AdvertisingValidationException("placement_type",
                                 "tariff type " + tariff.getPlacementType()
-                                        + " does not match requested " + type);
+                                        + " does not match requested " + type));
                     }
-                    return AdPlacement.create(
-                            businessId, tariffId, type,
-                            cmd.title(), cmd.content(), cmd.imageUrl(),
-                            cmd.targetUrl(), cmd.ctaText(),
-                            PlacementWindow.of(cmd.startsAt(), cmd.endsAt()),
-                            cmd.displayContexts(),
-                            cmd.displayOrder());
+                    // Upload base64 creative (if any) before building the aggregate,
+                    // so the stored AdPlacement carries a permanent URL.
+                    return imageProcessor.process(cmd.imageUrl())
+                            .defaultIfEmpty("")
+                            .map(storedImageUrl -> AdPlacement.create(
+                                    businessId, tariffId, type,
+                                    cmd.title(), cmd.content(),
+                                    storedImageUrl.isEmpty() ? null : storedImageUrl,
+                                    cmd.targetUrl(), cmd.ctaText(),
+                                    PlacementWindow.of(cmd.startsAt(), cmd.endsAt()),
+                                    cmd.displayContexts(),
+                                    cmd.displayOrder()));
                 });
     }
 }

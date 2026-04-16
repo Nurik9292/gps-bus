@@ -36,7 +36,8 @@ public class WebFluxConfig implements WebFluxConfigurer {
     @Value("${app.storage.banners.base-path:/app/data/banners}")
     private String bannersBasePath;
 
-
+    @Value("${app.storage.ad-placements.base-path:/app/data/ad-placements}")
+    private String adPlacementsBasePath;
 
     @Bean
     public MultipartHttpMessageReader multipartReader() {
@@ -59,5 +60,10 @@ public class WebFluxConfig implements WebFluxConfigurer {
                 .addResourceLocations("file:" + bannersBasePath + "/");
         registry.addResourceHandler("/api/v1/banners/**")
                 .addResourceLocations("file:" + bannersBasePath + "/");
+
+        registry.addResourceHandler("/ad-placements/**")
+                .addResourceLocations("file:" + adPlacementsBasePath + "/");
+        registry.addResourceHandler("/api/v1/ad-placements/**")
+                .addResourceLocations("file:" + adPlacementsBasePath + "/");
     }
 }
