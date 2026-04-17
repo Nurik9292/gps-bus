@@ -11,7 +11,9 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.assignment.Rou
 import biz.ugur.busroutebackend.shared.application.SecurityContextService;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import biz.ugur.busroutebackend.transport.application.dto.assignment.ImportFromExcelCommand;
+import biz.ugur.busroutebackend.transport.application.dto.assignment.ImportJobStatus;
 import biz.ugur.busroutebackend.transport.application.usecase.assignment.*;
+import biz.ugur.busroutebackend.transport.infrastructure.excel.AsyncExcelImportService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
@@ -41,6 +43,7 @@ public class AdminRouteAssignmentController extends BaseController {
     private final ClearImmediateAssignmentUseCase clearImmediateUseCase;
     private final ClearAllImmediateAssignmentsUseCase clearAllImmediateUseCase;
     private final ImportRouteAssignmentsFromExcelUseCase importFromExcelUseCase;
+    private final AsyncExcelImportService asyncExcelImportService;
     private final SecurityContextService securityContextService;
 
     public AdminRouteAssignmentController(
@@ -55,6 +58,7 @@ public class AdminRouteAssignmentController extends BaseController {
             ClearImmediateAssignmentUseCase clearImmediateUseCase,
             ClearAllImmediateAssignmentsUseCase clearAllImmediateUseCase,
             ImportRouteAssignmentsFromExcelUseCase importFromExcelUseCase,
+            AsyncExcelImportService asyncExcelImportService,
             SecurityContextService securityContextService,
             MessageSource messageSource) {
         super(messageSource);
@@ -69,6 +73,7 @@ public class AdminRouteAssignmentController extends BaseController {
         this.clearImmediateUseCase = clearImmediateUseCase;
         this.clearAllImmediateUseCase = clearAllImmediateUseCase;
         this.importFromExcelUseCase = importFromExcelUseCase;
+        this.asyncExcelImportService = asyncExcelImportService;
         this.securityContextService = securityContextService;
     }
 
@@ -192,5 +197,33 @@ public class AdminRouteAssignmentController extends BaseController {
                         .flatMap(command -> Mono.just(command)
                                 .as(importFromExcelUseCase::execute))
                         .map(ExcelImportResponse::fromResult)));
+    }
+
+    @PostMapping(value = "/import/excel/async", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Mono<ResponseEntity<ApiResponse<ImportJobStatus>>> importFromExcelAsync(
+            @RequestPart("file") FilePart file) {
+        log.info("Async import from Excel file: {}", file.filename());
+
+        return securityContextService.getCurrentUsername()
+                .flatMap(username -> DataBufferUtils.join(file.content())
+                        .map(dataBuffer -> {
+                            byte[] bytes = new byte[dataBuffer.readableByteCount()];
+                            dataBuffer.read(bytes);
+                            DataBufferUtils.release(dataBuffer);
+                            return bytes;
+                        })
+                        .flatMap(bytes -> asyncExcelImportService.submitJob(bytes, username)))
+                .flatMap(jobId -> asyncExcelImportService.getJobStatus(jobId))
+                .map(status -> ResponseEntity
+                        .status(202)
+                        .body(ApiResponse.success(status)));
+    }
+
+    @GetMapping("/import/excel/{jobId}/status")
+    public Mono<ResponseEntity<ApiResponse<ImportJobStatus>>> getImportStatus(
+            @PathVariable String jobId) {
+        return asyncExcelImportService.getJobStatus(jobId)
+                .map(status -> ResponseEntity.ok(ApiResponse.success(status)))
+                .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 }

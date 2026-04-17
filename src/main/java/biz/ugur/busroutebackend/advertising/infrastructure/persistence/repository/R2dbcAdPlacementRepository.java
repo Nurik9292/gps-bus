@@ -93,12 +93,11 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
                         SELECT * FROM ad_placements
                         WHERE status = 'ACTIVE'
                           AND placement_type = :type
-                          AND (starts_at IS NULL OR starts_at <= :moment)
-                          AND (ends_at   IS NULL OR ends_at   >  :moment)
+                          AND (starts_at IS NULL OR starts_at <= NOW())
+                          AND (ends_at   IS NULL OR ends_at   >  NOW())
                         ORDER BY display_order ASC, created_at DESC
                         """)
                 .bind("type", placementType.name())
-                .bind("moment", moment)
                 .map(getRowMapper())
                 .all();
     }
@@ -109,9 +108,8 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
                         SELECT * FROM ad_placements
                         WHERE status = 'SCHEDULED'
                           AND starts_at IS NOT NULL
-                          AND starts_at <= :moment
+                          AND starts_at <= NOW()
                         """)
-                .bind("moment", moment)
                 .map(getRowMapper())
                 .all();
     }
@@ -122,9 +120,8 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
                         SELECT * FROM ad_placements
                         WHERE status = 'ACTIVE'
                           AND ends_at IS NOT NULL
-                          AND ends_at <= :moment
+                          AND ends_at <= NOW()
                         """)
-                .bind("moment", moment)
                 .map(getRowMapper())
                 .all();
     }

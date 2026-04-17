@@ -64,16 +64,16 @@ public class R2dbcPaymentRepository extends PaymentBaseRepository implements Pay
 
     @Override
     public Flux<Payment> findPendingStale(long staleAfterSeconds, Pageable pageable) {
-        String sql = String.format("""
+        String sql = """
                 SELECT * FROM payments
                 WHERE status IN ('REGISTERED', 'PREAUTH')
                   AND provider_order_id IS NOT NULL
-                  AND initiated_at < NOW() - (:seconds * INTERVAL '1 second')
+                  AND initiated_at < NOW() - make_interval(secs => CAST(:seconds AS integer))
                 ORDER BY initiated_at ASC
                 LIMIT :limit OFFSET :offset
-                """);
+                """;
         return databaseClient.sql(sql)
-                .bind("seconds", staleAfterSeconds)
+                .bind("seconds", (int) staleAfterSeconds)
                 .bind("limit", pageable.getPageSize())
                 .bind("offset", pageable.getOffset())
                 .map(getRowMapper())
