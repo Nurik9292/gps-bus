@@ -259,8 +259,6 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Flux<Vehicle> findVehiclesInMotion() {
-        // Filter by freshness: ignore vehicles whose last GPS update is older than 5 minutes
-        // (e.g. frozen state during the 23:00–06:00 night window when GPS scheduler is paused).
         String sql = """
                 SELECT * FROM vehicles
                 WHERE is_in_motion = true
@@ -499,8 +497,12 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
         String sql = "UPDATE vehicles SET current_direction = :dir, updated_at = NOW() WHERE id = :id";
 
-        return Flux.fromIterable(vehicleIdToDirection.entrySet())
-                .flatMap(entry -> databaseClient.sql(sql)
+        List<Map.Entry<String, Integer>> sortedEntries = vehicleIdToDirection.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .toList();
+
+        return Flux.fromIterable(sortedEntries)
+                .concatMap(entry -> databaseClient.sql(sql)
                         .bind("dir", entry.getValue())
                         .bind("id", entry.getKey())
                         .fetch()
@@ -511,10 +513,6 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
     }
 
     private Mono<BatchUpdateResult> updateWithRetry(Vehicle vehicle) {
-        // Optimistic lock conflicts cannot be resolved by retrying with the same
-        // vehicle object (version is stale), so we skip the retry and treat any
-        // optimistic-lock failure — direct or wrapped in RetryExhaustedException — as
-        // a harmless conflict: the concurrent writer already persisted a newer position.
         return updateSingleVehicle(vehicle)
                 .map(rowsUpdated -> BatchUpdateResult.success())
                 .onErrorResume(error -> {
