@@ -581,7 +581,8 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
             vwe.speed_kmh,
             vwe.is_in_motion,
             vwe.current_stop_name,
-            vwe.course
+            vwe.course,
+            COALESCE(vwe.distance_on_route, vwe.distance_to_stop_direct) as distance_meters
         FROM vehicles_with_eta vwe
         WHERE vwe.calculated_eta IS NOT NULL
         AND vwe.calculated_eta > 0
@@ -630,6 +631,8 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         Boolean isInMotion = row.get("is_in_motion", Boolean.class);
         String currentStopName = row.get("current_stop_name", String.class);
         Double course = row.get("course", Double.class);
+        Double distance = row.get("distance_meters", Double.class);
+        Integer distanceMeters = distance != null ? (int) Math.round(distance) : null;
 
         return new BusArrivalInfo(
                 vehicleId,
@@ -646,7 +649,8 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 Boolean.TRUE.equals(isInMotion),
                 currentStopName,
                 LocalDateTime.now(),
-                course != null ? course : 0.0
+                course != null ? course : 0.0,
+                distanceMeters
         );
     }
 

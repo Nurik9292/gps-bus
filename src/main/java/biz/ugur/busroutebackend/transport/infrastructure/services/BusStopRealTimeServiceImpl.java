@@ -129,7 +129,6 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
         String stopId = targetStop.getId().getValue();
         int maxEtaMinutes = etaProperties.getPosition().getMaxEtaMinutes();
 
-        // Primary: use in-memory prediction states (fresh predicted position + fraction)
         Flux<BusArrivalInfo> fromPrediction = Flux.fromIterable(predictionService.getActiveStates())
                 .filter(s -> s.getRouteNumber() != null && s.getTotalRouteDistanceMeters() > 0)
                 .flatMap(state -> {
@@ -138,7 +137,6 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                     if (stopFracOpt.isEmpty()) return Mono.empty();
 
                     double stopFrac = stopFracOpt.getAsDouble();
-                    // Skip if vehicle has already passed this stop
                     if (state.getFractionOnRoute() >= stopFrac - 0.001) return Mono.empty();
 
                     double distMeters = (stopFrac - state.getFractionOnRoute()) * state.getTotalRouteDistanceMeters();
@@ -153,8 +151,8 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                             state.getLicensePlate(),
                             null,
                             state.getRouteNumber(),
-                            null,
-                            null,
+                            routeGeometryCache.getRouteName(state.getRouteNumber()),
+                            routeGeometryCache.getRouteColor(state.getRouteNumber()),
                             etaMin,
                             status,
                             state.getPredictedLatitude(),
@@ -163,25 +161,23 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                             state.isInMotion(),
                             "В пути",
                             LocalDateTime.now(),
-                            state.getCourse()
+                            state.getCourse(),
+                            (int) Math.round(distMeters)
                     );
                     return Mono.just(info);
                 })
-                // Keep only the closest bus per route
                 .collectMultimap(BusArrivalInfo::getRouteNumber)
                 .flatMapMany(byRoute -> Flux.fromIterable(byRoute.values())
                         .map(arrivals -> arrivals.stream()
                                 .min(Comparator.comparingInt(BusArrivalInfo::getEstimatedArrivalMinutes))
                                 .orElseThrow()));
 
-        // Fallback: SQL query on vehicles table (for buses not tracked by prediction)
         Flux<BusArrivalInfo> fromDb = busStopRepository.findArrivingVehicles(
                 targetStop.getId(),
                 targetStop.getLatitude().doubleValue(),
                 targetStop.getLongitude().doubleValue()
         );
 
-        // Merge: prediction result wins for routes it knows about; DB fills gaps
         return fromPrediction
                 .collectMap(BusArrivalInfo::getRouteNumber)
                 .flatMapMany(predMap ->

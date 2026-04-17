@@ -25,6 +25,7 @@ public class BusArrivalInfo {
     private String currentStopName;
     private LocalDateTime lastUpdated;
     private Double course;
+    private Integer distanceMeters;
     private Instant calculatedAt;
 
     public BusArrivalInfo() {
@@ -46,6 +47,27 @@ public class BusArrivalInfo {
                           String currentStopName,
                           LocalDateTime lastUpdated,
                           Double course) {
+        this(vehicleId, licensePlate, routeId, routeNumber, routeName, routeColor,
+                estimatedArrivalMinutes, arrivalStatus, currentLatitude, currentLongitude,
+                speedKmh, isInMotion, currentStopName, lastUpdated, course, null);
+    }
+
+    public BusArrivalInfo(String vehicleId,
+                          String licensePlate,
+                          String routeId,
+                          String routeNumber,
+                          String routeName,
+                          String routeColor,
+                          Integer estimatedArrivalMinutes,
+                          String arrivalStatus,
+                          Double currentLatitude,
+                          Double currentLongitude,
+                          Double speedKmh,
+                          Boolean isInMotion,
+                          String currentStopName,
+                          LocalDateTime lastUpdated,
+                          Double course,
+                          Integer distanceMeters) {
         this.vehicleId = vehicleId;
         this.licensePlate = licensePlate;
         this.routeNumber = routeNumber;
@@ -61,6 +83,7 @@ public class BusArrivalInfo {
         this.lastUpdated = lastUpdated;
         this.routeId = routeId;
         this.course = course;
+        this.distanceMeters = distanceMeters;
         this.calculatedAt = Instant.now();
     }
 }

@@ -30,6 +30,8 @@ public class RouteGeometryCache {
     private final ConcurrentHashMap<String, Double>            distanceCache      = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, double[]>          stopFractionsCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, List<RouteStopInfo>> routeStopsCache  = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String>            routeNameCache     = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String>            routeColorCache    = new ConcurrentHashMap<>();
 
     private final BusRouteRepository busRouteRepository;
 
@@ -204,8 +206,22 @@ public class RouteGeometryCache {
 
     private void cacheRoute(BusRoute route) {
         String routeNumber = route.getRouteNumber();
+        if (route.getRouteName() != null) {
+            routeNameCache.put(routeNumber, route.getRouteName());
+        }
+        if (route.getRouteColor() != null) {
+            routeColorCache.put(routeNumber, route.getRouteColor());
+        }
         cacheGeometry(routeNumber, FORWARD,  route.getRouteGeometryForward());
         cacheGeometry(routeNumber, BACKWARD, route.getRouteGeometryBackward());
+    }
+
+    public String getRouteName(String routeNumber) {
+        return routeNameCache.get(routeNumber);
+    }
+
+    public String getRouteColor(String routeNumber) {
+        return routeColorCache.get(routeNumber);
     }
 
     private void cacheGeometry(String routeNumber, String suffix, String wkt) {
