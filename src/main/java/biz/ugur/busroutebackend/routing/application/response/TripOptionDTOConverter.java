@@ -58,7 +58,6 @@ public class TripOptionDTOConverter {
             }
         }
 
-        // Find the first BUS_RIDE segment to look up nearest real-time bus
         Mono<TripOptionDTO.NearestBusDTO> nearestBusMono = findNearestBusForTrip(tripOption);
 
         return Mono.when(resolveFirst, resolveLast)
@@ -73,7 +72,6 @@ public class TripOptionDTOConverter {
     }
 
     private Mono<TripOptionDTO.NearestBusDTO> findNearestBusForTrip(TripOption tripOption) {
-        // Find the first BUS_RIDE segment — that's where the user boards
         return tripOption.getRouteSegments().stream()
                 .filter(s -> s.getType() == SegmentType.BUS_RIDE && s.getRouteNumber() != null)
                 .findFirst()
@@ -94,7 +92,10 @@ public class TripOptionDTOConverter {
                                 info.routeNumber(),
                                 info.etaMinutes(),
                                 info.distanceMeters()))
-                        .onErrorResume(e -> Mono.empty())
+                        .onErrorResume(e -> {
+                            log.warn("Nearest-bus ETA lookup failed for segment: {}", e.toString());
+                            return Mono.empty();
+                        })
                 )
                 .orElse(Mono.empty());
     }
