@@ -9,13 +9,13 @@ spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:bus_route_db}
     username: ${DB_USERNAME:bus_route_user}
-    password: ${DB_PASSWORD:bus_route_pass}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   r2dbc:
     url: r2dbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:bus_route_db}
     username: ${DB_USERNAME:bus_route_user}
-    password: ${DB_PASSWORD:bus_route_pass}
+    password: ${DB_PASSWORD}
     host: ${DB_HOST:localhost}
     port: ${DB_PORT:5432}
     database: ${DB_NAME:bus_route_db}
@@ -110,7 +110,7 @@ app:
 
   admin:
     default-username: ${ADMIN_DEFAULT_USERNAME:admin}
-    default-password: ${ADMIN_DEFAULT_PASSWORD:admin123}
+    default-password: ${ADMIN_DEFAULT_PASSWORD}
     password-expiry-days: 90
     validation:
       coordinates:
@@ -133,12 +133,12 @@ app:
   security:
     jwt:
       admin:
-        secret: ${JWT_ADMIN_SECRET:${JWT_SECRET:9b3f7d1a6e2c48f5b0a7d3e9c1f6b2a8d4e7c0f5a9b3d6e1c8f2a4b7d9e0c1f3}}
+        secret: ${JWT_ADMIN_SECRET:${JWT_SECRET}}
         access-token-expiration: "PT1H"    # 1 hour
-        refresh-token-expiration: "P7D"    # 7 daysdjn
+        refresh-token-expiration: "P7D"    # 7 days
         issuer: "bus-route-system"
       client:
-        secret: ${JWT_CLIENT_SECRET:${JWT_SECRET:f7c1d8e9a24b43e0c5f9127aa9d3e6bf72c14a8d59f0be3c6d8f1e2a7c9b4d01}}
+        secret: ${JWT_CLIENT_SECRET:${JWT_SECRET}}
         access-token-expiration: "P31D"   # 744 hours (31 days)
         refresh-token-expiration: "P90D"  # 912 days
         issuer: "bus-route-system"
