@@ -316,4 +316,62 @@ class BannerConflictDetectorTest {
 
         assertFalse(conflict.isPresent());
     }
+
+    private Banner restoredWith(biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId id,
+                                 Integer displayOrder) {
+        return Banner.restore(
+                id,
+                BannerTitle.of("Restored"),
+                BannerType.MAIN,
+                BannerPeriod.between(now, now.plusDays(5)),
+                BannerImage.of("img.jpg"),
+                "http://test.com",
+                true,
+                displayOrder,
+                "content",
+                null,
+                now,
+                now,
+                0L);
+    }
+
+    @Test
+    void hasConflict_DoesNotThrow_WhenExistingBannerHasNullDisplayOrder() {
+        Banner existing = restoredWith(
+                biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId.of(
+                        "00000000-0000-0000-0000-000000000001"),
+                null);
+
+        boolean result = detector.hasConflict(
+                biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId.of(
+                        "00000000-0000-0000-0000-000000000002"),
+                BannerType.MAIN,
+                BannerPeriod.between(now.plusDays(1), now.plusDays(4)),
+                1,
+                List.of(existing));
+
+        assertFalse(result);
+    }
+
+    @Test
+    void detectDisplayOrderConflict_DoesNotThrow_WhenNewBannerHasNullDisplayOrder() {
+        Banner existing = createBanner("Existing", BannerType.MAIN, now, now.plusDays(5), 1);
+        Banner newBanner = restoredWith(
+                biz.ugur.busroutebackend.banner.domain.valueobjects.BannerId.of(
+                        "00000000-0000-0000-0000-000000000009"),
+                null);
+
+        assertDoesNotThrow(() ->
+                detector.detectDisplayOrderConflict(newBanner, List.of(existing)));
+    }
+
+    @Test
+    void validateNoConflicts_HandlesNullIdSafely() {
+        Banner existing = restoredWith(null, 1);
+        Banner candidate = createBanner("Candidate", BannerType.MAIN,
+                now.plusDays(1), now.plusDays(4), 1);
+
+        assertThrows(BannerConflictException.class,
+                () -> detector.validateNoConflicts(candidate, List.of(existing)));
+    }
 }

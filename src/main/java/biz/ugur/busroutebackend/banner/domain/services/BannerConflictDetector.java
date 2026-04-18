@@ -8,6 +8,7 @@ import biz.ugur.busroutebackend.banner.domain.valueobjects.BannerPeriod;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -15,6 +16,9 @@ public class BannerConflictDetector {
 
     private boolean periodsOverlap(LocalDateTime start1, LocalDateTime end1,
                                    LocalDateTime start2, LocalDateTime end2) {
+        if (start1 == null || start2 == null) {
+            return false;
+        }
         if (end1 == null || end2 == null) {
             if (end1 == null && end2 == null) {
                 return true;
@@ -45,8 +49,8 @@ public class BannerConflictDetector {
         }
 
         return existingBanners.stream()
-                .filter(existing -> !existing.getId().equals(banner.getId()))
-                .filter(existing -> existing.getType().equals(banner.getType())) 
+                .filter(existing -> !Objects.equals(existing.getId(), banner.getId()))
+                .filter(existing -> Objects.equals(existing.getType(), banner.getType()))
                 .filter(existing -> periodsOverlap(banner.getPeriod(), existing.getPeriod()))
                 .findFirst();
     }
@@ -57,10 +61,10 @@ public class BannerConflictDetector {
         }
 
         return existingBanners.stream()
-                .filter(existing -> !existing.getId().equals(banner.getId())) 
-                .filter(existing -> existing.getType().equals(banner.getType()))
-                .filter(existing -> existing.getDisplayOrder().equals(banner.getDisplayOrder())) 
-                .filter(existing -> periodsOverlap(banner.getPeriod(), existing.getPeriod())) 
+                .filter(existing -> !Objects.equals(existing.getId(), banner.getId()))
+                .filter(existing -> Objects.equals(existing.getType(), banner.getType()))
+                .filter(existing -> Objects.equals(existing.getDisplayOrder(), banner.getDisplayOrder()))
+                .filter(existing -> periodsOverlap(banner.getPeriod(), existing.getPeriod()))
                 .findFirst();
     }
 
@@ -69,16 +73,27 @@ public class BannerConflictDetector {
             throw new IllegalArgumentException("Banner cannot be null");
         }
 
-        Optional<Banner> conflict = detectDisplayOrderConflict(banner, existingBanners);
-        if (conflict.isPresent()) {
+        detectDisplayOrderConflict(banner, existingBanners).ifPresent(conflict -> {
             throw new BannerConflictException(
                     String.format("Display order %d conflicts with existing banner '%s' (ID: %s) of type %s during overlapping period",
                             banner.getDisplayOrder(),
-                            conflict.get().getTitle().getValue(),
-                            conflict.get().getId().getValue(),
-                            conflict.get().getType().getValue())
+                            safeTitle(conflict),
+                            safeIdValue(conflict),
+                            safeTypeValue(conflict))
             );
-        }
+        });
+    }
+
+    private static String safeTitle(Banner banner) {
+        return banner.getTitle() != null ? banner.getTitle().getValue() : "—";
+    }
+
+    private static String safeIdValue(Banner banner) {
+        return banner.getId() != null ? banner.getId().getValue() : "—";
+    }
+
+    private static String safeTypeValue(Banner banner) {
+        return banner.getType() != null ? banner.getType().getValue() : "—";
     }
 
     public List<Banner> findAllConflicts(Banner banner, List<Banner> existingBanners) {
@@ -88,9 +103,9 @@ public class BannerConflictDetector {
 
         return existingBanners.stream()
                 .filter(existing -> !existing.getId().equals(banner.getId()))
-                .filter(existing -> existing.getType().equals(banner.getType()))
+                .filter(existing -> Objects.equals(existing.getType(), banner.getType()))
                 .filter(existing -> periodsOverlap(banner.getPeriod(), existing.getPeriod()))
-                .filter(existing -> existing.getDisplayOrder().equals(banner.getDisplayOrder()))
+                .filter(existing -> Objects.equals(existing.getDisplayOrder(), banner.getDisplayOrder()))
                 .collect(Collectors.toList());
     }
 
@@ -102,11 +117,11 @@ public class BannerConflictDetector {
         }
 
         return existingBanners.stream()
-                .filter(existing -> !existing.getId().equals(bannerId))
-                .filter(existing -> existing.getType().equals(bannerType))
+                .filter(existing -> !Objects.equals(existing.getId(), bannerId))
+                .filter(existing -> Objects.equals(existing.getType(), bannerType))
                 .anyMatch(existing -> {
                     boolean periodOverlap = periodsOverlap(period, existing.getPeriod());
-                    boolean sameDisplayOrder = existing.getDisplayOrder().equals(displayOrder);
+                    boolean sameDisplayOrder = Objects.equals(existing.getDisplayOrder(), displayOrder);
                     return periodOverlap && sameDisplayOrder;
                 });
     }
@@ -120,9 +135,9 @@ public class BannerConflictDetector {
         }
 
         return existingBanners.stream()
-                .filter(existing -> existing.getType().equals(bannerType))
+                .filter(existing -> Objects.equals(existing.getType(), bannerType))
                 .filter(existing -> periodsOverlap(period, existing.getPeriod()))
-                .filter(existing -> existing.getDisplayOrder().equals(displayOrder))
+                .filter(existing -> Objects.equals(existing.getDisplayOrder(), displayOrder))
                 .findFirst();
     }
 }
