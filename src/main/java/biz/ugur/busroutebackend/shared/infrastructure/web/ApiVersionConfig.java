@@ -99,4 +99,6 @@ public class ApiVersionConfig {
     public static final String PAYMENTS = "/payments";
     public static final String V1_ADMIN_PAYMENTS  = V1_ADMIN + PAYMENTS;
     public static final String V1_PAYMENTS_RETURN = API_V1 + PAYMENTS + "/return";
+
+    public static final String V1_ADMIN_GPS_RECORDER = V1_ADMIN + "/debug/gps-recorder";
 }
