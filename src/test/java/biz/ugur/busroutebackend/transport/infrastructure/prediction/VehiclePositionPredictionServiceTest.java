@@ -1,15 +1,18 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
 import biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.GpsRecorder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import reactor.core.publisher.Flux;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class VehiclePositionPredictionServiceTest {
@@ -37,9 +40,12 @@ class VehiclePositionPredictionServiceTest {
         properties = new PredictionProperties();
         lenient().when(stateRepository.loadAll()).thenReturn(Flux.empty());
         lenient().when(dwellStatsRepository.findAll()).thenReturn(Flux.empty());
+        @SuppressWarnings("unchecked")
+        ObjectProvider<GpsRecorder> gpsRecorderProvider = mock(ObjectProvider.class);
+        lenient().when(gpsRecorderProvider.getIfAvailable()).thenReturn(null);
         service = new VehiclePositionPredictionService(
                 properties, broadcaster, routeGeometryCache, mapMatchingService,
-                stateRepository, dwellStatsRepository
+                stateRepository, dwellStatsRepository, gpsRecorderProvider
         );
     }
 

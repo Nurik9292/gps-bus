@@ -606,6 +606,16 @@ ugur:
     # Minimum speed multiplier at the stop itself (fraction of current speed)
     stop-deceleration-min-factor: ${PREDICTION_STOP_DECEL_MIN:0.15}
 
+# ---------------------------------------------------------------
+# GPS fixture recorder (debug-only, OFF by default; enable locally
+# to capture real GPS streams as test fixtures for stage 6b)
+# ---------------------------------------------------------------
+gps:
+  recorder:
+    enabled: ${GPS_RECORDER_ENABLED:false}
+    output-dir: ${GPS_RECORDER_OUTPUT_DIR:logs/fixtures}
+    max-duration-sec: ${GPS_RECORDER_MAX_DURATION_SEC:300}
+
 # ============================================================================
 # Payment providers (sv_epg protocol for Rysgal + Senagat; placeholders for BKB/Halk)
 # All credentials come from environment variables — never commit real values here.

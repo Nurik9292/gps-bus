@@ -1,7 +1,9 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.GpsRecorder;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -44,6 +46,7 @@ public class VehiclePositionPredictionService {
     private final MapMatchingService mapMatchingService;
     private final VehiclePredictionStateRepository stateRepository;
     private final biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository dwellStatsRepository;
+    private final ObjectProvider<GpsRecorder> gpsRecorderProvider;
 
     private final ConcurrentHashMap<String, biz.ugur.busroutebackend.transport.domain.valueobject.StopDwellStat> dwellStatsCache
             = new ConcurrentHashMap<>();
@@ -53,13 +56,15 @@ public class VehiclePositionPredictionService {
                                              RouteGeometryCache routeGeometryCache,
                                              MapMatchingService mapMatchingService,
                                              VehiclePredictionStateRepository stateRepository,
-                                             biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository dwellStatsRepository) {
+                                             biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository dwellStatsRepository,
+                                             ObjectProvider<GpsRecorder> gpsRecorderProvider) {
         this.properties = properties;
         this.broadcaster = broadcaster;
         this.routeGeometryCache = routeGeometryCache;
         this.mapMatchingService = mapMatchingService;
         this.stateRepository = stateRepository;
         this.dwellStatsRepository = dwellStatsRepository;
+        this.gpsRecorderProvider = gpsRecorderProvider;
     }
 
     private static final Duration RESTORE_TIMEOUT = Duration.ofSeconds(30);
@@ -137,6 +142,12 @@ public class VehiclePositionPredictionService {
                             int direction) {
         if (!properties.isEnabled()) {
             return;
+        }
+
+        GpsRecorder recorder = gpsRecorderProvider.getIfAvailable();
+        if (recorder != null) {
+            recorder.recordIfActive(vehicleId, licensePlate, routeNumber,
+                    latitude, longitude, speedKmh, course, inMotion, timestamp, direction);
         }
 
         long gpsAgeMs = Instant.now().toEpochMilli() - timestamp.toEpochMilli();
