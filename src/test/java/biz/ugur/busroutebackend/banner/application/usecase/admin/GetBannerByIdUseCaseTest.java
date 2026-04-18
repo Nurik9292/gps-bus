@@ -89,6 +89,8 @@ class GetBannerByIdUseCaseTest {
         );
 
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
+        when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
         when(adminBannerRepository.findById(BannerId.of(BANNER_ID))).thenReturn(Mono.just(banner));
         when(bannerResponseMapper.toResponse(banner)).thenReturn(Mono.just(bannerResponse));
 
@@ -116,6 +118,8 @@ class GetBannerByIdUseCaseTest {
     @Test
     void shouldThrowExceptionWhenBannerNotFound() {
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
+        when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
         when(adminBannerRepository.findById(BannerId.of(BANNER_ID))).thenReturn(Mono.empty());
 
         Mono<BannerResponse> result = getBannerByIdUseCase.execute(Mono.just(BANNER_ID));

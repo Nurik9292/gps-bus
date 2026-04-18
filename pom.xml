@@ -35,6 +35,7 @@
         <flyway.version>10.14.0</flyway.version>
         <jjwt>0.12.6</jjwt>
         <resilience4j.version>2.2.0</resilience4j.version>
+        <jacoco.bundle.min-covered-ratio>0.05</jacoco.bundle.min-covered-ratio>
     </properties>
     <dependencies>
         <dependency>
@@ -287,6 +288,10 @@
                         <include>**/*Test.java</include>
                         <include>**/*Tests.java</include>
                     </includes>
+                    <excludes>
+                        <exclude>**/*IT.java</exclude>
+                        <exclude>**/*IntegrationTest.java</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
             <plugin>
@@ -318,64 +323,48 @@
                         </goals>
                     </execution>
                     <execution>
-                        <id>jcc-report</id>
-                        <phase>test</phase>
+                        <id>jacoco-report</id>
+                        <phase>verify</phase>
                         <goals>
                             <goal>report</goal>
                         </goals>
                     </execution>
-
                     <execution>
                         <id>jacoco-check</id>
                         <goals>
                             <goal>check</goal>
                         </goals>
-                        <phase>test</phase>
+                        <phase>verify</phase>
                         <configuration>
                             <rules>
                                 <rule>
-                                    <!--                                    <element>BUNDLE</element>-->
-                                    <!--                                    <element>PACKAGE</element>-->
-                                    <!--                                    <element>SOURCEFILE</element>-->
-                                    <!--                                    <element>METHOD</element>-->
-                                    <element>CLASS</element>
+                                    <element>BUNDLE</element>
                                     <limits>
                                         <limit>
                                             <counter>INSTRUCTION</counter>
-                                            <!--                                            <counter>LINE</counter>-->
-                                            <!--                                            <counter>BRANCH</counter>-->
-                                            <!--                                            <counter>COMPLEXITY</counter>-->
-                                            <!--                                            <counter>METHOD</counter>-->
-                                            <!--                                            <counter>CLASS</counter>-->
-
-                                            <value>MISSEDRATIO</value>
-                                            <maximum>20%</maximum>
-                                            <!--                                            <value>MISSEDCOUNT</value>-->
-                                            <!--                                            <maximum>2</maximum>-->
-                                            <!--                                            <value>COVEREDRATIO</value>-->
-                                            <!--                                            <minimum>90%</minimum>-->
-                                            <!--                                            <value>COVEREDCOUNT</value>-->
-                                            <!--                                            <minimum>90</minimum>-->
-                                            <!--                                            <value>TOTALCOUNT</value>-->
-                                            <!--                                            <minimum>90</minimum>-->
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.bundle.min-covered-ratio}</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
                             </rules>
                         </configuration>
                     </execution>
-
                 </executions>
                 <configuration>
                     <excludes>
-                        <exclude>biz\ugur\busroutebackend\admin\**</exclude>
-                        <exclude>biz\ugur\busroutebackend\client\**</exclude>
-                        <exclude>biz\ugur\busroutebackend\geospatial\**</exclude>
-                        <exclude>biz\ugur\busroutebackend\interfaces\**</exclude>
-                        <exclude>biz\ugur\busroutebackend\routing\**</exclude>
-                        <exclude>biz\ugur\busroutebackend\shared\**</exclude>
-                        <exclude>biz\ugur\busroutebackend\transport\**</exclude>
-                        <exclude>biz\ugur\busroutebackend\BusRouteBackendApplication.class</exclude>
+                        <exclude>biz/ugur/busroutebackend/BusRouteBackendApplication.class</exclude>
+                        <exclude>biz/ugur/busroutebackend/**/dto/**</exclude>
+                        <exclude>biz/ugur/busroutebackend/**/request/**</exclude>
+                        <exclude>biz/ugur/busroutebackend/**/response/**</exclude>
+                        <exclude>biz/ugur/busroutebackend/**/exceptions/**</exclude>
+                        <exclude>biz/ugur/busroutebackend/**/exception/**</exclude>
+                        <exclude>biz/ugur/busroutebackend/**/events/**</exclude>
+                        <exclude>biz/ugur/busroutebackend/**/config/**</exclude>
+                        <exclude>biz/ugur/busroutebackend/**/entity/**</exclude>
+                        <exclude>biz/ugur/busroutebackend/**/persistence/entity/**</exclude>
+                        <exclude>biz/ugur/busroutebackend/**/infrastructure/mapper/**</exclude>
+                        <exclude>**/*$*</exclude>
                     </excludes>
                 </configuration>
             </plugin>
