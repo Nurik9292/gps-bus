@@ -439,6 +439,14 @@ resilience4j:
       busInfoApi:
         limit-for-period: 20
         limit-refresh-period: 1s
+      adminLogin:
+        limit-for-period: ${RATE_LIMIT_ADMIN_LOGIN_PER_MINUTE:10}
+        limit-refresh-period: 1m
+        timeout-duration: 0s
+      clientLogin:
+        limit-for-period: ${RATE_LIMIT_CLIENT_LOGIN_PER_MINUTE:20}
+        limit-refresh-period: 1m
+        timeout-duration: 0s
 
   bulkhead:
     configs:
