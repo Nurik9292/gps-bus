@@ -10,11 +10,7 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 import java.util.OptionalDouble;
 
-/**
- * Computes real-time ETA using live GPS positions from the prediction engine.
- * Instead of static DB averages ("route 160 typically takes 15 min"),
- * this finds the actual nearest bus and computes "bus 6252 AGJ will arrive in 3 min 20 sec".
- */
+
 @Service
 @Slf4j
 public class RealTimeETAService {
@@ -28,14 +24,7 @@ public class RealTimeETAService {
         this.routeGeometryCache = routeGeometryCache;
     }
 
-    /**
-     * Find the nearest approaching bus on the given route to the given stop.
-     * Returns the ETA in minutes, or empty if no bus is approaching.
-     *
-     * @param routeNumber route to search (e.g. "160")
-     * @param stopName    target stop name
-     * @return Mono with NearestBusInfo, or empty if no bus found
-     */
+
     public Mono<NearestBusInfo> findNearestBus(String routeNumber, String stopName) {
         return findNearestBus(routeNumber, stopName, Double.NaN, Double.NaN);
     }
@@ -46,7 +35,6 @@ public class RealTimeETAService {
             List<VehiclePredictionState> allStates = predictionService.getActiveStates();
             if (allStates.isEmpty()) return null;
 
-            // Filter vehicles on this route
             List<VehiclePredictionState> onRoute = allStates.stream()
                     .filter(s -> routeNumber.equals(s.getRouteNumber()))
                     .filter(s -> s.isInMotion() && s.getSpeedKmh() > 0)
@@ -58,7 +46,6 @@ public class RealTimeETAService {
                 return null;
             }
 
-            // Find stop fraction on each direction
             NearestBusInfo best = null;
 
             for (int direction = 0; direction <= 1; direction++) {
@@ -77,23 +64,20 @@ public class RealTimeETAService {
                     if (vehicle.getDirection() != direction) continue;
 
                     double vehicleFrac = vehicle.getLastGpsFraction();
-                    // Vehicle must be BEFORE the stop (lower fraction) to be approaching.
-                    // Allow a tiny epsilon (0.5%) so a bus right AT the stop still counts.
                     if (vehicleFrac >= stopFrac + 0.005) continue;
-                    if (vehicleFrac < stopFrac - 0.5) continue; // > half the route away → ignore
+                    if (vehicleFrac < stopFrac - 0.5) continue; 
 
                     double distanceMeters = Math.max(0, (stopFrac - vehicleFrac) * totalDist);
-                    // Approaching bus must be within 5 km of the boarding stop
                     if (distanceMeters > 5000) continue;
 
                     double speedKmh = vehicle.getSmoothedSpeedKmh() > 0
                             ? vehicle.getSmoothedSpeedKmh()
                             : vehicle.getRawGpsSpeedKmh();
-                    if (speedKmh < 5) continue; // ignore stopped/creeping buses
+                    if (speedKmh < 5) continue; 
 
                     double etaMinutes = (distanceMeters / 1000.0) / speedKmh * 60.0;
                     int etaMin = (int) Math.ceil(etaMinutes);
-                    if (etaMin > 20) continue; // too far in the future to be useful
+                    if (etaMin > 20) continue; 
 
                     if (best == null || etaMin < best.etaMinutes()) {
                         best = new NearestBusInfo(
@@ -119,10 +103,7 @@ public class RealTimeETAService {
         });
     }
 
-    /**
-     * Get real-time waiting time for a bus at a given stop.
-     * Returns the ETA of the nearest approaching bus in minutes.
-     */
+
     public Mono<Integer> getWaitingTimeMinutes(String routeNumber, String stopName) {
         return findNearestBus(routeNumber, stopName)
                 .map(NearestBusInfo::etaMinutes);

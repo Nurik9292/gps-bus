@@ -192,7 +192,6 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
 
         LocalDateTime freshnessCutoff = LocalDateTime.now(ZoneOffset.UTC).minus(MAX_INITIAL_POSITION_AGE);
         return result
-                // Drop "dead" vehicles: stopped with no route (parked in garage, off duty).
                 .filter(v -> {
                     if (Boolean.FALSE.equals(v.getIsInMotion())
                             && v.getSpeedKmh() != null && v.getSpeedKmh() == 0
@@ -201,8 +200,6 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                     }
                     return true;
                 })
-                // Drop stale frozen positions (e.g. last GPS before night cutoff at 23:00).
-                // Without this, clients receive yesterday's coordinates from DB at any time.
                 .filter(v -> v.getLastPositionUpdate() != null
                         && v.getLastPositionUpdate().isAfter(freshnessCutoff));
     }
@@ -249,10 +246,6 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                 })
                 .filter(positionMsg -> isPositionInScope(positionMsg, config))
                 .onBackpressureLatest()
-                // Buffer enough to capture a full prediction tick (~300-600 vehicles/sec)
-                // plus a time window that matches the prediction tick interval (1000ms).
-                // Previously 50/100ms caused one tick to be split across 6+ batches, making
-                // clients see only slices of 50 vehicles at a time.
                 .bufferTimeout(1000, Duration.ofMillis(1100))
                 .takeWhile(ignored -> session.isOpen())
                 .filter(updates -> !updates.isEmpty())
@@ -421,7 +414,6 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                             msg.getLatitude(), msg.getLongitude());
                     return true;
                 })
-                // Filter out "dead" vehicles: stopped with no route (parked/garage).
                 .filter(msg -> {
                     if (Boolean.FALSE.equals(msg.getIsInMotion())
                             && msg.getSpeedKmh() != null && msg.getSpeedKmh() == 0

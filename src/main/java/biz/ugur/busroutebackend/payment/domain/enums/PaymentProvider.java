@@ -5,10 +5,7 @@ import lombok.Getter;
 
 import java.util.Arrays;
 
-/**
- * External payment provider. All sv_epg-based banks (Rysgal, Senagat) share the same
- * integration protocol — differ only in credentials and host.
- */
+
 @Getter
 public enum PaymentProvider {
     RYSGAL("sv_epg"),
@@ -16,7 +13,6 @@ public enum PaymentProvider {
     BKB("sv_epg"),
     HALK("sv_epg");
 
-    /** Underlying protocol implementation key. Used to select the provider strategy. */
     private final String protocol;
 
     PaymentProvider(String protocol) {

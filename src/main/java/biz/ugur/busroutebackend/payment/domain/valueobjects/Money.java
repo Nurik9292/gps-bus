@@ -31,10 +31,6 @@ public class Money extends ValueObject {
         return new Money(amountMinor, currency);
     }
 
-    /**
-     * ISO 4217 numeric currency code (sv_epg register.do requires this as `currency` field).
-     * TMT → 934, USD → 840, EUR → 978, RUB → 643.
-     */
     public int getIso4217NumericCode() {
         return switch (currency) {
             case "TMT" -> 934;

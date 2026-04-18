@@ -26,9 +26,7 @@ public class DijkstraEngine {
     private static final int MAX_TRANSFERS = 2;
     private static final int K_PATHS = 3;
     private static final int ROUTE_PENALTY_MINUTES = 30;
-    /** Max iterations to prevent infinite loops on bad graph data. */
     private static final int MAX_ITERATIONS = 50_000;
-    /** Max cost in minutes — paths beyond 3 hours are not useful. */
     private static final int MAX_COST_MINUTES = 180;
 
     public List<TransitPath> findPaths(TransitGraph graph, String fromStopId, String toStopId) {

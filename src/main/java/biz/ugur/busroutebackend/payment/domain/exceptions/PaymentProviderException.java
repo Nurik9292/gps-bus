@@ -2,10 +2,6 @@ package biz.ugur.busroutebackend.payment.domain.exceptions;
 
 import lombok.Getter;
 
-/**
- * Thrown when the external payment gateway returns an error or is unreachable.
- * The provider error code (if known) is preserved for logging and admin UI display.
- */
 @Getter
 public class PaymentProviderException extends PaymentDomainException {
 

@@ -5,10 +5,7 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
-/**
- * Thin writer for the {@code payment_callbacks_log} audit table.
- * Every provider interaction (return URL, webhook, manual sync) should land here for forensics.
- */
+
 @Repository
 @Slf4j
 public class PaymentCallbackLogRepository {

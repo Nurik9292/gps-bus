@@ -15,13 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-/**
- * Asks the provider for the current order status and reconciles our local state accordingly.
- * Used by:
- *   • the public return-URL handler (right after the customer is redirected back),
- *   • the background scheduler for stale REGISTERED/PREAUTH payments,
- *   • the admin "Sync" button.
- */
+
 @Service
 @Slf4j
 public class SyncPaymentStatusUseCase extends BaseUseCase<String, PaymentResponse> {
@@ -43,7 +37,7 @@ public class SyncPaymentStatusUseCase extends BaseUseCase<String, PaymentRespons
         return paymentRepository.findById(PaymentId.of(paymentId))
                 .switchIfEmpty(Mono.error(new PaymentNotFoundException(paymentId)))
                 .flatMap(payment -> payment.isTerminal()
-                        ? Mono.just(payment)          // nothing to reconcile
+                        ? Mono.just(payment)         
                         : reconcile(payment))
                 .flatMap(paymentRepository::save)
                 .transform(this::persistAndPublish)

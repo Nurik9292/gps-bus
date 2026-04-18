@@ -8,14 +8,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/**
- * Polls the payment provider for payments that are stuck in REGISTERED/PREAUTH longer than
- * a threshold — useful when the customer closes the browser before the return URL fires,
- * or when the provider's webhook never arrives.
- *
- * <p>Runs every 2 minutes. Fetches up to 50 stale orders per tick (older than 3 min and
- * younger than a sensible horizon to avoid thrashing on abandoned sessions).
- */
+
 @Component
 @Slf4j
 @ConditionalOnProperty(
@@ -25,7 +18,7 @@ import org.springframework.stereotype.Component;
         matchIfMissing = true)
 public class PaymentStatusSyncScheduler {
 
-    private static final long STALE_AFTER_SECONDS = 180;   // 3 min
+    private static final long STALE_AFTER_SECONDS = 180;  
     private static final int BATCH_SIZE = 50;
 
     private final PaymentRepository paymentRepository;

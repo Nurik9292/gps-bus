@@ -47,8 +47,6 @@ public class AdPlacementFactory {
                                 "tariff type " + tariff.getPlacementType()
                                         + " does not match requested " + type));
                     }
-                    // Upload base64 creative (if any) before building the aggregate,
-                    // so the stored AdPlacement carries a permanent URL.
                     return imageProcessor.process(cmd.imageUrl())
                             .defaultIfEmpty("")
                             .map(storedImageUrl -> AdPlacement.create(

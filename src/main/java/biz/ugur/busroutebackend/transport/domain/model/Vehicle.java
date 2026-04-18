@@ -285,8 +285,6 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
     public boolean hasRecentPosition(int maxAgeSeconds) {
         LocalDateTime cutoff = LocalDateTime.now().minusSeconds(maxAgeSeconds);
-        // Prefer updatedAt (server-side write time) over lastPositionUpdate (GPS fix time from provider,
-        // which may be stale due to GPS provider sending old timestamps).
         if (updatedAt != null) {
             return updatedAt.isAfter(cutoff);
         }

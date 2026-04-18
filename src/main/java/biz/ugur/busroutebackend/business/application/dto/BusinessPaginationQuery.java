@@ -11,8 +11,8 @@ public class BusinessPaginationQuery {
     private int size;
     private String sortField;
     private String sortOrder;
-    private String status;   // filter by BusinessStatus (optional)
-    private String type;     // filter by BusinessType   (optional)
+    private String status;  
+    private String type;    
 
     public static BusinessPaginationQuery create(int page, int size,
                                                   String sortField, String sortOrder,

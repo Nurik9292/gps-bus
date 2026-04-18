@@ -65,7 +65,6 @@ public class R2dbcStopDwellStatsRepository implements StopDwellStatsRepository {
 
     @Override
     public Mono<StopDwellStat> save(StopDwellStat stat) {
-        // PostgreSQL UPSERT using the unique constraint (stop_id, route_number, direction)
         String sql = """
             INSERT INTO stop_dwell_stats (
                 stop_id, route_number, direction,

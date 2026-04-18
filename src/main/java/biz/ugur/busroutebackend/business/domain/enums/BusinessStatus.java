@@ -2,18 +2,7 @@ package biz.ugur.busroutebackend.business.domain.enums;
 
 import lombok.Getter;
 
-/**
- * Lifecycle of a business onboarding record.
- *
- * <p>State transitions (driven by admin actions):
- * <pre>
- *                 ┌── REJECTED  (terminal, re-application requires a new entity)
- *   PENDING ─────┤
- *                 └── APPROVED ──┬── SUSPENDED (can be re-activated → APPROVED)
- *                                │
- *                                └── (stays APPROVED otherwise)
- * </pre>
- */
+
 @Getter
 public enum BusinessStatus {
 

@@ -1,16 +1,3 @@
--- =====================================================================================
--- V53: Business onboarding + advertising tariffs + ad placements
--- =====================================================================================
--- Introduces three bounded contexts:
---   • businesses        — companies applying to place ads in the app (lifecycle: PENDING/APPROVED/REJECTED/SUSPENDED)
---   • ad_tariffs        — pricing catalog (price × period × placement type)
---   • ad_placements     — concrete ad instances (business × tariff × creative × active window)
--- Payment linkage (FK to payments) is added in a later migration (V54) by the payment module.
--- =====================================================================================
-
--- -------------------------------------------------------------------------------------
--- BUSINESSES
--- -------------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS businesses (
     id                  VARCHAR(36) PRIMARY KEY,
     name                VARCHAR(200)    NOT NULL,
@@ -19,22 +6,18 @@ CREATE TABLE IF NOT EXISTS businesses (
     tax_number          VARCHAR(32),
     registration_number VARCHAR(64),
 
-    -- Contact
     contact_person      VARCHAR(200),
     contact_phone       VARCHAR(32)     NOT NULL,
     contact_email       VARCHAR(200),
     website_url         VARCHAR(500),
 
-    -- Address
     country             VARCHAR(100),
     city                VARCHAR(100),
     address_line        VARCHAR(500),
 
-    -- Optional branding
     logo_url            TEXT,
     description         TEXT,
 
-    -- Moderation
     rejection_reason    TEXT,
     approved_at         TIMESTAMP WITH TIME ZONE,
     approved_by_admin_id VARCHAR(36),
@@ -64,28 +47,19 @@ COMMENT ON COLUMN businesses.tax_number        IS 'ИНН / tax identification n
 COMMENT ON COLUMN businesses.approved_by_admin_id IS 'FK to admins.id of the moderator who approved the application.';
 
 
--- -------------------------------------------------------------------------------------
--- AD TARIFFS
--- -------------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ad_tariffs (
     id                      VARCHAR(36) PRIMARY KEY,
     name                    VARCHAR(200) NOT NULL,
     description             TEXT,
     placement_type          VARCHAR(20) NOT NULL,
     period                  VARCHAR(10) NOT NULL,
-
-    -- Pricing in minor currency units (e.g. tiyin, cents) to avoid float drift
     price_amount            BIGINT      NOT NULL,
     currency                VARCHAR(3)  NOT NULL DEFAULT 'TMT',
-
-    -- Optional limits bundled with the tariff
     max_impressions         INTEGER,
     max_clicks              INTEGER,
     daily_impression_cap    INTEGER,
-
     is_active               BOOLEAN     NOT NULL DEFAULT true,
     display_order           INTEGER     NOT NULL DEFAULT 0,
-
     created_at              TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at              TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     version                 BIGINT      NOT NULL DEFAULT 0,
@@ -111,9 +85,6 @@ COMMENT ON COLUMN ad_tariffs.period           IS 'Billing/display period the pri
 COMMENT ON COLUMN ad_tariffs.price_amount     IS 'Price in minor currency units (tiyin). Divide by 100 for display.';
 
 
--- -------------------------------------------------------------------------------------
--- AD PLACEMENTS (concrete ads bought by a business)
--- -------------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ad_placements (
     id                  VARCHAR(36) PRIMARY KEY,
     business_id         VARCHAR(36) NOT NULL,
@@ -121,24 +92,18 @@ CREATE TABLE IF NOT EXISTS ad_placements (
 
     placement_type      VARCHAR(20) NOT NULL,
     status              VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
-
-    -- Creative assets
     title               VARCHAR(200) NOT NULL,
     content             TEXT,
     image_url           TEXT,
     target_url          TEXT,
     cta_text            VARCHAR(100),
 
-    -- Display window
     starts_at           TIMESTAMP WITH TIME ZONE,
     ends_at             TIMESTAMP WITH TIME ZONE,
 
-    -- Runtime metrics
     impressions_count   BIGINT      NOT NULL DEFAULT 0,
     clicks_count        BIGINT      NOT NULL DEFAULT 0,
 
-    -- Context targeting (excluded contexts: map.html). Stored as comma-separated tags
-    -- for now; can be normalised to a join table when targeting grows complex.
     display_contexts    VARCHAR(500),
 
     display_order       INTEGER     NOT NULL DEFAULT 0,

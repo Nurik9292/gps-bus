@@ -306,7 +306,6 @@ public class SmtpEmailNotificationService implements EmailNotificationService {
                 """.formatted(e(name), e(orderNumber), e(reason));
     }
 
-    /** Minimal HTML escape for values inserted into the template. */
     private static String e(String value) {
         if (value == null) return "—";
         return value.replace("&", "&amp;")

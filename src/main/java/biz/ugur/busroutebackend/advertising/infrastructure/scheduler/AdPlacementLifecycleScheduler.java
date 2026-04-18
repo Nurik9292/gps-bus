@@ -10,17 +10,6 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 
-/**
- * Drives the time-based part of the {@link AdPlacement} FSM:
- *
- * <ul>
- *   <li><b>SCHEDULED → ACTIVE</b>: when the current time reaches {@code starts_at}.</li>
- *   <li><b>ACTIVE → EXPIRED</b>: when the current time passes {@code ends_at}.</li>
- * </ul>
- *
- * <p>The scheduler runs every minute — good enough granularity for daily/weekly ad windows.
- * Larger batches are pulled via pagination to avoid locking up on catch-up after downtime.
- */
 @Component
 @Slf4j
 @ConditionalOnProperty(
@@ -38,7 +27,6 @@ public class AdPlacementLifecycleScheduler {
         this.placementRepository = placementRepository;
     }
 
-    /** Runs every minute on the dot. */
     @Scheduled(cron = "0 * * * * *")
     public void tick() {
         LocalDateTime now = LocalDateTime.now();

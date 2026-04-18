@@ -186,7 +186,6 @@ public class VehicleDataScheduler {
     private Mono<List<GpsPositionDTO>> fetchPositionsIfNotEmpty(Map<GpsProviderType, List<String>> devicesByProvider) {
         int totalDevices = devicesByProvider.values().stream().mapToInt(List::size).sum();
 
-        // Bootstrap: find enabled providers that have zero known devices in DB
         List<reactor.core.publisher.Mono<List<GpsPositionDTO>>> extraFetches =
                 gpsDataAggregator.getEnabledProviders().stream()
                         .filter(p -> !devicesByProvider.containsKey(p.getProviderType()))

@@ -4,7 +4,6 @@ import biz.ugur.busroutebackend.payment.domain.exceptions.PaymentValidationExcep
 
 import java.util.Arrays;
 
-/** What a payment pays for. Kept explicit to avoid typos and to make billing reports unambiguous. */
 public enum PaymentSubjectType {
 
     AD_PLACEMENT;

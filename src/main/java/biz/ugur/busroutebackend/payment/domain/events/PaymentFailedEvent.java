@@ -7,7 +7,7 @@ import lombok.Getter;
 @Getter
 public class PaymentFailedEvent extends PaymentDomainEvent {
 
-    private final PaymentStatus terminalStatus;  // DECLINED / EXPIRED / CANCELLED
+    private final PaymentStatus terminalStatus;
     private final PaymentSubjectType subjectType;
     private final String subjectId;
     private final String failureCode;

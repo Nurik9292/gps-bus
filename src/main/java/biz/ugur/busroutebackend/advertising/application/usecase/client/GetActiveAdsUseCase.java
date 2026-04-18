@@ -15,11 +15,7 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Public endpoint used by the mobile app to fetch ads relevant for a display context
- * (e.g. home banner, trip-search popup, push queue). Excludes map.html by design
- * (filtered in {@link AdPlacement#create}).
- */
+
 @Service
 public class GetActiveAdsUseCase extends BaseUseCase<GetActiveAdsUseCase.Query, List<AdPlacementResponse>> {
 

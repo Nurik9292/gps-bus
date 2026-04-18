@@ -15,15 +15,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-/**
- * Cross-context integration: reacts to payment lifecycle events and moves the linked
- * {@link AdPlacement} through its own FSM accordingly.
- *
- * <p>Only placements whose subject_type is {@code AD_PLACEMENT} are affected. Other payment
- * subjects (future) are ignored here.
- *
- * <p>Listener is async: payment flow should not be blocked by placement updates.
- */
+
 @Component
 @Slf4j
 public class PaymentEventListener {
@@ -58,7 +50,6 @@ public class PaymentEventListener {
     @EventListener
     public void onPaymentRefunded(PaymentRefundedEvent event) {
         if (event.getSubjectType() != PaymentSubjectType.AD_PLACEMENT) return;
-        // A refund mid-run: cancel the placement so it stops being shown.
         transitionPlacement(event.getSubjectId(), AdPlacement::cancel,
                 PlacementStatus.CANCELLED, "payment refunded");
     }

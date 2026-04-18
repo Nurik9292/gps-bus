@@ -3,10 +3,7 @@ package biz.ugur.busroutebackend.payment.domain.events;
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentSubjectType;
 import lombok.Getter;
 
-/**
- * Emitted when a payment transitions to COMPLETED. Advertising module subscribes to this
- * event and flips the linked AdPlacement from PENDING_PAYMENT → SCHEDULED.
- */
+
 @Getter
 public class PaymentCompletedEvent extends PaymentDomainEvent {
 

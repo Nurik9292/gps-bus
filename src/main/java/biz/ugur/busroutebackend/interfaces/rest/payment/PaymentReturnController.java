@@ -21,22 +21,7 @@ import reactor.core.publisher.Mono;
 
 import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_PAYMENTS_RETURN;
 
-/**
- * Public endpoint that the bank redirects the customer to after the payment form.
- *
- * <p>The redirect URL for each bank is configured when creating the payment order
- * ({@code returnUrl} parameter of sv_epg {@code register.do}). After redirect we:
- * <ol>
- *   <li>Log the callback to {@code payment_callbacks_log} for audit.</li>
- *   <li>Look up the payment by provider + providerOrderId.</li>
- *   <li>Trigger a status sync so the local state is reconciled with the bank.</li>
- *   <li>Return the updated {@link PaymentResponse} (or a minimal error JSON) so the
- *       frontend can render a success/failure page.</li>
- * </ol>
- *
- * <p>Route is public because the customer's browser performs the GET after being
- * redirected by the bank — they are not authenticated in our admin session.
- */
+
 @RestController
 @RequestMapping(V1_PAYMENTS_RETURN)
 @CrossOrigin(origins = "*")
@@ -62,10 +47,7 @@ public class PaymentReturnController extends BaseController {
         return PaymentReturnController.class.getSimpleName();
     }
 
-    /**
-     * GET /api/v1/payments/return/{provider}?orderId=...
-     * Optional {@code orderNumber} query param as secondary fallback.
-     */
+   
     @GetMapping("/{provider}")
     public Mono<ResponseEntity<ApiResponse<PaymentResponse>>> onReturn(
             @PathVariable String provider,

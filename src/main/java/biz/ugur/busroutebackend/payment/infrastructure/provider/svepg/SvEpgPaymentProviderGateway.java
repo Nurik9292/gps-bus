@@ -11,16 +11,11 @@ import reactor.core.publisher.Mono;
 
 import java.util.Set;
 
-/**
- * {@link PaymentProviderGateway} implementation for all sv_epg-based banks (Rysgal, Senagat,
- * and any future BKB/Halk if they run on the same gateway). Routes each call to
- * {@link SvEpgApiClient} with the credentials matching {@link Payment#getProvider()}.
- */
+
 @Service
 @Slf4j
 public class SvEpgPaymentProviderGateway implements PaymentProviderGateway {
 
-    /** Banks that use the sv_epg protocol. */
     private static final Set<PaymentProvider> SUPPORTED =
             Set.of(PaymentProvider.RYSGAL, PaymentProvider.SENAGAT,
                     PaymentProvider.BKB,    PaymentProvider.HALK);

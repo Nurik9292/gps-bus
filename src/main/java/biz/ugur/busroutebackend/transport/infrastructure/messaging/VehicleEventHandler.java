@@ -117,10 +117,6 @@ public class VehicleEventHandler {
         log.debug("Processing vehicle position update: vehicleId={}, plate={}",
                 event.getVehicleId(), event.getLicensePlate());
 
-        // When prediction is enabled, ALL position broadcasts go through the prediction service
-        // (via directBroadcaster.broadcastDirect). This eliminates the PRED↔RAW flicker caused
-        // by two independent broadcast paths. Prediction handles both moving and stopped vehicles.
-        // Path B (Redis pub/sub broadcast) is fully disabled.
         Mono<Void> broadcastMono = predictionProperties.isEnabled()
                 ? Mono.empty()
                 : broadcastPositionUpdate(event);

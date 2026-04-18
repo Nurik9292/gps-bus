@@ -13,13 +13,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-/**
- * Cross-cutting concern: sends email notifications on business lifecycle events.
- *
- * <p>Listeners are async — email delivery never blocks the domain transaction.
- * On BusinessCreated we look up the fresh record and send an alert to the admin.
- * On Approved/Rejected/Suspended we send the business owner (if they supplied an email).
- */
+
 @Component
 @Slf4j
 public class BusinessNotificationEmailListener {

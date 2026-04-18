@@ -1,38 +1,22 @@
--- =====================================================================================
--- V54: Payment module — sv_epg (SmartVista EPG) integration for Rysgal & Senagat banks
--- =====================================================================================
--- Both banks use the same sv_epg payment gateway protocol — only credentials and host differ.
--- A single Payment aggregate covers all providers via the PaymentProvider strategy.
--- =====================================================================================
-
--- -------------------------------------------------------------------------------------
--- PAYMENTS — single payment order per ad placement (or other billable entity)
--- -------------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS payments (
     id                      VARCHAR(36) PRIMARY KEY,
 
-    -- Provider & external tracking
     provider                VARCHAR(20)  NOT NULL,
     provider_order_id       VARCHAR(64),                -- orderId returned by sv_epg register.do
     order_number            VARCHAR(36)  NOT NULL,      -- our merchant-side unique id (UUID short)
 
-    -- Billable target — at the moment only ad_placements, but table is kept open for other uses
     subject_type            VARCHAR(40)  NOT NULL,      -- e.g. 'AD_PLACEMENT'
     subject_id              VARCHAR(36)  NOT NULL,
 
-    -- Optional business context
     business_id             VARCHAR(36),
 
-    -- Amount stored in minor units (tiyin / cents)
     amount_minor            BIGINT       NOT NULL,
     currency                VARCHAR(3)   NOT NULL DEFAULT 'TMT',
 
-    -- Lifecycle
     status                  VARCHAR(20)  NOT NULL DEFAULT 'REGISTERED',
     form_url                TEXT,                        -- redirect target returned by provider
     return_url              TEXT NOT NULL,               -- where to send customer after payment
 
-    -- Timestamps and outcome
     initiated_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at            TIMESTAMP WITH TIME ZONE,
     failed_at               TIMESTAMP WITH TIME ZONE,
@@ -41,7 +25,6 @@ CREATE TABLE IF NOT EXISTS payments (
     failure_code            VARCHAR(50),
     failure_message         VARCHAR(512),
 
-    -- Masked card info returned by provider after payment
     card_pan_masked         VARCHAR(32),
     card_expiration         VARCHAR(6),
     cardholder_name         VARCHAR(100),
@@ -83,9 +66,6 @@ COMMENT ON COLUMN payments.amount_minor      IS 'Amount in minor currency units 
 COMMENT ON COLUMN payments.status            IS 'Lifecycle: REGISTERED → (PREAUTH) → COMPLETED / DECLINED / REVERSED / REFUNDED / EXPIRED / CANCELLED.';
 
 
--- -------------------------------------------------------------------------------------
--- PAYMENT CALLBACKS LOG — raw trace of return/callback invocations for auditing
--- -------------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS payment_callbacks_log (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     payment_id          VARCHAR(36),
@@ -115,9 +95,6 @@ COMMENT ON TABLE  payment_callbacks_log IS
     'Audit trail of all provider interactions (return-URL hits, webhooks, status polls). Essential for dispute resolution.';
 
 
--- -------------------------------------------------------------------------------------
--- Wire ad_placements → payment_id (nullable; one active payment per placement)
--- -------------------------------------------------------------------------------------
 ALTER TABLE ad_placements
     ADD COLUMN IF NOT EXISTS payment_id VARCHAR(36);
 

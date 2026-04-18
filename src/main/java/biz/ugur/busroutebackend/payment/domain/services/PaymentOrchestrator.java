@@ -7,10 +7,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 
-/**
- * Selects the {@link PaymentProviderGateway} for a given {@link PaymentProvider}.
- * Injected into use cases that need to interact with an external gateway.
- */
+
 public class PaymentOrchestrator {
 
     private final List<PaymentProviderGateway> gateways;

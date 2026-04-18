@@ -152,8 +152,6 @@ public class MapMatchingService {
         double[] b = routePoints.get(segIndex + 1);
         double bearing = bearingDegrees(a[0], a[1], b[0], b[1]);
 
-        // Both forward and backward geometries are stored in their natural traversal order
-        // (start→end of each trip). The bearing directly represents the travel direction.
         return bearing;
     }
 

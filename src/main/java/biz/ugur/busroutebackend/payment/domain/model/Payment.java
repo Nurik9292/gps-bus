@@ -19,17 +19,7 @@ import lombok.Getter;
 
 import java.time.LocalDateTime;
 
-/**
- * Aggregate root: a single payment attempt routed through an external gateway.
- *
- * <p>Invariants:
- * <ul>
- *   <li>Transitions follow {@link PaymentStatus#canTransitionTo}.</li>
- *   <li>{@code providerOrderId} is assigned only once — when the provider registers the order.</li>
- *   <li>{@code completedAt}/{@code failedAt} are set exactly once on terminal transitions.</li>
- *   <li>Refund is only allowed from COMPLETED state.</li>
- * </ul>
- */
+
 @Builder(toBuilder = true)
 @Getter
 @EqualsAndHashCode(callSuper = false)
@@ -167,7 +157,6 @@ public class Payment extends AggregateRoot<Payment, PaymentId> {
     // Behaviour
     // -------------------------------------------------------------------------------------
 
-    /** Called immediately after the provider accepts register.do and returns orderId + formUrl. */
     public Payment attachProviderOrder(String providerOrderId, String formUrl) {
         if (this.providerOrderId != null) {
             throw new PaymentValidationException("providerOrderId", "already attached");

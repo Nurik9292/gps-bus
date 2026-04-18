@@ -19,9 +19,5 @@ public interface PaymentRepository extends BaseRepository<Payment, PaymentId> {
 
     Mono<Long> countByStatus(PaymentStatus status);
 
-    /**
-     * Payments that are still open (REGISTERED or PREAUTH) and were initiated more than
-     * {@code staleAfterSeconds} ago. Used by the status-sync scheduler.
-     */
     Flux<Payment> findPendingStale(long staleAfterSeconds, Pageable pageable);
 }

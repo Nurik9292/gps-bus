@@ -187,8 +187,6 @@ public class SearchTripsUseCase extends BaseUseCase<Mono<TripSearchRequest>, Tri
         Coordinates to = context.toLocation();
         TripSearchCriteria criteria = context.searchCriteria();
 
-        // Include time period so morning-peak and off-peak searches are cached separately.
-        // ETA and travel times differ significantly by time of day.
         String period = biz.ugur.busroutebackend.routing.domain.valueobjects.TimePeriod
                 .fromDateTime(java.time.LocalDateTime.now()).name();
         return String.format("trip_search:%.6f:%.6f:%.6f:%.6f:%d:%d:%s:%s:%s",

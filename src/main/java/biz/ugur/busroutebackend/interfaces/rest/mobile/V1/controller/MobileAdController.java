@@ -23,10 +23,7 @@ import java.util.List;
 
 import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_MOBILE_ADS;
 
-/**
- * Public endpoints serving ads to the mobile app. All endpoints filter out the map.html
- * context since the product decision is to keep the map screen ad-free.
- */
+
 @RestController
 @RequestMapping(V1_MOBILE_ADS)
 @CrossOrigin(origins = "*")
@@ -54,28 +51,24 @@ public class MobileAdController extends BaseController {
         return MobileAdController.class.getSimpleName();
     }
 
-    /** GET /api/v1/mobile/ads/banner?context=home */
     @GetMapping("/banner")
     public Mono<ResponseEntity<ApiResponse<List<AdPlacementResponse>>>> getBanners(
             @RequestParam(required = false) String context) {
         return ok(getActiveAdsUseCase.execute(new GetActiveAdsUseCase.Query(PlacementType.BANNER, context)));
     }
 
-    /** GET /api/v1/mobile/ads/popup?context=trip-search */
     @GetMapping("/popup")
     public Mono<ResponseEntity<ApiResponse<List<AdPlacementResponse>>>> getPopups(
             @RequestParam(required = false) String context) {
         return ok(getActiveAdsUseCase.execute(new GetActiveAdsUseCase.Query(PlacementType.POPUP, context)));
     }
 
-    /** GET /api/v1/mobile/ads/push */
     @GetMapping("/push")
     public Mono<ResponseEntity<ApiResponse<List<AdPlacementResponse>>>> getPushAds(
             @RequestParam(required = false) String context) {
         return ok(getActiveAdsUseCase.execute(new GetActiveAdsUseCase.Query(PlacementType.PUSH, context)));
     }
 
-    /** GET /api/v1/mobile/ads/tariffs?placement_type=BANNER */
     @GetMapping("/tariffs")
     public Mono<ResponseEntity<ApiResponse<List<AdTariffResponse>>>> getTariffs(
             @RequestParam(value = "placement_type", required = false) String placementType) {

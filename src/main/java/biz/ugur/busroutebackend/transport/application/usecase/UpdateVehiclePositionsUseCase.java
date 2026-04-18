@@ -342,7 +342,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             updatedVehicle.getSpeedKmh()
                     );
 
-                    // Detect frozen-coords anomaly outside the block so the flag is visible to WS publish logic.
                     boolean frozenCoordsWithMotion = hasSignificantChange
                             && Boolean.TRUE.equals(updatedVehicle.getIsInMotion())
                             && oldLatitude != null && oldLongitude != null
@@ -362,8 +361,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     }
 
                     if (hasSignificantChange) {
-                        // Always add to vehiclesToUpdate so DB updated_at stays fresh (needed by hasRecentPosition).
-                        // WS publish is suppressed below for frozen-coords anomalies.
                         vehiclesToUpdate.add(updatedVehicle);
 
                         boolean hasCourse = updatedVehicle.getCourse() != null
@@ -569,8 +566,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
 
     private boolean shouldForcePublishForVehicle(String vehicleId) {
-        // Only suppress force-publish when prediction is actively broadcasting (vehicle is moving).
-        // Stopped vehicles are not handled by prediction — they need raw GPS force-publish.
         if (predictionService.isActivelyPredicting(vehicleId)) {
             return false;
         }

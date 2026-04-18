@@ -19,10 +19,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Pricing catalog entry: a specific ad placement × period at a fixed price.
- * Businesses pick a tariff when creating an {@link AdPlacement}.
- */
+
 @Builder(toBuilder = true)
 @Getter
 @EqualsAndHashCode(callSuper = false)

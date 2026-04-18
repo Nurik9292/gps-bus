@@ -15,13 +15,7 @@ import reactor.util.retry.Retry;
 
 import java.time.Duration;
 
-/**
- * Low-level HTTP client for the SmartVista EPG REST API (sv_epg).
- *
- * <p>All endpoints accept form-encoded {@code userName} + {@code password} on every call.
- * Responses are JSON. One client instance serves all configured banks — credentials are
- * passed per request via {@link SvEpgCredentials}.
- */
+
 @Component
 @Slf4j
 public class SvEpgApiClient {
@@ -34,7 +28,6 @@ public class SvEpgApiClient {
         this.objectMapper = objectMapper;
     }
 
-    /** POST /register.do — registers a one-phase order. */
     public Mono<JsonNode> register(SvEpgCredentials creds,
                                     String orderNumber,
                                     long amountMinor,
@@ -52,21 +45,18 @@ public class SvEpgApiClient {
         return post(creds, "/register.do", form);
     }
 
-    /** POST /getOrderStatus.do — returns current order state. */
     public Mono<JsonNode> getOrderStatus(SvEpgCredentials creds, String providerOrderId) {
         MultiValueMap<String, String> form = baseForm(creds);
         form.add("orderId", providerOrderId);
         return post(creds, "/getOrderStatus.do", form);
     }
 
-    /** POST /reverse.do — cancel an authorized payment. */
     public Mono<JsonNode> reverse(SvEpgCredentials creds, String providerOrderId) {
         MultiValueMap<String, String> form = baseForm(creds);
         form.add("orderId", providerOrderId);
         return post(creds, "/reverse.do", form);
     }
 
-    /** POST /refund.do — refund a completed payment. */
     public Mono<JsonNode> refund(SvEpgCredentials creds, String providerOrderId, long amountMinor) {
         MultiValueMap<String, String> form = baseForm(creds);
         form.add("orderId", providerOrderId);

@@ -111,7 +111,6 @@ public class LiveETACalculationService implements ETACalculationService {
     public Mono<Integer> calculateTravelTimeMinutes(String routeNumber, String fromStopName, String toStopName) {
         log.debug("Calculating travel time for route {} from {} to {}", routeNumber, fromStopName, toStopName);
 
-        // Include time period in cache key so morning (peak) and evening (off-peak) get different results
         LocalDateTime now = LocalDateTime.now();
         TimePeriod period = TimePeriod.fromDateTime(now);
         boolean isWeekend = TimePeriod.isWeekend(now);
@@ -128,7 +127,6 @@ public class LiveETACalculationService implements ETACalculationService {
                         calculateTravelTimeFromDatabase(routeNumber, fromStopName, toStopName)
                                 .timeout(Duration.ofSeconds(3), Mono.fromCallable(() -> etaProperties.getFallback().getDefaultTravelTimeMinutes()))
                                 .map(baseTravelTime -> {
-                                    // Apply time-of-day traffic multiplier
                                     int adjusted = (int) Math.ceil(baseTravelTime * trafficMult);
                                     log.debug("Travel time adjusted: base={}min × {}({}) = {}min",
                                             baseTravelTime, trafficMult, period.name(), adjusted);
@@ -194,10 +192,8 @@ public class LiveETACalculationService implements ETACalculationService {
 
 
     private Mono<Integer> getVehicleBasedWaitingTime(String routeNumber, String stopName) {
-        // Priority 1: real-time GPS-based ETA from prediction engine (most accurate)
         return realTimeETAService.getWaitingTimeMinutes(routeNumber, stopName)
                 .switchIfEmpty(
-                        // Fallback: DB-based vehicle positions (less accurate but wider coverage)
                         etaRepository.getVehicleBasedWaitingTime(routeNumber, stopName)
                 );
     }
@@ -228,8 +224,6 @@ public class LiveETACalculationService implements ETACalculationService {
     private Mono<Integer> calculateTravelTimeFromDatabase(String routeNumber, String fromStopName, String toStopName) {
         return etaRepository.calculateTravelTimeFromDatabase(routeNumber, fromStopName, toStopName)
                 .switchIfEmpty(
-                    // Fallback: estimate from stop count on this route instead of a fixed constant.
-                    // Uses minutesPerStop (default 2) × number of stops between from and to.
                     etaRepository.countStopsBetween(routeNumber, fromStopName, toStopName)
                         .map(stopCount -> {
                             int perStop = etaProperties.getFallback().getMinutesPerStop();

@@ -25,17 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Aggregate root: an onboarded business that may run ads in the app.
- *
- * <p>Invariants enforced here (not in DB/services):
- * <ul>
- *   <li>Status transitions follow {@link BusinessStatus#canTransitionTo}.</li>
- *   <li>Rejection requires a reason; rejected businesses cannot be modified further.</li>
- *   <li>Suspension requires a reason.</li>
- *   <li>Approved business captures the admin who approved it (for audit).</li>
- * </ul>
- */
+
 @Builder(toBuilder = true)
 @Getter
 @EqualsAndHashCode(callSuper = false)

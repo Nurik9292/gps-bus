@@ -17,15 +17,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Builds a "walking only" route option — direct walking from origin to destination
- * without any bus ride. Shown alongside bus routes so the user can compare.
- *
- * <p>Uses OSRM pedestrian routing for accurate street geometry and distance.
- * Falls back to Haversine × 1.3 if OSRM is unavailable.
- *
- * <p>Only offered when the straight-line distance is under MAX_WALKING_ONLY_METERS (3 km).
- */
+
 @Service
 @Slf4j
 public class WalkingOnlyRouteSearchService {
@@ -58,7 +50,6 @@ public class WalkingOnlyRouteSearchService {
             return Mono.just(SearchResult.successful("walking_only", List.of()));
         }
 
-        // Try OSRM for accurate street routing, fall back to straight-line estimate
         return walkingRouteService.getWalkingRoute(from, to)
                 .timeout(OSRM_TIMEOUT)
                 .map(osrmResult -> {
@@ -67,7 +58,6 @@ public class WalkingOnlyRouteSearchService {
                     List<List<Double>> geometry = null;
 
                     if (osrmResult.hasGeometry() && osrmResult.distanceMeters() > 0) {
-                        // OSRM success — use real street distance and geometry
                         distanceMeters = osrmResult.distanceMeters();
                         walkingMinutes = Math.max(1, (int) Math.ceil(distanceMeters / WALKING_SPEED_M_PER_MIN));
                         geometry = osrmResult.coordinates();
@@ -75,7 +65,6 @@ public class WalkingOnlyRouteSearchService {
                                 context.searchId(), distanceMeters, walkingMinutes,
                                 geometry != null ? geometry.size() : 0);
                     } else {
-                        // OSRM returned empty — fallback
                         distanceMeters = (int) (straightLineMeters * STREET_DISTANCE_FACTOR);
                         walkingMinutes = Math.max(1, (int) Math.ceil(distanceMeters / WALKING_SPEED_M_PER_MIN));
                         log.info("[{}] Walking-only (fallback): {}m estimated, {} min",
@@ -85,7 +74,6 @@ public class WalkingOnlyRouteSearchService {
                     return buildResult(from, to, walkingMinutes, distanceMeters, geometry);
                 })
                 .onErrorResume(e -> {
-                    // OSRM unavailable — use straight-line estimate
                     int distanceMeters = (int) (straightLineMeters * STREET_DISTANCE_FACTOR);
                     int walkingMinutes = Math.max(1, (int) Math.ceil(distanceMeters / WALKING_SPEED_M_PER_MIN));
                     log.warn("[{}] Walking-only (OSRM failed: {}): {}m estimated, {} min",

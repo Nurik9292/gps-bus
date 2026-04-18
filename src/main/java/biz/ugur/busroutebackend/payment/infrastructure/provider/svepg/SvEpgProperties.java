@@ -8,38 +8,13 @@ import org.springframework.stereotype.Component;
 import java.util.EnumMap;
 import java.util.Map;
 
-/**
- * Loads sv_epg credentials from {@code application.yml} ({@code payment.svepg.*}).
- * One nested {@link Bank} section per {@link PaymentProvider}; only enabled banks
- * are registered as runtime {@link SvEpgCredentials}.
- *
- * <pre>
- * payment:
- *   svepg:
- *     banks:
- *       RYSGAL:
- *         enabled: true
- *         base-url: https://epg.rysgalbank.tm/epg/rest
- *         user-name: ${RYSGAL_API_USER}
- *         password:  ${RYSGAL_API_PASS}
- *         terminal-id: 11014027
- *         pid: 109755
- *       SENAGAT:
- *         enabled: true
- *         base-url: https://epg.senagatbank.com.tm/epg/rest
- *         user-name: ${SENAGAT_API_USER}
- *         password:  ${SENAGAT_API_PASS}
- * </pre>
- */
 @Data
 @Component
 @ConfigurationProperties(prefix = "payment.svepg")
 public class SvEpgProperties {
 
-    /** Per-bank configuration keyed by {@link PaymentProvider}. */
     private Map<PaymentProvider, Bank> banks = new EnumMap<>(PaymentProvider.class);
 
-    /** Default connect/read timeout for HTTP calls to provider (milliseconds). */
     private int timeoutMillis = 15_000;
 
     @Data

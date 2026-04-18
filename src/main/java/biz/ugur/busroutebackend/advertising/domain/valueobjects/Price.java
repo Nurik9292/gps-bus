@@ -6,10 +6,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
 
-/**
- * Monetary amount stored in minor currency units (tiyin for TMT, cents for USD).
- * Storing the price as long integer avoids float/double rounding drift.
- */
+
 @Getter
 @EqualsAndHashCode(callSuper = false)
 @ToString(callSuper = false)

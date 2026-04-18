@@ -98,7 +98,6 @@ class BusinessTest {
                 () -> ContactInfo.of("Ivan", "abc", null, null));
         assertThrows(BusinessValidationException.class,
                 () -> ContactInfo.of("Ivan", "", null, null));
-        // Valid phone
         ContactInfo ok = ContactInfo.of("Ivan", "+993 65 123456", null, null);
         assertEquals("+993 65 123456", ok.getPhone());
     }

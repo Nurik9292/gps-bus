@@ -8,11 +8,6 @@ import lombok.ToString;
 
 import java.util.UUID;
 
-/**
- * Merchant-side idempotency identifier sent to the payment provider.
- * sv_epg requires an <=32 character unique value; we use a compacted UUID
- * (32 hex chars, no dashes) which guarantees both uniqueness and width compliance.
- */
 @Getter
 @EqualsAndHashCode(callSuper = false)
 @ToString(callSuper = false)

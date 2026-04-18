@@ -15,13 +15,6 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-/**
- * Cross-cutting concern: emails business owners about payment outcomes.
- *
- * <p>Payment events carry only the paymentId and subject info; we look up the
- * Payment + the linked Business to get the owner's email and the amount.
- * Entirely async — failure to send an email never affects the payment lifecycle.
- */
 @Component
 @Slf4j
 public class PaymentNotificationEmailListener {
