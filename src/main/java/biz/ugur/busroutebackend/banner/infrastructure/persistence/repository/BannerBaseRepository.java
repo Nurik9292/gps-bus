@@ -22,10 +22,20 @@ import java.util.function.BiFunction;
 @Repository
 public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, BannerId> {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "title", "type", "image_url", "target_url", "is_active",
+            "display_order", "start_date", "end_date", "content", "reply_time",
+            "version", "created_at", "updated_at"
+    );
+
     protected BannerBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "banners", Banner.class);
     }
 
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
+    }
 
     @Override
     protected String convertIdToDatabase(BannerId bannerId) {
@@ -82,7 +92,8 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-            "SELECT * FROM banners WHERE %s ORDER BY display_order ASC, created_at DESC",
+            "SELECT %s FROM banners WHERE %s ORDER BY display_order ASC, created_at DESC",
+            selectColumns(),
             criteria.getWhereClause()
         );
 
@@ -102,7 +113,8 @@ public abstract class BannerBaseRepository extends BaseR2dbcRepository<Banner, B
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-            "SELECT * FROM banners WHERE %s %s LIMIT :limit OFFSET :offset",
+            "SELECT %s FROM banners WHERE %s %s LIMIT :limit OFFSET :offset",
+            selectColumns(),
             criteria.getWhereClause(),
             getOrderByClause(pageable)
         );

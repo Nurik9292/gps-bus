@@ -20,8 +20,20 @@ import java.util.function.BiFunction;
 
 public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, ClientId> {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "name", "phone", "otp", "otp_verify", "platform", "status",
+            "last_activity", "access_token", "refresh_token",
+            "created_at", "updated_at", "version",
+            "created_by_service_id", "external_user_id"
+    );
+
     protected ClientBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "clients", Client.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -81,7 +93,8 @@ public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, C
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-                "SELECT * FROM clients WHERE %s ORDER BY created_at DESC",
+                "SELECT %s FROM clients WHERE %s ORDER BY created_at DESC",
+                selectColumns(),
                 criteria.getWhereClause()
         );
 
@@ -100,7 +113,8 @@ public abstract class ClientBaseRepository extends BaseR2dbcRepository<Client, C
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-                "SELECT * FROM clients WHERE %s %s LIMIT :limit OFFSET :offset",
+                "SELECT %s FROM clients WHERE %s %s LIMIT :limit OFFSET :offset",
+                selectColumns(),
                 criteria.getWhereClause(),
                 getOrderByClause(pageable)
         );
