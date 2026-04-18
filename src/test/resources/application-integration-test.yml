@@ -1,0 +1,56 @@
+spring:
+  main:
+    banner-mode: off
+    web-application-type: reactive
+
+app:
+  security:
+    jwt:
+      admin:
+        secret: "integration-test-jwt-secret-must-be-32-chars-or-more-hs256"
+        access-token-expiration: "PT1H"
+        refresh-token-expiration: "P7D"
+        issuer: "bus-route-integration-test"
+      client:
+        secret: "integration-test-jwt-secret-must-be-32-chars-or-more-hs256"
+        access-token-expiration: "P31D"
+        refresh-token-expiration: "P90D"
+        issuer: "bus-route-integration-test"
+
+  admin:
+    default-username: "integration-admin"
+    default-password: "integration-password-12chars"
+
+  scheduling:
+    enabled: false
+
+  scheduler:
+    active-hours:
+      start: 0
+      end: 24
+
+gps:
+  recorder:
+    enabled: false
+
+external:
+  api:
+    gps:
+      base-url: "http://localhost:1/gps-mock"
+    bus-info:
+      base-url: "http://localhost:1/bus-info-mock"
+    osrm:
+      enabled: false
+    nominatim:
+      enabled: false
+
+payment:
+  scheduler:
+    enabled: false
+
+ugur:
+  prediction:
+    enabled: true
+
+dijkstra:
+  enabled: true
