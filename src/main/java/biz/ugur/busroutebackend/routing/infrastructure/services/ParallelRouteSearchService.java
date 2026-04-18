@@ -18,6 +18,8 @@ import java.util.List;
 @Slf4j
 public class ParallelRouteSearchService {
 
+    private static final double SHORT_WALK_THRESHOLD_METERS = 150.0;
+
     private final DirectRouteSearchService directRouteSearch;
     private final OneTransferRouteSearchService oneTransferSearch;
     private final TwoTransferRouteSearchService twoTransferSearch;
@@ -57,6 +59,10 @@ public class ParallelRouteSearchService {
                 context.toLocation().getLatitudeAsDouble(),
                 context.toLocation().getLongitudeAsDouble());
 
+        if (isShortWalk(context)) {
+            return buildShortWalkOnlyPlan(context);
+        }
+
         log.info("[{}] >>> Step 1: Finding nearby stops", context.searchId());
         return nearbyStopsService.findStopsForBothLocations(context)
                 .timeout(Duration.ofSeconds(5))
@@ -79,6 +85,25 @@ public class ParallelRouteSearchService {
 
                     return executeSearchesInParallel(context, stopsContext);
                 });
+    }
+
+    private boolean isShortWalk(SearchContext context) {
+        double meters = DistanceCalculationService.haversineDistanceMeters(
+                context.fromLocation().getLatitudeAsDouble(),
+                context.fromLocation().getLongitudeAsDouble(),
+                context.toLocation().getLatitudeAsDouble(),
+                context.toLocation().getLongitudeAsDouble());
+        return meters <= SHORT_WALK_THRESHOLD_METERS;
+    }
+
+    private Mono<TripPlan> buildShortWalkOnlyPlan(SearchContext context) {
+        log.info("[{}] Short walk shortcut: endpoints within {} m — returning walking-only",
+                context.searchId(), (int) SHORT_WALK_THRESHOLD_METERS);
+        return walkingOnlySearch.search(context)
+                .map(walkingResult -> tripPlanCombiner.combineWithDeduplication(
+                        context,
+                        List.of(walkingResult),
+                        walkingResult.getOptions()));
     }
 
     private Mono<TripPlan> executeSearchesInParallel(SearchContext context, StopsContext stopsContext) {
