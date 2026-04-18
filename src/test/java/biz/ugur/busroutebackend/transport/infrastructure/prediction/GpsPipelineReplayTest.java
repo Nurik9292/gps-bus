@@ -69,10 +69,11 @@ class GpsPipelineReplayTest {
         lenient().when(gpsRecorderProvider.getIfAvailable()).thenReturn(null);
 
         service = new VehiclePositionPredictionService(
-                properties, broadcaster, routeGeometryCache, mapMatchingService,
-                stateRepository, dwellStatsRepository, gpsRecorderProvider,
+                properties, broadcaster, routeGeometryCache,
+                stateRepository, gpsRecorderProvider,
                 new GpsOutlierFilter(),
-                new SnapCorrector(properties, routeGeometryCache, mapMatchingService)
+                new SnapCorrector(properties, routeGeometryCache, mapMatchingService),
+                new VehiclePositionPredictor(properties, routeGeometryCache, mapMatchingService, dwellStatsRepository)
         );
     }
 
