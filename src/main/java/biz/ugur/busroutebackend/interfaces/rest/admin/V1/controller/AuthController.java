@@ -23,7 +23,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_AUTH)
-@CrossOrigin(origins = "*")
 public class AuthController extends BaseController {
 
     private final LoginUseCase loginUseCase;

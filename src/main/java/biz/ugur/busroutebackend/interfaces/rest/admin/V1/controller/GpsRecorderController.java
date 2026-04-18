@@ -3,7 +3,6 @@ package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 import biz.ugur.busroutebackend.transport.infrastructure.debug.GpsRecorder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -15,7 +14,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_GPS_RECORDER)
-@CrossOrigin("*")
 @ConditionalOnProperty(prefix = "gps.recorder", name = "enabled", havingValue = "true")
 public class GpsRecorderController {
 

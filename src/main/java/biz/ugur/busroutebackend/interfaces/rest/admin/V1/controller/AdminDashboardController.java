@@ -5,7 +5,6 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.dashboard.Dash
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,7 +14,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_DASHBOARD)
-@CrossOrigin("*")
 public class AdminDashboardController extends BaseController {
 
     private final GetDashboardStatisticsUseCase getDashboardStatisticsUseCase;

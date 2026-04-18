@@ -19,7 +19,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_COMPLAINTS)
-@CrossOrigin("*")
 public class AdminComplaintController extends BasePaginatedController {
 
     private final GetAllComplaintsUseCase getAllComplaintsUseCase;

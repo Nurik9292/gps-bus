@@ -20,7 +20,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_INTEGRATION_CLIENTS)
-@CrossOrigin(origins = "*")
 @Tag(name = "Integration Clients", description = "Manage clients via external service API")
 public class IntegrationClientsController extends BasePaginatedController {
 

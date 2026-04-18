@@ -16,7 +16,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_CLIENT_FAVORITES)
-@CrossOrigin(origins = "*")
 public class FavoritesController extends BaseController {
 
     private final AddStopToFavoritesUseCase addStopToFavoritesUseCase;

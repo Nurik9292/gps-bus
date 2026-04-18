@@ -22,7 +22,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_CLIENT_SUGGESTIONS)
-@CrossOrigin(origins = "*")
 public class ClientSuggestionController extends BaseController {
 
     private final CreateAliasSuggestionUseCase createAliasSuggestionUseCase;

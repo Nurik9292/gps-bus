@@ -29,7 +29,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 @Slf4j
 @RestController
 @RequestMapping(V1_ADMIN_ROUTE_ASSIGNMENTS)
-@CrossOrigin(origins = "*")
 public class AdminRouteAssignmentController extends BaseController {
 
     private final CreateRouteAssignmentUseCase createUseCase;

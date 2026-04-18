@@ -23,7 +23,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_PLACES)
-@CrossOrigin("*")
 public class AdminPlaceController extends BasePaginatedController {
 
     private final CreatePlaceUseCase createPlaceUseCase;

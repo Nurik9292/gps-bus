@@ -22,7 +22,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_CLIENT_AUTH)
-@CrossOrigin(origins = "*")
 public class ClientAuthController extends BaseController {
 
     private final RegisterClientUseCase registerClientUseCase;

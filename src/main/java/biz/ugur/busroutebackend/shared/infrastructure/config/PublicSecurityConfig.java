@@ -27,6 +27,12 @@ import java.util.List;
 @Order(3)
 public class PublicSecurityConfig {
 
+    private final CorsProperties corsProperties;
+
+    public PublicSecurityConfig(CorsProperties corsProperties) {
+        this.corsProperties = corsProperties;
+    }
+
     @Bean
     public SecurityWebFilterChain publicSecurityFilterChain(ServerHttpSecurity http) {
 
@@ -98,7 +104,16 @@ public class PublicSecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        if (!corsProperties.getAllowedOrigins().isEmpty()) {
+            configuration.setAllowedOrigins(corsProperties.getAllowedOrigins());
+        }
+        if (!corsProperties.getAllowedOriginPatterns().isEmpty()) {
+            configuration.setAllowedOriginPatterns(corsProperties.getAllowedOriginPatterns());
+        }
+        log.info("[CORS] allowed-origins={} patterns={} credentials={}",
+                corsProperties.getAllowedOrigins(),
+                corsProperties.getAllowedOriginPatterns(),
+                corsProperties.isAllowCredentials());
 
         configuration.setAllowedMethods(List.of(
                 "GET",
@@ -111,7 +126,7 @@ public class PublicSecurityConfig {
 
         configuration.setAllowedHeaders(List.of("*"));
 
-        configuration.setAllowCredentials(true);
+        configuration.setAllowCredentials(corsProperties.isAllowCredentials());
 
         configuration.setMaxAge(3600L);
 

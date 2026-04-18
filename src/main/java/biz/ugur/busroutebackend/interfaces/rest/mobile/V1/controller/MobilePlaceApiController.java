@@ -16,7 +16,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_MOBILE_PLACES)
-@CrossOrigin("*")
 public class MobilePlaceApiController extends BaseController {
 
     private final SearchPlacesUseCase searchPlacesUseCase;

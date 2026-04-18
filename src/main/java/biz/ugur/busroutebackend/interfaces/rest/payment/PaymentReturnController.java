@@ -11,7 +11,6 @@ import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,7 +23,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_PAYMENTS_RETURN)
-@CrossOrigin(origins = "*")
 @Slf4j
 public class PaymentReturnController extends BaseController {
 

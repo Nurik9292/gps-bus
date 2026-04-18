@@ -25,7 +25,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_STREETS)
-@CrossOrigin("*")
 public class AdminStreetController extends BasePaginatedController {
 
     private final CreateStreetUseCase createStreetUseCase;

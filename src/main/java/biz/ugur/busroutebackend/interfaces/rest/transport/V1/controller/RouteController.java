@@ -23,7 +23,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping( V1_ROUTES)
-@CrossOrigin("*")
 public class RouteController extends BaseController {
 
     private final GetRouteWithGeometryUseCase getRouteWithGeometryUseCase;

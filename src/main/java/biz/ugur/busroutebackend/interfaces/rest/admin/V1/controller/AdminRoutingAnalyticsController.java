@@ -18,7 +18,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_ANALYTICS + "/routing")
-@CrossOrigin("*")
 public class AdminRoutingAnalyticsController extends BaseController {
 
     private final GetRoutingAnalyticsOverviewUseCase getRoutingAnalyticsOverviewUseCase;

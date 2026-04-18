@@ -148,6 +148,14 @@ app:
         refresh-token-expiration: "P90D"  # 912 days
         issuer: "bus-route-system"
 
+  cors:
+    # Comma-separated list of allowed origins (exact match).
+    # Production must list real domains; dev default covers Flutter dev + admin.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+    # Pattern-based match (supports wildcards). Use only when allowed-origins is insufficient.
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:}
+    allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
+
   storage:
     avatars:
       base-path: ${AVATAR_STORAGE_PATH:/home/user/bus/bus_route_backend/app/data/avatars}
