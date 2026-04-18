@@ -16,6 +16,7 @@ import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
+import java.util.Optional;
 import java.util.UUID;
 
 @Log4j2
@@ -90,15 +91,22 @@ public abstract class BaseImageStorageService {
         String header = parts[0];
         String data = parts[1];
 
-        String mimeType = header.substring(5, header.indexOf(";"));
-        String extension = mimeType.substring(mimeType.indexOf("/") + 1);
-        if ("jpeg".equals(extension)) {
-            extension = "jpg";
-        }
-
+        String declaredMimeType = header.substring(5, header.indexOf(";"));
+        String declaredExtension = declaredMimeType.substring(declaredMimeType.indexOf("/") + 1);
         byte[] decodedData = Base64.getDecoder().decode(data);
 
-        return new Metadata(extension, decodedData, mimeType);
+        ImageMagicBytes.Format detected = ImageMagicBytes.detect(decodedData)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Image bytes do not match any supported image format (JPEG/PNG/GIF/WEBP)."));
+
+        Optional<ImageMagicBytes.Format> declared =
+                ImageMagicBytes.Format.fromDeclaredExtension(declaredExtension);
+        if (declared.isEmpty() || declared.get() != detected) {
+            log.warn("⚠️ Image mime-type mismatch: declared={} detected={} — using detected",
+                    declaredMimeType, detected.mimeType());
+        }
+
+        return new Metadata(detected.extension(), decodedData, detected.mimeType());
     }
 
 
