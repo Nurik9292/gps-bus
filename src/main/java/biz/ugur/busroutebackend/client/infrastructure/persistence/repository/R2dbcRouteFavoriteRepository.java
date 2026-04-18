@@ -20,11 +20,11 @@ public class R2dbcRouteFavoriteRepository extends RouteFavoriteBaseRepository im
 
     @Override
     public Flux<RouteFavorite> findByClientId(ClientId clientId) {
-        String sql = """
-            SELECT * FROM route_favorites 
-            WHERE client_id = :clientId 
+        String sql = String.format("""
+            SELECT %s FROM route_favorites
+            WHERE client_id = :clientId
             ORDER BY created_at DESC
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("clientId", clientId.getValue())

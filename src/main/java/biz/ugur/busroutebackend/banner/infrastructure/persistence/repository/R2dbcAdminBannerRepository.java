@@ -18,13 +18,13 @@ public class R2dbcAdminBannerRepository extends BannerBaseRepository implements 
 
     @Override
     public Flux<Banner> findActiveBanners() {
-        String sql = """
-            SELECT * FROM banners 
-            WHERE is_active = true 
+        String sql = String.format("""
+            SELECT %s FROM banners
+            WHERE is_active = true
             AND (start_date IS NULL OR start_date <= NOW())
             AND (end_date IS NULL OR end_date >= NOW())
             ORDER BY display_order ASC, created_at DESC
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -48,14 +48,14 @@ public class R2dbcAdminBannerRepository extends BannerBaseRepository implements 
 
     @Override
     public Flux<Banner> findByTypeAndActive(BannerType type) {
-        String sql = """
-            SELECT * FROM banners
+        String sql = String.format("""
+            SELECT %s FROM banners
             WHERE is_active = true
             AND LOWER(type) = LOWER(:type)
             AND (start_date IS NULL OR start_date <= NOW())
             AND (end_date IS NULL OR end_date >= NOW())
             ORDER BY display_order ASC, created_at DESC
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("type", type.getValue())

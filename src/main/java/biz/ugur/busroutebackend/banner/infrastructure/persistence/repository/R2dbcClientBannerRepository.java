@@ -19,15 +19,15 @@ public class R2dbcClientBannerRepository extends BannerBaseRepository implements
 
     @Override
     public Flux<Banner> findActiveBannersByTypeWithPagination(BannerType type, Pageable pageable) {
-        String sql = """
-        SELECT * FROM banners
+        String sql = String.format("""
+        SELECT %s FROM banners
         WHERE is_active = true
         AND (start_date IS NULL OR start_date <= NOW())
         AND (end_date IS NULL OR end_date >= NOW())
         AND LOWER(type) = LOWER(:type)
         ORDER BY display_order ASC, created_at DESC
         LIMIT :limit OFFSET :offset
-        """;
+        """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("type", type.getValue())
