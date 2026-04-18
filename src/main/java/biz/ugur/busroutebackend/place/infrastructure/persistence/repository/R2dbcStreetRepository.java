@@ -23,8 +23,18 @@ import java.util.function.BiFunction;
 public class R2dbcStreetRepository extends BaseR2dbcRepository<Street, StreetId>
         implements StreetRepository {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "name", "name_en", "name_tm", "city_id", "is_active",
+            "version", "created_at", "updated_at"
+    );
+
     public R2dbcStreetRepository(DatabaseClient databaseClient) {
         super(databaseClient, "streets", Street.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -55,7 +65,10 @@ public class R2dbcStreetRepository extends BaseR2dbcRepository<Street, StreetId>
 
     @Override
     public Flux<Street> findByCityId(String cityId) {
-        String sql = "SELECT * FROM streets WHERE city_id = :cityId AND is_active = true ORDER BY name";
+        String sql = String.format(
+                "SELECT %s FROM streets WHERE city_id = :cityId AND is_active = true ORDER BY name",
+                selectColumns()
+        );
         return databaseClient.sql(sql)
                 .bind("cityId", cityId)
                 .map(getRowMapper())
@@ -65,7 +78,8 @@ public class R2dbcStreetRepository extends BaseR2dbcRepository<Street, StreetId>
     @Override
     public Flux<Street> findByCityId(String cityId, Pageable pageable) {
         String sql = String.format(
-                "SELECT * FROM streets WHERE city_id = :cityId %s LIMIT :limit OFFSET :offset",
+                "SELECT %s FROM streets WHERE city_id = :cityId %s LIMIT :limit OFFSET :offset",
+                selectColumns(),
                 getOrderByClause(pageable)
         );
         return databaseClient.sql(sql)

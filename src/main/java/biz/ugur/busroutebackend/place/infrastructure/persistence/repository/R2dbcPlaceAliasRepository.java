@@ -22,8 +22,18 @@ import java.util.function.BiFunction;
 public class R2dbcPlaceAliasRepository extends BaseR2dbcRepository<PlaceAlias, PlaceAliasId>
         implements PlaceAliasRepository {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "place_id", "alias", "language",
+            "version", "created_at", "updated_at"
+    );
+
     public R2dbcPlaceAliasRepository(DatabaseClient databaseClient) {
         super(databaseClient, "place_aliases", PlaceAlias.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -52,7 +62,10 @@ public class R2dbcPlaceAliasRepository extends BaseR2dbcRepository<PlaceAlias, P
 
     @Override
     public Flux<PlaceAlias> findByPlaceId(String placeId) {
-        String sql = "SELECT * FROM place_aliases WHERE place_id = :placeId ORDER BY alias";
+        String sql = String.format(
+                "SELECT %s FROM place_aliases WHERE place_id = :placeId ORDER BY alias",
+                selectColumns()
+        );
         return databaseClient.sql(sql)
                 .bind("placeId", placeId)
                 .map(getRowMapper())

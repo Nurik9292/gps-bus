@@ -18,8 +18,19 @@ import java.util.function.BiFunction;
 
 public abstract class PlaceBaseRepository extends BaseR2dbcRepository<Place, PlaceId> {
 
+    protected static final String SELECT_COLUMNS = String.join(", ",
+            "id", "name", "name_en", "name_tm", "description", "address",
+            "category", "city_id", "latitude", "longitude", "is_active",
+            "version", "created_at", "updated_at"
+    );
+
     protected PlaceBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "places", Place.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override

@@ -22,8 +22,18 @@ import java.util.function.BiFunction;
 public class R2dbcStreetAliasRepository extends BaseR2dbcRepository<StreetAlias, StreetAliasId>
         implements StreetAliasRepository {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "street_id", "alias", "language",
+            "version", "created_at", "updated_at"
+    );
+
     public R2dbcStreetAliasRepository(DatabaseClient databaseClient) {
         super(databaseClient, "street_aliases", StreetAlias.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -52,7 +62,10 @@ public class R2dbcStreetAliasRepository extends BaseR2dbcRepository<StreetAlias,
 
     @Override
     public Flux<StreetAlias> findByStreetId(String streetId) {
-        String sql = "SELECT * FROM street_aliases WHERE street_id = :streetId ORDER BY alias";
+        String sql = String.format(
+                "SELECT %s FROM street_aliases WHERE street_id = :streetId ORDER BY alias",
+                selectColumns()
+        );
         return databaseClient.sql(sql)
                 .bind("streetId", streetId)
                 .map(getRowMapper())
@@ -71,7 +84,10 @@ public class R2dbcStreetAliasRepository extends BaseR2dbcRepository<StreetAlias,
 
     @Override
     public Flux<StreetAlias> findAllWithStreetNames() {
-        String sql = "SELECT sa.* FROM street_aliases sa JOIN streets s ON sa.street_id = s.id WHERE s.is_active = true";
+        String sql = String.format(
+                "SELECT %s FROM street_aliases sa JOIN streets s ON sa.street_id = s.id WHERE s.is_active = true",
+                selectColumns("sa")
+        );
         return databaseClient.sql(sql)
                 .map(getRowMapper())
                 .all();
