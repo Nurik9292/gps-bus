@@ -16,8 +16,25 @@ import java.util.function.BiFunction;
 
 public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPlacement, PlacementId> {
 
+    protected static final String SELECT_COLUMNS = String.join(", ",
+            "id", "business_id", "tariff_id", "placement_type", "status",
+            "title", "content", "image_url", "target_url", "cta_text",
+            "starts_at", "ends_at",
+            "impressions_count", "clicks_count",
+            "display_contexts", "display_order",
+            "rejection_reason",
+            "approved_at", "approved_by_admin_id",
+            "rejected_at", "rejected_by_admin_id",
+            "created_at", "updated_at", "version"
+    );
+
     protected AdPlacementBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "ad_placements", AdPlacement.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override protected String convertIdToDatabase(PlacementId id) { return id.getValue(); }

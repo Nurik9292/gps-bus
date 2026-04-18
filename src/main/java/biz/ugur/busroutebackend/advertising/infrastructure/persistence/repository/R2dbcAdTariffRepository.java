@@ -16,22 +16,24 @@ public class R2dbcAdTariffRepository extends AdTariffBaseRepository implements A
 
     @Override
     public Flux<AdTariff> findActive() {
-        return databaseClient.sql("""
-                        SELECT * FROM ad_tariffs
+        String sql = String.format("""
+                        SELECT %s FROM ad_tariffs
                         WHERE is_active = true
                         ORDER BY display_order ASC, created_at DESC
-                        """)
+                        """, selectColumns());
+        return databaseClient.sql(sql)
                 .map(getRowMapper())
                 .all();
     }
 
     @Override
     public Flux<AdTariff> findActiveByType(PlacementType placementType) {
-        return databaseClient.sql("""
-                        SELECT * FROM ad_tariffs
+        String sql = String.format("""
+                        SELECT %s FROM ad_tariffs
                         WHERE is_active = true AND placement_type = :type
                         ORDER BY display_order ASC, price_amount ASC
-                        """)
+                        """, selectColumns());
+        return databaseClient.sql(sql)
                 .bind("type", placementType.name())
                 .map(getRowMapper())
                 .all();
