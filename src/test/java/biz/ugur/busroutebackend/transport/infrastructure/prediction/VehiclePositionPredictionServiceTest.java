@@ -46,7 +46,8 @@ class VehiclePositionPredictionServiceTest {
         service = new VehiclePositionPredictionService(
                 properties, broadcaster, routeGeometryCache, mapMatchingService,
                 stateRepository, dwellStatsRepository, gpsRecorderProvider,
-                new GpsOutlierFilter()
+                new GpsOutlierFilter(),
+                new SnapCorrector(properties, routeGeometryCache, mapMatchingService)
         );
     }
 
