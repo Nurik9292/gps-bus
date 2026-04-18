@@ -885,6 +885,10 @@ public class VehiclePositionPredictionService {
                 .toList();
     }
 
+    List<VehiclePredictionState> snapshotAllStatesForTest() {
+        return List.copyOf(vehicleStates.values());
+    }
+
     public Map<String, Integer> drainPendingDirectionFixes() {
         if (pendingDirectionFixes.isEmpty()) {
             return Map.of();

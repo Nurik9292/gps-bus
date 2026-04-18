@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.shared.test.integration;
 
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePositionPredictionService;
+import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePredictionState;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -13,6 +14,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 public class GpsPipelineReplayRunner {
 
@@ -21,10 +23,13 @@ public class GpsPipelineReplayRunner {
     private static final String GOLDEN_DIR = "fixtures/gps/golden";
 
     private final VehiclePositionPredictionService service;
+    private final Supplier<List<VehiclePredictionState>> stateSupplier;
     private final ObjectMapper mapper;
 
-    public GpsPipelineReplayRunner(VehiclePositionPredictionService service) {
+    public GpsPipelineReplayRunner(VehiclePositionPredictionService service,
+                                    Supplier<List<VehiclePredictionState>> stateSupplier) {
         this.service = service;
+        this.stateSupplier = stateSupplier;
         this.mapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .enable(SerializationFeature.INDENT_OUTPUT)
@@ -55,7 +60,7 @@ public class GpsPipelineReplayRunner {
                     shiftedTimestamp,
                     event.direction()
             );
-            snapshots.add(PredictionSnapshot.fromAll(service.getActiveStates()));
+            snapshots.add(PredictionSnapshot.fromAll(stateSupplier.get()));
         }
 
         compareOrRegenerate(scenario, snapshots);
