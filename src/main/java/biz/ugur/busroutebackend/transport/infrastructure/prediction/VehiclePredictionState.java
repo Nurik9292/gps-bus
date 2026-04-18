@@ -58,4 +58,6 @@ public class VehiclePredictionState {
 
     private String dwellStopId;
 
+    private Instant coldStartUntilAt;
+
 }

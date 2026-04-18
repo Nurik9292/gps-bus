@@ -42,9 +42,20 @@ public class PredictionBroadcaster {
         return lastBroadcastPosition.get(vehicleId);
     }
 
+    public static boolean isInColdStart(VehiclePredictionState state) {
+        Instant coldStartUntilAt = state.getColdStartUntilAt();
+        return coldStartUntilAt != null && coldStartUntilAt.isAfter(Instant.now());
+    }
+
     public Mono<Void> broadcast(VehiclePredictionState state) {
         if (!state.isInMotion() && state.getSpeedKmh() == 0
                 && (state.getRouteNumber() == null || state.getRouteNumber().isBlank())) {
+            return Mono.empty();
+        }
+
+        if (isInColdStart(state)) {
+            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_COLD_START vehicle={} plate={} — state stabilizing",
+                    state.getVehicleId(), state.getLicensePlate());
             return Mono.empty();
         }
 

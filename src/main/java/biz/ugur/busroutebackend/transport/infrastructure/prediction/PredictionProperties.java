@@ -54,4 +54,6 @@ public class PredictionProperties {
     private double dwellActivationDistanceMeters = 100.0;
 
     private double dwellSpeedThresholdKmh = 15.0;
+
+    private long coldStartDurationSec = 15;
 }

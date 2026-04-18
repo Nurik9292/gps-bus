@@ -131,6 +131,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
 
         Flux<BusArrivalInfo> fromPrediction = Flux.fromIterable(predictionService.getActiveStates())
                 .filter(s -> s.getRouteNumber() != null && s.getTotalRouteDistanceMeters() > 0)
+                .filter(s -> !biz.ugur.busroutebackend.transport.infrastructure.prediction.PredictionBroadcaster.isInColdStart(s))
                 .flatMap(state -> {
                     OptionalDouble stopFracOpt = routeGeometryCache.getStopFraction(
                             state.getRouteNumber(), state.getDirection(), stopId);

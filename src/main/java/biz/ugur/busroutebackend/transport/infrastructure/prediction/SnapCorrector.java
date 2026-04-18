@@ -41,7 +41,8 @@ class SnapCorrector {
             double totalRouteDistanceMeters,
             double course,
             double newRejectedFrac,
-            int newImplausibleCount
+            int newImplausibleCount,
+            boolean resetTriggered
     ) {}
 
     SnapResult applySnap(VehiclePredictionState existing,
@@ -55,7 +56,7 @@ class SnapCorrector {
             log.debug("[GPS_PIPELINE] SNAP_SKIP vehicle={} snapToRoute={} routeNumber={}",
                     vehicleId, properties.isSnapToRoute(), routeNumber);
             return new SnapResult(latitude, longitude, -1, direction, null, 0,
-                    course, newRejectedFrac, newImplausibleCount);
+                    course, newRejectedFrac, newImplausibleCount, false);
         }
 
         List<double[]> routeCoords = routeGeometryCache.getPoints(routeNumber, direction);
@@ -71,7 +72,7 @@ class SnapCorrector {
             log.debug("[GPS_PIPELINE] SNAP_SKIP vehicle={} snapToRoute={} routeNumber={}",
                     vehicleId, properties.isSnapToRoute(), routeNumber);
             return new SnapResult(latitude, longitude, -1, direction, null, 0,
-                    course, newRejectedFrac, newImplausibleCount);
+                    course, newRejectedFrac, newImplausibleCount, false);
         }
 
         double totalDist = routeGeometryCache.getTotalDistance(routeNumber, direction);
@@ -116,6 +117,7 @@ class SnapCorrector {
         double predictedLat;
         double predictedLon;
         double fraction;
+        boolean resetTriggered = false;
 
         if (snap.snapped()) {
             log.debug("[GPS_PIPELINE] SNAP_OK vehicle={} route={} dist={}m frac={}",
@@ -197,6 +199,7 @@ class SnapCorrector {
                         newImplausibleCount = 0;
                         newRejectedFrac = -1;
                         resetToDR = true;
+                        resetTriggered = true;
                     } else {
                         plausibleSnap = false;
                         log.debug("[GPS_PIPELINE] SNAP_IMPLAUSIBLE vehicle={} route={} dir={} lastFrac={}→newFrac={} jump={} ({}/3) — keeping predicted",
@@ -250,6 +253,7 @@ class SnapCorrector {
                 fraction = -1;
                 routeCoords = null;
                 totalDist = 0;
+                resetTriggered = true;
             } else if (realIsAhead) {
                 predictedLat = snap.latitude();
                 predictedLon = snap.longitude();
@@ -329,7 +333,8 @@ class SnapCorrector {
         }
 
         return new SnapResult(predictedLat, predictedLon, fraction, direction,
-                routeCoords, totalDist, course, newRejectedFrac, newImplausibleCount);
+                routeCoords, totalDist, course, newRejectedFrac, newImplausibleCount,
+                resetTriggered);
     }
 
     Map<String, Integer> drainPendingDirectionFixes() {

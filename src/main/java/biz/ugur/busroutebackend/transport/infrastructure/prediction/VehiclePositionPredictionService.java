@@ -215,8 +215,19 @@ public class VehiclePositionPredictionService {
                 .consecutiveImplausibleCount(newImplausibleCount)
                 .direction(direction);
 
-        VehiclePredictionState builtState = builder.lastReceivedAt(Instant.now()).build();
+        Instant coldStartUntilAt = snapResult.resetTriggered()
+                ? Instant.now().plusSeconds(properties.getColdStartDurationSec())
+                : (existing != null ? existing.getColdStartUntilAt() : null);
+
+        VehiclePredictionState builtState = builder
+                .lastReceivedAt(Instant.now())
+                .coldStartUntilAt(coldStartUntilAt)
+                .build();
         vehicleStates.put(vehicleId, builtState);
+        if (snapResult.resetTriggered()) {
+            log.warn("[GPS_PIPELINE] COLD_START vehicle={} plate={} route={} duration={}s — WS broadcast suppressed until state stabilizes",
+                    vehicleId, licensePlate, routeNumber, properties.getColdStartDurationSec());
+        }
         log.debug("[GPS_PIPELINE] GPS_STORED vehicle={} plate={} route={} speed={}km/h inMotion={} frac={} mode={}",
                 vehicleId, licensePlate, routeNumber,
                 String.format("%.1f", speedKmh), inMotion,
@@ -385,6 +396,11 @@ public class VehiclePositionPredictionService {
 
     List<VehiclePredictionState> snapshotAllStatesForTest() {
         return List.copyOf(vehicleStates.values());
+    }
+
+    public boolean isInColdStart(String vehicleId) {
+        VehiclePredictionState state = vehicleStates.get(vehicleId);
+        return state != null && PredictionBroadcaster.isInColdStart(state);
     }
 
     public Map<String, Integer> drainPendingDirectionFixes() {
