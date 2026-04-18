@@ -19,7 +19,9 @@ public class R2dbcAliasSuggestionRepository extends SuggestionBaseRepository imp
 
     @Override
     public Flux<AliasSuggestion> findByFilters(SuggestionStatus status, SuggestionEntityType entityType, Pageable pageable) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM alias_suggestions WHERE 1=1");
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(selectColumns())
+                .append(" FROM alias_suggestions WHERE 1=1");
 
         if (status != null) sql.append(" AND status = :status");
         if (entityType != null) sql.append(" AND entity_type = :entityType");
@@ -64,7 +66,8 @@ public class R2dbcAliasSuggestionRepository extends SuggestionBaseRepository imp
     @Override
     public Flux<AliasSuggestion> findByClientId(String clientId, Pageable pageable) {
         String sql = String.format(
-                "SELECT * FROM alias_suggestions WHERE client_id = :clientId %s LIMIT :limit OFFSET :offset",
+                "SELECT %s FROM alias_suggestions WHERE client_id = :clientId %s LIMIT :limit OFFSET :offset",
+                selectColumns(),
                 getOrderByClause(pageable)
         );
         return databaseClient.sql(sql)

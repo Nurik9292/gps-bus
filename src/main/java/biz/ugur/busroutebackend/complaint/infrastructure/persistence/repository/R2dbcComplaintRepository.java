@@ -19,7 +19,9 @@ public class R2dbcComplaintRepository extends ComplaintBaseRepository implements
 
     @Override
     public Flux<Complaint> findByFilters(ComplaintStatus status, ComplaintType type, Pageable pageable) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM complaints WHERE 1=1");
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(selectColumns())
+                .append(" FROM complaints WHERE 1=1");
 
         if (status != null) sql.append(" AND status = :status");
         if (type != null) sql.append(" AND type = :type");
@@ -53,7 +55,8 @@ public class R2dbcComplaintRepository extends ComplaintBaseRepository implements
     @Override
     public Flux<Complaint> findByClientId(String clientId, Pageable pageable) {
         String sql = String.format(
-                "SELECT * FROM complaints WHERE client_id = :clientId %s LIMIT :limit OFFSET :offset",
+                "SELECT %s FROM complaints WHERE client_id = :clientId %s LIMIT :limit OFFSET :offset",
+                selectColumns(),
                 getOrderByClause(pageable)
         );
         return databaseClient.sql(sql)

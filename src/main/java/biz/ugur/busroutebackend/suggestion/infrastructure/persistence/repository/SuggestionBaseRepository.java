@@ -16,8 +16,19 @@ import java.util.function.BiFunction;
 
 public abstract class SuggestionBaseRepository extends BaseR2dbcRepository<AliasSuggestion, AliasSuggestionId> {
 
+    protected static final String SELECT_COLUMNS = String.join(", ",
+            "id", "entity_type", "entity_id", "suggested_alias", "language",
+            "status", "client_id", "reviewer_id", "review_comment",
+            "version", "created_at", "updated_at"
+    );
+
     protected SuggestionBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "alias_suggestions", AliasSuggestion.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override

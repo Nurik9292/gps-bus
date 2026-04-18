@@ -20,11 +20,11 @@ public class R2dbcBusinessRepository extends BusinessBaseRepository implements B
     @Override
     public Flux<Business> findByStatus(BusinessStatus status, Pageable pageable) {
         String sql = String.format("""
-                SELECT * FROM businesses
+                SELECT %s FROM businesses
                 WHERE status = :status
                 %s
                 LIMIT :limit OFFSET :offset
-                """, getOrderByClause(pageable));
+                """, selectColumns(), getOrderByClause(pageable));
         return databaseClient.sql(sql)
                 .bind("status", status.name())
                 .bind("limit", pageable.getPageSize())
@@ -44,11 +44,11 @@ public class R2dbcBusinessRepository extends BusinessBaseRepository implements B
     @Override
     public Flux<Business> findByType(BusinessType type, Pageable pageable) {
         String sql = String.format("""
-                SELECT * FROM businesses
+                SELECT %s FROM businesses
                 WHERE business_type = :type
                 %s
                 LIMIT :limit OFFSET :offset
-                """, getOrderByClause(pageable));
+                """, selectColumns(), getOrderByClause(pageable));
         return databaseClient.sql(sql)
                 .bind("type", type.name())
                 .bind("limit", pageable.getPageSize())
