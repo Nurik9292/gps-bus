@@ -633,7 +633,9 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         Double course = row.get("course", Double.class);
         Double distance = row.get("distance_meters", Double.class);
         Integer distanceMeters = distance != null ? (int) Math.round(distance) : null;
-        Integer direction = row.get("direction", Integer.class);
+        Integer direction = hasColumn(metadata, "direction")
+                ? row.get("direction", Integer.class)
+                : null;
 
         BusArrivalInfo info = new BusArrivalInfo(
                 vehicleId,
@@ -655,6 +657,11 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         );
         info.setDirection(direction);
         return info;
+    }
+
+    private static boolean hasColumn(RowMetadata metadata, String columnName) {
+        return metadata.getColumnMetadatas().stream()
+                .anyMatch(m -> m.getName().equalsIgnoreCase(columnName));
     }
 
     @Override
