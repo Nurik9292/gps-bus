@@ -27,11 +27,6 @@ public class VehiclePositionPredictionService {
 
     private static final double MAX_CORRECTION_DISTANCE_METERS = 50.0;
 
-    private static final double MAX_BUS_SPEED_MS = 33.0;
-
-    private static final double OUTLIER_TOLERANCE = 1.0;
-   
-    private static final double MAX_TELEPORT_DISTANCE_METERS = 5_000.0;
     private static final double DIRECTION_FLIP_THRESHOLD_DEG = 90.0;
     private static final long MAX_GPS_AGE_MS = 10 * 60 * 1000L;
     private static final int OPPOSITE_SNAP_THRESHOLD = 3;
@@ -47,6 +42,7 @@ public class VehiclePositionPredictionService {
     private final VehiclePredictionStateRepository stateRepository;
     private final biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository dwellStatsRepository;
     private final ObjectProvider<GpsRecorder> gpsRecorderProvider;
+    private final GpsOutlierFilter outlierFilter;
 
     private final ConcurrentHashMap<String, biz.ugur.busroutebackend.transport.domain.valueobject.StopDwellStat> dwellStatsCache
             = new ConcurrentHashMap<>();
@@ -57,7 +53,8 @@ public class VehiclePositionPredictionService {
                                              MapMatchingService mapMatchingService,
                                              VehiclePredictionStateRepository stateRepository,
                                              biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository dwellStatsRepository,
-                                             ObjectProvider<GpsRecorder> gpsRecorderProvider) {
+                                             ObjectProvider<GpsRecorder> gpsRecorderProvider,
+                                             GpsOutlierFilter outlierFilter) {
         this.properties = properties;
         this.broadcaster = broadcaster;
         this.routeGeometryCache = routeGeometryCache;
@@ -65,6 +62,7 @@ public class VehiclePositionPredictionService {
         this.stateRepository = stateRepository;
         this.dwellStatsRepository = dwellStatsRepository;
         this.gpsRecorderProvider = gpsRecorderProvider;
+        this.outlierFilter = outlierFilter;
     }
 
     private static final Duration RESTORE_TIMEOUT = Duration.ofSeconds(30);
@@ -165,53 +163,23 @@ public class VehiclePositionPredictionService {
             return;
         }
 
-        if (existing != null) {
-            long elapsedMs = timestamp.toEpochMilli() - existing.getLastGpsUpdate().toEpochMilli();
-
-            if (elapsedMs > 0 && elapsedMs < 10_000) {
-                double distFromLastGps = DistanceCalculationService.haversineDistanceMeters(
-                        existing.getGpsLatitude(), existing.getGpsLongitude(), latitude, longitude);
-                if (distFromLastGps > 10_000) {
-                    log.warn("[GPS_PIPELINE] HARD_OUTLIER_REJECTED vehicle={} plate={}: {}m in {}ms " +
-                                    "(implied {}km/h) — baseline preserved",
-                            vehicleId, licensePlate,
-                            (int) distFromLastGps, elapsedMs,
-                            (int) (distFromLastGps / (elapsedMs / 1000.0) * 3.6));
-                    vehicleStates.put(vehicleId, existing.toBuilder()
-                            .lastReceivedAt(Instant.now())
-                            .build());
-                    return;
-                }
+        GpsOutlierFilter.Decision outlierDecision = outlierFilter.evaluate(
+                existing, latitude, longitude, timestamp, vehicleId, licensePlate);
+        switch (outlierDecision) {
+            case REJECT_HARD_OUTLIER, REJECT_SOFT_OUTLIER -> {
+                vehicleStates.put(vehicleId, existing.toBuilder()
+                        .lastReceivedAt(Instant.now())
+                        .build());
+                return;
             }
-
-            if (elapsedMs > 0 && elapsedMs < 300_000) {
-                double distFromLastGps = DistanceCalculationService.haversineDistanceMeters(
-                        existing.getGpsLatitude(), existing.getGpsLongitude(), latitude, longitude);
-                double maxPossibleDist = (elapsedMs / 1000.0) * MAX_BUS_SPEED_MS * OUTLIER_TOLERANCE;
-                if (distFromLastGps > maxPossibleDist) {
-                    log.warn("GPS outlier rejected for vehicle {}: {}m in {}ms (max {}m at {}km/h×{}) " +
-                                    "— baseline preserved",
-                            vehicleId, (int) distFromLastGps, elapsedMs,
-                            (int) maxPossibleDist, (int) (MAX_BUS_SPEED_MS * 3.6), OUTLIER_TOLERANCE);
-                    vehicleStates.put(vehicleId, existing.toBuilder()
-                            .lastReceivedAt(Instant.now())
-                            .build());
-                    return;
-                }
-            } else if (elapsedMs >= 300_000) {
-                double distFromLastGps = DistanceCalculationService.haversineDistanceMeters(
-                        existing.getGpsLatitude(), existing.getGpsLongitude(), latitude, longitude);
-                if (distFromLastGps > MAX_TELEPORT_DISTANCE_METERS) {
-                    log.warn("GPS teleportation rejected for vehicle {} after {}min gap: {}m (max {}m)",
-                            vehicleId, elapsedMs / 60_000, (int) distFromLastGps,
-                            (int) MAX_TELEPORT_DISTANCE_METERS);
-                    vehicleStates.put(vehicleId, existing.toBuilder()
-                            .lastGpsUpdate(timestamp)
-                            .lastReceivedAt(Instant.now())
-                            .build());
-                    return;
-                }
+            case REJECT_TELEPORT_GAP -> {
+                vehicleStates.put(vehicleId, existing.toBuilder()
+                        .lastGpsUpdate(timestamp)
+                        .lastReceivedAt(Instant.now())
+                        .build());
+                return;
             }
+            case ACCEPT -> { /* fall through to snap/predict */ }
         }
 
         double predictedLat;

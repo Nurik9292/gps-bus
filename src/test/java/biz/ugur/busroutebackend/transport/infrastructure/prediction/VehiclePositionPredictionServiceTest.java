@@ -45,7 +45,8 @@ class VehiclePositionPredictionServiceTest {
         lenient().when(gpsRecorderProvider.getIfAvailable()).thenReturn(null);
         service = new VehiclePositionPredictionService(
                 properties, broadcaster, routeGeometryCache, mapMatchingService,
-                stateRepository, dwellStatsRepository, gpsRecorderProvider
+                stateRepository, dwellStatsRepository, gpsRecorderProvider,
+                new GpsOutlierFilter()
         );
     }
 
