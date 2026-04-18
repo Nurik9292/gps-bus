@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.payment.infrastructure.scheduler;
 
 import biz.ugur.busroutebackend.payment.application.usecase.admin.SyncPaymentStatusUseCase;
 import biz.ugur.busroutebackend.payment.domain.repository.PaymentRepository;
+import biz.ugur.busroutebackend.payment.infrastructure.config.PaymentSchedulerProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.PageRequest;
@@ -18,21 +19,24 @@ import org.springframework.stereotype.Component;
         matchIfMissing = true)
 public class PaymentStatusSyncScheduler {
 
-    private static final long STALE_AFTER_SECONDS = 180;  
-    private static final int BATCH_SIZE = 50;
-
     private final PaymentRepository paymentRepository;
     private final SyncPaymentStatusUseCase syncPaymentStatusUseCase;
+    private final PaymentSchedulerProperties properties;
 
     public PaymentStatusSyncScheduler(PaymentRepository paymentRepository,
-                                       SyncPaymentStatusUseCase syncPaymentStatusUseCase) {
+                                       SyncPaymentStatusUseCase syncPaymentStatusUseCase,
+                                       PaymentSchedulerProperties properties) {
         this.paymentRepository = paymentRepository;
         this.syncPaymentStatusUseCase = syncPaymentStatusUseCase;
+        this.properties = properties;
     }
 
-    @Scheduled(fixedDelay = 120_000, initialDelay = 60_000)
+    @Scheduled(
+            fixedDelayString = "${payment.scheduler.fixed-delay-ms:120000}",
+            initialDelayString = "${payment.scheduler.initial-delay-ms:60000}")
     public void tick() {
-        paymentRepository.findPendingStale(STALE_AFTER_SECONDS, PageRequest.of(0, BATCH_SIZE))
+        paymentRepository.findPendingStale(properties.getStaleAfterSeconds(),
+                        PageRequest.of(0, properties.getBatchSize()))
                 .flatMap(payment -> syncPaymentStatusUseCase.execute(payment.getId().getValue())
                         .doOnSuccess(result -> log.debug(
                                 "Auto-sync payment {}: status={}",

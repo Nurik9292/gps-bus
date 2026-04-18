@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.routing.domain.model.graph.TransitEdge;
 import biz.ugur.busroutebackend.routing.domain.model.graph.TransitGraph;
 import biz.ugur.busroutebackend.routing.domain.model.graph.TransitPath;
 import biz.ugur.busroutebackend.routing.domain.model.graph.TransitPathSegment;
+import biz.ugur.busroutebackend.routing.infrastructure.config.DijkstraProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -22,15 +23,14 @@ import java.util.Set;
 @Slf4j
 public class DijkstraEngine {
 
-    private static final int TRANSFER_PENALTY_MINUTES = 5;
-    private static final int MAX_TRANSFERS = 2;
-    private static final int K_PATHS = 3;
-    private static final int ROUTE_PENALTY_MINUTES = 30;
-    private static final int MAX_ITERATIONS = 50_000;
-    private static final int MAX_COST_MINUTES = 180;
+    private final DijkstraProperties properties;
+
+    public DijkstraEngine(DijkstraProperties properties) {
+        this.properties = properties;
+    }
 
     public List<TransitPath> findPaths(TransitGraph graph, String fromStopId, String toStopId) {
-        return findPaths(graph, fromStopId, toStopId, K_PATHS);
+        return findPaths(graph, fromStopId, toStopId, properties.getKPaths());
     }
 
     public List<TransitPath> findPaths(TransitGraph graph, String fromStopId, String toStopId, int maxPaths) {
@@ -64,15 +64,17 @@ public class DijkstraEngine {
         pq.offer(new DijkstraState(0, fromStopId, null, 0));
 
         int iterations = 0;
+        int maxIterations = properties.getMaxIterations();
+        int maxCostMinutes = properties.getMaxCostMinutes();
         while (!pq.isEmpty()) {
-            if (++iterations > MAX_ITERATIONS) {
+            if (++iterations > maxIterations) {
                 log.warn("Dijkstra exceeded {} iterations from {} to {} — aborting",
-                        MAX_ITERATIONS, fromStopId, toStopId);
+                        maxIterations, fromStopId, toStopId);
                 return null;
             }
 
             DijkstraState cur = pq.poll();
-            if (cur.cost > MAX_COST_MINUTES) continue;
+            if (cur.cost > maxCostMinutes) continue;
 
             String curKey = stateKey(cur.stopId, cur.lastBusRouteId);
 
@@ -94,13 +96,13 @@ public class DijkstraEngine {
 
                     if (cur.lastBusRouteId != null && !cur.lastBusRouteId.equals(edgeRouteId)) {
                         newTransfers = cur.transfers + 1;
-                        if (newTransfers > MAX_TRANSFERS) continue;
-                        penalty = TRANSFER_PENALTY_MINUTES;
+                        if (newTransfers > properties.getMaxTransfers()) continue;
+                        penalty = properties.getTransferPenaltyMinutes();
                     }
                     newLastBusRouteId = edgeRouteId;
 
                     if (penalizedRoutes.contains(edgeRouteId)) {
-                        edgeCost += ROUTE_PENALTY_MINUTES;
+                        edgeCost += properties.getRoutePenaltyMinutes();
                     }
                 }
 

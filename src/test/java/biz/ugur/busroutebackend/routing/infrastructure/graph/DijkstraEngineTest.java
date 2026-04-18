@@ -39,7 +39,7 @@ class DijkstraEngineTest {
 
     @BeforeEach
     void setUp() {
-        engine = new DijkstraEngine();
+        engine = new DijkstraEngine(new biz.ugur.busroutebackend.routing.infrastructure.config.DijkstraProperties());
         graph = buildTestGraph();
     }
 

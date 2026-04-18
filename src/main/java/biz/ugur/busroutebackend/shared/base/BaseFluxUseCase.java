@@ -2,10 +2,11 @@ package biz.ugur.busroutebackend.shared.base;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.application.ReactiveFluxUseCase;
 import biz.ugur.busroutebackend.shared.application.UseCase;
 import reactor.core.publisher.Flux;
 
-public abstract class BaseFluxUseCase<T, R> implements UseCase<T, Flux<R>> {
+public abstract class BaseFluxUseCase<T, R> implements UseCase<T, Flux<R>>, ReactiveFluxUseCase<T, R> {
 
     protected final CorrelationContextService correlationService;
     protected final EventBus eventBus;

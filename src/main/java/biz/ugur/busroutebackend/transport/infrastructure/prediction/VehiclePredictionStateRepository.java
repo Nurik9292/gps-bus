@@ -61,6 +61,9 @@ public class VehiclePredictionStateRepository {
     public Mono<Void> delete(String vehicleId) {
         return redisTemplate.delete(RedisKeyRegistry.Prediction.state(vehicleId))
                 .then()
-                .onErrorResume(e -> Mono.empty());
+                .onErrorResume(e -> {
+                    log.debug("Failed to delete prediction state for {}: {}", vehicleId, e.getMessage());
+                    return Mono.empty();
+                });
     }
 }

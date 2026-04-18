@@ -35,10 +35,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class VehicleDataScheduler {
 
     private static final String GPS_UPDATE_LOCK_NAME = "gps-scheduler";
-    private static final Duration UPDATE_INTERVAL = Duration.ofSeconds(5);
-    private static final ZoneId TIMEZONE = ZoneId.of("Asia/Ashgabat");
-    private static final int ACTIVE_HOUR_START = 6;
-    private static final int ACTIVE_HOUR_END = 23;
 
     private final GpsDataAggregatorService gpsDataAggregator;
     private final UpdateVehiclePositionsUseCase updateVehiclePositionsUseCase;
@@ -93,12 +89,13 @@ public class VehicleDataScheduler {
             return;
         }
 
-        schedulerDisposable = Mono.delay(UPDATE_INTERVAL)
+        schedulerDisposable = Mono.delay(schedulerProperties.getUpdateInterval())
                 .publishOn(Schedulers.boundedElastic())
                 .flatMap(tick -> {
                     if (!isActiveHours()) {
                         log.debug("Outside active hours ({}-{}), skipping GPS update",
-                                ACTIVE_HOUR_START, ACTIVE_HOUR_END);
+                                schedulerProperties.getActiveHours().getStart(),
+                                schedulerProperties.getActiveHours().getEnd());
                         return Mono.empty();
                     }
                     return executeWithLock();
@@ -108,8 +105,9 @@ public class VehicleDataScheduler {
     }
 
     private boolean isActiveHours() {
-        int hour = LocalTime.now(TIMEZONE).getHour();
-        return hour >= ACTIVE_HOUR_START && hour < ACTIVE_HOUR_END;
+        SchedulerProperties.ActiveHours ah = schedulerProperties.getActiveHours();
+        int hour = LocalTime.now(ZoneId.of(ah.getTimezone())).getHour();
+        return hour >= ah.getStart() && hour < ah.getEnd();
     }
 
     private Mono<Void> executeWithLock() {
