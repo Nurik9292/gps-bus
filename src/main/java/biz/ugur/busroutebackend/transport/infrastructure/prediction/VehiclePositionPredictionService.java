@@ -176,6 +176,7 @@ public class VehiclePositionPredictionService {
         int newImplausibleCount = snapResult.newImplausibleCount();
 
 
+        boolean positionTeleport = false;
         if (existing != null
                 && existing.getPredictedLatitude() != 0.0
                 && existing.getPredictedLongitude() != 0.0) {
@@ -185,6 +186,7 @@ public class VehiclePositionPredictionService {
             if (distFromPredicted > properties.getTeleportThresholdMeters()) {
                 log.info("[GPS_PIPELINE] SNAP_TELEPORT vehicle={} plate={} dist={}m — large correction",
                         vehicleId, licensePlate, String.format("%.0f", distFromPredicted));
+                positionTeleport = true;
             }
         }
 
@@ -215,8 +217,22 @@ public class VehiclePositionPredictionService {
                 .consecutiveImplausibleCount(newImplausibleCount)
                 .direction(direction);
 
-        VehiclePredictionState builtState = builder.lastReceivedAt(Instant.now()).build();
+        boolean triggerColdStart = snapResult.resetTriggered() || positionTeleport;
+        Instant coldStartUntilAt = triggerColdStart
+                ? Instant.now().plusSeconds(properties.getColdStartDurationSec())
+                : (existing != null ? existing.getColdStartUntilAt() : null);
+
+        VehiclePredictionState builtState = builder
+                .lastReceivedAt(Instant.now())
+                .coldStartUntilAt(coldStartUntilAt)
+                .build();
         vehicleStates.put(vehicleId, builtState);
+        if (triggerColdStart) {
+            log.warn("[GPS_PIPELINE] COLD_START vehicle={} plate={} route={} reason={} duration={}s — WS broadcast suppressed until state stabilizes",
+                    vehicleId, licensePlate, routeNumber,
+                    snapResult.resetTriggered() ? "snap-implausible" : "position-teleport",
+                    properties.getColdStartDurationSec());
+        }
         log.debug("[GPS_PIPELINE] GPS_STORED vehicle={} plate={} route={} speed={}km/h inMotion={} frac={} mode={}",
                 vehicleId, licensePlate, routeNumber,
                 String.format("%.1f", speedKmh), inMotion,
@@ -385,6 +401,11 @@ public class VehiclePositionPredictionService {
 
     List<VehiclePredictionState> snapshotAllStatesForTest() {
         return List.copyOf(vehicleStates.values());
+    }
+
+    public boolean isInColdStart(String vehicleId) {
+        VehiclePredictionState state = vehicleStates.get(vehicleId);
+        return state != null && PredictionBroadcaster.isInColdStart(state);
     }
 
     public Map<String, Integer> drainPendingDirectionFixes() {

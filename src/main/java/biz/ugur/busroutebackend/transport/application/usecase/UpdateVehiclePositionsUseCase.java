@@ -382,8 +382,32 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     }
 
                     String vehicleId = updatedVehicle.getId().getValue();
+
+                    if (updatedVehicle.getCurrentLatitude() != null
+                            && updatedVehicle.getCurrentLongitude() != null) {
+                        predictionService.onGpsUpdate(
+                                vehicleId,
+                                updatedVehicle.getLicensePlate(),
+                                updatedVehicle.getRouteNumber(),
+                                updatedVehicle.getCurrentLatitude(),
+                                updatedVehicle.getCurrentLongitude(),
+                                updatedVehicle.getSpeedKmh() != null ? updatedVehicle.getSpeedKmh() : 0.0,
+                                (updatedVehicle.getCourse() != null && updatedVehicle.getCourse() > 0.0)
+                                        ? updatedVehicle.getCourse()
+                                        : estimatedBearings.getOrDefault(vehicleId, 0.0),
+                                Boolean.TRUE.equals(updatedVehicle.getIsInMotion()),
+                                updatedVehicle.getLastPositionUpdate() != null
+                                        ? updatedVehicle.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
+                                        : Instant.now(),
+                                updatedVehicle.getCurrentDirection() != null ? updatedVehicle.getCurrentDirection() : 0
+                        );
+                    }
+
                     boolean shouldForcePublish = shouldForcePublishForVehicle(vehicleId);
-                    boolean shouldPublish = (hasSignificantChange || shouldForcePublish) && !frozenCoordsWithMotion;
+                    boolean inColdStart = predictionService.isInColdStart(vehicleId);
+                    boolean shouldPublish = (hasSignificantChange || shouldForcePublish)
+                            && !frozenCoordsWithMotion
+                            && !inColdStart;
 
                     if (shouldPublish) {
                         lastPublishedTime.put(vehicleId, Instant.now());
@@ -406,26 +430,9 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 updatedVehicle.getCurrentDirection()
                         );
                         domainEventPublisher.publish(event);
-                    }
-
-                    if (updatedVehicle.getCurrentLatitude() != null
-                            && updatedVehicle.getCurrentLongitude() != null) {
-                        predictionService.onGpsUpdate(
-                                vehicleId,
-                                updatedVehicle.getLicensePlate(),
-                                updatedVehicle.getRouteNumber(),
-                                updatedVehicle.getCurrentLatitude(),
-                                updatedVehicle.getCurrentLongitude(),
-                                updatedVehicle.getSpeedKmh() != null ? updatedVehicle.getSpeedKmh() : 0.0,
-                                (updatedVehicle.getCourse() != null && updatedVehicle.getCourse() > 0.0)
-                                        ? updatedVehicle.getCourse()
-                                        : estimatedBearings.getOrDefault(vehicleId, 0.0),
-                                Boolean.TRUE.equals(updatedVehicle.getIsInMotion()),
-                                updatedVehicle.getLastPositionUpdate() != null
-                                        ? updatedVehicle.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
-                                        : Instant.now(),
-                                updatedVehicle.getCurrentDirection() != null ? updatedVehicle.getCurrentDirection() : 0
-                        );
+                    } else if (inColdStart) {
+                        log.debug("[GPS_PIPELINE] WS_PUBLISH_SUPPRESSED_COLD_START vehicle={} plate={} — prediction stabilizing",
+                                vehicleId, updatedVehicle.getLicensePlate());
                     }
 
                     statuses.add(VehicleUpdateStatus.updated(
