@@ -40,6 +40,17 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
     private static final String ENTITY_TYPE = "vehicle";
     private static final int MAX_RETRIES = 3;
     private static final int BATCH_UPDATE_CONCURRENCY = 16;
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "device_id", "license_plate",
+            "current_latitude", "current_longitude",
+            "speed_kmh", "is_in_motion", "last_position_update",
+            "assigned_route_id", "route_number", "is_active",
+            "course", "current_direction", "last_stop_sequence",
+            "last_garage_id", "garage_entry_time", "garage_exit_time", "is_in_garage",
+            "route_source", "route_confidence",
+            "gps_detection_enabled", "gps_provider",
+            "created_at", "updated_at", "version"
+    );
 
     private final VehicleEntityMapper entityMapper;
     private final OptimisticLockMetricsRecorder metricsRecorder;
@@ -50,6 +61,11 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         super(databaseClient, "vehicles", Vehicle.class);
         this.entityMapper = entityMapper;
         this.metricsRecorder = metricsRecorder;
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -113,8 +129,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 :current_direction, :last_stop_sequence, :version,
                 :last_garage_id, :garage_entry_time, :garage_exit_time, :is_in_garage,
                 :route_source, :route_confidence, :gps_detection_enabled, :gps_provider
-            ) RETURNING *
-            """;
+            ) RETURNING %s
+            """.formatted(selectColumns());
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
 
@@ -164,8 +180,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 gps_provider = :gps_provider,
                 version = :version
             WHERE id = :id AND version = :old_version
-            RETURNING *
-            """;
+            RETURNING %s
+            """.formatted(selectColumns());
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
                 .bind("id", entity.getId().getValue())
@@ -195,7 +211,10 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Mono<Vehicle> findByDeviceId(String deviceId) {
-        String sql = "SELECT * FROM vehicles WHERE device_id = :deviceId";
+        String sql = String.format(
+                "SELECT %s FROM vehicles WHERE device_id = :deviceId",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .bind("deviceId", deviceId)
@@ -206,7 +225,10 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Mono<Vehicle> findByLicensePlate(String licensePlate) {
-        String sql = "SELECT * FROM vehicles WHERE license_plate = :licensePlate";
+        String sql = String.format(
+                "SELECT %s FROM vehicles WHERE license_plate = :licensePlate",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .bind("licensePlate", licensePlate)
@@ -217,7 +239,10 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Flux<Vehicle> findByAssignedRouteId(BusRouteId routeId) {
-        String sql = "SELECT * FROM vehicles WHERE assigned_route_id = :routeId AND is_active = true";
+        String sql = String.format(
+                "SELECT %s FROM vehicles WHERE assigned_route_id = :routeId AND is_active = true",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .bind("routeId", routeId.getValue())
@@ -228,7 +253,10 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Flux<Vehicle> findActiveVehicles() {
-        String sql = "SELECT * FROM vehicles WHERE is_active = true ORDER BY last_position_update DESC";
+        String sql = String.format(
+                "SELECT %s FROM vehicles WHERE is_active = true ORDER BY last_position_update DESC",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -238,7 +266,10 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Flux<Vehicle> findByRouteNumber(String routeNumber) {
-        String sql = "SELECT * FROM vehicles WHERE route_number = :routeNumber AND is_active = true";
+        String sql = String.format(
+                "SELECT %s FROM vehicles WHERE route_number = :routeNumber AND is_active = true",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .bind("routeNumber", routeNumber)
@@ -249,7 +280,10 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Flux<Vehicle> findUnassignedVehicles() {
-        String sql = "SELECT * FROM vehicles WHERE route_number IS NULL AND is_active = true";
+        String sql = String.format(
+                "SELECT %s FROM vehicles WHERE route_number IS NULL AND is_active = true",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -259,13 +293,13 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Flux<Vehicle> findVehiclesInMotion() {
-        String sql = """
-                SELECT * FROM vehicles
+        String sql = String.format("""
+                SELECT %s FROM vehicles
                 WHERE is_in_motion = true
                   AND is_active = true
                   AND last_position_update IS NOT NULL
                   AND last_position_update > NOW() - INTERVAL '5 minutes'
-                """;
+                """, selectColumns());
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -283,7 +317,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         );
 
         String sql = String.format("""
-            SELECT *,
+            SELECT %s,
                    %s
             FROM vehicles
             WHERE is_active = true
@@ -292,6 +326,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             AND %s
             ORDER BY %s
             """,
+                selectColumns(),
                 query.distanceColumn(),
                 query.withinRadiusCondition(),
                 query.orderByClause()
@@ -308,12 +343,12 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Flux<Vehicle> findVehiclesWithRecentPosition() {
-        String sql = """
-            SELECT * FROM vehicles 
-            WHERE is_active = true 
+        String sql = String.format("""
+            SELECT %s FROM vehicles
+            WHERE is_active = true
             AND last_position_update > NOW() - INTERVAL '5 minutes'
             ORDER BY last_position_update DESC
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -452,7 +487,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         }
         String placeholders = String.join(",", namedParams);
 
-        String sql = "SELECT * FROM vehicles WHERE device_id IN (" + placeholders + ")";
+        String sql = "SELECT " + selectColumns() + " FROM vehicles WHERE device_id IN (" + placeholders + ")";
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
         for (int i = 0; i < validDeviceIds.size(); i++) {
@@ -613,8 +648,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 :created_at, :updated_at, :version,
                 :last_garage_id, :garage_entry_time, :garage_exit_time, :is_in_garage,
                 :route_source, :route_confidence, :gps_detection_enabled, :gps_provider
-            ) RETURNING *
-            """;
+            ) RETURNING %s
+            """.formatted(selectColumns());
 
         return Flux.fromIterable(vehicles)
                 .flatMap(vehicle -> {
@@ -638,7 +673,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-            "SELECT * FROM vehicles WHERE %s ORDER BY last_position_update DESC, created_at DESC",
+            "SELECT %s FROM vehicles WHERE %s ORDER BY last_position_update DESC, created_at DESC",
+            selectColumns(),
             criteria.getWhereClause()
         );
 
@@ -658,7 +694,8 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-            "SELECT * FROM vehicles WHERE %s %s LIMIT :limit OFFSET :offset",
+            "SELECT %s FROM vehicles WHERE %s %s LIMIT :limit OFFSET :offset",
+            selectColumns(),
             criteria.getWhereClause(),
             getOrderByClause(pageable)
         );
@@ -759,11 +796,11 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     @Override
     public Mono<Map<String, Vehicle>> findAllWithRouteAssignment() {
-        String sql = """
-            SELECT * FROM vehicles
+        String sql = String.format("""
+            SELECT %s FROM vehicles
             WHERE is_active = true
             AND route_number IS NOT NULL
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
