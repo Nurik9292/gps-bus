@@ -18,8 +18,20 @@ import java.util.function.BiFunction;
 
 public abstract class ExternalServiceBaseRepository extends BaseR2dbcRepository<ExternalService, ExternalServiceId> {
 
+    protected static final String SELECT_COLUMNS = String.join(", ",
+            "id", "name", "description", "api_token", "is_active",
+            "allowed_endpoints", "rate_limit_per_minute", "last_used_at",
+            "created_by_admin_id", "can_manage_clients",
+            "version", "created_at", "updated_at"
+    );
+
     protected ExternalServiceBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "external_services", ExternalService.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override

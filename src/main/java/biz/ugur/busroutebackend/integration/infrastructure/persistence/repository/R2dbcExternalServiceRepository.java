@@ -21,10 +21,10 @@ public class R2dbcExternalServiceRepository extends ExternalServiceBaseRepositor
 
     @Override
     public Mono<ExternalService> findByApiToken(ApiToken apiToken) {
-        String sql = """
-            SELECT * FROM external_services
+        String sql = String.format("""
+            SELECT %s FROM external_services
             WHERE api_token = :apiToken
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("apiToken", apiToken.getValue())
@@ -36,11 +36,11 @@ public class R2dbcExternalServiceRepository extends ExternalServiceBaseRepositor
 
     @Override
     public Flux<ExternalService> findAllActive() {
-        String sql = """
-            SELECT * FROM external_services
+        String sql = String.format("""
+            SELECT %s FROM external_services
             WHERE is_active = true
             ORDER BY name ASC
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())

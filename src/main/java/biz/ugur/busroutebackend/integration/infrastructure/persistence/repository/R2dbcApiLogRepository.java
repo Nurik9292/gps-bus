@@ -16,6 +16,12 @@ import java.util.UUID;
 @Slf4j
 public class R2dbcApiLogRepository {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "external_service_id", "endpoint", "http_method",
+            "response_status", "response_time_ms", "ip_address",
+            "user_agent", "error_message", "created_at"
+    );
+
     private final DatabaseClient databaseClient;
 
     public Mono<Void> save(ApiLogEntity logEntity) {
@@ -49,12 +55,12 @@ public class R2dbcApiLogRepository {
     }
 
     public Flux<ApiLogEntity> findByExternalServiceId(String externalServiceId, int limit) {
-        String sql = """
-            SELECT * FROM external_service_api_logs
+        String sql = String.format("""
+            SELECT %s FROM external_service_api_logs
             WHERE external_service_id = :externalServiceId
             ORDER BY created_at DESC
             LIMIT :limit
-            """;
+            """, SELECT_COLUMNS);
 
         return databaseClient.sql(sql)
                 .bind("externalServiceId", externalServiceId)
