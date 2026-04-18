@@ -27,11 +27,24 @@ import java.util.function.BiFunction;
 public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripPlanId>
         implements TripPlanRepository {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "origin_latitude", "origin_longitude",
+            "destination_latitude", "destination_longitude",
+            "search_time", "options_count", "max_transfers",
+            "max_walking_distance_meters",
+            "created_at", "updated_at"
+    );
+
     private final TripPlanMapper mapper;
 
     public R2dbcTripPlanRepository(DatabaseClient databaseClient, TripPlanMapper mapper) {
         super(databaseClient, "trip_plans", TripPlan.class);
         this.mapper = mapper;
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -50,7 +63,7 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
     private Mono<TripPlan> insertNew(TripPlan tripPlan) {
         TripPlanEntity entity = mapper.toEntity(tripPlan);
 
-        String sql = """
+        String sql = String.format("""
         INSERT INTO trip_plans (
             id,
             origin_latitude,
@@ -65,8 +78,8 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
             updated_at
         )
         VALUES (:id, :originLat, :originLon, :destLat, :destLon, :searchTime, :optionsCount, :maxTransfers, :maxWalkingDist, :createdAt, :updatedAt)
-        RETURNING *
-        """;
+        RETURNING %s
+        """, selectColumns());
 
         log.info("➕ Inserting new TripPlan: {}", tripPlan.getId().getValue());
 
@@ -96,13 +109,13 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
     }
 
     private Mono<TripPlan> updateExisting(TripPlan tripPlan) {
-        String sql = """
+        String sql = String.format("""
         UPDATE trip_plans SET
             options_count = :optionsCount,
             updated_at = :updatedAt
         WHERE id = :id
-        RETURNING *
-        """;
+        RETURNING %s
+        """, selectColumns());
 
         log.info("🔄 Updating existing TripPlan: {}", tripPlan.getId().getValue());
 
@@ -117,7 +130,10 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
 
     @Override
     public Mono<TripPlan> findById(TripPlanId id) {
-        String sql = "SELECT * FROM trip_plans WHERE id = :id";
+        String sql = String.format(
+                "SELECT %s FROM trip_plans WHERE id = :id",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .bind("id", id.getValue())
@@ -131,8 +147,8 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
     @Override
     public Flux<TripPlan> findRecentPlans(int limit) {
         String sql = String.format(
-                "SELECT * FROM %s ORDER BY created_at DESC LIMIT :limit",
-                tableName);
+                "SELECT %s FROM %s ORDER BY created_at DESC LIMIT :limit",
+                selectColumns(), tableName);
 
         return databaseClient.sql(sql)
                 .bind("limit", limit)
@@ -143,8 +159,8 @@ public class R2dbcTripPlanRepository extends BaseR2dbcRepository<TripPlan, TripP
     @Override
     public Flux<TripPlan> findPlansByTimeRange(LocalDateTime from, LocalDateTime to) {
         String sql = String.format(
-                "SELECT * FROM %s WHERE created_at BETWEEN :from AND :to ORDER BY created_at DESC",
-                tableName);
+                "SELECT %s FROM %s WHERE created_at BETWEEN :from AND :to ORDER BY created_at DESC",
+                selectColumns(), tableName);
 
         return databaseClient.sql(sql)
                 .bind("from", from)
