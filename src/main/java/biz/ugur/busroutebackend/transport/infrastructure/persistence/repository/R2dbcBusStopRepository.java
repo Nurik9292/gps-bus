@@ -633,8 +633,9 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         Double course = row.get("course", Double.class);
         Double distance = row.get("distance_meters", Double.class);
         Integer distanceMeters = distance != null ? (int) Math.round(distance) : null;
+        Integer direction = row.get("direction", Integer.class);
 
-        return new BusArrivalInfo(
+        BusArrivalInfo info = new BusArrivalInfo(
                 vehicleId,
                 licensePlate,
                 routeId,
@@ -652,6 +653,8 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 course != null ? course : 0.0,
                 distanceMeters
         );
+        info.setDirection(direction);
+        return info;
     }
 
     @Override

@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 
 
 @Data
@@ -27,6 +28,8 @@ public class BusArrivalInfo {
     private Double course;
     private Integer distanceMeters;
     private Instant calculatedAt;
+    private Integer direction;
+    private List<List<Double>> routeGeometry;
 
     public BusArrivalInfo() {
         this.calculatedAt = Instant.now();

@@ -164,6 +164,9 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                             state.getCourse(),
                             (int) Math.round(distMeters)
                     );
+                    info.setDirection(state.getDirection());
+                    info.setRouteGeometry(toGeometryJson(
+                            routeGeometryCache.getPoints(state.getRouteNumber(), state.getDirection())));
                     return Mono.just(info);
                 })
                 .collectMultimap(BusArrivalInfo::getRouteNumber)
@@ -182,8 +185,23 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 .collectMap(BusArrivalInfo::getRouteNumber)
                 .flatMapMany(predMap ->
                         fromDb.filter(db -> !predMap.containsKey(db.getRouteNumber()))
+                                .doOnNext(this::enrichGeometryIfMissing)
                                 .mergeWith(Flux.fromIterable(predMap.values()))
                 );
+    }
+
+    private void enrichGeometryIfMissing(BusArrivalInfo info) {
+        if (info.getRouteGeometry() != null || info.getRouteNumber() == null) return;
+        int direction = info.getDirection() != null ? info.getDirection() : 0;
+        info.setRouteGeometry(toGeometryJson(
+                routeGeometryCache.getPoints(info.getRouteNumber(), direction)));
+    }
+
+    private static java.util.List<java.util.List<Double>> toGeometryJson(java.util.List<double[]> points) {
+        if (points == null || points.isEmpty()) return null;
+        return points.stream()
+                .map(p -> java.util.List.of(p[0], p[1]))
+                .toList();
     }
 
     private int computeEtaMinutes(double distanceMeters, double speedKmh) {
