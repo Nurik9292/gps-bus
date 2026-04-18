@@ -495,10 +495,10 @@ public class VehiclePositionPredictionService {
                 .routeNumber(routeNumber)
                 .gpsLatitude(latitude)
                 .gpsLongitude(longitude)
-                .speedKmh(computeSmoothedSpeed(existing, speedKmh))
+                .speedKmh(PredictionMath.computeSmoothedSpeed(existing != null ? existing.getRecentSpeeds() : null, speedKmh))
                 .rawGpsSpeedKmh(speedKmh)
-                .smoothedSpeedKmh(computeSmoothedSpeed(existing, speedKmh))
-                .recentSpeeds(appendSpeedToBuffer(existing, speedKmh))
+                .smoothedSpeedKmh(PredictionMath.computeSmoothedSpeed(existing != null ? existing.getRecentSpeeds() : null, speedKmh))
+                .recentSpeeds(PredictionMath.appendSpeedToBuffer(existing != null ? existing.getRecentSpeeds() : null, speedKmh))
                 .course(course)
                 .inMotion(inMotion)
                 .lastGpsUpdate(timestamp)
@@ -822,7 +822,7 @@ public class VehiclePositionPredictionService {
                 nextStops.isEmpty() ? null : nextStops,
                 Boolean.TRUE,
                 fractionValue,
-                computeConfidence(state).name()
+                PredictionMath.computeConfidence(state.getLastReceivedAt(), state.getFractionOnRoute(), Instant.now()).name()
         );
 
         return Mono.fromRunnable(() -> {
@@ -954,22 +954,7 @@ public class VehiclePositionPredictionService {
     public PositionConfidence getConfidence(String vehicleId) {
         VehiclePredictionState state = vehicleStates.get(vehicleId);
         if (state == null) return PositionConfidence.STALE;
-        return computeConfidence(state);
-    }
-
-    private PositionConfidence computeConfidence(VehiclePredictionState state) {
-        if (state.getLastReceivedAt() == null) return PositionConfidence.STALE;
-        long ageMs = Instant.now().toEpochMilli() - state.getLastReceivedAt().toEpochMilli();
-        if (ageMs <= 3_000 && state.getFractionOnRoute() >= 0) {
-            return PositionConfidence.HIGH;
-        }
-        if (ageMs <= 10_000) {
-            return PositionConfidence.MEDIUM;
-        }
-        if (ageMs <= 30_000) {
-            return PositionConfidence.LOW;
-        }
-        return PositionConfidence.STALE;
+        return PredictionMath.computeConfidence(state.getLastReceivedAt(), state.getFractionOnRoute(), Instant.now());
     }
 
     public int getActiveStateCount() {
@@ -994,34 +979,6 @@ public class VehiclePositionPredictionService {
         return result;
     }
 
-   
-    private static final int SPEED_BUFFER_SIZE = 5;
-
-    private double[] appendSpeedToBuffer(VehiclePredictionState existing, double newSpeed) {
-        double[] prev = (existing != null) ? existing.getRecentSpeeds() : null;
-        if (prev == null || prev.length == 0) {
-            return new double[]{newSpeed};
-        }
-        if (prev.length < SPEED_BUFFER_SIZE) {
-            double[] buf = new double[prev.length + 1];
-            System.arraycopy(prev, 0, buf, 0, prev.length);
-            buf[prev.length] = newSpeed;
-            return buf;
-        }
-        double[] buf = new double[SPEED_BUFFER_SIZE];
-        System.arraycopy(prev, 1, buf, 0, SPEED_BUFFER_SIZE - 1);
-        buf[SPEED_BUFFER_SIZE - 1] = newSpeed;
-        return buf;
-    }
-
-    private double computeSmoothedSpeed(VehiclePredictionState existing, double newSpeed) {
-        double[] buffer = appendSpeedToBuffer(existing, newSpeed);
-        double sum = 0;
-        for (double s : buffer) sum += s;
-        return sum / buffer.length;
-    }
-
-    
     private String dwellKey(String stopId, String routeNumber, int direction) {
         return stopId + ":" + routeNumber + ":" + direction;
     }
@@ -1077,7 +1034,7 @@ public class VehiclePositionPredictionService {
         if (fraction < 0 || state.getRouteNumber() == null || totalRouteDistance <= 0) return -1;
         double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteNumber(), state.getDirection());
         if (stopFractions == null || stopFractions.length == 0) return -1;
-        double nextStopFrac = findNextStopFraction(stopFractions, fraction, state.getDirection());
+        double nextStopFrac = PredictionMath.findNextStopFraction(stopFractions, fraction);
         if (nextStopFrac < 0) return -1;
         return Math.abs(nextStopFrac - fraction) * totalRouteDistance;
     }
@@ -1087,7 +1044,7 @@ public class VehiclePositionPredictionService {
         double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteNumber(), state.getDirection());
         if (stopFractions == null || stopFractions.length == 0) return -1;
         double currentFraction = state.getFractionOnRoute();
-        double nextStopFraction = findNextStopFraction(stopFractions, currentFraction, state.getDirection());
+        double nextStopFraction = PredictionMath.findNextStopFraction(stopFractions, currentFraction);
         if (nextStopFraction < 0) return -1;
         return Math.abs(nextStopFraction - currentFraction) * totalRouteDistance;
     }
@@ -1099,7 +1056,7 @@ public class VehiclePositionPredictionService {
         if (stopFractions == null || stopFractions.length == 0) return 1.0;
 
         double currentFraction = state.getFractionOnRoute();
-        double nextStopFraction = findNextStopFraction(stopFractions, currentFraction, state.getDirection());
+        double nextStopFraction = PredictionMath.findNextStopFraction(stopFractions, currentFraction);
         if (nextStopFraction < 0) return 1.0;
 
         double distToStop = Math.abs(nextStopFraction - currentFraction) * totalRouteDistance;
@@ -1121,7 +1078,7 @@ public class VehiclePositionPredictionService {
         if (stopFractions == null || stopFractions.length == 0) return 1.0;
 
         double currentFraction = state.getFractionOnRoute();
-        double prevStopFrac = findPreviousStopFraction(stopFractions, currentFraction);
+        double prevStopFrac = PredictionMath.findPreviousStopFraction(stopFractions, currentFraction);
         if (prevStopFrac < 0) return 1.0;
 
         double distFromStop = Math.abs(currentFraction - prevStopFrac) * totalRouteDistance;
@@ -1132,19 +1089,4 @@ public class VehiclePositionPredictionService {
         return minFactor + (1.0 - minFactor) * (distFromStop / zone);
     }
 
-    private double findPreviousStopFraction(double[] sortedFractions, double currentFraction) {
-        double prev = -1;
-        for (double f : sortedFractions) {
-            if (f >= currentFraction - 0.001) break;
-            prev = f;
-        }
-        return prev;
-    }
-
-    private double findNextStopFraction(double[] sortedFractions, double currentFraction, int direction) {
-        for (double f : sortedFractions) {
-            if (f > currentFraction + 0.001) return f;
-        }
-        return -1;
-    }
 }
