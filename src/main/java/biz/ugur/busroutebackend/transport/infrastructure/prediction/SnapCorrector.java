@@ -202,7 +202,8 @@ class SnapCorrector {
                         resetTriggered = true;
                     } else {
                         plausibleSnap = false;
-                        log.debug("[GPS_PIPELINE] SNAP_IMPLAUSIBLE vehicle={} route={} dir={} lastFrac={}→newFrac={} jump={} ({}/3) — keeping predicted",
+                        resetTriggered = true;
+                        log.debug("[GPS_PIPELINE] SNAP_IMPLAUSIBLE vehicle={} route={} dir={} lastFrac={}→newFrac={} jump={} ({}/3) — keeping predicted, entering cold-start",
                                 vehicleId, routeNumber, direction,
                                 String.format("%.4f", existing.getLastGpsFraction()),
                                 String.format("%.4f", realFraction),
