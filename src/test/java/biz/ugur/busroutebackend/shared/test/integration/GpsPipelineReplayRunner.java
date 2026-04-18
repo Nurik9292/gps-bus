@@ -98,7 +98,8 @@ public class GpsPipelineReplayRunner {
             return;
         }
 
-        String expected = Files.readString(goldenPath, StandardCharsets.UTF_8);
+        String expected = Files.readString(goldenPath, StandardCharsets.UTF_8)
+                .replace("\r\n", "\n");
         if (!expected.equals(actual)) {
             throw new AssertionError(
                     "Golden snapshot mismatch for scenario '" + scenario + "'.\n" +

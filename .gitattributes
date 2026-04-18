@@ -1,3 +1,7 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
 .env
+
+# Test fixtures must keep LF (compared byte-for-byte against Java String output)
+src/test/resources/fixtures/**/*.jsonl text eol=lf
+src/test/resources/fixtures/**/*.json  text eol=lf
