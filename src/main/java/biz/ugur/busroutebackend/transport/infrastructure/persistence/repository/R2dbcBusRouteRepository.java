@@ -33,11 +33,24 @@ import java.util.function.BiFunction;
 public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRouteId>
         implements BusRouteRepository, NearbyRouteQueryRepository {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "route_number", "route_name", "name_tm", "name_en",
+            "route_color", "is_active", "city_id", "estimated_duration_minutes",
+            "route_geometry_forward", "route_geometry_backward",
+            "total_distance_forward_meters", "total_distance_backward_meters",
+            "version", "created_at", "updated_at"
+    );
+
     private final BusRouteEntityMapper entityMapper;
 
     public R2dbcBusRouteRepository(DatabaseClient databaseClient, BusRouteEntityMapper entityMapper) {
         super(databaseClient, "bus_routes", BusRoute.class);
         this.entityMapper = entityMapper;
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -101,8 +114,8 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 END,
                 :total_distance_forward_meters, :total_distance_backward_meters,
                 :created_at, :updated_at, :version
-            ) RETURNING *
-            """;
+            ) RETURNING %s
+            """.formatted(selectColumns());
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
 
@@ -155,8 +168,8 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 updated_at = :updated_at,
                 version = :version
             WHERE id = :id AND version = :old_version
-            RETURNING *
-            """;
+            RETURNING %s
+            """.formatted(selectColumns());
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
                 .bind("id", entity.getId().getValue())
@@ -184,7 +197,10 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
 
     @Override
     public Mono<BusRoute> findByRouteNumber(String routeNumber) {
-        String sql = "SELECT * FROM bus_routes WHERE route_number = :routeNumber AND is_active = true";
+        String sql = String.format(
+                "SELECT %s FROM bus_routes WHERE route_number = :routeNumber AND is_active = true",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .bind("routeNumber", routeNumber)
@@ -194,7 +210,10 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
 
     @Override
     public Flux<BusRoute> findActiveRoutes() {
-        String sql = "SELECT * FROM bus_routes WHERE is_active = true ORDER BY route_number";
+        String sql = String.format(
+                "SELECT %s FROM bus_routes WHERE is_active = true ORDER BY route_number",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -224,14 +243,14 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
 
     @Override
     public Flux<BusRoute> searchRoutesByNameOrNumber(String query, Integer limit) {
-        String sql = """
-            SELECT * FROM bus_routes br
-            WHERE br.is_active = true 
-            AND (LOWER(br.route_number) LIKE LOWER(:query) 
+        String sql = String.format("""
+            SELECT %s FROM bus_routes br
+            WHERE br.is_active = true
+            AND (LOWER(br.route_number) LIKE LOWER(:query)
                  OR LOWER(br.route_name) LIKE LOWER(:searchPattern)
                  OR LOWER(br.name_tm) LIKE LOWER(:searchPattern))
-            ORDER BY 
-                CASE 
+            ORDER BY
+                CASE
                     WHEN LOWER(br.route_number) = LOWER(:query) THEN 1
                     WHEN LOWER(br.route_number) LIKE LOWER(:query) THEN 2
                     WHEN LOWER(br.route_name) LIKE LOWER(:searchPattern) THEN 3
@@ -239,7 +258,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 END,
                 br.route_number
             LIMIT :limit
-            """;
+            """, selectColumns("br"));
 
         String searchPattern = "%" + query + "%";
 
@@ -446,7 +465,8 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-            "SELECT * FROM bus_routes WHERE %s ORDER BY route_number ASC, created_at DESC",
+            "SELECT %s FROM bus_routes WHERE %s ORDER BY route_number ASC, created_at DESC",
+            selectColumns(),
             criteria.getWhereClause()
         );
 
@@ -466,7 +486,8 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-            "SELECT * FROM bus_routes WHERE %s %s LIMIT :limit OFFSET :offset",
+            "SELECT %s FROM bus_routes WHERE %s %s LIMIT :limit OFFSET :offset",
+            selectColumns(),
             criteria.getWhereClause(),
             getOrderByClause(pageable)
         );
@@ -510,13 +531,13 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
         String searchPattern = "%" + searchQuery + "%";
 
         StringBuilder sqlBuilder = new StringBuilder();
-        sqlBuilder.append("""
-            SELECT * FROM bus_routes
+        sqlBuilder.append(String.format("""
+            SELECT %s FROM bus_routes
             WHERE (LOWER(route_number) LIKE :searchPattern
                    OR LOWER(route_name) LIKE :searchPattern
                    OR LOWER(name_tm) LIKE :searchPattern
                    OR LOWER(name_en) LIKE :searchPattern)
-            """);
+            """, selectColumns()));
 
         if (isActive != null) {
             sqlBuilder.append(" AND is_active = :isActive");
