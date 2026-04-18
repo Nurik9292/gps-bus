@@ -1,8 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
-import biz.ugur.busroutebackend.routing.infrastructure.config.ETAProperties;
 import biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository;
-import biz.ugur.busroutebackend.transport.infrastructure.messaging.DirectVehiclePositionBroadcaster;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,7 +15,7 @@ import static org.mockito.Mockito.lenient;
 class VehiclePositionPredictionServiceTest {
 
     @Mock
-    private DirectVehiclePositionBroadcaster broadcaster;
+    private PredictionBroadcaster broadcaster;
 
     @Mock
     private RouteGeometryCache routeGeometryCache;
@@ -27,9 +25,6 @@ class VehiclePositionPredictionServiceTest {
 
     @Mock
     private VehiclePredictionStateRepository stateRepository;
-
-    @Mock
-    private ETAProperties etaProperties;
 
     @Mock
     private StopDwellStatsRepository dwellStatsRepository;
@@ -44,7 +39,7 @@ class VehiclePositionPredictionServiceTest {
         lenient().when(dwellStatsRepository.findAll()).thenReturn(Flux.empty());
         service = new VehiclePositionPredictionService(
                 properties, broadcaster, routeGeometryCache, mapMatchingService,
-                stateRepository, etaProperties, dwellStatsRepository
+                stateRepository, dwellStatsRepository
         );
     }
 

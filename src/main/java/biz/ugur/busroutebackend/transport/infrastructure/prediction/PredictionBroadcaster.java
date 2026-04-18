@@ -1,0 +1,156 @@
+package biz.ugur.busroutebackend.transport.infrastructure.prediction;
+
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TimePeriod;
+import biz.ugur.busroutebackend.routing.infrastructure.config.ETAProperties;
+import biz.ugur.busroutebackend.transport.infrastructure.messaging.DirectVehiclePositionBroadcaster;
+import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage;
+import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage.NextStopEta;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Component
+@Slf4j
+public class PredictionBroadcaster {
+
+    private static final long FRESH_GPS_WINDOW_MS = 5_000;
+
+    private final DirectVehiclePositionBroadcaster directBroadcaster;
+    private final RouteGeometryCache routeGeometryCache;
+    private final ETAProperties etaProperties;
+    private final PredictionProperties properties;
+
+    private final ConcurrentHashMap<String, double[]> lastBroadcastPosition = new ConcurrentHashMap<>();
+
+    public PredictionBroadcaster(DirectVehiclePositionBroadcaster directBroadcaster,
+                                  RouteGeometryCache routeGeometryCache,
+                                  ETAProperties etaProperties,
+                                  PredictionProperties properties) {
+        this.directBroadcaster = directBroadcaster;
+        this.routeGeometryCache = routeGeometryCache;
+        this.etaProperties = etaProperties;
+        this.properties = properties;
+    }
+
+    public double[] getLastBroadcastPosition(String vehicleId) {
+        return lastBroadcastPosition.get(vehicleId);
+    }
+
+    public Mono<Void> broadcast(VehiclePredictionState state) {
+        if (!state.isInMotion() && state.getSpeedKmh() == 0
+                && (state.getRouteNumber() == null || state.getRouteNumber().isBlank())) {
+            return Mono.empty();
+        }
+
+        Double fractionValue = (state.getFractionOnRoute() >= 0) ? state.getFractionOnRoute() : null;
+        List<NextStopEta> nextStops = computeNextStopsEta(state, 3);
+
+        VehiclePositionWebSocketMessage msg = new VehiclePositionWebSocketMessage(
+                state.getVehicleId(),
+                state.getLicensePlate(),
+                state.getRouteNumber(),
+                state.getPredictedLatitude(),
+                state.getPredictedLongitude(),
+                state.getSpeedKmh(),
+                state.isInMotion(),
+                LocalDateTime.now(),
+                state.getCourse(),
+                state.getDirection() == 0,
+                nextStops.isEmpty() ? null : nextStops,
+                Boolean.TRUE,
+                fractionValue,
+                PredictionMath.computeConfidence(state.getLastReceivedAt(), state.getFractionOnRoute(), Instant.now()).name()
+        );
+
+        return Mono.fromRunnable(() -> {
+            try {
+                if (suppressTeleport(state)) {
+                    return;
+                }
+                lastBroadcastPosition.put(state.getVehicleId(),
+                        new double[]{state.getPredictedLatitude(), state.getPredictedLongitude()});
+
+                directBroadcaster.broadcastDirect(msg);
+                log.debug("[GPS_PIPELINE] WS_PRED vehicle={} plate={} mode={} frac={} lat={} lon={} speed={}km/h eta_stops={}",
+                        state.getVehicleId(), state.getLicensePlate(),
+                        fractionValue != null ? "SNAPPED" : "DEAD_RECKONING",
+                        fractionValue != null ? String.format("%.4f", fractionValue) : "-",
+                        String.format("%.6f", state.getPredictedLatitude()),
+                        String.format("%.6f", state.getPredictedLongitude()),
+                        String.format("%.1f", state.getSpeedKmh()),
+                        nextStops.size());
+            } catch (Exception e) {
+                log.warn("Failed to broadcast prediction for vehicle {}: {}", state.getVehicleId(), e.getMessage());
+            }
+        });
+    }
+
+    private boolean suppressTeleport(VehiclePredictionState state) {
+        double[] prevPos = lastBroadcastPosition.get(state.getVehicleId());
+        if (prevPos == null) {
+            return false;
+        }
+        double jumpDist = DistanceCalculationService.haversineDistanceMeters(
+                prevPos[0], prevPos[1],
+                state.getPredictedLatitude(), state.getPredictedLongitude());
+        long msSinceGps = state.getLastReceivedAt() != null
+                ? Instant.now().toEpochMilli() - state.getLastReceivedAt().toEpochMilli()
+                : Long.MAX_VALUE;
+        boolean freshGps = msSinceGps <= FRESH_GPS_WINDOW_MS;
+        Double fractionValue = (state.getFractionOnRoute() >= 0) ? state.getFractionOnRoute() : null;
+        if (!freshGps && jumpDist > properties.getTeleportThresholdMeters()) {
+            log.warn("[GPS_PIPELINE] WS_TELEPORT_SUPPRESSED vehicle={} plate={} dist={}m " +
+                            "from=({},{}) to=({},{}) frac={} dir={} — broadcast skipped",
+                    state.getVehicleId(), state.getLicensePlate(),
+                    String.format("%.0f", jumpDist),
+                    String.format("%.5f", prevPos[0]),
+                    String.format("%.5f", prevPos[1]),
+                    String.format("%.5f", state.getPredictedLatitude()),
+                    String.format("%.5f", state.getPredictedLongitude()),
+                    fractionValue != null ? String.format("%.4f", fractionValue) : "-",
+                    state.getDirection());
+            return true;
+        }
+        return false;
+    }
+
+    private List<NextStopEta> computeNextStopsEta(VehiclePredictionState state, int maxStops) {
+        double trueFraction = state.getLastGpsFraction() >= 0
+                ? state.getLastGpsFraction()
+                : state.getFractionOnRoute();
+        if (trueFraction < 0 || state.getTotalRouteDistanceMeters() <= 0
+                || state.getRouteNumber() == null) {
+            return List.of();
+        }
+        LocalDateTime now = LocalDateTime.now();
+        TimePeriod period = TimePeriod.fromDateTime(now);
+        double speedKmh = state.getSmoothedSpeedKmh() > 0
+                ? state.getSmoothedSpeedKmh()
+                : state.getRawGpsSpeedKmh();
+        if (speedKmh < etaProperties.getSpeed().getMovingThresholdKmh()) {
+            speedKmh = period.getAverageSpeedKmh();
+        }
+        double effectiveSpeed = speedKmh;
+        double totalDist = state.getTotalRouteDistanceMeters();
+        double currentFrac = trueFraction;
+        double trafficMult = period.getTrafficMultiplier(TimePeriod.isWeekend(now));
+
+        return routeGeometryCache.getStopsAhead(state.getRouteNumber(), state.getDirection(), currentFrac)
+                .stream()
+                .limit(maxStops)
+                .map(stop -> {
+                    double stopFrac = stop.getDistanceFromStartMeters() / totalDist;
+                    double distMeters = (stopFrac - currentFrac) * totalDist;
+                    int etaMin = (int) Math.max(1, Math.ceil(
+                            (distMeters / 1000.0 / effectiveSpeed) * 60.0 * trafficMult));
+                    return new NextStopEta(stop.getStopId(), stop.getStopName(), etaMin, (int) distMeters);
+                })
+                .toList();
+    }
+}
