@@ -44,9 +44,11 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
             BigDecimal latitude,
             BigDecimal longitude,
             Boolean isMajorStop,
-            String cityId) {
+            String cityId,
+            String createdBy) {
 
         String validatedStopName = validateStopName(stopName);
+        String auditActor = (createdBy == null || createdBy.isBlank()) ? "anonymous" : createdBy;
 
         BusStop busStop = builder()
                 .id(BusStopId.generate())
@@ -77,7 +79,7 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
                 busStop.id,
                 busStop.stopName,
                 busStop.stopCode,
-                "admin" // TODO: получать из контекста безопасности
+                auditActor
         ));
 
         return busStop;
