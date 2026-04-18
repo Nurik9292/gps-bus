@@ -25,7 +25,8 @@ public class ApiClientConfig {
             @Value("${external.api.gps.timeout:30s}") Duration timeout,
             @Value("${external.api.gps.connect-timeout:10s}") Duration connectTimeout,
             @Value("${external.api.gps.read-timeout:60s}") Duration readTimeout,
-            @Value("${external.api.gps.write-timeout:10s}") Duration writeTimeout) {
+            @Value("${external.api.gps.write-timeout:10s}") Duration writeTimeout,
+            @Value("${external.api.gps.max-in-memory-bytes:10485760}") int maxInMemoryBytes) {
 
         HttpClient httpClient = HttpClient.create()
                 .responseTimeout(timeout)
@@ -40,7 +41,7 @@ public class ApiClientConfig {
         return WebClient.builder()
                 .baseUrl(baseUrl)
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(maxInMemoryBytes))
                 .build();
     }
 
@@ -51,7 +52,8 @@ public class ApiClientConfig {
             @Value("${external.api.bus-info.timeout:30s}") Duration timeout,
             @Value("${external.api.bus-info.connect-timeout:10s}") Duration connectTimeout,
             @Value("${external.api.bus-info.read-timeout:30s}") Duration readTimeout,
-            @Value("${external.api.bus-info.write-timeout:10s}") Duration writeTimeout) {
+            @Value("${external.api.bus-info.write-timeout:10s}") Duration writeTimeout,
+            @Value("${external.api.bus-info.max-in-memory-bytes:2097152}") int maxInMemoryBytes) {
 
         HttpClient httpClient = HttpClient.create()
                 .responseTimeout(timeout)
@@ -66,7 +68,7 @@ public class ApiClientConfig {
         return WebClient.builder()
                 .baseUrl(baseUrl)
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(maxInMemoryBytes))
                 .build();
     }
 
@@ -77,7 +79,8 @@ public class ApiClientConfig {
             @Value("${external.api.osrm.timeout:3s}") Duration timeout,
             @Value("${external.api.osrm.connect-timeout:2s}") Duration connectTimeout,
             @Value("${external.api.osrm.read-timeout:3s}") Duration readTimeout,
-            @Value("${external.api.osrm.write-timeout:2s}") Duration writeTimeout) {
+            @Value("${external.api.osrm.write-timeout:2s}") Duration writeTimeout,
+            @Value("${external.api.osrm.max-in-memory-bytes:524288}") int maxInMemoryBytes) {
 
         HttpClient httpClient = HttpClient.create()
                 .responseTimeout(timeout)
@@ -91,7 +94,7 @@ public class ApiClientConfig {
         return WebClient.builder()
                 .baseUrl(baseUrl)
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(512 * 1024))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(maxInMemoryBytes))
                 .build();
     }
 
@@ -102,7 +105,8 @@ public class ApiClientConfig {
             @Value("${external.api.nominatim.timeout:10s}") Duration timeout,
             @Value("${external.api.nominatim.connect-timeout:3s}") Duration connectTimeout,
             @Value("${external.api.nominatim.read-timeout:10s}") Duration readTimeout,
-            @Value("${external.api.nominatim.write-timeout:3s}") Duration writeTimeout) {
+            @Value("${external.api.nominatim.write-timeout:3s}") Duration writeTimeout,
+            @Value("${external.api.nominatim.max-in-memory-bytes:2097152}") int maxInMemoryBytes) {
 
         HttpClient httpClient = HttpClient.create()
                 .responseTimeout(timeout)
@@ -116,7 +120,7 @@ public class ApiClientConfig {
         return WebClient.builder()
                 .baseUrl(baseUrl)
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(maxInMemoryBytes))
                 .build();
     }
 }

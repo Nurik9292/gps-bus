@@ -15,6 +15,10 @@ public class SchedulerProperties {
 
     private GpsConfig gps = new GpsConfig();
 
+    private ActiveHours activeHours = new ActiveHours();
+
+    private Duration updateInterval = Duration.ofSeconds(5);
+
     @Getter
     @Setter
     public static class GpsConfig {
@@ -26,5 +30,16 @@ public class SchedulerProperties {
         private Duration batchTimeout = Duration.ofSeconds(30);
 
         private Duration totalTimeout = Duration.ofSeconds(60);
+    }
+
+    @Getter
+    @Setter
+    public static class ActiveHours {
+
+        private int start = 6;
+
+        private int end = 23;
+
+        private String timezone = "Asia/Ashgabat";
     }
 }

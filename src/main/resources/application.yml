@@ -78,6 +78,11 @@ app:
     enabled: true
 
   scheduler:
+    update-interval: ${SCHEDULER_UPDATE_INTERVAL:5s}
+    active-hours:
+      start: ${SCHEDULER_ACTIVE_HOUR_START:6}
+      end: ${SCHEDULER_ACTIVE_HOUR_END:23}
+      timezone: ${SCHEDULER_TIMEZONE:Asia/Ashgabat}
     gps:
       batch-size: ${SCHEDULER_GPS_BATCH_SIZE:100}
       parallel-workers: ${SCHEDULER_GPS_PARALLEL_WORKERS:2}
@@ -528,6 +533,12 @@ server:
 routing:
   dijkstra:
     enabled: ${DIJKSTRA_ENABLED:true}
+    transfer-penalty-minutes: 5
+    max-transfers: 2
+    k-paths: 3
+    route-penalty-minutes: 30
+    max-iterations: 50000
+    max-cost-minutes: 180
 
   stop-based-search:
     enabled: true
@@ -601,6 +612,13 @@ ugur:
 # See .env.example for the full list.
 # ============================================================================
 payment:
+  scheduler:
+    enabled: true
+    stale-after-seconds: 180
+    batch-size: 50
+    fixed-delay-ms: 120000
+    initial-delay-ms: 60000
+
   svepg:
     timeout-millis: ${PAYMENT_TIMEOUT_MS:15000}
     banks:
