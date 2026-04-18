@@ -1,13 +1,15 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -60,51 +62,66 @@ public class VehiclePositionPredictionService {
         this.dwellStatsRepository = dwellStatsRepository;
     }
 
-    @PostConstruct
+    private static final Duration RESTORE_TIMEOUT = Duration.ofSeconds(30);
+
+    @EventListener(ApplicationReadyEvent.class)
     public void restoreFromRedis() {
         if (!properties.isEnabled()) return;
 
-        dwellStatsRepository.findAll()
-                .subscribeOn(Schedulers.boundedElastic())
-                .subscribe(
-                        stat -> dwellStatsCache.put(dwellKey(stat.getStopId(), stat.getRouteNumber(), stat.getDirection()), stat),
-                        err -> log.warn("Failed to load dwell stats: {}", err.getMessage()),
-                        () -> log.info("Loaded dwell stats cache: {} entries", dwellStatsCache.size())
-                );
+        try {
+            Mono.when(loadDwellStats(), loadPredictionStates())
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .block(RESTORE_TIMEOUT);
+        } catch (RuntimeException e) {
+            log.warn("Prediction state restore aborted after {}s, continuing with empty cache: {}",
+                    RESTORE_TIMEOUT.toSeconds(), e.getMessage());
+        }
+    }
 
-        stateRepository.loadAll()
+    private Mono<Void> loadDwellStats() {
+        return dwellStatsRepository.findAll()
+                .doOnNext(stat -> dwellStatsCache.put(
+                        dwellKey(stat.getStopId(), stat.getRouteNumber(), stat.getDirection()), stat))
+                .doOnError(err -> log.warn("Failed to load dwell stats: {}", err.getMessage()))
+                .onErrorResume(err -> Flux.empty())
+                .then(Mono.fromRunnable(() ->
+                        log.info("Loaded dwell stats cache: {} entries", dwellStatsCache.size())));
+    }
+
+    private Mono<Void> loadPredictionStates() {
+        return stateRepository.loadAll()
                 .filter(state -> state.getVehicleId() != null)
-                .map(state -> {
-                    if (state.getRouteNumber() != null) {
-                        List<double[]> coords = routeGeometryCache.getPoints(
-                                state.getRouteNumber(), state.getDirection());
-                        double totalDist = routeGeometryCache.getTotalDistance(
-                                state.getRouteNumber(), state.getDirection());
-                        if (coords != null) {
-                            return state.toBuilder()
-                                    .routeCoordinates(coords)
-                                    .totalRouteDistanceMeters(totalDist)
-                                    .build();
-                        }
-                    }
-                    return state;
-                })
+                .map(this::attachRouteGeometry)
                 .map(state -> state.toBuilder()
                         .lastReceivedAt(Instant.now().minusSeconds(properties.getMaxAgeMs() / 1000 + 60))
                         .build())
-                .subscribeOn(Schedulers.boundedElastic())
-                .subscribe(
-                        state -> {
-                            vehicleStates.put(state.getVehicleId(), state);
-                            log.debug("Restored prediction state (stale, awaiting fresh GPS): vehicle={} route={} frac={}",
-                                    state.getVehicleId(), state.getRouteNumber(),
-                                    state.getFractionOnRoute() >= 0
-                                            ? String.format("%.4f", state.getFractionOnRoute()) : "-");
-                        },
-                        err -> log.warn("Error restoring prediction states: {}", err.getMessage()),
-                        () -> log.info("Prediction states restored from Redis: {} vehicles (awaiting fresh GPS before broadcast)",
-                                vehicleStates.size())
-                );
+                .doOnNext(state -> {
+                    vehicleStates.put(state.getVehicleId(), state);
+                    log.debug("Restored prediction state (stale, awaiting fresh GPS): vehicle={} route={} frac={}",
+                            state.getVehicleId(), state.getRouteNumber(),
+                            state.getFractionOnRoute() >= 0
+                                    ? String.format("%.4f", state.getFractionOnRoute()) : "-");
+                })
+                .doOnError(err -> log.warn("Error restoring prediction states: {}", err.getMessage()))
+                .onErrorResume(err -> Flux.empty())
+                .then(Mono.fromRunnable(() ->
+                        log.info("Prediction states restored from Redis: {} vehicles (awaiting fresh GPS before broadcast)",
+                                vehicleStates.size())));
+    }
+
+    private VehiclePredictionState attachRouteGeometry(VehiclePredictionState state) {
+        if (state.getRouteNumber() == null) {
+            return state;
+        }
+        List<double[]> coords = routeGeometryCache.getPoints(state.getRouteNumber(), state.getDirection());
+        if (coords == null) {
+            return state;
+        }
+        double totalDist = routeGeometryCache.getTotalDistance(state.getRouteNumber(), state.getDirection());
+        return state.toBuilder()
+                .routeCoordinates(coords)
+                .totalRouteDistanceMeters(totalDist)
+                .build();
     }
 
 
