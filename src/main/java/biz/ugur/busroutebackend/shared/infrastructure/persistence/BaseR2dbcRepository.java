@@ -261,6 +261,17 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
         return "*";
     }
 
+    protected String selectColumns(String alias) {
+        String columns = selectColumns();
+        if ("*".equals(columns) || alias == null || alias.isBlank()) {
+            return alias == null || alias.isBlank() ? columns : alias + ".*";
+        }
+        return java.util.Arrays.stream(columns.split(","))
+                .map(String::trim)
+                .map(c -> alias + "." + c)
+                .collect(Collectors.joining(", "));
+    }
+
     protected abstract String convertIdToDatabase(ID id);
 
     protected abstract BiFunction<Row, RowMetadata, T> getRowMapper();

@@ -33,6 +33,12 @@ import java.util.function.BiFunction;
 public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStopId>
         implements BusStopRepository {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "stop_name", "name_en", "name_tm", "stop_code",
+            "latitude", "longitude", "is_active", "is_major_stop", "city_id",
+            "created_at", "updated_at", "version"
+    );
+
     private final BusStopEntityMapper entityMapper;
     private final ETAProperties etaProperties;
 
@@ -42,6 +48,11 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         super(databaseClient, "bus_stops", BusStop.class);
         this.entityMapper = entityMapper;
         this.etaProperties = etaProperties;
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -73,13 +84,13 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
 
     @Override
     public Flux<BusStop> findByStopName(String stopName) {
-        String sql = """
-            SELECT * FROM bus_stops 
-            WHERE (stop_name ILIKE :stopName 
-               OR name_en ILIKE :stopName 
-               OR name_tm ILIKE :stopName) 
+        String sql = String.format("""
+            SELECT %s FROM bus_stops
+            WHERE (stop_name ILIKE :stopName
+               OR name_en ILIKE :stopName
+               OR name_tm ILIKE :stopName)
             AND is_active = true
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("stopName", "%" + stopName + "%")
@@ -91,8 +102,8 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
     public Flux<BusStop> findStopsWithinRadius(Double centerLat, Double centerLon, Double radiusKm) {
         log.debug("Searching for stops within {}km of ({}, {})", radiusKm, centerLat, centerLon);
 
-        String sql = """
-            SELECT *,
+        String sql = String.format("""
+            SELECT %s,
                 ST_Distance(
                     ST_SetSRID(ST_Point(longitude, latitude), 4326)::geography,
                     ST_SetSRID(ST_Point(:centerLon, :centerLat), 4326)::geography
@@ -106,7 +117,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
             )
             ORDER BY distance_meters
             LIMIT 15
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("centerLat", centerLat)
@@ -122,12 +133,12 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
 
     @Override
     public Flux<BusStop> findByRouteId(String routeId) {
-        String sql = """
-            SELECT bs.* FROM bus_stops bs
+        String sql = String.format("""
+            SELECT %s FROM bus_stops bs
             JOIN route_stops rs ON bs.id = rs.stop_id
             WHERE rs.route_id = :routeId AND bs.is_active = true
             ORDER BY rs.stop_sequence
-            """;
+            """, selectColumns("bs"));
 
         return databaseClient.sql(sql)
                 .bind("routeId", routeId)
@@ -137,7 +148,10 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
 
     @Override
     public Flux<BusStop> findActiveStops() {
-        String sql = "SELECT * FROM bus_stops WHERE is_active = true ORDER BY stop_name";
+        String sql = String.format(
+                "SELECT %s FROM bus_stops WHERE is_active = true ORDER BY stop_name",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -167,13 +181,13 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
 
     @Override
     public Flux<BusStop> searchByName(String query, Integer limit) {
-        String sql = """
-            SELECT * FROM bus_stops 
-            WHERE (stop_name ILIKE :query 
-               OR name_en ILIKE :query 
+        String sql = String.format("""
+            SELECT %s FROM bus_stops
+            WHERE (stop_name ILIKE :query
+               OR name_en ILIKE :query
                OR name_tm ILIKE :query)
-            ORDER BY 
-                CASE 
+            ORDER BY
+                CASE
                     WHEN stop_name ILIKE :exactQuery THEN 1
                     WHEN name_en ILIKE :exactQuery THEN 2
                     WHEN name_tm ILIKE :exactQuery THEN 3
@@ -181,7 +195,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 END,
                 stop_name
             LIMIT :limit
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("query", "%" + query + "%")
@@ -264,7 +278,8 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-            "SELECT * FROM bus_stops WHERE %s ORDER BY stop_name ASC, created_at DESC",
+            "SELECT %s FROM bus_stops WHERE %s ORDER BY stop_name ASC, created_at DESC",
+            selectColumns(),
             criteria.getWhereClause()
         );
 
@@ -284,7 +299,8 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-            "SELECT * FROM bus_stops WHERE %s %s LIMIT :limit OFFSET :offset",
+            "SELECT %s FROM bus_stops WHERE %s %s LIMIT :limit OFFSET :offset",
+            selectColumns(),
             criteria.getWhereClause(),
             getOrderByClause(pageable)
         );
