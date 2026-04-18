@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.payment.infrastructure.provider.svepg;
 
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentProvider;
 import lombok.Data;
+import lombok.ToString;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +23,7 @@ public class SvEpgProperties {
         private boolean enabled = false;
         private String baseUrl;
         private String userName;
+        @ToString.Exclude
         private String password;
         private String terminalId;
         private String pid;
