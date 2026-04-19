@@ -2,6 +2,8 @@ package biz.ugur.busroutebackend.business.domain.events;
 
 import lombok.Getter;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 @Getter
@@ -13,7 +15,7 @@ public class BusinessUpdatedEvent extends BusinessDomainEvent {
 
     public BusinessUpdatedEvent(String businessId, Map<String, Object> changes) {
         super(businessId);
-        this.changes = Map.copyOf(changes);
+        this.changes = Collections.unmodifiableMap(new HashMap<>(changes));
     }
 
     @Override
