@@ -16,8 +16,24 @@ import java.util.function.BiFunction;
 
 public abstract class PaymentBaseRepository extends BaseR2dbcRepository<Payment, PaymentId> {
 
+    protected static final String SELECT_COLUMNS = String.join(", ",
+            "id", "provider", "provider_order_id", "order_number",
+            "subject_type", "subject_id", "business_id",
+            "amount_minor", "currency", "status",
+            "form_url", "return_url",
+            "initiated_at", "completed_at", "failed_at", "expires_at",
+            "failure_code", "failure_message",
+            "card_pan_masked", "card_expiration", "cardholder_name",
+            "created_at", "updated_at", "version"
+    );
+
     protected PaymentBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "payments", Payment.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override protected String convertIdToDatabase(PaymentId id) { return id.getValue(); }

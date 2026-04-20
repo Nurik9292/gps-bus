@@ -21,7 +21,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_EXTERNAL_SERVICES)
-@CrossOrigin(origins = "*")
 public class AdminExternalServicesController extends BaseController {
 
     private final CreateExternalServiceUseCase createExternalServiceUseCase;

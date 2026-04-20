@@ -22,7 +22,10 @@ public class R2dbcAdminRepository extends AdminBaseRepository implements AdminRe
 
     @Override
     public Mono<Admin> findByUsername(String username) {
-        String sql = "SELECT * FROM admins WHERE username = :username";
+        String sql = String.format(
+                "SELECT %s FROM admins WHERE username = :username",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .bind("username", username)
@@ -33,11 +36,11 @@ public class R2dbcAdminRepository extends AdminBaseRepository implements AdminRe
 
     @Override
     public Flux<Admin> findActiveAdmins() {
-        String sql = """
-            SELECT * FROM admins
+        String sql = String.format("""
+            SELECT %s FROM admins
             WHERE is_active = true
             ORDER BY full_name
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -70,15 +73,15 @@ public class R2dbcAdminRepository extends AdminBaseRepository implements AdminRe
 
     @Override
     public Mono<Admin> updateAvatar(AdminId adminId, String avatar) {
-        String sql = """
+        String sql = String.format("""
         UPDATE admins
         SET avatar = :avatar,
             updated_at = :updated_at,
             version = version + 1
         WHERE id = :id
           AND version = :old_version
-        RETURNING *
-        """;
+        RETURNING %s
+        """, selectColumns());
 
         return findById(adminId)
                 .flatMap(existing -> {

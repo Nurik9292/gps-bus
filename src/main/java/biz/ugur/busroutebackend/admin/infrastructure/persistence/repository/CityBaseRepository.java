@@ -20,8 +20,18 @@ import java.util.function.BiFunction;
 
 public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityId> {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "name", "name_tm", "is_active", "display_order",
+            "version", "created_at", "updated_at"
+    );
+
     protected CityBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "cities", City.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -67,7 +77,8 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-                "SELECT * FROM cities WHERE %s ORDER BY display_order ASC, name ASC",
+                "SELECT %s FROM cities WHERE %s ORDER BY display_order ASC, name ASC",
+                selectColumns(),
                 criteria.getWhereClause()
         );
 
@@ -86,7 +97,8 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-                "SELECT * FROM cities WHERE %s %s LIMIT :limit OFFSET :offset",
+                "SELECT %s FROM cities WHERE %s %s LIMIT :limit OFFSET :offset",
+                selectColumns(),
                 criteria.getWhereClause(),
                 getOrderByClause(pageable)
         );

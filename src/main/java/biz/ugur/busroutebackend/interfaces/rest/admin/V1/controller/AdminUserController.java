@@ -24,7 +24,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_USERS)
-@CrossOrigin(origins = "*")
 public class AdminUserController extends BasePaginatedController {
 
     private final CreateAdminUseCase createAdminUseCase;

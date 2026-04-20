@@ -17,11 +17,11 @@ public class R2dbcAdminNotificationRepository extends NotificationBaseRepository
 
     @Override
     public Flux<Notification> findActiveNotifications() {
-        String sql = """
-            SELECT * FROM notifications
+        String sql = String.format("""
+            SELECT %s FROM notifications
             WHERE is_active = true
             ORDER BY display_order ASC, created_at DESC
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())

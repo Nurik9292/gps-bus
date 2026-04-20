@@ -22,7 +22,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_CLIENT_COMPLAINTS)
-@CrossOrigin(origins = "*")
 public class ClientComplaintController extends BaseController {
 
     private final CreateComplaintUseCase createComplaintUseCase;

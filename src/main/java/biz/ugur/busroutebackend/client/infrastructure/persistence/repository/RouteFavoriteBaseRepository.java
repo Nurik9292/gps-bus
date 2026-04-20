@@ -21,8 +21,17 @@ import java.util.function.BiFunction;
 
 public abstract class RouteFavoriteBaseRepository extends BaseR2dbcRepository<RouteFavorite, RouteFavoriteId> {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "client_id", "route_id", "created_at", "updated_at", "version"
+    );
+
     protected RouteFavoriteBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "route_favorites", RouteFavorite.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -65,7 +74,8 @@ public abstract class RouteFavoriteBaseRepository extends BaseR2dbcRepository<Ro
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-                "SELECT * FROM route_favorites WHERE %s ORDER BY created_at DESC",
+                "SELECT %s FROM route_favorites WHERE %s ORDER BY created_at DESC",
+                selectColumns(),
                 criteria.getWhereClause()
         );
 
@@ -85,7 +95,8 @@ public abstract class RouteFavoriteBaseRepository extends BaseR2dbcRepository<Ro
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-                "SELECT * FROM route_favorites WHERE %s %s LIMIT :limit OFFSET :offset",
+                "SELECT %s FROM route_favorites WHERE %s %s LIMIT :limit OFFSET :offset",
+                selectColumns(),
                 criteria.getWhereClause(),
                 getOrderByClause(pageable)
         );

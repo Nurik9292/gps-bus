@@ -25,7 +25,10 @@ public class R2dbcClientRepository extends ClientBaseRepository implements Clien
 
     @Override
     public Mono<Client> findByPhone(String phone) {
-        String sql = "SELECT * FROM clients WHERE phone = :phone";
+        String sql = String.format(
+                "SELECT %s FROM clients WHERE phone = :phone",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .bind("phone", phone)
@@ -37,7 +40,10 @@ public class R2dbcClientRepository extends ClientBaseRepository implements Clien
 
     @Override
     public Flux<Client> findByStatus(ClientStatus status) {
-        String sql = "SELECT * FROM clients WHERE status = :status ORDER BY created_at DESC";
+        String sql = String.format(
+                "SELECT %s FROM clients WHERE status = :status ORDER BY created_at DESC",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .bind("status", status.name())
@@ -55,7 +61,10 @@ public class R2dbcClientRepository extends ClientBaseRepository implements Clien
 
     @Override
     public Flux<Client> findByLastActivityAfter(LocalDateTime since) {
-        String sql = "SELECT * FROM clients WHERE last_activity > :since ORDER BY last_activity DESC";
+        String sql = String.format(
+                "SELECT %s FROM clients WHERE last_activity > :since ORDER BY last_activity DESC",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .bind("since", since)
@@ -96,11 +105,11 @@ public class R2dbcClientRepository extends ClientBaseRepository implements Clien
 
     @Override
     public Mono<Client> findByServiceAndExternalUserId(String serviceId, String externalUserId) {
-        String sql = """
-            SELECT * FROM clients
+        String sql = String.format("""
+            SELECT %s FROM clients
             WHERE created_by_service_id = :serviceId
             AND external_user_id = :externalUserId
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("serviceId", serviceId)
@@ -113,12 +122,12 @@ public class R2dbcClientRepository extends ClientBaseRepository implements Clien
 
     @Override
     public Flux<Client> findByCreatedByServiceId(String serviceId, Pageable pageable) {
-        String sql = """
-            SELECT * FROM clients
+        String sql = String.format("""
+            SELECT %s FROM clients
             WHERE created_by_service_id = :serviceId
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("serviceId", serviceId)

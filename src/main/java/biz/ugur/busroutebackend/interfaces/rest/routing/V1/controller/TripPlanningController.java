@@ -27,7 +27,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ROUTING)
-@CrossOrigin(origins = "*")
 @Slf4j
 public class TripPlanningController extends BaseController {
 

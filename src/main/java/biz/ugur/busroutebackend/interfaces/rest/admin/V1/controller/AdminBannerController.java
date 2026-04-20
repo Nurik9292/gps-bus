@@ -17,7 +17,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_BANNERS)
-@CrossOrigin(origins = "*")
 public class AdminBannerController extends BasePaginatedController {
 
     private final CreateBannerUseCase createBannerUseCase;

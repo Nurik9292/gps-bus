@@ -22,10 +22,19 @@ import java.util.function.BiFunction;
 @Repository
 public abstract class NotificationBaseRepository extends BaseR2dbcRepository<Notification, NotificationId> {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "title", "content", "is_active", "display_order",
+            "version", "created_at", "updated_at"
+    );
+
     protected NotificationBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "notifications", Notification.class);
     }
 
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
+    }
 
     @Override
     protected String convertIdToDatabase(NotificationId notificationId) {
@@ -70,7 +79,8 @@ public abstract class NotificationBaseRepository extends BaseR2dbcRepository<Not
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-            "SELECT * FROM notifications WHERE %s ORDER BY display_order ASC, created_at DESC",
+            "SELECT %s FROM notifications WHERE %s ORDER BY display_order ASC, created_at DESC",
+            selectColumns(),
             criteria.getWhereClause()
         );
 
@@ -90,7 +100,8 @@ public abstract class NotificationBaseRepository extends BaseR2dbcRepository<Not
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-            "SELECT * FROM notifications WHERE %s %s LIMIT :limit OFFSET :offset",
+            "SELECT %s FROM notifications WHERE %s %s LIMIT :limit OFFSET :offset",
+            selectColumns(),
             criteria.getWhereClause(),
             getOrderByClause(pageable)
         );

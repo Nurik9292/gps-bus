@@ -13,7 +13,6 @@ import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedControlle
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,7 +26,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_PAYMENTS)
-@CrossOrigin(origins = "*")
 public class AdminPaymentController extends BasePaginatedController {
 
     private final InitiatePaymentUseCase initiatePaymentUseCase;

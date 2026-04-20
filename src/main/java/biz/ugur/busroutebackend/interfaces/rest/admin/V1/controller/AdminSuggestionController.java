@@ -21,7 +21,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_SUGGESTIONS)
-@CrossOrigin("*")
 public class AdminSuggestionController extends BasePaginatedController {
 
     private final GetAllSuggestionsUseCase getAllSuggestionsUseCase;

@@ -5,8 +5,11 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.bind.annotation.CrossOrigin;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 
 class NamingConventionsTest {
 
@@ -39,6 +42,26 @@ class NamingConventionsTest {
                 .should().resideInAPackage("..interfaces..")
                 .because("Controllers belong to the delivery layer. "
                         + "BaseController abstracts live in shared.infrastructure.web.")
+                .check(classes);
+    }
+
+    @Test
+    void controllersMustNotDeclareCrossOriginAnnotation() {
+        noClasses()
+                .that().resideInAPackage("..interfaces..")
+                .should().beAnnotatedWith(CrossOrigin.class)
+                .because("CORS is configured centrally via app.cors.* in PublicSecurityConfig; "
+                        + "per-controller @CrossOrigin bypasses the whitelist.")
+                .check(classes);
+    }
+
+    @Test
+    void controllerMethodsMustNotDeclareCrossOriginAnnotation() {
+        noMethods()
+                .that().areDeclaredInClassesThat().resideInAPackage("..interfaces..")
+                .should().beAnnotatedWith(CrossOrigin.class)
+                .because("CORS is configured centrally via app.cors.* in PublicSecurityConfig; "
+                        + "per-method @CrossOrigin bypasses the whitelist.")
                 .check(classes);
     }
 

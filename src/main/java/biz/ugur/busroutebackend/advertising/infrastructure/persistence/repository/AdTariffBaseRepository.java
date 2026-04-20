@@ -16,8 +16,21 @@ import java.util.function.BiFunction;
 
 public abstract class AdTariffBaseRepository extends BaseR2dbcRepository<AdTariff, TariffId> {
 
+    protected static final String SELECT_COLUMNS = String.join(", ",
+            "id", "name", "description", "placement_type", "period",
+            "price_amount", "currency",
+            "max_impressions", "max_clicks", "daily_impression_cap",
+            "is_active", "display_order",
+            "created_at", "updated_at", "version"
+    );
+
     protected AdTariffBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "ad_tariffs", AdTariff.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override protected String convertIdToDatabase(TariffId id) { return id.getValue(); }

@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.transport.application.usecase.stop;
 
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.application.SecurityContextService;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.geospatial.domain.constants.TurkmenistanBounds;
 import biz.ugur.busroutebackend.transport.application.dto.stop.CreateStop;
@@ -21,12 +22,15 @@ import java.util.Random;
 public class CreateBusStopUseCase extends BaseUseCase<Mono<CreateStop>, StopData> {
 
     private final BusStopRepository busStopRepository;
+    private final SecurityContextService securityContextService;
 
     public CreateBusStopUseCase(BusStopRepository busStopRepository,
                                 EventBus eventBus,
-                                CorrelationContextService correlationService) {
+                                CorrelationContextService correlationService,
+                                SecurityContextService securityContextService) {
         super(correlationService, eventBus);
         this.busStopRepository = busStopRepository;
+        this.securityContextService = securityContextService;
     }
 
     @Override
@@ -54,24 +58,19 @@ public class CreateBusStopUseCase extends BaseUseCase<Mono<CreateStop>, StopData
     }
 
     private Mono<BusStop> createBusStop(CreateStop command) {
-        try {
-            validateCoordinates(command.latitude(), command.longitude());
-
-            BusStop busStop = BusStop.create(
-                    command.stopName(),
-                    command.nameEn(),
-                    command.nameTm(),
-                    StopCode.generate(command.cityId(), new Random().nextInt(1000)),
-                    command.latitude(),
-                    command.longitude(),
-                    command.isMajorStop(),
-                    command.cityId()
-            );
-
-            return busStopRepository.save(busStop);
-        } catch (Exception e) {
-            return Mono.error(e);
-        }
+        return Mono.fromRunnable(() -> validateCoordinates(command.latitude(), command.longitude()))
+                .then(securityContextService.getCurrentUsername())
+                .flatMap(actor -> busStopRepository.save(BusStop.create(
+                        command.stopName(),
+                        command.nameEn(),
+                        command.nameTm(),
+                        StopCode.generate(command.cityId(), new Random().nextInt(1000)),
+                        command.latitude(),
+                        command.longitude(),
+                        command.isMajorStop(),
+                        command.cityId(),
+                        actor
+                )));
     }
 
 

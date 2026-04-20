@@ -18,12 +18,12 @@ public class R2dbcClientNotificationRepository extends NotificationBaseRepositor
 
     @Override
     public Flux<Notification> findActiveNotificationsWithPagination(Pageable pageable) {
-        String sql = """
-            SELECT * FROM notifications
+        String sql = String.format("""
+            SELECT %s FROM notifications
             WHERE is_active = true
             ORDER BY display_order ASC, created_at DESC
             LIMIT :limit OFFSET :offset
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("limit", pageable.getPageSize())

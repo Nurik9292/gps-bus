@@ -17,7 +17,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_NOTIFICATIONS)
-@CrossOrigin(origins = "*")
 public class AdminNotificationController extends BasePaginatedController {
 
     private final CreateNotificationUseCase createNotificationUseCase;

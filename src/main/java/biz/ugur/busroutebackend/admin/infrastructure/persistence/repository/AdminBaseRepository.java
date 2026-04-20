@@ -21,8 +21,19 @@ import java.util.function.BiFunction;
 
 public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, AdminId> {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "username", "password_hash", "full_name", "avatar",
+            "is_active", "is_super_admin", "last_login_at",
+            "version", "created_at", "updated_at"
+    );
+
     protected AdminBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "admins", Admin.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -74,7 +85,8 @@ public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, Adm
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-                "SELECT * FROM admins WHERE %s ORDER BY full_name ASC, created_at DESC",
+                "SELECT %s FROM admins WHERE %s ORDER BY full_name ASC, created_at DESC",
+                selectColumns(),
                 criteria.getWhereClause()
         );
 
@@ -93,7 +105,8 @@ public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, Adm
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-                "SELECT * FROM admins WHERE %s %s LIMIT :limit OFFSET :offset",
+                "SELECT %s FROM admins WHERE %s %s LIMIT :limit OFFSET :offset",
+                selectColumns(),
                 criteria.getWhereClause(),
                 getOrderByClause(pageable)
         );

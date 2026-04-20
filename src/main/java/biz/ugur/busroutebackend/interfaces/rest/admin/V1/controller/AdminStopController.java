@@ -22,7 +22,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_STOPS)
-@CrossOrigin(origins = "*")
 public class AdminStopController extends BasePaginatedController {
 
     private final CreateBusStopUseCase createBusStopUseCase;

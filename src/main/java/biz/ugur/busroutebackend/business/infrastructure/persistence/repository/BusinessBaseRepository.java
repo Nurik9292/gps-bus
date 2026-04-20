@@ -16,8 +16,24 @@ import java.util.function.BiFunction;
 
 public abstract class BusinessBaseRepository extends BaseR2dbcRepository<Business, BusinessId> {
 
+    protected static final String SELECT_COLUMNS = String.join(", ",
+            "id", "name", "business_type", "status",
+            "tax_number", "registration_number",
+            "contact_person", "contact_phone", "contact_email",
+            "website_url", "country", "city", "address_line",
+            "logo_url", "description",
+            "rejection_reason", "approved_at", "approved_by_admin_id",
+            "suspended_at", "suspension_reason",
+            "created_at", "updated_at", "version"
+    );
+
     protected BusinessBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "businesses", Business.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override

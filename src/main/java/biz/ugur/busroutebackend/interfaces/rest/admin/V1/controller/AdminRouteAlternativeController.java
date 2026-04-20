@@ -17,7 +17,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_ROUTE_ALTERNATIVES)
-@CrossOrigin(origins = "*")
 public class AdminRouteAlternativeController extends BaseController {
 
     private final CreateRouteAlternativeUseCase createRouteAlternativeUseCase;

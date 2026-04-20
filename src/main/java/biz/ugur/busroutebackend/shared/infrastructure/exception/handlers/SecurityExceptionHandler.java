@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.shared.infrastructure.exception.ErrorResponse;
 import biz.ugur.busroutebackend.shared.infrastructure.exception.ErrorResponseFactory;
 import biz.ugur.busroutebackend.shared.infrastructure.exception.HttpStatusMapper;
 import biz.ugur.busroutebackend.shared.infrastructure.security.JwtTokenException;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
@@ -91,5 +92,29 @@ public class SecurityExceptionHandler {
         );
 
         return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse));
+    }
+
+    @ExceptionHandler(RequestNotPermitted.class)
+    public Mono<ResponseEntity<ErrorResponse>> handleRateLimitExceeded(
+            RequestNotPermitted ex,
+            ServerWebExchange exchange
+    ) {
+        log.warn("[RATE_LIMIT] Request rejected path={} ip={} reason={}",
+                exchange.getRequest().getPath().value(),
+                exchange.getRequest().getRemoteAddress() != null
+                        ? exchange.getRequest().getRemoteAddress().getAddress().getHostAddress()
+                        : "-",
+                ex.getMessage());
+
+        ErrorResponse errorResponse = errorResponseFactory.fromGenericError(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "RATE_LIMIT_EXCEEDED",
+                "Too many requests, please slow down",
+                exchange
+        );
+
+        return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "60")
+                .body(errorResponse));
     }
 }

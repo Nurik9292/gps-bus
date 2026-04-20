@@ -11,6 +11,7 @@ import biz.ugur.busroutebackend.client.domain.enums.Platform;
 import biz.ugur.busroutebackend.interfaces.rest.client.V1.request.*;
 import biz.ugur.busroutebackend.interfaces.rest.client.V1.response.*;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +22,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_CLIENT_AUTH)
-@CrossOrigin(origins = "*")
 public class ClientAuthController extends BaseController {
 
     private final RegisterClientUseCase registerClientUseCase;
@@ -94,6 +94,7 @@ public class ClientAuthController extends BaseController {
 
 
     @PostMapping("/login")
+    @RateLimiter(name = "clientLogin")
     public Mono<ResponseEntity<ApiResponse<LoginResponse>>> login(@Valid @RequestBody LoginRequest request) {
         AuthenticateClientUseCase.Command command = new AuthenticateClientUseCase.Command(request.phone(), request.otp());
 

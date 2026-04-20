@@ -26,11 +26,22 @@ import java.util.function.BiFunction;
 public class R2dbcRouteAlternativeRepository extends BaseR2dbcRepository<RouteAlternative, RouteAlternativeId>
         implements RouteAlternativeRepository {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "primary_route_id", "alternative_route_id", "priority",
+            "description", "description_tm", "description_en",
+            "version", "created_at", "updated_at"
+    );
+
     private final RouteAlternativeEntityMapper entityMapper;
 
     public R2dbcRouteAlternativeRepository(DatabaseClient databaseClient, RouteAlternativeEntityMapper entityMapper) {
         super(databaseClient, "route_alternatives", RouteAlternative.class);
         this.entityMapper = entityMapper;
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -83,11 +94,11 @@ public class R2dbcRouteAlternativeRepository extends BaseR2dbcRepository<RouteAl
 
     @Override
     public Flux<RouteAlternative> findByPrimaryRouteId(BusRouteId primaryRouteId) {
-        String sql = """
-            SELECT * FROM route_alternatives
+        String sql = String.format("""
+            SELECT %s FROM route_alternatives
             WHERE primary_route_id = :primaryRouteId
             ORDER BY priority ASC
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("primaryRouteId", primaryRouteId.getValue())
@@ -98,11 +109,11 @@ public class R2dbcRouteAlternativeRepository extends BaseR2dbcRepository<RouteAl
 
     @Override
     public Flux<RouteAlternative> findByAlternativeRouteId(BusRouteId alternativeRouteId) {
-        String sql = """
-            SELECT * FROM route_alternatives
+        String sql = String.format("""
+            SELECT %s FROM route_alternatives
             WHERE alternative_route_id = :alternativeRouteId
             ORDER BY priority ASC
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("alternativeRouteId", alternativeRouteId.getValue())
@@ -129,11 +140,11 @@ public class R2dbcRouteAlternativeRepository extends BaseR2dbcRepository<RouteAl
 
     @Override
     public Mono<RouteAlternative> findByPrimaryAndAlternative(BusRouteId primaryRouteId, BusRouteId alternativeRouteId) {
-        String sql = """
-            SELECT * FROM route_alternatives
+        String sql = String.format("""
+            SELECT %s FROM route_alternatives
             WHERE primary_route_id = :primaryRouteId
             AND alternative_route_id = :alternativeRouteId
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("primaryRouteId", primaryRouteId.getValue())

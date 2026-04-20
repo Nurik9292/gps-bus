@@ -22,6 +22,12 @@ import java.time.LocalDateTime;
 @Slf4j
 public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "vehicle_id", "route_id", "effective_date", "shift_type",
+            "assigned_by", "reason", "expires_at", "is_active",
+            "created_at", "updated_at", "version"
+    );
+
     private final DatabaseClient databaseClient;
     private final RouteAssignmentEntityMapper mapper;
 
@@ -40,7 +46,7 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
         }
         entity.setUpdatedAt(LocalDateTime.now());
 
-        String sql = """
+        String sql = String.format("""
             INSERT INTO route_assignments
                 (id, vehicle_id, route_id, effective_date, shift_type,
                  assigned_by, reason, expires_at, is_active, created_at, updated_at, version)
@@ -58,8 +64,8 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
                 is_active = EXCLUDED.is_active,
                 updated_at = EXCLUDED.updated_at,
                 version = route_assignments.version + 1
-            RETURNING *
-            """;
+            RETURNING %s
+            """, SELECT_COLUMNS);
 
         var spec = databaseClient.sql(sql)
                 .bind("id", entity.getId())
@@ -96,7 +102,10 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
 
     @Override
     public Mono<RouteAssignment> findById(RouteAssignmentId id) {
-        String sql = "SELECT * FROM route_assignments WHERE id = :id";
+        String sql = String.format(
+                "SELECT %s FROM route_assignments WHERE id = :id",
+                SELECT_COLUMNS
+        );
 
         return databaseClient.sql(sql)
                 .bind("id", id.getValue())
@@ -107,7 +116,10 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
 
     @Override
     public Flux<RouteAssignment> findAll() {
-        String sql = "SELECT * FROM route_assignments ORDER BY effective_date DESC, created_at DESC";
+        String sql = String.format(
+                "SELECT %s FROM route_assignments ORDER BY effective_date DESC, created_at DESC",
+                SELECT_COLUMNS
+        );
 
         return databaseClient.sql(sql)
                 .map((row, metadata) -> mapRowToEntity(row))
@@ -117,8 +129,10 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
 
     @Override
     public Flux<RouteAssignment> findAll(org.springframework.data.domain.Pageable pageable) {
-        String sql = "SELECT * FROM route_assignments ORDER BY effective_date DESC, created_at DESC " +
-                     "LIMIT :limit OFFSET :offset";
+        String sql = String.format(
+                "SELECT %s FROM route_assignments ORDER BY effective_date DESC, created_at DESC LIMIT :limit OFFSET :offset",
+                SELECT_COLUMNS
+        );
 
         return databaseClient.sql(sql)
                 .bind("limit", pageable.getPageSize())
@@ -145,14 +159,14 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
             LocalDate effectiveDate,
             ShiftType shiftType) {
 
-        String sql = """
-            SELECT * FROM route_assignments
+        String sql = String.format("""
+            SELECT %s FROM route_assignments
             WHERE vehicle_id = :vehicleId
               AND effective_date = :effectiveDate
               AND shift_type = :shiftType
               AND is_active = true
             LIMIT 1
-            """;
+            """, SELECT_COLUMNS);
 
         return databaseClient.sql(sql)
                 .bind("vehicleId", vehicleId.getValue())
@@ -165,11 +179,11 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
 
     @Override
     public Flux<RouteAssignment> findActiveByVehicleId(VehicleId vehicleId) {
-        String sql = """
-            SELECT * FROM route_assignments
+        String sql = String.format("""
+            SELECT %s FROM route_assignments
             WHERE vehicle_id = :vehicleId AND is_active = true
             ORDER BY effective_date DESC, created_at DESC
-            """;
+            """, SELECT_COLUMNS);
 
         return databaseClient.sql(sql)
                 .bind("vehicleId", vehicleId.getValue())
@@ -180,13 +194,13 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
 
     @Override
     public Flux<RouteAssignment> findActiveByDateAndShift(LocalDate effectiveDate, ShiftType shiftType) {
-        String sql = """
-            SELECT * FROM route_assignments
+        String sql = String.format("""
+            SELECT %s FROM route_assignments
             WHERE effective_date = :effectiveDate
               AND shift_type = :shiftType
               AND is_active = true
             ORDER BY created_at DESC
-            """;
+            """, SELECT_COLUMNS);
 
         return databaseClient.sql(sql)
                 .bind("effectiveDate", effectiveDate)
@@ -198,11 +212,11 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
 
     @Override
     public Flux<RouteAssignment> findActiveByRouteId(BusRouteId routeId) {
-        String sql = """
-            SELECT * FROM route_assignments
+        String sql = String.format("""
+            SELECT %s FROM route_assignments
             WHERE route_id = :routeId AND is_active = true
             ORDER BY effective_date DESC, created_at DESC
-            """;
+            """, SELECT_COLUMNS);
 
         return databaseClient.sql(sql)
                 .bind("routeId", routeId.getValue())
@@ -213,13 +227,13 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
 
     @Override
     public Flux<RouteAssignment> findExpiredAssignments() {
-        String sql = """
-            SELECT * FROM route_assignments
+        String sql = String.format("""
+            SELECT %s FROM route_assignments
             WHERE is_active = true
               AND expires_at IS NOT NULL
               AND expires_at < :now
             ORDER BY expires_at ASC
-            """;
+            """, SELECT_COLUMNS);
 
         return databaseClient.sql(sql)
                 .bind("now", Instant.now())
@@ -230,11 +244,11 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
 
     @Override
     public Flux<RouteAssignment> findActiveByEffectiveDateBefore(LocalDate date) {
-        String sql = """
-            SELECT * FROM route_assignments
+        String sql = String.format("""
+            SELECT %s FROM route_assignments
             WHERE effective_date < :date AND is_active = true
             ORDER BY effective_date ASC
-            """;
+            """, SELECT_COLUMNS);
 
         return databaseClient.sql(sql)
                 .bind("date", date)
@@ -245,11 +259,11 @@ public class R2dbcRouteAssignmentRepository implements RouteAssignmentRepository
 
     @Override
     public Flux<RouteAssignment> findActiveByAssignedBy(String assignedBy) {
-        String sql = """
-            SELECT * FROM route_assignments
+        String sql = String.format("""
+            SELECT %s FROM route_assignments
             WHERE assigned_by = :assignedBy AND is_active = true
             ORDER BY effective_date DESC, created_at DESC
-            """;
+            """, SELECT_COLUMNS);
 
         return databaseClient.sql(sql)
                 .bind("assignedBy", assignedBy)

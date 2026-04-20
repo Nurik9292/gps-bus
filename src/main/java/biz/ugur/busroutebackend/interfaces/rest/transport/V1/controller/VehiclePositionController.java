@@ -13,7 +13,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/vehicles")
-@CrossOrigin(origins = "*")
 public class VehiclePositionController extends BaseController {
 
     private final GetAllVehiclePositionsUseCase getAllVehiclePositionsUseCase;

@@ -20,7 +20,10 @@ public class R2dbcPlaceRepository extends PlaceBaseRepository implements PlaceRe
 
     @Override
     public Flux<Place> findByCityId(String cityId) {
-        String sql = "SELECT * FROM places WHERE city_id = :cityId AND is_active = true ORDER BY name";
+        String sql = String.format(
+                "SELECT %s FROM places WHERE city_id = :cityId AND is_active = true ORDER BY name",
+                selectColumns()
+        );
         return databaseClient.sql(sql)
                 .bind("cityId", cityId)
                 .map(getRowMapper())
@@ -30,7 +33,8 @@ public class R2dbcPlaceRepository extends PlaceBaseRepository implements PlaceRe
     @Override
     public Flux<Place> findByCityId(String cityId, Pageable pageable) {
         String sql = String.format(
-                "SELECT * FROM places WHERE city_id = :cityId %s LIMIT :limit OFFSET :offset",
+                "SELECT %s FROM places WHERE city_id = :cityId %s LIMIT :limit OFFSET :offset",
+                selectColumns(),
                 getOrderByClause(pageable)
         );
         return databaseClient.sql(sql)
@@ -54,7 +58,8 @@ public class R2dbcPlaceRepository extends PlaceBaseRepository implements PlaceRe
     @Override
     public Flux<Place> findByCategory(String category, Pageable pageable) {
         String sql = String.format(
-                "SELECT * FROM places WHERE category = :category AND is_active = true %s LIMIT :limit OFFSET :offset",
+                "SELECT %s FROM places WHERE category = :category AND is_active = true %s LIMIT :limit OFFSET :offset",
+                selectColumns(),
                 getOrderByClause(pageable)
         );
         return databaseClient.sql(sql)
@@ -95,7 +100,9 @@ public class R2dbcPlaceRepository extends PlaceBaseRepository implements PlaceRe
 
     @Override
     public Flux<Place> findByFilters(String cityId, String category, String search, Pageable pageable) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM places WHERE 1=1");
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(selectColumns())
+                .append(" FROM places WHERE 1=1");
 
         if (cityId != null) sql.append(" AND city_id = :cityId");
         if (category != null) sql.append(" AND category = :category");

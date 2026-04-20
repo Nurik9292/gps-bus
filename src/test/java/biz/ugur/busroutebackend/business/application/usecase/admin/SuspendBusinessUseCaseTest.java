@@ -1,0 +1,106 @@
+package biz.ugur.busroutebackend.business.application.usecase.admin;
+
+import biz.ugur.busroutebackend.business.application.dto.BusinessResponse;
+import biz.ugur.busroutebackend.business.application.dto.SuspendBusinessCommand;
+import biz.ugur.busroutebackend.business.application.mapper.BusinessResponseMapper;
+import biz.ugur.busroutebackend.business.domain.enums.BusinessType;
+import biz.ugur.busroutebackend.business.domain.exceptions.BusinessNotFoundException;
+import biz.ugur.busroutebackend.business.domain.model.Business;
+import biz.ugur.busroutebackend.business.domain.repository.BusinessRepository;
+import biz.ugur.busroutebackend.business.domain.valueobjects.BusinessAddress;
+import biz.ugur.busroutebackend.business.domain.valueobjects.BusinessId;
+import biz.ugur.busroutebackend.business.domain.valueobjects.BusinessName;
+import biz.ugur.busroutebackend.business.domain.valueobjects.ContactInfo;
+import biz.ugur.busroutebackend.business.domain.valueobjects.TaxNumber;
+import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.shared.application.EventBus;
+import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(SpringExtension.class)
+class SuspendBusinessUseCaseTest {
+
+    @InjectMocks
+    private SuspendBusinessUseCase useCase;
+
+    @Mock
+    private BusinessRepository businessRepository;
+
+    @Mock
+    private BusinessResponseMapper businessResponseMapper;
+
+    @Mock
+    private CorrelationContextService correlationService;
+
+    @Mock
+    private EventBus eventBus;
+
+    private Business business;
+
+    @BeforeEach
+    void setUp() {
+        business = Business.create(
+                BusinessName.of("Acme Ltd"),
+                BusinessType.RESTAURANT,
+                ContactInfo.of("John", "+99312345678", "contact@acme.tm", null),
+                BusinessAddress.empty(),
+                TaxNumber.of("123456789"),
+                "REG-1",
+                null,
+                "description"
+        ).approve("admin-1");
+    }
+
+    @Test
+    void suspendsBusinessWithReason() {
+        BusinessResponse response = mock(BusinessResponse.class);
+        when(response.id()).thenReturn(business.getId().getValue());
+
+        when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
+        when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(businessRepository.findById(business.getId())).thenReturn(Mono.just(business));
+        when(businessRepository.save(any(Business.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(businessResponseMapper.toResponse(any(Business.class))).thenReturn(Mono.just(response));
+
+        StepVerifier.create(useCase.execute(new SuspendBusinessUseCase.Request(
+                business.getId().getValue(), new SuspendBusinessCommand("fraud"))))
+                .expectNextCount(1)
+                .verifyComplete();
+    }
+
+    @Test
+    void errorsWhenBusinessNotFound() {
+        String id = BusinessId.generate().getValue();
+
+        when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
+        when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(businessRepository.findById(any(BusinessId.class))).thenReturn(Mono.empty());
+
+        StepVerifier.create(useCase.execute(new SuspendBusinessUseCase.Request(
+                id, new SuspendBusinessCommand("reason"))))
+                .expectErrorSatisfies(err -> assertInstanceOf(BusinessNotFoundException.class, err))
+                .verify();
+    }
+
+    @Test
+    void exposesBoundContext() {
+        assertEquals("business.admin", useCase.getBoundContext());
+    }
+}

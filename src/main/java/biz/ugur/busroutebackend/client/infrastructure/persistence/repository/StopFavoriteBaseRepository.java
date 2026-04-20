@@ -21,8 +21,17 @@ import java.util.function.BiFunction;
 
 public abstract class StopFavoriteBaseRepository extends BaseR2dbcRepository<StopFavorite, StopFavoriteId> {
 
+    private static final String SELECT_COLUMNS = String.join(", ",
+            "id", "client_id", "stop_id", "created_at", "updated_at", "version"
+    );
+
     protected StopFavoriteBaseRepository(DatabaseClient databaseClient) {
         super(databaseClient, "stop_favorites", StopFavorite.class);
+    }
+
+    @Override
+    protected String selectColumns() {
+        return SELECT_COLUMNS;
     }
 
     @Override
@@ -66,7 +75,8 @@ public abstract class StopFavoriteBaseRepository extends BaseR2dbcRepository<Sto
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-                "SELECT * FROM stop_favorites WHERE %s ORDER BY created_at DESC",
+                "SELECT %s FROM stop_favorites WHERE %s ORDER BY created_at DESC",
+                selectColumns(),
                 criteria.getWhereClause()
         );
 
@@ -86,7 +96,8 @@ public abstract class StopFavoriteBaseRepository extends BaseR2dbcRepository<Sto
         SqlCriteria criteria = specification.toSqlCriteria();
 
         String sql = String.format(
-                "SELECT * FROM stop_favorites WHERE %s %s LIMIT :limit OFFSET :offset",
+                "SELECT %s FROM stop_favorites WHERE %s %s LIMIT :limit OFFSET :offset",
+                selectColumns(),
                 criteria.getWhereClause(),
                 getOrderByClause(pageable)
         );

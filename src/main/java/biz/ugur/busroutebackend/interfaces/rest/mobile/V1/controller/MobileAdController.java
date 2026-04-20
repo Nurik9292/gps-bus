@@ -10,7 +10,6 @@ import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,7 +25,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_MOBILE_ADS)
-@CrossOrigin(origins = "*")
 public class MobileAdController extends BaseController {
 
     private final GetActiveAdsUseCase getActiveAdsUseCase;

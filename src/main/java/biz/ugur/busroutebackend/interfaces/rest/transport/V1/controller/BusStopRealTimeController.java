@@ -21,7 +21,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_STOPS)
-@CrossOrigin(origins = "*")
 public class BusStopRealTimeController extends BaseController {
 
     private final BusStopRealTimeServiceImpl busStopRealTimeService;

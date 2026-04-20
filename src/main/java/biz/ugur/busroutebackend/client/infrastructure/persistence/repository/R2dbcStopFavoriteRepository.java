@@ -20,11 +20,11 @@ public class R2dbcStopFavoriteRepository extends StopFavoriteBaseRepository impl
 
     @Override
     public Flux<StopFavorite> findByClientId(ClientId clientId) {
-        String sql = """
-            SELECT * FROM stop_favorites
+        String sql = String.format("""
+            SELECT %s FROM stop_favorites
             WHERE client_id = :clientId
             ORDER BY created_at DESC
-            """;
+            """, selectColumns());
 
         return databaseClient.sql(sql)
                 .bind("clientId", clientId.getValue())

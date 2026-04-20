@@ -8,6 +8,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+
+import java.time.Duration;
 
 
 @Component
@@ -18,6 +21,10 @@ import org.springframework.stereotype.Component;
         havingValue = "true",
         matchIfMissing = true)
 public class PaymentStatusSyncScheduler {
+
+    private static final int CONCURRENCY = 4;
+    private static final Duration TICK_TIMEOUT = Duration.ofMinutes(1);
+    private static final Duration PER_ITEM_TIMEOUT = Duration.ofSeconds(10);
 
     private final PaymentRepository paymentRepository;
     private final SyncPaymentStatusUseCase syncPaymentStatusUseCase;
@@ -38,14 +45,19 @@ public class PaymentStatusSyncScheduler {
         paymentRepository.findPendingStale(properties.getStaleAfterSeconds(),
                         PageRequest.of(0, properties.getBatchSize()))
                 .flatMap(payment -> syncPaymentStatusUseCase.execute(payment.getId().getValue())
+                        .timeout(PER_ITEM_TIMEOUT)
                         .doOnSuccess(result -> log.debug(
                                 "Auto-sync payment {}: status={}",
                                 result.id(), result.status()))
                         .onErrorResume(e -> {
                             log.warn("Auto-sync failed for payment {}: {}",
                                     payment.getId().getValue(), e.getMessage());
-                            return reactor.core.publisher.Mono.empty();
-                        }))
+                            return Mono.empty();
+                        }), CONCURRENCY)
+                .then()
+                .timeout(TICK_TIMEOUT)
+                .doOnError(err -> log.warn("[SCHEDULER] PaymentStatusSync tick failed: {}", err.toString()))
+                .onErrorResume(err -> Mono.empty())
                 .subscribe();
     }
 }

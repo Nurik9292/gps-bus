@@ -10,6 +10,7 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.admin.RefreshTo
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.admin.AdminProfileResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.admin.AuthResponse;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +23,6 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 
 @RestController
 @RequestMapping(V1_ADMIN_AUTH)
-@CrossOrigin(origins = "*")
 public class AuthController extends BaseController {
 
     private final LoginUseCase loginUseCase;
@@ -49,6 +49,7 @@ public class AuthController extends BaseController {
 
 
     @PostMapping("/login")
+    @RateLimiter(name = "adminLogin")
     public Mono<ResponseEntity<ApiResponse<AuthResponse>>> login(@Valid @RequestBody LoginRequest request) {
         return ok(Mono.just(request.toRequest())
                 .as(loginUseCase::execute)

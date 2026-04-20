@@ -20,7 +20,10 @@ public class R2dbcCityRepository extends CityBaseRepository implements CityRepos
 
     @Override
     public Flux<City> findActiveCities() {
-        String sql = "SELECT * FROM cities WHERE is_active = true ORDER BY display_order, name";
+        String sql = String.format(
+                "SELECT %s FROM cities WHERE is_active = true ORDER BY display_order, name",
+                selectColumns()
+        );
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())

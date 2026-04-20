@@ -50,7 +50,7 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
 
     @Override
     public Flux<T> findAll() {
-        String sql = String.format("SELECT * FROM %s", tableName);
+        String sql = String.format("SELECT %s FROM %s", selectColumns(), tableName);
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -61,7 +61,8 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
     @Override
     public Flux<T> findAll(Pageable pageable) {
         String sql = String.format(
-                "SELECT * FROM %s %s LIMIT :limit OFFSET :offset",
+                "SELECT %s FROM %s %s LIMIT :limit OFFSET :offset",
+                selectColumns(),
                 tableName,
                 getOrderByClause(pageable)
         );
@@ -76,7 +77,11 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
 
     @Override
     public Mono<T> findById(ID id) {
-        String sql = String.format("SELECT * FROM %s WHERE id = :id", tableName);
+        String sql = String.format(
+                "SELECT %s FROM %s WHERE id = :id",
+                selectColumns(),
+                tableName
+        );
 
         return databaseClient.sql(sql)
                 .bind("id", convertIdToDatabase(id))
@@ -143,8 +148,8 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
                 .collect(Collectors.joining(", "));
 
         String sql = String.format(
-                "INSERT INTO %s (%s) VALUES (%s) RETURNING *",
-                tableName, columns, placeholders
+                "INSERT INTO %s (%s) VALUES (%s) RETURNING %s",
+                tableName, columns, placeholders, selectColumns()
         );
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
@@ -172,8 +177,8 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
                 .collect(Collectors.joining(", "));
 
         String sql = String.format(
-                "UPDATE %s SET %s WHERE id = :id AND version = :old_version RETURNING *",
-                tableName, setClause
+                "UPDATE %s SET %s WHERE id = :id AND version = :old_version RETURNING %s",
+                tableName, setClause, selectColumns()
         );
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
@@ -251,6 +256,21 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
 
 
 
+
+    protected String selectColumns() {
+        return "*";
+    }
+
+    protected String selectColumns(String alias) {
+        String columns = selectColumns();
+        if ("*".equals(columns) || alias == null || alias.isBlank()) {
+            return alias == null || alias.isBlank() ? columns : alias + ".*";
+        }
+        return java.util.Arrays.stream(columns.split(","))
+                .map(String::trim)
+                .map(c -> alias + "." + c)
+                .collect(Collectors.joining(", "));
+    }
 
     protected abstract String convertIdToDatabase(ID id);
 
