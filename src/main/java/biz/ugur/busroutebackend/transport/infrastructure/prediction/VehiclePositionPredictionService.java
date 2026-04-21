@@ -37,6 +37,9 @@ public class VehiclePositionPredictionService {
     private static final double OUTLIER_CLUSTER_RADIUS_METERS = 150.0;
     private static final long OUTLIER_FORCE_ACCEPT_WINDOW_MS = 120_000;
 
+    private static final double OFF_ROUTE_DISTANCE_THRESHOLD_METERS = 200.0;
+    private static final int OFF_ROUTE_CONFIRMATIONS = 5;
+
     private record OutlierBaseline(double lat, double lon, int count, Instant firstSeen) {}
     private final ConcurrentHashMap<String, OutlierBaseline> pendingAltBaselines = new ConcurrentHashMap<>();
 
@@ -385,6 +388,29 @@ public class VehiclePositionPredictionService {
             positionTeleport = false;
         }
 
+        int newOffRouteCount = existing != null ? existing.getConsecutiveOffRouteCount() : 0;
+        boolean newOffRoute = existing != null && existing.isOffRoute();
+        if (fraction >= 0 && !teleportRejected) {
+            double rawToSnapDist = DistanceCalculationService.haversineDistanceMeters(
+                    latitude, longitude, predictedLat, predictedLon);
+            if (rawToSnapDist > OFF_ROUTE_DISTANCE_THRESHOLD_METERS) {
+                newOffRouteCount += 1;
+                if (newOffRouteCount >= OFF_ROUTE_CONFIRMATIONS && !newOffRoute) {
+                    newOffRoute = true;
+                    log.warn("[GPS_PIPELINE] OFF_ROUTE_DETECTED vehicle={} plate={} route={} consecutive={} rawToSnapDist={}m — suppressing broadcast until back on route",
+                            vehicleId, licensePlate, routeNumber, newOffRouteCount,
+                            String.format("%.0f", rawToSnapDist));
+                }
+            } else {
+                if (newOffRoute) {
+                    log.info("[GPS_PIPELINE] OFF_ROUTE_CLEARED vehicle={} plate={} route={} — vehicle returned within {}m of route",
+                            vehicleId, licensePlate, routeNumber, (int) OFF_ROUTE_DISTANCE_THRESHOLD_METERS);
+                }
+                newOffRouteCount = 0;
+                newOffRoute = false;
+            }
+        }
+
         VehiclePredictionState.VehiclePredictionStateBuilder builder = VehiclePredictionState.builder()
                 .vehicleId(vehicleId)
                 .licensePlate(licensePlate)
@@ -410,6 +436,8 @@ public class VehiclePositionPredictionService {
                 .lastGpsFraction(fraction)
                 .lastRejectedGpsFraction(newRejectedFrac)
                 .consecutiveImplausibleCount(newImplausibleCount)
+                .consecutiveOffRouteCount(newOffRouteCount)
+                .offRoute(newOffRoute)
                 .inGarage(false)
                 .direction(direction);
 

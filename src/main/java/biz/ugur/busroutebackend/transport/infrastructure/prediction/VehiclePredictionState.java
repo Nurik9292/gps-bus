@@ -66,4 +66,10 @@ public class VehiclePredictionState {
     @Builder.Default
     private int consecutiveInconsistentAdvanceCount = 0;
 
+    @Builder.Default
+    private int consecutiveOffRouteCount = 0;
+
+    @Builder.Default
+    private boolean offRoute = false;
+
 }

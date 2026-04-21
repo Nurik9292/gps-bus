@@ -62,6 +62,13 @@ public class PredictionBroadcaster {
             return Mono.empty();
         }
 
+        if (state.isOffRoute()) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "off-route");
+            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_OFF_ROUTE vehicle={} plate={} — vehicle {}+ GPS points away from route",
+                    state.getVehicleId(), state.getLicensePlate(), state.getConsecutiveOffRouteCount());
+            return Mono.empty();
+        }
+
         if (!state.isInMotion() && state.getSpeedKmh() == 0
                 && (state.getRouteNumber() == null || state.getRouteNumber().isBlank())) {
             return Mono.empty();
