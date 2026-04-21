@@ -5,6 +5,7 @@ public enum GatekeeperDecision {
     FORCE_ACCEPT_STALE,
     REJECT_OUTLIER,
     REJECT_TELEPORT_GAP,
+    REJECT_OFF_ROUTE,
     PENDING_TELEPORT,
     COLD_START;
 

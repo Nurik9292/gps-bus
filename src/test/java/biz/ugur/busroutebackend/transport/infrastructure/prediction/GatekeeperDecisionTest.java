@@ -16,6 +16,7 @@ class GatekeeperDecisionTest {
     void disallowsCoordinateWrite_forRejectAndPendingAndColdStart() {
         assertThat(GatekeeperDecision.REJECT_OUTLIER.allowsCoordinateWrite()).isFalse();
         assertThat(GatekeeperDecision.REJECT_TELEPORT_GAP.allowsCoordinateWrite()).isFalse();
+        assertThat(GatekeeperDecision.REJECT_OFF_ROUTE.allowsCoordinateWrite()).isFalse();
         assertThat(GatekeeperDecision.PENDING_TELEPORT.allowsCoordinateWrite()).isFalse();
         assertThat(GatekeeperDecision.COLD_START.allowsCoordinateWrite()).isFalse();
     }

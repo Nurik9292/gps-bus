@@ -694,6 +694,9 @@ public class VehiclePositionPredictionService {
         if (pendingTeleports.containsKey(vehicleId)) {
             return GatekeeperDecision.PENDING_TELEPORT;
         }
+        if (state.isOffRoute()) {
+            return GatekeeperDecision.REJECT_OFF_ROUTE;
+        }
         return lastDecisions.getOrDefault(vehicleId, GatekeeperDecision.ACCEPT);
     }
 
