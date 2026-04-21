@@ -117,12 +117,8 @@ public class VehicleEventHandler {
         log.debug("Processing vehicle position update: vehicleId={}, plate={}",
                 event.getVehicleId(), event.getLicensePlate());
 
-        Mono<Void> broadcastMono = predictionProperties.isEnabled()
-                ? Mono.empty()
-                : broadcastPositionUpdate(event);
-
         return cacheVehiclePosition(event)
-                .then(broadcastMono)
+                .then()
                 .timeout(OPERATION_TIMEOUT)
                 .retryWhen(createRetrySpec("position update"))
                 .doOnSuccess(v -> log.trace("Vehicle position processed: {}", event.getVehicleId()))
@@ -183,6 +179,16 @@ public class VehicleEventHandler {
                 });
     }
 
+    /*
+     * DEPRECATED — legacy WS_PUBLISH broadcast path.
+     * Single-source-ws refactor (2026-04-21) made PredictionBroadcaster the
+     * only WS source of truth. This method is kept temporarily (2 weeks) as
+     * a safety net in case prediction engine needs a fallback. Remove after
+     * 2026-05-05 if no regressions. When removing, also delete:
+     *   - webSocketPublisher, vehicleEtaEnricherService, etaSemaphore fields
+     *   - ETA_ENRICHMENT_TIMEOUT, MAX_ETA_CONCURRENCY constants
+     *   - VehiclePositionWebSocketMessage/VehicleEtaEnricherService imports
+     *
     private Mono<Void> broadcastPositionUpdate(VehiclePositionUpdatedEvent event) {
         VehiclePositionWebSocketMessage msg = new VehiclePositionWebSocketMessage(
                 event.getVehicleId(),
@@ -214,6 +220,7 @@ public class VehicleEventHandler {
                     .doOnSuccess(v -> log.trace("Broadcasted position (no ETA slot): {}", event.getVehicleId()));
         }
     }
+    */
 
     private Mono<Boolean> updateRouteAssignmentCache(VehicleAssignedToRouteEvent event) {
         String key = RedisKeyRegistry.Vehicle.route(event.getVehicleId());
