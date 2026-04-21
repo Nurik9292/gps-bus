@@ -615,25 +615,25 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
             return Mono.zip(updateMono, insertMono, dirFixMono)
                     .flatMap(tuple -> {
-                        long vehiclesWithPosition = updatedVehicles.stream()
-                                .filter(Vehicle::hasPosition)
+                        long rawWinnersWithPosition = latestPositionsByDevice.values().stream()
+                                .filter(p -> p.getLatitude() != null && p.getLongitude() != null)
                                 .count();
 
-                        if (vehiclesWithPosition == 0) {
+                        if (rawWinnersWithPosition == 0) {
                             return Mono.just(tuple);
                         }
 
-                        return Flux.fromIterable(updatedVehicles)
-                                .filter(Vehicle::hasPosition)
-                                .flatMap(v -> gpsHistoryService.addPoint(
-                                        v.getDeviceId(),
-                                        v.getCurrentLatitude(),
-                                        v.getCurrentLongitude(),
-                                        v.getSpeedKmh(),
-                                        v.getLastPositionUpdate()
+                        return Flux.fromIterable(latestPositionsByDevice.values())
+                                .filter(p -> p.getLatitude() != null && p.getLongitude() != null)
+                                .flatMap(p -> gpsHistoryService.addPoint(
+                                        p.getDeviceId(),
+                                        p.getLatitude(),
+                                        p.getLongitude(),
+                                        p.getSpeed(),
+                                        p.getFixTime()
                                 ), 5)
                                 .then(Mono.defer(() -> {
-                                    log.debug("Saved GPS history for {} vehicles", vehiclesWithPosition);
+                                    log.debug("Saved raw GPS history for {} winners", rawWinnersWithPosition);
                                     return Mono.just(tuple);
                                 }));
                     })
