@@ -16,6 +16,7 @@ class SnapCorrector {
     private static final double DIRECTION_FLIP_THRESHOLD_DEG = 90.0;
     private static final int OPPOSITE_SNAP_THRESHOLD = 3;
     private static final double MAX_CORRECTION_DISTANCE_METERS = 50.0;
+    private static final double TERMINAL_FLIP_MAX_PHYSICAL_JUMP_METERS = 100.0;
 
     private final PredictionProperties properties;
     private final RouteGeometryCache routeGeometryCache;
@@ -382,17 +383,28 @@ class SnapCorrector {
                 : existing.getLastGpsFraction();
         boolean predNearTerminal = predFrac >= 0
                 && (predFrac <= tolerance || predFrac >= (1.0 - tolerance));
-        if (curNearTerminal || predNearTerminal) {
-            log.debug("[GPS_PIPELINE] DIR_FLIP_ALLOWED_TERMINAL vehicle={} trigger={} curFrac={} predFrac={}",
-                    vehicleId, trigger,
-                    curFraction >= 0 ? String.format("%.4f", curFraction) : "-",
-                    existing.getFractionOnRoute() >= 0 ? String.format("%.4f", existing.getFractionOnRoute()) : "-");
-            return true;
-        }
-
         double physicalJumpMeters = DistanceCalculationService.haversineDistanceMeters(
                 existing.getPredictedLatitude(), existing.getPredictedLongitude(),
                 flippedSnap.latitude(), flippedSnap.longitude());
+
+        if (curNearTerminal || predNearTerminal) {
+            if (physicalJumpMeters > TERMINAL_FLIP_MAX_PHYSICAL_JUMP_METERS) {
+                log.warn("[GPS_PIPELINE] DIR_FLIP_REJECTED_TERMINAL_FAR vehicle={} trigger={} physicalJump={}m > {}m " +
+                                "curFrac={} predFrac={} — at-terminal, but flipped snap is physically far (likely two close terminals on different routes)",
+                        vehicleId, trigger,
+                        String.format("%.0f", physicalJumpMeters),
+                        (int) TERMINAL_FLIP_MAX_PHYSICAL_JUMP_METERS,
+                        curFraction >= 0 ? String.format("%.4f", curFraction) : "-",
+                        existing.getFractionOnRoute() >= 0 ? String.format("%.4f", existing.getFractionOnRoute()) : "-");
+                return false;
+            }
+            log.debug("[GPS_PIPELINE] DIR_FLIP_ALLOWED_TERMINAL vehicle={} trigger={} curFrac={} predFrac={} physicalJump={}m",
+                    vehicleId, trigger,
+                    curFraction >= 0 ? String.format("%.4f", curFraction) : "-",
+                    existing.getFractionOnRoute() >= 0 ? String.format("%.4f", existing.getFractionOnRoute()) : "-",
+                    String.format("%.0f", physicalJumpMeters));
+            return true;
+        }
 
         if (physicalJumpMeters <= properties.getDirectionFlipMaxDistanceMeters()) {
             return true;
