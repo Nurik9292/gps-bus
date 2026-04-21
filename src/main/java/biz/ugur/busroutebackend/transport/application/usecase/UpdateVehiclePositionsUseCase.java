@@ -388,6 +388,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         List<VehicleUpdateStatus> statuses = new ArrayList<>();
         Map<String, Double> estimatedBearings = new HashMap<>();
         Map<String, double[]> oldCoordsByVehicleId = new HashMap<>();
+        Map<String, Boolean> hasSignificantChangeById = new HashMap<>();
+        Map<String, Boolean> frozenCoordsWithMotionById = new HashMap<>();
 
         for (GpsPositionDTO gpsPosition : latestPositionsByDevice.values()) {
             try {
@@ -468,42 +470,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
                     String vehicleId = updatedVehicle.getId().getValue();
 
-                    boolean shouldForcePublish = shouldForcePublishForVehicle(vehicleId);
-                    boolean inColdStart = predictionService.isInColdStart(vehicleId);
-                    boolean hasPendingTeleport = predictionService.hasPendingTeleport(vehicleId);
-                    boolean shouldPublish = (hasSignificantChange || shouldForcePublish)
-                            && !frozenCoordsWithMotion
-                            && !inColdStart
-                            && !hasPendingTeleport;
-
-                    if (shouldPublish) {
-                        lastPublishedTime.put(vehicleId, Instant.now());
-                        log.debug("[GPS_PIPELINE] WS_PUBLISH vehicle={} plate={} lat={} lon={} speed={} moved={}",
-                                vehicleId, updatedVehicle.getLicensePlate(),
-                                updatedVehicle.getCurrentLatitude(), updatedVehicle.getCurrentLongitude(),
-                                updatedVehicle.getSpeedKmh(), hasSignificantChange);
-
-                        VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
-                                vehicleId,
-                                updatedVehicle.getDeviceId(),
-                                updatedVehicle.getLicensePlate(),
-                                updatedVehicle.getRouteNumber(),
-                                updatedVehicle.getCurrentLatitude(),
-                                updatedVehicle.getCurrentLongitude(),
-                                updatedVehicle.getSpeedKmh(),
-                                updatedVehicle.getIsInMotion(),
-                                updatedVehicle.getLastPositionUpdate(),
-                                updatedVehicle.getCourse(),
-                                updatedVehicle.getCurrentDirection()
-                        );
-                        domainEventPublisher.publish(event);
-                    } else if (inColdStart) {
-                        log.debug("[GPS_PIPELINE] WS_PUBLISH_SUPPRESSED_COLD_START vehicle={} plate={} — prediction stabilizing",
-                                vehicleId, updatedVehicle.getLicensePlate());
-                    } else if (hasPendingTeleport) {
-                        log.debug("[GPS_PIPELINE] WS_PUBLISH_SUPPRESSED_TELEPORT_PENDING vehicle={} plate={} — awaiting teleport confirmation, WS_PRED remains source of truth",
-                                vehicleId, updatedVehicle.getLicensePlate());
-                    }
+                    hasSignificantChangeById.put(vehicleId, hasSignificantChange);
+                    frozenCoordsWithMotionById.put(vehicleId, frozenCoordsWithMotion);
 
                     statuses.add(VehicleUpdateStatus.updated(
                             updatedVehicle.getId().getValue(),
@@ -601,6 +569,12 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     .map(v -> applyGatekeeperDecision(v, oldCoordsByVehicleId))
                     .toList();
 
+            for (Vehicle v : updatedVehicles) {
+                publishPositionEventIfAccepted(v,
+                        hasSignificantChangeById.getOrDefault(v.getId().getValue(), false),
+                        frozenCoordsWithMotionById.getOrDefault(v.getId().getValue(), false));
+            }
+
             Map<String, Integer> directionFixes = predictionService.drainPendingDirectionFixes();
             Mono<Integer> dirFixMono = directionFixes.isEmpty()
                     ? Mono.just(0)
@@ -646,6 +620,41 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         });
     }
 
+
+    private void publishPositionEventIfAccepted(Vehicle v, boolean hasSignificantChange, boolean frozenCoordsWithMotion) {
+        String vehicleId = v.getId().getValue();
+        GatekeeperDecision decision = predictionService.evaluateGate(vehicleId);
+        boolean forcePublish = shouldForcePublishForVehicle(vehicleId);
+        boolean shouldPublish = (hasSignificantChange || forcePublish)
+                && !frozenCoordsWithMotion
+                && decision.allowsCoordinateWrite();
+
+        if (shouldPublish) {
+            lastPublishedTime.put(vehicleId, Instant.now());
+            log.debug("[GPS_PIPELINE] WS_PUBLISH vehicle={} plate={} decision={} lat={} lon={} speed={} moved={}",
+                    vehicleId, v.getLicensePlate(), decision,
+                    v.getCurrentLatitude(), v.getCurrentLongitude(),
+                    v.getSpeedKmh(), hasSignificantChange);
+
+            VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
+                    vehicleId,
+                    v.getDeviceId(),
+                    v.getLicensePlate(),
+                    v.getRouteNumber(),
+                    v.getCurrentLatitude(),
+                    v.getCurrentLongitude(),
+                    v.getSpeedKmh(),
+                    v.getIsInMotion(),
+                    v.getLastPositionUpdate(),
+                    v.getCourse(),
+                    v.getCurrentDirection()
+            );
+            domainEventPublisher.publish(event);
+        } else if (!decision.allowsCoordinateWrite()) {
+            log.debug("[GPS_PIPELINE] WS_PUBLISH_SUPPRESSED vehicle={} plate={} decision={} — DB coords preserved, no event emitted",
+                    vehicleId, v.getLicensePlate(), decision);
+        }
+    }
 
     private Vehicle applyGatekeeperDecision(Vehicle v, Map<String, double[]> oldCoordsByVehicleId) {
         String vehicleId = v.getId().getValue();
