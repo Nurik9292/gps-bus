@@ -26,6 +26,7 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.OutlierDetectionRes
 import biz.ugur.busroutebackend.transport.infrastructure.config.GpsOutlierDetectionProperties;
 import biz.ugur.busroutebackend.transport.infrastructure.metrics.GpsOutlierMetricsRecorder;
 import biz.ugur.busroutebackend.transport.infrastructure.metrics.GpsValidationMetricsRecorder;
+import biz.ugur.busroutebackend.transport.infrastructure.prediction.GatekeeperDecision;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePositionPredictionService;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.GpsPoint;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.GpsUpdateDeadLetterQueue;
@@ -386,6 +387,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         List<Vehicle> vehiclesToCreate = new ArrayList<>();
         List<VehicleUpdateStatus> statuses = new ArrayList<>();
         Map<String, Double> estimatedBearings = new HashMap<>();
+        Map<String, double[]> oldCoordsByVehicleId = new HashMap<>();
 
         for (GpsPositionDTO gpsPosition : latestPositionsByDevice.values()) {
             try {
@@ -395,6 +397,11 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     Double oldLatitude = vehicle.getCurrentLatitude();
                     Double oldLongitude = vehicle.getCurrentLongitude();
                     Double oldSpeed = vehicle.getSpeedKmh();
+
+                    if (oldLatitude != null && oldLongitude != null) {
+                        oldCoordsByVehicleId.put(vehicle.getId().getValue(),
+                                new double[]{oldLatitude, oldLongitude});
+                    }
 
                     Vehicle updatedVehicle = vehicle.updatePosition(
                             gpsPosition.getLatitude(),
@@ -590,14 +597,18 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 }
             }
 
+            List<Vehicle> gatedVehicles = updatedVehicles.stream()
+                    .map(v -> applyGatekeeperDecision(v, oldCoordsByVehicleId))
+                    .toList();
+
             Map<String, Integer> directionFixes = predictionService.drainPendingDirectionFixes();
             Mono<Integer> dirFixMono = directionFixes.isEmpty()
                     ? Mono.just(0)
                     : vehicleRepository.batchUpdateDirections(directionFixes)
                             .doOnNext(n -> log.debug("[GPS_PIPELINE] DIR_AUTO_FIX applied {} direction corrections", n));
 
-            Mono<Integer> updateMono = updatedVehicles.isEmpty() ?
-                    Mono.just(0) : vehicleRepository.batchUpdate(updatedVehicles);
+            Mono<Integer> updateMono = gatedVehicles.isEmpty() ?
+                    Mono.just(0) : vehicleRepository.batchUpdate(gatedVehicles);
 
             Mono<List<Vehicle>> insertMono = vehiclesToCreate.isEmpty() ?
                     Mono.just(List.of()) : vehicleRepository.batchInsert(vehiclesToCreate).collectList();
@@ -615,7 +626,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         return Flux.fromIterable(updatedVehicles)
                                 .filter(Vehicle::hasPosition)
                                 .flatMap(v -> gpsHistoryService.addPoint(
-                                        v.getDeviceId(),  
+                                        v.getDeviceId(),
                                         v.getCurrentLatitude(),
                                         v.getCurrentLongitude(),
                                         v.getSpeedKmh(),
@@ -635,6 +646,24 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         });
     }
 
+
+    private Vehicle applyGatekeeperDecision(Vehicle v, Map<String, double[]> oldCoordsByVehicleId) {
+        String vehicleId = v.getId().getValue();
+        GatekeeperDecision decision = predictionService.evaluateGate(vehicleId);
+        if (decision.allowsCoordinateWrite()) {
+            return v;
+        }
+        double[] oldCoords = oldCoordsByVehicleId.get(vehicleId);
+        if (oldCoords == null) {
+            return v;
+        }
+        log.debug("[GPS_PIPELINE] DB_HEARTBEAT_ONLY vehicle={} plate={} decision={} — preserving coords, updating timing only",
+                vehicleId, v.getLicensePlate(), decision);
+        return v.toBuilder()
+                .currentLatitude(oldCoords[0])
+                .currentLongitude(oldCoords[1])
+                .build();
+    }
 
     private boolean shouldForcePublishForVehicle(String vehicleId) {
         if (predictionService.isActivelyPredicting(vehicleId)) {
