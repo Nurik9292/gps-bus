@@ -60,7 +60,9 @@ class VehiclePositionPredictor {
             return state;
         }
 
-        if (state.getRouteCoordinates() != null && state.getFractionOnRoute() < 0) {
+        if (state.getFractionOnRoute() < 0
+                && state.getRouteNumber() != null
+                && !state.getRouteNumber().isBlank()) {
             return state;
         }
 
