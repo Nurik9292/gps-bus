@@ -60,6 +60,10 @@ class VehiclePositionPredictor {
             return state;
         }
 
+        if (state.getRouteCoordinates() != null && state.getFractionOnRoute() < 0) {
+            return state;
+        }
+
         VehiclePredictionState result = advanceInternal(state, msSinceGps);
         if (result != state && state.getPredictedLatitude() != 0.0 && result.getPredictedLatitude() != 0.0) {
             double delta = biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService

@@ -55,6 +55,13 @@ public class PredictionBroadcaster {
             return Mono.empty();
         }
 
+        if (state.getRouteCoordinates() != null && state.getFractionOnRoute() < 0) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "unsnapped-awaiting-gps");
+            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_UNSNAPPED vehicle={} plate={} — state awaiting fresh GPS to re-snap",
+                    state.getVehicleId(), state.getLicensePlate());
+            return Mono.empty();
+        }
+
         if (!state.isInMotion() && state.getSpeedKmh() == 0
                 && (state.getRouteNumber() == null || state.getRouteNumber().isBlank())) {
             return Mono.empty();
