@@ -40,6 +40,8 @@ public class VehiclePositionPredictionService {
     private record OutlierBaseline(double lat, double lon, int count, Instant firstSeen) {}
     private final ConcurrentHashMap<String, OutlierBaseline> pendingAltBaselines = new ConcurrentHashMap<>();
 
+    private final ConcurrentHashMap<String, GatekeeperDecision> lastDecisions = new ConcurrentHashMap<>();
+
     @org.springframework.beans.factory.annotation.Value("${ugur.diagnostics.tracked-plates:}")
     private String trackedPlatesProperty;
     private volatile java.util.Set<String> trackedPlates = java.util.Set.of();
@@ -250,10 +252,12 @@ public class VehiclePositionPredictionService {
                 if (shouldForceAcceptStaleBaseline(vehicleId, licensePlate, latitude, longitude)) {
                     forceAcceptAfterOutlier = true;
                     pendingAltBaselines.remove(vehicleId);
+                    lastDecisions.put(vehicleId, GatekeeperDecision.FORCE_ACCEPT_STALE);
                 } else {
                     replaceState(vehicleId, existing.toBuilder()
                             .lastReceivedAt(Instant.now())
                             .build(), "outlier-reject");
+                    lastDecisions.put(vehicleId, GatekeeperDecision.REJECT_OUTLIER);
                     return;
                 }
             }
@@ -262,6 +266,7 @@ public class VehiclePositionPredictionService {
                         .lastGpsUpdate(timestamp)
                         .lastReceivedAt(Instant.now())
                         .build(), "teleport-gap-reject");
+                lastDecisions.put(vehicleId, GatekeeperDecision.REJECT_TELEPORT_GAP);
                 return;
             }
             case ACCEPT -> pendingAltBaselines.remove(vehicleId);
@@ -421,6 +426,13 @@ public class VehiclePositionPredictionService {
                 : (triggerColdStart ? (snapResult.resetTriggered() ? "onGpsUpdate-snap-reset" : "onGpsUpdate-pos-teleport")
                         : "onGpsUpdate-accept");
         replaceState(vehicleId, builtState, writeReason);
+        if (teleportRejected) {
+            lastDecisions.put(vehicleId, GatekeeperDecision.PENDING_TELEPORT);
+        } else if (triggerColdStart) {
+            lastDecisions.put(vehicleId, GatekeeperDecision.COLD_START);
+        } else if (!forceAcceptAfterOutlier) {
+            lastDecisions.put(vehicleId, GatekeeperDecision.ACCEPT);
+        }
         if (triggerColdStart) {
             log.warn("[GPS_PIPELINE] COLD_START vehicle={} plate={} route={} reason={} duration={}s — WS broadcast suppressed until state stabilizes",
                     vehicleId, licensePlate, routeNumber,
@@ -535,6 +547,7 @@ public class VehiclePositionPredictionService {
         });
         pendingTeleports.keySet().retainAll(vehicleStates.keySet());
         pendingAltBaselines.keySet().retainAll(vehicleStates.keySet());
+        lastDecisions.keySet().retainAll(vehicleStates.keySet());
         snapCorrector.onVehicleStaleCleanup(vehicleStates.keySet());
     }
 
@@ -640,6 +653,20 @@ public class VehiclePositionPredictionService {
 
     public boolean hasPendingTeleport(String vehicleId) {
         return pendingTeleports.containsKey(vehicleId);
+    }
+
+    public GatekeeperDecision evaluateGate(String vehicleId) {
+        VehiclePredictionState state = vehicleStates.get(vehicleId);
+        if (state == null) {
+            return GatekeeperDecision.ACCEPT;
+        }
+        if (PredictionBroadcaster.isInColdStart(state)) {
+            return GatekeeperDecision.COLD_START;
+        }
+        if (pendingTeleports.containsKey(vehicleId)) {
+            return GatekeeperDecision.PENDING_TELEPORT;
+        }
+        return lastDecisions.getOrDefault(vehicleId, GatekeeperDecision.ACCEPT);
     }
 
     public double[] getAcceptedPosition(String vehicleId) {
