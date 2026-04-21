@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
 import biz.ugur.busroutebackend.transport.application.usecase.GetActiveVehiclesUseCase;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.DirectVehiclePositionBroadcaster;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage;
+import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePositionPredictionService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,7 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
     private final WebSocketBufferMetricsTracker bufferMetrics;
+    private final VehiclePositionPredictionService predictionService;
 
     private final Map<String, SessionConfig> activeSessions = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCounter = new AtomicInteger(0);
@@ -57,11 +59,13 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
     public VehiclePositionHandler(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                   ReactiveRedisTemplate<String, Object> redisTemplate,
                                   ObjectMapper objectMapper,
-                                  WebSocketBufferMetricsTracker bufferMetrics) {
+                                  WebSocketBufferMetricsTracker bufferMetrics,
+                                  @org.springframework.context.annotation.Lazy VehiclePositionPredictionService predictionService) {
         this.getActiveVehiclesUseCase = getActiveVehiclesUseCase;
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.bufferMetrics = bufferMetrics;
+        this.predictionService = predictionService;
     }
 
     @PostConstruct

@@ -75,6 +75,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private final GpsOutlierMetricsRecorder outlierMetricsRecorder;
     private final GpsOutlierDetectionProperties outlierDetectionProperties;
     private final VehiclePositionPredictionService predictionService;
+    private final biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
                                          VehicleFactory vehicleFactory,
@@ -94,7 +95,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                          GpsOutlierDetector outlierDetector,
                                          GpsOutlierMetricsRecorder outlierMetricsRecorder,
                                          GpsOutlierDetectionProperties outlierDetectionProperties,
-                                         VehiclePositionPredictionService predictionService) {
+                                         VehiclePositionPredictionService predictionService,
+                                         biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer) {
         super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
         this.vehicleFactory = vehicleFactory;
@@ -113,6 +115,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         this.outlierMetricsRecorder = outlierMetricsRecorder;
         this.outlierDetectionProperties = outlierDetectionProperties;
         this.predictionService = predictionService;
+        this.pipelineTracer = pipelineTracer;
     }
 
     @Override
@@ -296,10 +299,26 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private record PositionWithOutlierResult(GpsPositionDTO position, OutlierDetectionResult detectionResult) {}
 
     private Mono<VehiclePositionUpdateResult> processBatch(List<GpsPositionDTO> validPositions, Map<String, Vehicle> existingVehicles) {
+        for (GpsPositionDTO position : validPositions) {
+            Vehicle v = existingVehicles.get(position.getDeviceId());
+            String plate = v != null ? v.getLicensePlate() : null;
+            pipelineTracer.traceGpsApiRecv(
+                    position.getDeviceId(), plate,
+                    position.getGpsProvider() != null ? position.getGpsProvider().name() : "UNKNOWN",
+                    position.getLatitude(), position.getLongitude(),
+                    String.valueOf(position.getFixTime()),
+                    position.getSpeed());
+        }
+
         Map<String, GpsPositionDTO> latestPositionsByDevice = new java.util.LinkedHashMap<>();
+        java.util.Map<String, java.util.List<GpsPositionDTO>> duplicatesByDevice = new java.util.HashMap<>();
         for (GpsPositionDTO position : validPositions) {
             String deviceId = position.getDeviceId();
             GpsPositionDTO existing = latestPositionsByDevice.get(deviceId);
+
+            if (existing != null) {
+                duplicatesByDevice.computeIfAbsent(deviceId, k -> new java.util.ArrayList<>()).add(existing);
+            }
 
             if (existing == null
                     || position.getFixTime() != null
@@ -309,8 +328,58 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             }
         }
 
-        log.debug("[GPS_PIPELINE] PROCESS_BATCH input={} unique_vehicles={}",
-                validPositions.size(), latestPositionsByDevice.size());
+        for (Map.Entry<String, GpsPositionDTO> e : latestPositionsByDevice.entrySet()) {
+            GpsPositionDTO winner = e.getValue();
+            Vehicle v = existingVehicles.get(e.getKey());
+            String plate = v != null ? v.getLicensePlate() : null;
+            int candidatesCount = 1 + (duplicatesByDevice.containsKey(e.getKey())
+                    ? duplicatesByDevice.get(e.getKey()).size() : 0);
+            pipelineTracer.traceBatchWinner(e.getKey(), plate,
+                    winner.getGpsProvider() != null ? winner.getGpsProvider().name() : "UNKNOWN",
+                    candidatesCount,
+                    String.valueOf(winner.getFixTime()));
+        }
+
+        for (var entry : duplicatesByDevice.entrySet()) {
+            String deviceId = entry.getKey();
+            GpsPositionDTO winner = latestPositionsByDevice.get(deviceId);
+            java.util.List<GpsPositionDTO> losers = entry.getValue();
+            losers.add(winner);
+            Vehicle v = existingVehicles.get(deviceId);
+            String plate = v != null ? v.getLicensePlate() : "?";
+            StringBuilder sb = new StringBuilder();
+            for (GpsPositionDTO p : losers) {
+                double distFromWinner = (p == winner || p.getLatitude() == null || winner.getLatitude() == null)
+                        ? 0.0
+                        : biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService
+                                .haversineDistanceMeters(p.getLatitude(), p.getLongitude(),
+                                        winner.getLatitude(), winner.getLongitude());
+                sb.append(String.format(" [%s %s lat=%.5f lon=%.5f fixTime=%s dist=%.0fm]",
+                        p.getGpsProvider(), p == winner ? "WINNER" : "loser",
+                        p.getLatitude() != null ? p.getLatitude() : 0.0,
+                        p.getLongitude() != null ? p.getLongitude() : 0.0,
+                        p.getFixTime(),
+                        distFromWinner));
+            }
+            log.info("[GPS_PIPELINE] GPS_DUPLICATE_SOURCES device={} plate={} winner={} candidates={}{}",
+                    deviceId, plate, winner.getGpsProvider(), losers.size(), sb);
+        }
+
+        for (GpsPositionDTO winner : latestPositionsByDevice.values()) {
+            String deviceId = winner.getDeviceId();
+            Vehicle v = existingVehicles.get(deviceId);
+            String plate = v != null ? v.getLicensePlate() : "?";
+            String storedProvider = v != null && v.getGpsProvider() != null ? v.getGpsProvider().getCode() : null;
+            String newProvider = winner.getGpsProvider() != null ? winner.getGpsProvider().getCode() : null;
+            if (storedProvider != null && newProvider != null && !storedProvider.equals(newProvider)) {
+                log.info("[GPS_PIPELINE] GPS_PROVIDER_SWITCH device={} plate={} from={} to={} newLat={} newLon={}",
+                        deviceId, plate, storedProvider, newProvider,
+                        winner.getLatitude(), winner.getLongitude());
+            }
+        }
+
+        log.debug("[GPS_PIPELINE] PROCESS_BATCH input={} unique_vehicles={} cross_provider_duplicates={}",
+                validPositions.size(), latestPositionsByDevice.size(), duplicatesByDevice.size());
 
         List<Vehicle> vehiclesToUpdate = new ArrayList<>();
         List<Vehicle> vehiclesForDetection = new ArrayList<>();
@@ -360,6 +429,15 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 String.format("%.6f", updatedVehicle.getCurrentLongitude()));
                     }
 
+                    pipelineTracer.traceDbSave(
+                            gpsPosition.getDeviceId(),
+                            updatedVehicle.getLicensePlate(),
+                            oldLatitude, oldLongitude,
+                            updatedVehicle.getCurrentLatitude(),
+                            updatedVehicle.getCurrentLongitude(),
+                            hasSignificantChange,
+                            hasSignificantChange ? "significant-change" : "no-change-skip");
+
                     if (hasSignificantChange) {
                         vehiclesToUpdate.add(updatedVehicle);
 
@@ -399,15 +477,40 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 updatedVehicle.getLastPositionUpdate() != null
                                         ? updatedVehicle.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
                                         : Instant.now(),
-                                updatedVehicle.getCurrentDirection() != null ? updatedVehicle.getCurrentDirection() : 0
+                                updatedVehicle.getCurrentDirection() != null ? updatedVehicle.getCurrentDirection() : 0,
+                                Boolean.TRUE.equals(updatedVehicle.getIsInGarage())
                         );
+
+                        boolean shouldRevertDbPosition =
+                                (predictionService.hasPendingTeleport(vehicleId)
+                                        || predictionService.isInColdStart(vehicleId))
+                                && oldLatitude != null && oldLongitude != null;
+                        if (shouldRevertDbPosition) {
+                            Vehicle revertedVehicle = vehicle.updatePosition(
+                                    oldLatitude,
+                                    oldLongitude,
+                                    gpsPosition.getSpeed(),
+                                    gpsPosition.getFixTime(),
+                                    gpsPosition.getCourse()
+                            );
+                            vehiclesToUpdate.removeIf(v -> v.getId().getValue().equals(vehicleId));
+                            vehiclesToUpdate.add(revertedVehicle);
+                            vehiclesForDetection.removeIf(v -> v.getId().getValue().equals(vehicleId));
+                            vehiclesForDetection.add(revertedVehicle);
+                            updatedVehicle = revertedVehicle;
+                            log.debug("[GPS_PIPELINE] DB_POSITION_REVERTED vehicle={} plate={} reason={} — keeping old coords",
+                                    vehicleId, updatedVehicle.getLicensePlate(),
+                                    predictionService.hasPendingTeleport(vehicleId) ? "teleport-pending" : "cold-start");
+                        }
                     }
 
                     boolean shouldForcePublish = shouldForcePublishForVehicle(vehicleId);
                     boolean inColdStart = predictionService.isInColdStart(vehicleId);
+                    boolean hasPendingTeleport = predictionService.hasPendingTeleport(vehicleId);
                     boolean shouldPublish = (hasSignificantChange || shouldForcePublish)
                             && !frozenCoordsWithMotion
-                            && !inColdStart;
+                            && !inColdStart
+                            && !hasPendingTeleport;
 
                     if (shouldPublish) {
                         lastPublishedTime.put(vehicleId, Instant.now());
@@ -432,6 +535,9 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         domainEventPublisher.publish(event);
                     } else if (inColdStart) {
                         log.debug("[GPS_PIPELINE] WS_PUBLISH_SUPPRESSED_COLD_START vehicle={} plate={} — prediction stabilizing",
+                                vehicleId, updatedVehicle.getLicensePlate());
+                    } else if (hasPendingTeleport) {
+                        log.debug("[GPS_PIPELINE] WS_PUBLISH_SUPPRESSED_TELEPORT_PENDING vehicle={} plate={} — awaiting teleport confirmation, WS_PRED remains source of truth",
                                 vehicleId, updatedVehicle.getLicensePlate());
                     }
 
@@ -521,7 +627,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             v.getLastPositionUpdate() != null
                                     ? v.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
                                     : Instant.now(),
-                            v.getCurrentDirection() != null ? v.getCurrentDirection() : 0
+                            v.getCurrentDirection() != null ? v.getCurrentDirection() : 0,
+                            Boolean.TRUE.equals(v.getIsInGarage())
                     );
                 }
             }
