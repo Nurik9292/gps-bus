@@ -60,6 +60,34 @@ class VehiclePositionPredictor {
             return state;
         }
 
+        VehiclePredictionState result = advanceInternal(state, msSinceGps);
+        if (result != state && state.getPredictedLatitude() != 0.0 && result.getPredictedLatitude() != 0.0) {
+            double delta = biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService
+                    .haversineDistanceMeters(state.getPredictedLatitude(), state.getPredictedLongitude(),
+                            result.getPredictedLatitude(), result.getPredictedLongitude());
+            if (delta > 500.0) {
+                List<double[]> rc = state.getRouteCoordinates();
+                int rcSize = rc != null ? rc.size() : -1;
+                log.warn("[GPS_PIPELINE] ADVANCE_JUMP vehicle={} plate={} delta={}m speed={}km/h fraction={}->{} routeCoordsSize={} totalDist={} in.predicted=({},{}) out.predicted=({},{}) in.gps=({},{})",
+                        state.getVehicleId(), state.getLicensePlate(),
+                        String.format("%.0f", delta),
+                        String.format("%.1f", state.getSpeedKmh()),
+                        String.format("%.4f", state.getFractionOnRoute()),
+                        String.format("%.4f", result.getFractionOnRoute()),
+                        rcSize,
+                        String.format("%.0f", state.getTotalRouteDistanceMeters()),
+                        String.format("%.5f", state.getPredictedLatitude()),
+                        String.format("%.5f", state.getPredictedLongitude()),
+                        String.format("%.5f", result.getPredictedLatitude()),
+                        String.format("%.5f", result.getPredictedLongitude()),
+                        String.format("%.5f", state.getGpsLatitude()),
+                        String.format("%.5f", state.getGpsLongitude()));
+            }
+        }
+        return result;
+    }
+
+    private VehiclePredictionState advanceInternal(VehiclePredictionState state, long msSinceGps) {
         double decayedSpeedKmh = state.getSpeedKmh() * decayFactor(msSinceGps);
         double conservativeFactor = properties.getConservativeSpeedFactor();
         double adjustedConservative = conservativeFactor;
@@ -98,6 +126,40 @@ class VehiclePositionPredictor {
             double[] coords = mapMatchingService.interpolateRoutePoint(routeCoords, newFraction, totalRouteDistance);
             if (coords == null) return state;
 
+            if (state.getPredictedLatitude() != 0.0) {
+                double snapToPredicted = biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService
+                        .haversineDistanceMeters(state.getPredictedLatitude(), state.getPredictedLongitude(),
+                                coords[0], coords[1]);
+                if (snapToPredicted > 300.0) {
+                    int newCount = state.getConsecutiveInconsistentAdvanceCount() + 1;
+                    if (newCount >= 10) {
+                        log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE_RESET vehicle={} plate={} consecutiveInconsistent={} — force resetting fractionOnRoute/routeCoords to let SnapCorrector re-snap on next GPS",
+                                state.getVehicleId(), state.getLicensePlate(), newCount);
+                        return state.toBuilder()
+                                .fractionOnRoute(-1)
+                                .lastGpsFraction(-1)
+                                .lastRejectedGpsFraction(-1)
+                                .consecutiveImplausibleCount(0)
+                                .consecutiveInconsistentAdvanceCount(0)
+                                .routeCoordinates(null)
+                                .totalRouteDistanceMeters(0)
+                                .build();
+                    }
+                    log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE vehicle={} plate={} predicted=({},{}) interpolated=({},{}) frac={} count={}/10 — falling back to dead-reckoning",
+                            state.getVehicleId(), state.getLicensePlate(),
+                            String.format("%.5f", state.getPredictedLatitude()),
+                            String.format("%.5f", state.getPredictedLongitude()),
+                            String.format("%.5f", coords[0]),
+                            String.format("%.5f", coords[1]),
+                            String.format("%.4f", state.getFractionOnRoute()),
+                            newCount);
+                    return advanceDeadReckoning(state, decayedSpeedKmh, effectiveSpeedKmh)
+                            .toBuilder()
+                            .consecutiveInconsistentAdvanceCount(newCount)
+                            .build();
+                }
+            }
+
             double newCourse = mapMatchingService.calculateCourseFromRoute(
                     routeCoords, newFraction, state.getDirection(), totalRouteDistance);
 
@@ -107,6 +169,7 @@ class VehiclePositionPredictor {
                     .predictedLongitude(coords[1])
                     .fractionOnRoute(newFraction)
                     .course(newCourse)
+                    .consecutiveInconsistentAdvanceCount(0)
                     .build();
         }
 

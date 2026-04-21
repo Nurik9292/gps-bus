@@ -133,22 +133,36 @@ class SnapCorrector {
                 double fracDelta = realFraction - lastGpsFrac;
                 boolean gpsMoveAgainstDir = fracDelta < -0.005;
                 boolean plausibleJump = Math.abs(fracDelta) <= 0.25;
+                double tolerance = properties.getTerminalFractionTolerance();
+                boolean wasNearTerminal = lastGpsFrac <= tolerance || lastGpsFrac >= (1.0 - tolerance);
+                boolean nowNearOppositeTerminal = realFraction >= 0
+                        && (lastGpsFrac >= (1.0 - tolerance) ? realFraction <= tolerance * 3
+                                : realFraction >= (1.0 - tolerance * 3));
 
-                if (gpsMoveAgainstDir && plausibleJump) {
+                if (gpsMoveAgainstDir && (plausibleJump || (wasNearTerminal && nowNearOppositeTerminal))) {
                     int correctedDir = (direction == 0) ? 1 : 0;
                     List<double[]> correctedCoords = routeGeometryCache.getPoints(routeNumber, correctedDir);
                     if (correctedCoords != null) {
                         double correctedDist = routeGeometryCache.getTotalDistance(routeNumber, correctedDir);
                         MapMatchingService.SnappedResult correctedSnap =
                                 mapMatchingService.snapToNearestSegment(latitude, longitude, correctedCoords, correctedDist);
-                        if (correctedSnap.snapped()
-                                && isDirectionFlipPhysicallyPlausible(vehicleId, "FRAC", existing,
-                                        correctedSnap, lastGpsFrac)) {
-                            log.info("[GPS_PIPELINE] DIR_CORRECT_FRAC vehicle={} route={} dir={}→{} gpsFrac={}→{} (delta={})",
+                        boolean terminalFlipSmoothOnOpposite = wasNearTerminal && correctedSnap.snapped()
+                                && (lastGpsFrac >= (1.0 - tolerance)
+                                        ? correctedSnap.fraction() <= tolerance * 3
+                                        : correctedSnap.fraction() >= (1.0 - tolerance * 3));
+                        boolean flipAcceptable = correctedSnap.snapped()
+                                && (plausibleJump
+                                        ? isDirectionFlipPhysicallyPlausible(vehicleId, "FRAC", existing,
+                                                correctedSnap, lastGpsFrac)
+                                        : terminalFlipSmoothOnOpposite);
+                        if (flipAcceptable) {
+                            log.info("[GPS_PIPELINE] DIR_CORRECT_FRAC vehicle={} route={} dir={}→{} gpsFrac={}→{} oppositeFrac={} (delta={}{})",
                                     vehicleId, routeNumber, direction, correctedDir,
                                     String.format("%.4f", lastGpsFrac),
                                     String.format("%.4f", realFraction),
-                                    String.format("%.4f", fracDelta));
+                                    String.format("%.4f", correctedSnap.fraction()),
+                                    String.format("%.4f", fracDelta),
+                                    wasNearTerminal && !plausibleJump ? " terminal-flip" : "");
                             direction = correctedDir;
                             routeCoords = correctedCoords;
                             totalDist = correctedDist;

@@ -59,7 +59,8 @@ class PredictionBroadcasterColdStartTest {
     @Test
     void broadcast_skipsPublish_whenInColdStart() {
         PredictionBroadcaster broadcaster = new PredictionBroadcaster(
-                directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties());
+                directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(),
+                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer());
 
         VehiclePredictionState state = VehiclePredictionState.builder()
                 .vehicleId("v1")
