@@ -461,49 +461,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
                     String vehicleId = updatedVehicle.getId().getValue();
 
-                    if (updatedVehicle.getCurrentLatitude() != null
-                            && updatedVehicle.getCurrentLongitude() != null) {
-                        predictionService.onGpsUpdate(
-                                vehicleId,
-                                updatedVehicle.getLicensePlate(),
-                                updatedVehicle.getRouteNumber(),
-                                updatedVehicle.getCurrentLatitude(),
-                                updatedVehicle.getCurrentLongitude(),
-                                updatedVehicle.getSpeedKmh() != null ? updatedVehicle.getSpeedKmh() : 0.0,
-                                (updatedVehicle.getCourse() != null && updatedVehicle.getCourse() > 0.0)
-                                        ? updatedVehicle.getCourse()
-                                        : estimatedBearings.getOrDefault(vehicleId, 0.0),
-                                Boolean.TRUE.equals(updatedVehicle.getIsInMotion()),
-                                updatedVehicle.getLastPositionUpdate() != null
-                                        ? updatedVehicle.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
-                                        : Instant.now(),
-                                updatedVehicle.getCurrentDirection() != null ? updatedVehicle.getCurrentDirection() : 0,
-                                Boolean.TRUE.equals(updatedVehicle.getIsInGarage())
-                        );
-
-                        boolean shouldRevertDbPosition =
-                                (predictionService.hasPendingTeleport(vehicleId)
-                                        || predictionService.isInColdStart(vehicleId))
-                                && oldLatitude != null && oldLongitude != null;
-                        if (shouldRevertDbPosition) {
-                            Vehicle revertedVehicle = vehicle.updatePosition(
-                                    oldLatitude,
-                                    oldLongitude,
-                                    gpsPosition.getSpeed(),
-                                    gpsPosition.getFixTime(),
-                                    gpsPosition.getCourse()
-                            );
-                            vehiclesToUpdate.removeIf(v -> v.getId().getValue().equals(vehicleId));
-                            vehiclesToUpdate.add(revertedVehicle);
-                            vehiclesForDetection.removeIf(v -> v.getId().getValue().equals(vehicleId));
-                            vehiclesForDetection.add(revertedVehicle);
-                            updatedVehicle = revertedVehicle;
-                            log.debug("[GPS_PIPELINE] DB_POSITION_REVERTED vehicle={} plate={} reason={} — keeping old coords",
-                                    vehicleId, updatedVehicle.getLicensePlate(),
-                                    predictionService.hasPendingTeleport(vehicleId) ? "teleport-pending" : "cold-start");
-                        }
-                    }
-
                     boolean shouldForcePublish = shouldForcePublishForVehicle(vehicleId);
                     boolean inColdStart = predictionService.isInColdStart(vehicleId);
                     boolean hasPendingTeleport = predictionService.hasPendingTeleport(vehicleId);
