@@ -350,6 +350,28 @@
 
         /* Cursor hint */
         #map.route-mode { cursor: crosshair !important; }
+
+        .teleport-panel {
+            position: fixed; top: 70px; right: 12px; z-index: 900;
+            background: rgba(15, 15, 19, 0.95);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            width: 320px;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            backdrop-filter: blur(10px);
+        }
+        .tp-header { font-weight: 700; color: var(--red); font-size: 13px; margin-bottom: 8px; letter-spacing: 1px; }
+        .tp-section-title { color: var(--text-dim); font-size: 9px; letter-spacing: 2px; margin: 10px 0 4px; border-top: 1px solid var(--border); padding-top: 6px; }
+        .tp-row { display: flex; gap: 8px; padding: 3px 0; align-items: center; border-bottom: 1px dotted rgba(255,255,255,0.05); }
+        .tp-plate { flex: 1; color: var(--text); font-weight: 600; }
+        .tp-route { color: var(--accent); width: 42px; }
+        .tp-count { color: var(--orange); font-weight: 700; }
+        .tp-dist { color: var(--red); width: 54px; text-align: right; }
+        .tp-age { color: var(--text-dim); width: 36px; text-align: right; font-size: 10px; }
     </style>
 </head>
 <body>
@@ -388,10 +410,16 @@
             <span class="stat-value" id="update-rate">0</span>
             <span class="stat-label">upd/s</span>
         </div>
+        <button class="route-btn" id="trails-toggle" onclick="toggleTrails()" style="padding:6px 10px;font-size:11px;">Trails: ON</button>
+        <button class="route-btn" onclick="clearTrails()" style="padding:6px 10px;font-size:11px;background:#3a1a1a;">Clear</button>
     </div>
 </div>
 
 <div id="map"></div>
+
+<div id="teleport-panel" class="teleport-panel">
+    <div class="tp-header">Teleports: 0</div>
+</div>
 
 <!-- Route Builder Panel -->
 <div class="route-panel" id="route-panel">
@@ -464,6 +492,14 @@
     let updateCounter = 0;
     let lastCounterReset = Date.now();
 
+    // Trail debug state
+    let vehicleTrails = {};       // id -> [{lat, lon, ts, jump}]
+    let vehicleTrailLayers = {};  // id -> L.layerGroup
+    let trailsVisible = true;
+    let teleportLog = [];         // [{plate, route, dist, from, to, ts}]
+    const TRAIL_MAX_POINTS = 120;
+    const TELEPORT_THRESHOLD_M = 500;
+
     // ===== MAP INIT =====
     function initMap() {
         map = L.map('map', { zoomControl: false }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
@@ -478,6 +514,9 @@
 
         loadStops();
         connectWebSocket();
+
+        updateTeleportPanel();
+        setInterval(updateTeleportPanel, 2000);
 
         // Update rate counter
         setInterval(() => {
@@ -584,7 +623,8 @@
                 const data = JSON.parse(e.data);
                 if (data.type === 'initial_positions' || data.type === 'position_update') {
                     const vlist = data.vehicles || [];
-                    vlist.forEach(v => processVehicle(v));
+                    const isInitial = data.type === 'initial_positions';
+                    vlist.forEach(v => processVehicle(v, { initial: isInitial }));
                     updateCounter += vlist.length;
                     updateStats();
                 }
@@ -594,6 +634,11 @@
         ws.onerror = () => setWsStatus(false);
         ws.onclose = () => {
             setWsStatus(false);
+            // Trails become stale during disconnect — clear to avoid false teleport
+            // detection on first position_update after reconnect
+            vehicleTrails = {};
+            Object.values(vehicleTrailLayers).forEach(l => map.removeLayer(l));
+            vehicleTrailLayers = {};
             setTimeout(connectWebSocket, 3000);
         };
     }
@@ -607,6 +652,11 @@
         Object.values(vehicleMarkers).forEach(m => map.removeLayer(m));
         vehicleMarkers = {};
         vehicles = {};
+        // Clear trails too — stale trail points would create false teleports
+        // when reconnecting since vehicle moved during disconnect window
+        vehicleTrails = {};
+        Object.values(vehicleTrailLayers).forEach(l => map.removeLayer(l));
+        vehicleTrailLayers = {};
         updateStats();
         connectWebSocket();
     }
@@ -667,9 +717,133 @@
     }
 
     // ===== PROCESS VEHICLE =====
-    function processVehicle(raw) {
+    function haversine(a, b) {
+        const R = 6371000;
+        const dLat = (b.lat - a.lat) * Math.PI / 180;
+        const dLon = (b.lon - a.lon) * Math.PI / 180;
+        const lat1 = a.lat * Math.PI / 180;
+        const lat2 = b.lat * Math.PI / 180;
+        const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+        return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    function addTrailPoint(v) {
+        const trail = vehicleTrails[v.id] || [];
+        const point = { lat: v.lat, lon: v.lon, ts: Date.now(), jump: 0, source: v.source || 'ws' };
+        if (trail.length >= 2) {
+            const prev = trail[trail.length - 1];
+            point.jump = haversine(prev, point);
+            if (point.jump >= TELEPORT_THRESHOLD_M) {
+                teleportLog.push({
+                    plate: v.plate || v.id.slice(0, 8),
+                    route: v.route || '-',
+                    dist: Math.round(point.jump),
+                    from: { lat: prev.lat, lon: prev.lon },
+                    to: { lat: point.lat, lon: point.lon },
+                    ts: Date.now()
+                });
+                if (teleportLog.length > 200) teleportLog.shift();
+                updateTeleportPanel();
+            }
+        } else if (trail.length === 1) {
+            const prev = trail[0];
+            point.jump = haversine(prev, point);
+        }
+        trail.push(point);
+        if (trail.length > TRAIL_MAX_POINTS) trail.shift();
+        vehicleTrails[v.id] = trail;
+
+        drawTrail(v.id);
+    }
+
+    function drawTrail(id) {
+        if (!trailsVisible) return;
+        const trail = vehicleTrails[id];
+        if (!trail || trail.length < 2) return;
+
+        if (vehicleTrailLayers[id]) {
+            map.removeLayer(vehicleTrailLayers[id]);
+        }
+        const group = L.layerGroup();
+        for (let i = 1; i < trail.length; i++) {
+            const a = trail[i - 1];
+            const b = trail[i];
+            const isJump = b.jump >= TELEPORT_THRESHOLD_M;
+            L.polyline([[a.lat, a.lon], [b.lat, b.lon]], {
+                color: isJump ? '#ff0055' : '#22c55e',
+                weight: isJump ? 3 : 1.5,
+                opacity: isJump ? 0.9 : 0.5,
+                dashArray: isJump ? '6 4' : null
+            }).addTo(group);
+            if (isJump) {
+                L.circleMarker([b.lat, b.lon], {
+                    radius: 4, color: '#ff0055', fillColor: '#ff0055',
+                    fillOpacity: 0.8, weight: 1
+                }).bindTooltip(`TELEPORT ${Math.round(b.jump)}m`).addTo(group);
+            }
+        }
+        group.addTo(map);
+        vehicleTrailLayers[id] = group;
+    }
+
+    function redrawAllTrails() {
+        Object.values(vehicleTrailLayers).forEach(l => map.removeLayer(l));
+        vehicleTrailLayers = {};
+        if (!trailsVisible) return;
+        Object.keys(vehicleTrails).forEach(drawTrail);
+    }
+
+    function toggleTrails() {
+        trailsVisible = !trailsVisible;
+        const btn = document.getElementById('trails-toggle');
+        if (btn) btn.textContent = trailsVisible ? 'Trails: ON' : 'Trails: OFF';
+        redrawAllTrails();
+    }
+
+    function clearTrails() {
+        vehicleTrails = {};
+        teleportLog = [];
+        Object.values(vehicleTrailLayers).forEach(l => map.removeLayer(l));
+        vehicleTrailLayers = {};
+        updateTeleportPanel();
+    }
+
+    function updateTeleportPanel() {
+        const panel = document.getElementById('teleport-panel');
+        if (!panel) return;
+        const recent = teleportLog.slice(-30).reverse();
+        const byPlate = {};
+        teleportLog.forEach(e => { byPlate[e.plate] = (byPlate[e.plate] || 0) + 1; });
+        const totals = Object.entries(byPlate).sort((a, b) => b[1] - a[1]).slice(0, 15);
+
+        let html = `<div class="tp-header">Teleports: ${teleportLog.length}</div>`;
+        html += '<div class="tp-section-title">TOP OFFENDERS</div>';
+        totals.forEach(([plate, cnt]) => {
+            html += `<div class="tp-row"><span class="tp-plate">${plate}</span><span class="tp-count">${cnt}×</span></div>`;
+        });
+        html += '<div class="tp-section-title">RECENT</div>';
+        recent.forEach(e => {
+            const age = Math.round((Date.now() - e.ts) / 1000);
+            html += `<div class="tp-row">
+                <span class="tp-plate">${e.plate}</span>
+                <span class="tp-route">r=${e.route}</span>
+                <span class="tp-dist">${e.dist}m</span>
+                <span class="tp-age">${age}s</span>
+            </div>`;
+        });
+        panel.innerHTML = html;
+    }
+
+    function processVehicle(raw, options) {
         const v = normalizeVehicle(raw);
         if (!v.id || !v.lat || !v.lon) return;
+
+        const isInitial = options && options.initial;
+        if (!isInitial) {
+            addTrailPoint(v);
+        } else if (!vehicleTrails[v.id]) {
+            vehicleTrails[v.id] = [{ lat: v.lat, lon: v.lon, ts: Date.now(), jump: 0, source: 'initial' }];
+        }
 
         vehicles[v.id] = v;
 
