@@ -60,6 +60,10 @@ class VehiclePositionPredictor {
             return state;
         }
 
+        if (PredictionBroadcaster.isInColdStart(state)) {
+            return state;
+        }
+
         if (state.getRouteNumber() == null || state.getRouteNumber().isBlank()) {
             return state;
         }
@@ -158,18 +162,16 @@ class VehiclePositionPredictor {
                                 .consecutiveInconsistentAdvanceCount(0)
                                 .build();
                     }
-                    log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE vehicle={} plate={} predicted=({},{}) interpolated=({},{}) frac={} count={}/10 — snapping predicted to route interpolation",
+                    log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE vehicle={} plate={} predicted=({},{}) interpolated=({},{}) frac={} driftDist={}m count={}/10 — holding predicted, awaiting GPS re-sync (not snapping to interpolated which may be polyline artifact)",
                             state.getVehicleId(), state.getLicensePlate(),
                             String.format("%.5f", state.getPredictedLatitude()),
                             String.format("%.5f", state.getPredictedLongitude()),
                             String.format("%.5f", coords[0]),
                             String.format("%.5f", coords[1]),
                             String.format("%.4f", state.getFractionOnRoute()),
+                            String.format("%.0f", snapToPredicted),
                             newCount);
                     return state.toBuilder()
-                            .predictedLatitude(coords[0])
-                            .predictedLongitude(coords[1])
-                            .fractionOnRoute(newFraction)
                             .consecutiveInconsistentAdvanceCount(newCount)
                             .speedKmh(decayedSpeedKmh)
                             .build();
