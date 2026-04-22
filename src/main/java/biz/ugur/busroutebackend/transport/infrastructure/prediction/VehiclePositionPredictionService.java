@@ -571,9 +571,12 @@ public class VehiclePositionPredictionService {
             Instant received = e.getValue().getLastReceivedAt();
             boolean stale = received != null && received.isBefore(cutoff);
             if (stale) {
-                stateRepository.delete(e.getKey())
+                String vehicleId = e.getKey();
+                stateRepository.delete(vehicleId)
                         .subscribeOn(Schedulers.boundedElastic())
-                        .subscribe();
+                        .subscribe(null, err -> log.warn(
+                                "Redis state delete failed for stale vehicle {}: {}",
+                                vehicleId, err.getMessage()));
             }
             return stale;
         });
