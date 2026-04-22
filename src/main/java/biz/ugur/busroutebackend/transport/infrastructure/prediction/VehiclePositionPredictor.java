@@ -64,7 +64,7 @@ class VehiclePositionPredictor {
             return state;
         }
 
-        if (state.getFractionOnRoute() < 0) {
+        if (state.getFractionOnRoute() < 0 && state.getLastGpsFraction() < 0) {
             return state;
         }
 
@@ -107,7 +107,10 @@ class VehiclePositionPredictor {
 
         List<double[]> routeCoords = state.getRouteCoordinates();
         double totalRouteDistance = state.getTotalRouteDistanceMeters();
-        boolean onRoute = routeCoords != null && state.getFractionOnRoute() >= 0 && totalRouteDistance > 0;
+        double effectiveStartFraction = state.getFractionOnRoute() >= 0
+                ? state.getFractionOnRoute()
+                : state.getLastGpsFraction();
+        boolean onRoute = routeCoords != null && effectiveStartFraction >= 0 && totalRouteDistance > 0;
 
         if (onRoute) {
             double distToNextStop = computeDistanceToNextStop(state, totalRouteDistance);
@@ -129,7 +132,7 @@ class VehiclePositionPredictor {
             double stopFactor = Math.min(stopDecel, stopAccel);
             double speedMs = (effectiveSpeedKmh * stopFactor) / 3.6;
             double fractionDelta = speedMs * DT_SECONDS / totalRouteDistance;
-            double newFraction = Math.min(state.getFractionOnRoute() + fractionDelta, 1.0);
+            double newFraction = Math.min(effectiveStartFraction + fractionDelta, 1.0);
 
             VehiclePredictionState dwellTriggered = tryTriggerDwell(state, routeCoords, totalRouteDistance);
             if (dwellTriggered != null) {
@@ -146,19 +149,16 @@ class VehiclePositionPredictor {
                 if (snapToPredicted > 300.0) {
                     int newCount = state.getConsecutiveInconsistentAdvanceCount() + 1;
                     if (newCount >= 10) {
-                        log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE_RESET vehicle={} plate={} consecutiveInconsistent={} — force resetting fractionOnRoute/routeCoords to let SnapCorrector re-snap on next GPS",
+                        log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE_RESET vehicle={} plate={} consecutiveInconsistent={} — fraction invalidated, route geometry kept for continued on-route prediction",
                                 state.getVehicleId(), state.getLicensePlate(), newCount);
                         return state.toBuilder()
                                 .fractionOnRoute(-1)
-                                .lastGpsFraction(-1)
                                 .lastRejectedGpsFraction(-1)
                                 .consecutiveImplausibleCount(0)
                                 .consecutiveInconsistentAdvanceCount(0)
-                                .routeCoordinates(null)
-                                .totalRouteDistanceMeters(0)
                                 .build();
                     }
-                    log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE vehicle={} plate={} predicted=({},{}) interpolated=({},{}) frac={} count={}/10 — falling back to dead-reckoning",
+                    log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE vehicle={} plate={} predicted=({},{}) interpolated=({},{}) frac={} count={}/10 — snapping predicted to route interpolation",
                             state.getVehicleId(), state.getLicensePlate(),
                             String.format("%.5f", state.getPredictedLatitude()),
                             String.format("%.5f", state.getPredictedLongitude()),
@@ -166,9 +166,12 @@ class VehiclePositionPredictor {
                             String.format("%.5f", coords[1]),
                             String.format("%.4f", state.getFractionOnRoute()),
                             newCount);
-                    return advanceDeadReckoning(state, decayedSpeedKmh, effectiveSpeedKmh)
-                            .toBuilder()
+                    return state.toBuilder()
+                            .predictedLatitude(coords[0])
+                            .predictedLongitude(coords[1])
+                            .fractionOnRoute(newFraction)
                             .consecutiveInconsistentAdvanceCount(newCount)
+                            .speedKmh(decayedSpeedKmh)
                             .build();
                 }
             }

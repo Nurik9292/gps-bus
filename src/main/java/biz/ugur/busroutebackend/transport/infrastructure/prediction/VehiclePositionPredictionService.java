@@ -282,12 +282,9 @@ public class VehiclePositionPredictionService {
                     .predictedLatitude(latitude)
                     .predictedLongitude(longitude)
                     .fractionOnRoute(-1)
-                    .lastGpsFraction(-1)
                     .lastRejectedGpsFraction(-1)
                     .consecutiveImplausibleCount(0)
                     .consecutiveInconsistentAdvanceCount(0)
-                    .routeCoordinates(null)
-                    .totalRouteDistanceMeters(0)
                     .build();
             pendingTeleports.remove(vehicleId);
         }

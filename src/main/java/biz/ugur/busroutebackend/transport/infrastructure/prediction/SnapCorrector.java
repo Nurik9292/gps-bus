@@ -258,17 +258,17 @@ class SnapCorrector {
                     snap.latitude(), snap.longitude(), latitude, longitude);
             if (snapVsGpsDistance > properties.getTeleportThresholdMeters()) {
                 log.warn("[GPS_PIPELINE] SNAP_TOO_FAR_FROM_GPS vehicle={} plate={} route={} " +
-                                "snapDist={}m gps=({},{}) snap=({},{}) frac={} — reset to dead-reckoning",
+                                "snapDist={}m gps=({},{}) snap=({},{}) frac={} — keeping predicted on route, awaiting re-snap",
                         vehicleId, licensePlate, routeNumber,
                         String.format("%.0f", snapVsGpsDistance),
                         String.format("%.5f", latitude), String.format("%.5f", longitude),
                         String.format("%.5f", snap.latitude()), String.format("%.5f", snap.longitude()),
                         String.format("%.4f", realFraction));
-                predictedLat = latitude;
-                predictedLon = longitude;
-                fraction = -1;
-                routeCoords = null;
-                totalDist = 0;
+                predictedLat = existing != null ? existing.getPredictedLatitude() : latitude;
+                predictedLon = existing != null ? existing.getPredictedLongitude() : longitude;
+                fraction = existing != null && existing.getFractionOnRoute() >= 0
+                        ? existing.getFractionOnRoute()
+                        : -1;
                 resetTriggered = true;
             } else if (realIsAhead) {
                 predictedLat = snap.latitude();
@@ -287,11 +287,9 @@ class SnapCorrector {
             }
 
             if (resetToDR) {
-                predictedLat = latitude;
-                predictedLon = longitude;
+                predictedLat = existing != null ? existing.getPredictedLatitude() : latitude;
+                predictedLon = existing != null ? existing.getPredictedLongitude() : longitude;
                 fraction = -1;
-                routeCoords = null;
-                totalDist = 0;
             }
         } else {
             int oppositeDir = (direction == 0) ? 1 : 0;
@@ -322,29 +320,29 @@ class SnapCorrector {
                     fraction = realFractionOpposite;
                     course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction, totalDist);
                 } else {
-                    log.debug("[GPS_PIPELINE] SNAP_FAIL vehicle={} route={} dist={}m (opposite={}m) > threshold={}m → dead-reckoning",
+                    log.debug("[GPS_PIPELINE] SNAP_FAIL vehicle={} route={} dist={}m (opposite={}m) > threshold={}m → keeping predicted on route, awaiting re-snap",
                             vehicleId, routeNumber,
                             String.format("%.1f", snap.distanceMeters()),
                             String.format("%.1f", oppositeSnap.distanceMeters()),
                             (int) MapMatchingService.MAX_SNAP_DISTANCE_METERS);
                     consecutiveOppositeSnaps.remove(vehicleId);
-                    predictedLat = blendOrAccept(existing, latitude, longitude, true);
-                    predictedLon = blendOrAccept(existing, latitude, longitude, false);
-                    fraction = -1;
-                    routeCoords = null;
-                    totalDist = 0;
+                    predictedLat = existing != null ? existing.getPredictedLatitude() : latitude;
+                    predictedLon = existing != null ? existing.getPredictedLongitude() : longitude;
+                    fraction = existing != null && existing.getFractionOnRoute() >= 0
+                            ? existing.getFractionOnRoute()
+                            : -1;
                 }
             } else {
-                log.debug("[GPS_PIPELINE] SNAP_FAIL vehicle={} route={} dist={}m > threshold={}m → dead-reckoning",
+                log.debug("[GPS_PIPELINE] SNAP_FAIL vehicle={} route={} dist={}m > threshold={}m → keeping predicted on route, awaiting re-snap",
                         vehicleId, routeNumber,
                         String.format("%.1f", snap.distanceMeters()),
                         (int) MapMatchingService.MAX_SNAP_DISTANCE_METERS);
                 consecutiveOppositeSnaps.remove(vehicleId);
-                predictedLat = blendOrAccept(existing, latitude, longitude, true);
-                predictedLon = blendOrAccept(existing, latitude, longitude, false);
-                fraction = -1;
-                routeCoords = null;
-                totalDist = 0;
+                predictedLat = existing != null ? existing.getPredictedLatitude() : latitude;
+                predictedLon = existing != null ? existing.getPredictedLongitude() : longitude;
+                fraction = existing != null && existing.getFractionOnRoute() >= 0
+                        ? existing.getFractionOnRoute()
+                        : -1;
             }
         }
 

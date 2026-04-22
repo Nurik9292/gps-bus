@@ -62,10 +62,14 @@ public class PredictionBroadcaster {
             return Mono.empty();
         }
 
-        if (state.getFractionOnRoute() < 0) {
-            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "unsnapped-awaiting-gps");
-            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_UNSNAPPED vehicle={} plate={} route={} — state awaiting fresh GPS to re-snap",
-                    state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber());
+        boolean hasRouteGeometry = state.getRouteCoordinates() != null
+                && state.getTotalRouteDistanceMeters() > 0;
+        boolean hasAnyFraction = state.getFractionOnRoute() >= 0 || state.getLastGpsFraction() >= 0;
+        if (!hasRouteGeometry || !hasAnyFraction) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "no-route-anchor");
+            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_NO_ANCHOR vehicle={} plate={} route={} hasGeom={} hasFrac={} — awaiting first snap",
+                    state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber(),
+                    hasRouteGeometry, hasAnyFraction);
             return Mono.empty();
         }
 
