@@ -48,6 +48,15 @@ final class PredictionMath {
         return sum / buffer.length;
     }
 
+    static final double LONG_TERM_ALPHA = 0.05;
+
+    static double updateLongTermAvgSpeed(double prevAvg, double newSpeed) {
+        if (prevAvg < 0) {
+            return newSpeed;
+        }
+        return LONG_TERM_ALPHA * newSpeed + (1.0 - LONG_TERM_ALPHA) * prevAvg;
+    }
+
     static PositionConfidence computeConfidence(Instant lastReceivedAt, double fractionOnRoute, Instant now) {
         if (lastReceivedAt == null) return PositionConfidence.STALE;
         long ageMs = now.toEpochMilli() - lastReceivedAt.toEpochMilli();

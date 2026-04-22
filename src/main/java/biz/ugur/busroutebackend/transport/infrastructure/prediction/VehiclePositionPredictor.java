@@ -24,6 +24,14 @@ class VehiclePositionPredictor {
     private static final double DWELL_MAX_SECONDS = 600.0;
     private static final int DWELL_MIN_SAMPLES = 3;
 
+    private static final double REAL_STOP_LONG_TERM_SPEED_KMH = 2.0;
+    private static final double TRAFFIC_CRAWL_MIN_SPEED_KMH = 2.0;
+    private static final double TRAFFIC_CRAWL_MAX_SPEED_KMH = 12.0;
+
+    private static final double CATCH_UP_ERROR_THRESHOLD = 0.002;
+    private static final double CATCH_UP_GAIN = 0.30;
+    private static final double CATCH_UP_MAX_PER_TICK = 0.005;
+
     private final PredictionProperties properties;
     private final RouteGeometryCache routeGeometryCache;
     private final MapMatchingService mapMatchingService;
@@ -72,8 +80,12 @@ class VehiclePositionPredictor {
             return state;
         }
 
-        if (state.getRawGpsSpeedKmh() < properties.getMinSpeedKmh()
-                && msSinceGps < properties.getFreshGpsWindowMs()) {
+        boolean freshGps = msSinceGps < properties.getFreshGpsWindowMs();
+        boolean rawBelowMin = state.getRawGpsSpeedKmh() < properties.getMinSpeedKmh();
+        double longTermAvg = state.getLongTermAvgSpeedKmh();
+        boolean realStop = freshGps && rawBelowMin
+                && (longTermAvg < 0 || longTermAvg < REAL_STOP_LONG_TERM_SPEED_KMH);
+        if (realStop) {
             return state;
         }
 
@@ -105,7 +117,18 @@ class VehiclePositionPredictor {
     }
 
     private VehiclePredictionState advanceInternal(VehiclePredictionState state, long msSinceGps) {
-        double decayedSpeedKmh = state.getSpeedKmh() * decayFactor(msSinceGps);
+        double baseSpeed = state.getSpeedKmh();
+        boolean freshGps = msSinceGps < properties.getFreshGpsWindowMs();
+        boolean rawBelowMin = state.getRawGpsSpeedKmh() < properties.getMinSpeedKmh();
+        double longTermAvg = state.getLongTermAvgSpeedKmh();
+        boolean trafficCrawl = freshGps && rawBelowMin
+                && longTermAvg >= TRAFFIC_CRAWL_MIN_SPEED_KMH
+                && longTermAvg <= TRAFFIC_CRAWL_MAX_SPEED_KMH;
+        if (trafficCrawl) {
+            baseSpeed = longTermAvg;
+        }
+
+        double decayedSpeedKmh = baseSpeed * decayFactor(msSinceGps);
         double conservativeFactor = properties.getConservativeSpeedFactor();
         double adjustedConservative = conservativeFactor;
 
@@ -137,6 +160,13 @@ class VehiclePositionPredictor {
             double speedMs = (effectiveSpeedKmh * stopFactor) / 3.6;
             double fractionDelta = speedMs * DT_SECONDS / totalRouteDistance;
             double newFraction = Math.min(effectiveStartFraction + fractionDelta, 1.0);
+
+            double lastGpsFrac = state.getLastGpsFraction();
+            if (lastGpsFrac >= 0 && lastGpsFrac > newFraction + CATCH_UP_ERROR_THRESHOLD) {
+                double trackingError = lastGpsFrac - newFraction;
+                double catchUpBoost = Math.min(trackingError * CATCH_UP_GAIN, CATCH_UP_MAX_PER_TICK);
+                newFraction = Math.min(newFraction + catchUpBoost, 1.0);
+            }
 
             VehiclePredictionState dwellTriggered = tryTriggerDwell(state, routeCoords, totalRouteDistance);
             if (dwellTriggered != null) {

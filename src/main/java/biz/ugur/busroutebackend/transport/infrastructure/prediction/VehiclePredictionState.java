@@ -72,4 +72,7 @@ public class VehiclePredictionState {
     @Builder.Default
     private boolean offRoute = false;
 
+    @Builder.Default
+    private double longTermAvgSpeedKmh = -1;
+
 }

@@ -411,6 +411,9 @@ public class VehiclePositionPredictionService {
             }
         }
 
+        double newLongTermAvg = PredictionMath.updateLongTermAvgSpeed(
+                existing != null ? existing.getLongTermAvgSpeedKmh() : -1, speedKmh);
+
         VehiclePredictionState.VehiclePredictionStateBuilder builder = VehiclePredictionState.builder()
                 .vehicleId(vehicleId)
                 .licensePlate(licensePlate)
@@ -421,6 +424,7 @@ public class VehiclePositionPredictionService {
                 .rawGpsSpeedKmh(speedKmh)
                 .smoothedSpeedKmh(PredictionMath.computeSmoothedSpeed(existing != null ? existing.getRecentSpeeds() : null, speedKmh))
                 .recentSpeeds(PredictionMath.appendSpeedToBuffer(existing != null ? existing.getRecentSpeeds() : null, speedKmh))
+                .longTermAvgSpeedKmh(newLongTermAvg)
                 .course(course)
                 .inMotion(inMotion)
                 .lastGpsUpdate(timestamp)
