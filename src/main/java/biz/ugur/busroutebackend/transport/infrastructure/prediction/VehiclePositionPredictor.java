@@ -86,6 +86,10 @@ class VehiclePositionPredictor {
         boolean realStop = freshGps && rawBelowMin
                 && (longTermAvg < 0 || longTermAvg < REAL_STOP_LONG_TERM_SPEED_KMH);
         if (realStop) {
+            log.debug("[GPS_PIPELINE] REAL_STOP vehicle={} plate={} rawSpeed={}km/h longTermAvg={}km/h — freezing predicted",
+                    state.getVehicleId(), state.getLicensePlate(),
+                    String.format("%.1f", state.getRawGpsSpeedKmh()),
+                    longTermAvg >= 0 ? String.format("%.1f", longTermAvg) : "—");
             return state;
         }
 
@@ -125,6 +129,10 @@ class VehiclePositionPredictor {
                 && longTermAvg >= TRAFFIC_CRAWL_MIN_SPEED_KMH
                 && longTermAvg <= TRAFFIC_CRAWL_MAX_SPEED_KMH;
         if (trafficCrawl) {
+            log.debug("[GPS_PIPELINE] TRAFFIC_CRAWL vehicle={} plate={} rawSpeed={}km/h longTermAvg={}km/h — using crawl speed for advance",
+                    state.getVehicleId(), state.getLicensePlate(),
+                    String.format("%.1f", state.getRawGpsSpeedKmh()),
+                    String.format("%.1f", longTermAvg));
             baseSpeed = longTermAvg;
         }
 
@@ -165,7 +173,15 @@ class VehiclePositionPredictor {
             if (lastGpsFrac >= 0 && lastGpsFrac > newFraction + CATCH_UP_ERROR_THRESHOLD) {
                 double trackingError = lastGpsFrac - newFraction;
                 double catchUpBoost = Math.min(trackingError * CATCH_UP_GAIN, CATCH_UP_MAX_PER_TICK);
+                double before = newFraction;
                 newFraction = Math.min(newFraction + catchUpBoost, 1.0);
+                log.debug("[GPS_PIPELINE] CATCH_UP vehicle={} plate={} trackingError={} boost={} fraction={}→{} (lastGps={})",
+                        state.getVehicleId(), state.getLicensePlate(),
+                        String.format("%.4f", trackingError),
+                        String.format("%.4f", catchUpBoost),
+                        String.format("%.4f", before),
+                        String.format("%.4f", newFraction),
+                        String.format("%.4f", lastGpsFrac));
             }
 
             VehiclePredictionState dwellTriggered = tryTriggerDwell(state, routeCoords, totalRouteDistance);
