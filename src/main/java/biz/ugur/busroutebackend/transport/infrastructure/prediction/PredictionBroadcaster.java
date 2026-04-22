@@ -105,14 +105,23 @@ public class PredictionBroadcaster {
         Double fractionValue = (state.getFractionOnRoute() >= 0) ? state.getFractionOnRoute() : null;
         List<NextStopEta> nextStops = computeNextStopsEta(state, 3);
 
+        long msSinceGpsForBroadcast = state.getLastReceivedAt() != null
+                ? Instant.now().toEpochMilli() - state.getLastReceivedAt().toEpochMilli()
+                : Long.MAX_VALUE;
+        boolean freshGps = msSinceGpsForBroadcast < properties.getFreshGpsWindowMs();
+        double broadcastSpeedKmh = freshGps ? state.getRawGpsSpeedKmh() : state.getSpeedKmh();
+        boolean broadcastInMotion = freshGps
+                ? state.getRawGpsSpeedKmh() >= properties.getMinSpeedKmh()
+                : state.isInMotion();
+
         VehiclePositionWebSocketMessage msg = new VehiclePositionWebSocketMessage(
                 state.getVehicleId(),
                 state.getLicensePlate(),
                 state.getRouteNumber(),
                 state.getPredictedLatitude(),
                 state.getPredictedLongitude(),
-                state.getSpeedKmh(),
-                state.isInMotion(),
+                broadcastSpeedKmh,
+                broadcastInMotion,
                 LocalDateTime.now(),
                 state.getCourse(),
                 state.getDirection() == 0,
@@ -128,16 +137,18 @@ public class PredictionBroadcaster {
                 pipelineTracer.traceWsBroadcast(
                         state.getVehicleId(), state.getLicensePlate(),
                         state.getPredictedLatitude(), state.getPredictedLongitude(),
-                        state.getSpeedKmh(), state.isInMotion(),
+                        broadcastSpeedKmh, broadcastInMotion,
                         Boolean.TRUE,
                         fractionValue != null ? "SNAPPED" : "DEAD_RECKONING");
-                log.debug("[GPS_PIPELINE] WS_PRED vehicle={} plate={} mode={} frac={} lat={} lon={} speed={}km/h eta_stops={}",
+                log.debug("[GPS_PIPELINE] WS_PRED vehicle={} plate={} mode={} frac={} lat={} lon={} speed={}km/h rawSpeed={}km/h moving={} eta_stops={}",
                         state.getVehicleId(), state.getLicensePlate(),
                         fractionValue != null ? "SNAPPED" : "DEAD_RECKONING",
                         fractionValue != null ? String.format("%.4f", fractionValue) : "-",
                         String.format("%.6f", state.getPredictedLatitude()),
                         String.format("%.6f", state.getPredictedLongitude()),
-                        String.format("%.1f", state.getSpeedKmh()),
+                        String.format("%.1f", broadcastSpeedKmh),
+                        String.format("%.1f", state.getRawGpsSpeedKmh()),
+                        broadcastInMotion,
                         nextStops.size());
             } catch (Exception e) {
                 log.warn("Failed to broadcast prediction for vehicle {}: {}", state.getVehicleId(), e.getMessage());

@@ -68,6 +68,11 @@ class VehiclePositionPredictor {
             return state;
         }
 
+        if (state.getRawGpsSpeedKmh() < properties.getMinSpeedKmh()
+                && msSinceGps < properties.getFreshGpsWindowMs()) {
+            return state;
+        }
+
         VehiclePredictionState result = advanceInternal(state, msSinceGps);
         if (result != state && state.getPredictedLatitude() != 0.0 && result.getPredictedLatitude() != 0.0) {
             double delta = biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService
