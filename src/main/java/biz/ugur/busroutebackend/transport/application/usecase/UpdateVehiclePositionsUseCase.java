@@ -54,7 +54,7 @@ import java.time.ZoneOffset;
 @Slf4j
 public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionDTO>, VehiclePositionUpdateResult> {
 
-    private static final long FORCE_PUBLISH_INTERVAL_SECONDS = 5;
+    private static final long FORCE_PUBLISH_INTERVAL_SECONDS = 20;
     private static final long MAX_GPS_AGE_SECONDS = 600;
 
     private final ConcurrentHashMap<String, Instant> lastPublishedTime = new ConcurrentHashMap<>();

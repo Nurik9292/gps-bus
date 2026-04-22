@@ -53,6 +53,11 @@ class SnapCorrector {
         double newRejectedFrac = existing != null ? existing.getLastRejectedGpsFraction() : -1;
         int newImplausibleCount = existing != null ? existing.getConsecutiveImplausibleCount() : 0;
 
+        boolean routeReassigned = existing != null
+                && existing.getRouteNumber() != null
+                && routeNumber != null
+                && !existing.getRouteNumber().equals(routeNumber);
+
         if (routeNumber == null || !properties.isSnapToRoute()) {
             log.debug("[GPS_PIPELINE] SNAP_SKIP vehicle={} snapToRoute={} routeNumber={}",
                     vehicleId, properties.isSnapToRoute(), routeNumber);
@@ -266,7 +271,7 @@ class SnapCorrector {
                         String.format("%.4f", realFraction));
                 predictedLat = existing != null ? existing.getPredictedLatitude() : latitude;
                 predictedLon = existing != null ? existing.getPredictedLongitude() : longitude;
-                fraction = existing != null && existing.getFractionOnRoute() >= 0
+                fraction = !routeReassigned && existing != null && existing.getFractionOnRoute() >= 0
                         ? existing.getFractionOnRoute()
                         : -1;
                 resetTriggered = true;
@@ -328,7 +333,7 @@ class SnapCorrector {
                     consecutiveOppositeSnaps.remove(vehicleId);
                     predictedLat = existing != null ? existing.getPredictedLatitude() : latitude;
                     predictedLon = existing != null ? existing.getPredictedLongitude() : longitude;
-                    fraction = existing != null && existing.getFractionOnRoute() >= 0
+                    fraction = !routeReassigned && existing != null && existing.getFractionOnRoute() >= 0
                             ? existing.getFractionOnRoute()
                             : -1;
                 }
