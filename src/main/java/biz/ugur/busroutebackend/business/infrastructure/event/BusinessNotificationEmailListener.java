@@ -67,9 +67,6 @@ public class BusinessNotificationEmailListener {
                         event.getReason()));
     }
 
-    // -------------------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------------------
 
     private void dispatch(String businessId,
                           java.util.function.Function<

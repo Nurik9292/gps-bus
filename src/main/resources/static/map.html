@@ -612,13 +612,37 @@
         return WS_URL;
     }
 
+    let wsLastMessageAt = 0;
+    let wsPingTimer = null;
+    let wsStalenessTimer = null;
+    const WS_PING_INTERVAL_MS = 20000;
+    const WS_STALE_THRESHOLD_MS = 45000;
+
     function connectWebSocket() {
         setWsStatus(false);
         ws = new WebSocket(buildWsUrl());
 
-        ws.onopen = () => { setWsStatus(true); };
+        ws.onopen = () => {
+            setWsStatus(true);
+            wsLastMessageAt = Date.now();
+            clearInterval(wsPingTimer);
+            clearInterval(wsStalenessTimer);
+            wsPingTimer = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    try { ws.send(JSON.stringify({ type: 'ping' })); } catch(_) {}
+                }
+            }, WS_PING_INTERVAL_MS);
+            wsStalenessTimer = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN
+                        && Date.now() - wsLastMessageAt > WS_STALE_THRESHOLD_MS) {
+                    console.warn('[ws] no messages for', Math.round((Date.now()-wsLastMessageAt)/1000), 's — forcing reconnect');
+                    ws.close();
+                }
+            }, 5000);
+        };
 
         ws.onmessage = (e) => {
+            wsLastMessageAt = Date.now();
             try {
                 const data = JSON.parse(e.data);
                 if (data.type === 'initial_positions' || data.type === 'position_update') {
@@ -634,6 +658,8 @@
         ws.onerror = () => setWsStatus(false);
         ws.onclose = () => {
             setWsStatus(false);
+            clearInterval(wsPingTimer);
+            clearInterval(wsStalenessTimer);
             // Trails become stale during disconnect — clear to avoid false teleport
             // detection on first position_update after reconnect
             vehicleTrails = {};
