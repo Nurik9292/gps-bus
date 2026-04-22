@@ -40,7 +40,8 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
     private static final Duration MAX_GPS_AGE = Duration.ofMinutes(10);
     private static final Duration MAX_INITIAL_POSITION_AGE = Duration.ofMinutes(5);
 
-    private static final long CLEANUP_INTERVAL_MS = 60_000;
+    private static final long CLEANUP_INTERVAL_MS = 30_000;
+    private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(30);
 
     private final GetActiveVehiclesUseCase getActiveVehiclesUseCase;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
@@ -129,8 +130,9 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
 
         Flux<WebSocketMessage> initialPositions = getInitialPositions(session, config);
         Flux<WebSocketMessage> liveUpdates = getLivePositionUpdates(session, config);
+        Flux<WebSocketMessage> heartbeat = heartbeatStream(session);
 
-        return Flux.merge(initialPositions, liveUpdates)
+        return Flux.merge(initialPositions, liveUpdates, heartbeat)
                 .onErrorContinue((error, obj) -> {
                     log.error("Error sending WebSocket message - Error type: {}, Message: {}, Object type: {}",
                             error.getClass().getName(),
@@ -138,6 +140,12 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                             obj != null ? obj.getClass().getName() : "null",
                             error);
                 });
+    }
+
+    private Flux<WebSocketMessage> heartbeatStream(WebSocketSession session) {
+        return Flux.interval(HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL)
+                .takeWhile(ignored -> session.isOpen())
+                .map(tick -> session.pingMessage(factory -> factory.wrap(new byte[0])));
     }
 
     private Flux<WebSocketMessage> getInitialPositions(WebSocketSession session, SessionConfig config) {

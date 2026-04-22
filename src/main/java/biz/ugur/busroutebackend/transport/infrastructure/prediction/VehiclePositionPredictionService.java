@@ -257,9 +257,6 @@ public class VehiclePositionPredictionService {
                     pendingAltBaselines.remove(vehicleId);
                     lastDecisions.put(vehicleId, GatekeeperDecision.FORCE_ACCEPT_STALE);
                 } else {
-                    replaceState(vehicleId, existing.toBuilder()
-                            .lastReceivedAt(Instant.now())
-                            .build(), "outlier-reject");
                     lastDecisions.put(vehicleId, GatekeeperDecision.REJECT_OUTLIER);
                     return;
                 }
@@ -267,7 +264,6 @@ public class VehiclePositionPredictionService {
             case REJECT_TELEPORT_GAP -> {
                 replaceState(vehicleId, existing.toBuilder()
                         .lastGpsUpdate(timestamp)
-                        .lastReceivedAt(Instant.now())
                         .build(), "teleport-gap-reject");
                 lastDecisions.put(vehicleId, GatekeeperDecision.REJECT_TELEPORT_GAP);
                 return;
@@ -385,8 +381,15 @@ public class VehiclePositionPredictionService {
             positionTeleport = false;
         }
 
-        int newOffRouteCount = existing != null ? existing.getConsecutiveOffRouteCount() : 0;
-        boolean newOffRoute = existing != null && existing.isOffRoute();
+        boolean routeChanged = existing != null
+                && existing.getRouteNumber() != null
+                && !existing.getRouteNumber().equals(routeNumber);
+        if (routeChanged) {
+            log.info("[GPS_PIPELINE] ROUTE_CHANGED vehicle={} plate={} from={} to={} — resetting off-route state",
+                    vehicleId, licensePlate, existing.getRouteNumber(), routeNumber);
+        }
+        int newOffRouteCount = (existing != null && !routeChanged) ? existing.getConsecutiveOffRouteCount() : 0;
+        boolean newOffRoute = existing != null && !routeChanged && existing.isOffRoute();
         if (fraction >= 0 && !teleportRejected) {
             double rawToSnapDist = DistanceCalculationService.haversineDistanceMeters(
                     latitude, longitude, predictedLat, predictedLon);
@@ -564,9 +567,12 @@ public class VehiclePositionPredictionService {
             Instant received = e.getValue().getLastReceivedAt();
             boolean stale = received != null && received.isBefore(cutoff);
             if (stale) {
-                stateRepository.delete(e.getKey())
+                String vehicleId = e.getKey();
+                stateRepository.delete(vehicleId)
                         .subscribeOn(Schedulers.boundedElastic())
-                        .subscribe();
+                        .subscribe(null, err -> log.warn(
+                                "Redis state delete failed for stale vehicle {}: {}",
+                                vehicleId, err.getMessage()));
             }
             return stale;
         });
@@ -574,6 +580,7 @@ public class VehiclePositionPredictionService {
         pendingAltBaselines.keySet().retainAll(vehicleStates.keySet());
         lastDecisions.keySet().retainAll(vehicleStates.keySet());
         snapCorrector.onVehicleStaleCleanup(vehicleStates.keySet());
+        broadcaster.onVehiclesStaleCleanup(vehicleStates.keySet());
     }
 
     private boolean shouldForceAcceptStaleBaseline(String vehicleId, String licensePlate,

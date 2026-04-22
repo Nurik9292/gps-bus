@@ -21,7 +21,7 @@ public class PositionPredictionScheduler {
         predictionService.predictNextPositions()
                 .subscribe(
                         null,
-                        error -> log.error("Prediction cycle failed: {}", error.getMessage())
+                        error -> log.error("Prediction cycle failed", error)
                 );
     }
 }

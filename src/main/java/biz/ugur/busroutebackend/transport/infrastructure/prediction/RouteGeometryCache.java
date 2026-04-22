@@ -39,14 +39,27 @@ public class RouteGeometryCache {
         this.busRouteRepository = busRouteRepository;
     }
 
+    private volatile boolean loaded = false;
+
     @PostConstruct
     public void init() {
-        loadWithRetry();
+        try {
+            loadWithRetry().block(Duration.ofSeconds(60));
+            loaded = true;
+            log.info("Route geometry cache loaded synchronously: {} geometry entries, {} stop-fraction entries",
+                    pointsCache.size(), stopFractionsCache.size());
+        } catch (RuntimeException e) {
+            log.error("Route geometry cache init timed out — prediction will use dead-reckoning until cache warms up: {}",
+                    e.getMessage());
+        }
     }
 
-    
-    private void loadWithRetry() {
-        busRouteRepository.findActiveRoutes()
+    public boolean isLoaded() {
+        return loaded;
+    }
+
+    private reactor.core.publisher.Mono<Void> loadWithRetry() {
+        return busRouteRepository.findActiveRoutes()
                 .doOnNext(this::cacheRoute)
                 .flatMap(route -> loadStopFractions(route.getRouteNumber()))
                 .retryWhen(reactor.util.retry.Retry.backoff(5, Duration.ofSeconds(2))
@@ -59,12 +72,7 @@ public class RouteGeometryCache {
                 .doOnError(e -> log.error(
                         "Route geometry cache failed after all retries — prediction will use dead-reckoning: {}",
                         e.getMessage()))
-                .subscribe(
-                        ignored -> {},
-                        error -> log.error("Route geometry cache init error (all retries exhausted)", error),
-                        () -> log.info("Route geometry cache loaded: {} geometry entries, {} stop-fraction entries",
-                                pointsCache.size(), stopFractionsCache.size())
-                );
+                .then();
     }
 
     private reactor.core.publisher.Mono<Void> loadStopFractions(String routeNumber) {
