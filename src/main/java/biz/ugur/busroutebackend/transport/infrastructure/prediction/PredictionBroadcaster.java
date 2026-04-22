@@ -55,9 +55,14 @@ public class PredictionBroadcaster {
             return Mono.empty();
         }
 
-        if (state.getFractionOnRoute() < 0
-                && state.getRouteNumber() != null
-                && !state.getRouteNumber().isBlank()) {
+        if (state.getRouteNumber() == null || state.getRouteNumber().isBlank()) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "no-route");
+            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_NO_ROUTE vehicle={} plate={} — vehicle not assigned to a route",
+                    state.getVehicleId(), state.getLicensePlate());
+            return Mono.empty();
+        }
+
+        if (state.getFractionOnRoute() < 0) {
             pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "unsnapped-awaiting-gps");
             log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_UNSNAPPED vehicle={} plate={} route={} — state awaiting fresh GPS to re-snap",
                     state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber());
@@ -68,11 +73,6 @@ public class PredictionBroadcaster {
             pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "off-route");
             log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_OFF_ROUTE vehicle={} plate={} — vehicle {}+ GPS points away from route",
                     state.getVehicleId(), state.getLicensePlate(), state.getConsecutiveOffRouteCount());
-            return Mono.empty();
-        }
-
-        if (!state.isInMotion() && state.getSpeedKmh() == 0
-                && (state.getRouteNumber() == null || state.getRouteNumber().isBlank())) {
             return Mono.empty();
         }
 
