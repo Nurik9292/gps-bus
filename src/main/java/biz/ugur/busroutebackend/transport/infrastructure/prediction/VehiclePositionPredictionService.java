@@ -581,6 +581,7 @@ public class VehiclePositionPredictionService {
         pendingAltBaselines.keySet().retainAll(vehicleStates.keySet());
         lastDecisions.keySet().retainAll(vehicleStates.keySet());
         snapCorrector.onVehicleStaleCleanup(vehicleStates.keySet());
+        broadcaster.onVehiclesStaleCleanup(vehicleStates.keySet());
     }
 
     private boolean shouldForceAcceptStaleBaseline(String vehicleId, String licensePlate,

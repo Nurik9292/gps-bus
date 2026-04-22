@@ -12,6 +12,7 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -40,6 +41,10 @@ public class PredictionBroadcaster {
 
     public double[] getLastBroadcastPosition(String vehicleId) {
         return lastBroadcastPosition.get(vehicleId);
+    }
+
+    public void onVehiclesStaleCleanup(Set<String> activeVehicleIds) {
+        lastBroadcastPosition.keySet().retainAll(activeVehicleIds);
     }
 
     public static boolean isInColdStart(VehiclePredictionState state) {
