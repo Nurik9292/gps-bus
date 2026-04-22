@@ -15,7 +15,7 @@ public class PredictionProperties {
 
     private int intervalMs = 1000;
 
-    private int maxAgeMs = 10000;
+    private int maxAgeMs = 90_000;
 
     private double minSpeedKmh = 3.0;
 
@@ -39,7 +39,7 @@ public class PredictionProperties {
   
     private double aggressiveDecayFactor = 0.90;
 
-    private long stopAdvanceAfterMs = 30_000;
+    private long stopAdvanceAfterMs = 90_000;
 
     private double teleportThresholdMeters = 300.0;
 

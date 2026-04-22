@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
 import biz.ugur.busroutebackend.transport.application.usecase.GetActiveVehiclesUseCase;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.DirectVehiclePositionBroadcaster;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage;
+import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePositionPredictionService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,7 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
     private final WebSocketBufferMetricsTracker bufferMetrics;
+    private final VehiclePositionPredictionService predictionService;
 
     private final Map<String, SessionConfig> activeSessions = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCounter = new AtomicInteger(0);
@@ -57,11 +59,13 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
     public VehiclePositionHandler(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                   ReactiveRedisTemplate<String, Object> redisTemplate,
                                   ObjectMapper objectMapper,
-                                  WebSocketBufferMetricsTracker bufferMetrics) {
+                                  WebSocketBufferMetricsTracker bufferMetrics,
+                                  @org.springframework.context.annotation.Lazy VehiclePositionPredictionService predictionService) {
         this.getActiveVehiclesUseCase = getActiveVehiclesUseCase;
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.bufferMetrics = bufferMetrics;
+        this.predictionService = predictionService;
     }
 
     @PostConstruct
@@ -192,14 +196,7 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
 
         LocalDateTime freshnessCutoff = LocalDateTime.now(ZoneOffset.UTC).minus(MAX_INITIAL_POSITION_AGE);
         return result
-                .filter(v -> {
-                    if (Boolean.FALSE.equals(v.getIsInMotion())
-                            && v.getSpeedKmh() != null && v.getSpeedKmh() == 0
-                            && (v.getRouteNumber() == null || v.getRouteNumber().isBlank())) {
-                        return false;
-                    }
-                    return true;
-                })
+                .filter(v -> v.getRouteNumber() != null && !v.getRouteNumber().isBlank())
                 .filter(v -> v.getLastPositionUpdate() != null
                         && v.getLastPositionUpdate().isAfter(freshnessCutoff));
     }
@@ -415,9 +412,9 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                     return true;
                 })
                 .filter(msg -> {
-                    if (Boolean.FALSE.equals(msg.getIsInMotion())
-                            && msg.getSpeedKmh() != null && msg.getSpeedKmh() == 0
-                            && (msg.getRouteNumber() == null || msg.getRouteNumber().isBlank())) {
+                    if (msg.getRouteNumber() == null || msg.getRouteNumber().isBlank()) {
+                        log.trace("Redis stream filter: dropped vehicle {} — no route",
+                                msg.getVehicleId());
                         return false;
                     }
                     return true;

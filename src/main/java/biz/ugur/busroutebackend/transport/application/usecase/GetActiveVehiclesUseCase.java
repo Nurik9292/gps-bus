@@ -93,6 +93,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
                 .switchIfEmpty(
                         vehicleRepository.findActiveVehicles()
                                 .filter(this::isVehicleOnLine)
+                                .filter(this::isNotInGarage)
                                 .flatMap(this::enrichVehicleWithRouteInfo)
                                 .collectList()
                                 .flatMapMany(vehicles ->
@@ -116,6 +117,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
                                 .flatMapMany(route ->
                                         vehicleRepository.findByAssignedRouteId(route.getId())
                                                 .filter(Vehicle::getIsActive)
+                                                .filter(this::isNotInGarage)
                                                 .filter(v -> v.hasPosition() && v.hasRecentPosition())
                                                 .flatMap(vehicle -> enrichVehicleWithRouteInfo(vehicle, route))
                                 )
@@ -136,6 +138,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
 
         return vehicleRepository.findActiveVehicles()
                 .filter(this::isVehicleOnLine)
+                .filter(this::isNotInGarage)
                 .filter(vehicle -> isVehicleInArea(vehicle, minLat, minLon, maxLat, maxLon))
                 .flatMap(this::enrichVehicleWithRouteInfo)
                 .doOnNext(vehicle -> log.trace("Vehicle in area: {}", vehicle.getLicensePlate()));
@@ -149,9 +152,14 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
 
         return vehicleRepository.findVehiclesWithinRadius(centerLat, centerLon, radiusMeters)
                 .filter(Vehicle::getIsActive)
+                .filter(this::isNotInGarage)
                 .filter(this::isVehicleOnLine)
                 .flatMap(this::enrichVehicleWithRouteInfo)
                 .doOnNext(vehicle -> log.trace("Vehicle in radius: {}", vehicle.getLicensePlate()));
+    }
+
+    private boolean isNotInGarage(Vehicle vehicle) {
+        return !Boolean.TRUE.equals(vehicle.getIsInGarage());
     }
 
     private Mono<VehiclePositionDTO> enrichVehicleWithRouteInfo(Vehicle vehicle) {

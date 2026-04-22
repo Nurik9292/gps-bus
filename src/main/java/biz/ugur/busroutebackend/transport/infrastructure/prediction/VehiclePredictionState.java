@@ -60,4 +60,16 @@ public class VehiclePredictionState {
 
     private Instant coldStartUntilAt;
 
+    @Builder.Default
+    private boolean inGarage = false;
+
+    @Builder.Default
+    private int consecutiveInconsistentAdvanceCount = 0;
+
+    @Builder.Default
+    private int consecutiveOffRouteCount = 0;
+
+    @Builder.Default
+    private boolean offRoute = false;
+
 }

@@ -16,6 +16,7 @@ class SnapCorrector {
     private static final double DIRECTION_FLIP_THRESHOLD_DEG = 90.0;
     private static final int OPPOSITE_SNAP_THRESHOLD = 3;
     private static final double MAX_CORRECTION_DISTANCE_METERS = 50.0;
+    private static final double TERMINAL_FLIP_MAX_PHYSICAL_JUMP_METERS = 100.0;
 
     private final PredictionProperties properties;
     private final RouteGeometryCache routeGeometryCache;
@@ -133,22 +134,36 @@ class SnapCorrector {
                 double fracDelta = realFraction - lastGpsFrac;
                 boolean gpsMoveAgainstDir = fracDelta < -0.005;
                 boolean plausibleJump = Math.abs(fracDelta) <= 0.25;
+                double tolerance = properties.getTerminalFractionTolerance();
+                boolean wasNearTerminal = lastGpsFrac <= tolerance || lastGpsFrac >= (1.0 - tolerance);
+                boolean nowNearOppositeTerminal = realFraction >= 0
+                        && (lastGpsFrac >= (1.0 - tolerance) ? realFraction <= tolerance * 3
+                                : realFraction >= (1.0 - tolerance * 3));
 
-                if (gpsMoveAgainstDir && plausibleJump) {
+                if (gpsMoveAgainstDir && (plausibleJump || (wasNearTerminal && nowNearOppositeTerminal))) {
                     int correctedDir = (direction == 0) ? 1 : 0;
                     List<double[]> correctedCoords = routeGeometryCache.getPoints(routeNumber, correctedDir);
                     if (correctedCoords != null) {
                         double correctedDist = routeGeometryCache.getTotalDistance(routeNumber, correctedDir);
                         MapMatchingService.SnappedResult correctedSnap =
                                 mapMatchingService.snapToNearestSegment(latitude, longitude, correctedCoords, correctedDist);
-                        if (correctedSnap.snapped()
-                                && isDirectionFlipPhysicallyPlausible(vehicleId, "FRAC", existing,
-                                        correctedSnap, lastGpsFrac)) {
-                            log.info("[GPS_PIPELINE] DIR_CORRECT_FRAC vehicle={} route={} dir={}→{} gpsFrac={}→{} (delta={})",
+                        boolean terminalFlipSmoothOnOpposite = wasNearTerminal && correctedSnap.snapped()
+                                && (lastGpsFrac >= (1.0 - tolerance)
+                                        ? correctedSnap.fraction() <= tolerance * 3
+                                        : correctedSnap.fraction() >= (1.0 - tolerance * 3));
+                        boolean flipAcceptable = correctedSnap.snapped()
+                                && (plausibleJump
+                                        ? isDirectionFlipPhysicallyPlausible(vehicleId, "FRAC", existing,
+                                                correctedSnap, lastGpsFrac)
+                                        : terminalFlipSmoothOnOpposite);
+                        if (flipAcceptable) {
+                            log.info("[GPS_PIPELINE] DIR_CORRECT_FRAC vehicle={} route={} dir={}→{} gpsFrac={}→{} oppositeFrac={} (delta={}{})",
                                     vehicleId, routeNumber, direction, correctedDir,
                                     String.format("%.4f", lastGpsFrac),
                                     String.format("%.4f", realFraction),
-                                    String.format("%.4f", fracDelta));
+                                    String.format("%.4f", correctedSnap.fraction()),
+                                    String.format("%.4f", fracDelta),
+                                    wasNearTerminal && !plausibleJump ? " terminal-flip" : "");
                             direction = correctedDir;
                             routeCoords = correctedCoords;
                             totalDist = correctedDist;
@@ -368,17 +383,28 @@ class SnapCorrector {
                 : existing.getLastGpsFraction();
         boolean predNearTerminal = predFrac >= 0
                 && (predFrac <= tolerance || predFrac >= (1.0 - tolerance));
-        if (curNearTerminal || predNearTerminal) {
-            log.debug("[GPS_PIPELINE] DIR_FLIP_ALLOWED_TERMINAL vehicle={} trigger={} curFrac={} predFrac={}",
-                    vehicleId, trigger,
-                    curFraction >= 0 ? String.format("%.4f", curFraction) : "-",
-                    existing.getFractionOnRoute() >= 0 ? String.format("%.4f", existing.getFractionOnRoute()) : "-");
-            return true;
-        }
-
         double physicalJumpMeters = DistanceCalculationService.haversineDistanceMeters(
                 existing.getPredictedLatitude(), existing.getPredictedLongitude(),
                 flippedSnap.latitude(), flippedSnap.longitude());
+
+        if (curNearTerminal || predNearTerminal) {
+            if (physicalJumpMeters > TERMINAL_FLIP_MAX_PHYSICAL_JUMP_METERS) {
+                log.warn("[GPS_PIPELINE] DIR_FLIP_REJECTED_TERMINAL_FAR vehicle={} trigger={} physicalJump={}m > {}m " +
+                                "curFrac={} predFrac={} — at-terminal, but flipped snap is physically far (likely two close terminals on different routes)",
+                        vehicleId, trigger,
+                        String.format("%.0f", physicalJumpMeters),
+                        (int) TERMINAL_FLIP_MAX_PHYSICAL_JUMP_METERS,
+                        curFraction >= 0 ? String.format("%.4f", curFraction) : "-",
+                        existing.getFractionOnRoute() >= 0 ? String.format("%.4f", existing.getFractionOnRoute()) : "-");
+                return false;
+            }
+            log.debug("[GPS_PIPELINE] DIR_FLIP_ALLOWED_TERMINAL vehicle={} trigger={} curFrac={} predFrac={} physicalJump={}m",
+                    vehicleId, trigger,
+                    curFraction >= 0 ? String.format("%.4f", curFraction) : "-",
+                    existing.getFractionOnRoute() >= 0 ? String.format("%.4f", existing.getFractionOnRoute()) : "-",
+                    String.format("%.0f", physicalJumpMeters));
+            return true;
+        }
 
         if (physicalJumpMeters <= properties.getDirectionFlipMaxDistanceMeters()) {
             return true;

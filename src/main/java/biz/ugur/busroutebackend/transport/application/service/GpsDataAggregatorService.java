@@ -111,14 +111,52 @@ public class GpsDataAggregatorService {
 
         return Flux.fromIterable(enabledProviders)
                 .flatMap(provider -> provider.fetchAllPositions()
+                        .doOnNext(list -> {
+                            log.info("[GPS_PIPELINE] GPS_API_RECV provider={} count={}",
+                                    provider.getProviderType().getCode(), list.size());
+                            java.util.Map<String, Long> deviceIdCounts = list.stream()
+                                    .filter(p -> p.getDeviceId() != null)
+                                    .collect(java.util.stream.Collectors.groupingBy(
+                                            GpsPositionDTO::getDeviceId,
+                                            java.util.stream.Collectors.counting()));
+                            long distinctDevices = deviceIdCounts.size();
+                            long duplicatesInFetch = list.size() - distinctDevices;
+                            if (duplicatesInFetch > 0) {
+                                log.info("[GPS_PIPELINE] GPS_API_DUPES_IN_FETCH provider={} total={} distinct_devices={} duplicates={}",
+                                        provider.getProviderType().getCode(), list.size(),
+                                        distinctDevices, duplicatesInFetch);
+                            }
+                        })
                         .onErrorResume(error -> {
                             log.error("Provider {} failed: {}", provider.getProviderType(), error.getMessage());
                             return Mono.just(List.of());
                         }))
                 .flatMapIterable(list -> list)
                 .collectList()
-                .doOnSuccess(positions ->
-                        log.debug("Fetched {} total positions from all providers", positions.size()));
+                .doOnSuccess(positions -> {
+                    java.util.Map<GpsProviderType, Long> byProvider = positions.stream()
+                            .filter(p -> p.getGpsProvider() != null)
+                            .collect(java.util.stream.Collectors.groupingBy(
+                                    GpsPositionDTO::getGpsProvider,
+                                    java.util.stream.Collectors.counting()));
+                    java.util.Set<String> devicesFromChina = positions.stream()
+                            .filter(p -> p.getGpsProvider() == GpsProviderType.CHINA && p.getDeviceId() != null)
+                            .map(GpsPositionDTO::getDeviceId)
+                            .collect(java.util.stream.Collectors.toSet());
+                    java.util.Set<String> devicesFromTugdk = positions.stream()
+                            .filter(p -> p.getGpsProvider() == GpsProviderType.TUGDK && p.getDeviceId() != null)
+                            .map(GpsPositionDTO::getDeviceId)
+                            .collect(java.util.stream.Collectors.toSet());
+                    java.util.Set<String> crossProviderDevices = new java.util.HashSet<>(devicesFromChina);
+                    crossProviderDevices.retainAll(devicesFromTugdk);
+                    log.info("[GPS_PIPELINE] GPS_AGGREGATE total={} by_provider={} cross_provider_devices={}",
+                            positions.size(), byProvider, crossProviderDevices.size());
+                    if (!crossProviderDevices.isEmpty()) {
+                        log.warn("[GPS_PIPELINE] GPS_CROSS_PROVIDER devices reporting to BOTH providers: {} (sample: {})",
+                                crossProviderDevices.size(),
+                                crossProviderDevices.stream().limit(5).toList());
+                    }
+                });
     }
 
 

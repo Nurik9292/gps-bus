@@ -1,6 +1,5 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
-import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TimePeriod;
 import biz.ugur.busroutebackend.routing.infrastructure.config.ETAProperties;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.DirectVehiclePositionBroadcaster;
@@ -19,23 +18,24 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class PredictionBroadcaster {
 
-    private static final long FRESH_GPS_WINDOW_MS = 5_000;
-
     private final DirectVehiclePositionBroadcaster directBroadcaster;
     private final RouteGeometryCache routeGeometryCache;
     private final ETAProperties etaProperties;
     private final PredictionProperties properties;
+    private final biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer;
 
     private final ConcurrentHashMap<String, double[]> lastBroadcastPosition = new ConcurrentHashMap<>();
 
     public PredictionBroadcaster(DirectVehiclePositionBroadcaster directBroadcaster,
                                   RouteGeometryCache routeGeometryCache,
                                   ETAProperties etaProperties,
-                                  PredictionProperties properties) {
+                                  PredictionProperties properties,
+                                  biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer) {
         this.directBroadcaster = directBroadcaster;
         this.routeGeometryCache = routeGeometryCache;
         this.etaProperties = etaProperties;
         this.properties = properties;
+        this.pipelineTracer = pipelineTracer;
     }
 
     public double[] getLastBroadcastPosition(String vehicleId) {
@@ -48,12 +48,55 @@ public class PredictionBroadcaster {
     }
 
     public Mono<Void> broadcast(VehiclePredictionState state) {
-        if (!state.isInMotion() && state.getSpeedKmh() == 0
-                && (state.getRouteNumber() == null || state.getRouteNumber().isBlank())) {
+        if (state.isInGarage()) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "in-garage");
+            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_IN_GARAGE vehicle={} plate={}",
+                    state.getVehicleId(), state.getLicensePlate());
             return Mono.empty();
         }
 
+        if (state.getRouteNumber() == null || state.getRouteNumber().isBlank()) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "no-route");
+            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_NO_ROUTE vehicle={} plate={} — vehicle not assigned to a route",
+                    state.getVehicleId(), state.getLicensePlate());
+            return Mono.empty();
+        }
+
+        if (state.getFractionOnRoute() < 0) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "unsnapped-awaiting-gps");
+            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_UNSNAPPED vehicle={} plate={} route={} — state awaiting fresh GPS to re-snap",
+                    state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber());
+            return Mono.empty();
+        }
+
+        if (state.isOffRoute()) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "off-route");
+            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_OFF_ROUTE vehicle={} plate={} — vehicle {}+ GPS points away from route",
+                    state.getVehicleId(), state.getLicensePlate(), state.getConsecutiveOffRouteCount());
+            return Mono.empty();
+        }
+
+        double[] prevBroadcast = lastBroadcastPosition.get(state.getVehicleId());
+        if (prevBroadcast != null) {
+            double bDelta = biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService
+                    .haversineDistanceMeters(prevBroadcast[0], prevBroadcast[1],
+                            state.getPredictedLatitude(), state.getPredictedLongitude());
+            if (bDelta > 500.0) {
+                log.warn("[GPS_PIPELINE] WS_PRED_BROADCAST_JUMP vehicle={} plate={} delta={}m prev=({},{}) new=({},{}) coldStart={}",
+                        state.getVehicleId(), state.getLicensePlate(),
+                        String.format("%.0f", bDelta),
+                        String.format("%.5f", prevBroadcast[0]),
+                        String.format("%.5f", prevBroadcast[1]),
+                        String.format("%.5f", state.getPredictedLatitude()),
+                        String.format("%.5f", state.getPredictedLongitude()),
+                        isInColdStart(state));
+            }
+        }
+        lastBroadcastPosition.put(state.getVehicleId(),
+                new double[]{state.getPredictedLatitude(), state.getPredictedLongitude()});
+
         if (isInColdStart(state)) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "cold-start");
             log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_COLD_START vehicle={} plate={} — state stabilizing",
                     state.getVehicleId(), state.getLicensePlate());
             return Mono.empty();
@@ -81,13 +124,13 @@ public class PredictionBroadcaster {
 
         return Mono.fromRunnable(() -> {
             try {
-                if (suppressTeleport(state)) {
-                    return;
-                }
-                lastBroadcastPosition.put(state.getVehicleId(),
-                        new double[]{state.getPredictedLatitude(), state.getPredictedLongitude()});
-
                 directBroadcaster.broadcastDirect(msg);
+                pipelineTracer.traceWsBroadcast(
+                        state.getVehicleId(), state.getLicensePlate(),
+                        state.getPredictedLatitude(), state.getPredictedLongitude(),
+                        state.getSpeedKmh(), state.isInMotion(),
+                        Boolean.TRUE,
+                        fractionValue != null ? "SNAPPED" : "DEAD_RECKONING");
                 log.debug("[GPS_PIPELINE] WS_PRED vehicle={} plate={} mode={} frac={} lat={} lon={} speed={}km/h eta_stops={}",
                         state.getVehicleId(), state.getLicensePlate(),
                         fractionValue != null ? "SNAPPED" : "DEAD_RECKONING",
@@ -100,35 +143,6 @@ public class PredictionBroadcaster {
                 log.warn("Failed to broadcast prediction for vehicle {}: {}", state.getVehicleId(), e.getMessage());
             }
         });
-    }
-
-    private boolean suppressTeleport(VehiclePredictionState state) {
-        double[] prevPos = lastBroadcastPosition.get(state.getVehicleId());
-        if (prevPos == null) {
-            return false;
-        }
-        double jumpDist = DistanceCalculationService.haversineDistanceMeters(
-                prevPos[0], prevPos[1],
-                state.getPredictedLatitude(), state.getPredictedLongitude());
-        long msSinceGps = state.getLastReceivedAt() != null
-                ? Instant.now().toEpochMilli() - state.getLastReceivedAt().toEpochMilli()
-                : Long.MAX_VALUE;
-        boolean freshGps = msSinceGps <= FRESH_GPS_WINDOW_MS;
-        Double fractionValue = (state.getFractionOnRoute() >= 0) ? state.getFractionOnRoute() : null;
-        if (!freshGps && jumpDist > properties.getTeleportThresholdMeters()) {
-            log.warn("[GPS_PIPELINE] WS_TELEPORT_SUPPRESSED vehicle={} plate={} dist={}m " +
-                            "from=({},{}) to=({},{}) frac={} dir={} — broadcast skipped",
-                    state.getVehicleId(), state.getLicensePlate(),
-                    String.format("%.0f", jumpDist),
-                    String.format("%.5f", prevPos[0]),
-                    String.format("%.5f", prevPos[1]),
-                    String.format("%.5f", state.getPredictedLatitude()),
-                    String.format("%.5f", state.getPredictedLongitude()),
-                    fractionValue != null ? String.format("%.4f", fractionValue) : "-",
-                    state.getDirection());
-            return true;
-        }
-        return false;
     }
 
     private List<NextStopEta> computeNextStopsEta(VehiclePredictionState state, int maxStops) {
