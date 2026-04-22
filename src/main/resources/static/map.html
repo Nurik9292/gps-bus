@@ -528,6 +528,38 @@
 
         // Update vehicle ages
         setInterval(updateVehicleList, 2000);
+
+        // Remove markers that backend stopped updating (suppressed / off-route / stale)
+        setInterval(cleanupStaleMarkers, 5000);
+    }
+
+    const STALE_MARKER_AGE_MS = 45_000;
+
+    function cleanupStaleMarkers() {
+        const now = Date.now();
+        const staleIds = [];
+        Object.values(vehicles).forEach(v => {
+            if (v.receivedAt && (now - v.receivedAt) > STALE_MARKER_AGE_MS) {
+                staleIds.push(v.id);
+            }
+        });
+        if (staleIds.length === 0) return;
+        staleIds.forEach(id => {
+            const marker = vehicleMarkers[id];
+            if (marker) {
+                map.removeLayer(marker);
+                delete vehicleMarkers[id];
+            }
+            const trail = vehicleTrailLayers[id];
+            if (trail) {
+                map.removeLayer(trail);
+                delete vehicleTrailLayers[id];
+            }
+            delete vehicleTrails[id];
+            delete vehicles[id];
+        });
+        console.log(`[cleanup] removed ${staleIds.length} stale vehicle markers (>${STALE_MARKER_AGE_MS/1000}s no update)`);
+        updateStats();
     }
 
     // ===== NORMALIZE VEHICLE DATA =====
