@@ -196,14 +196,7 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
 
         LocalDateTime freshnessCutoff = LocalDateTime.now(ZoneOffset.UTC).minus(MAX_INITIAL_POSITION_AGE);
         return result
-                .filter(v -> {
-                    if (Boolean.FALSE.equals(v.getIsInMotion())
-                            && v.getSpeedKmh() != null && v.getSpeedKmh() == 0
-                            && (v.getRouteNumber() == null || v.getRouteNumber().isBlank())) {
-                        return false;
-                    }
-                    return true;
-                })
+                .filter(v -> v.getRouteNumber() != null && !v.getRouteNumber().isBlank())
                 .filter(v -> v.getLastPositionUpdate() != null
                         && v.getLastPositionUpdate().isAfter(freshnessCutoff));
     }
@@ -419,9 +412,9 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                     return true;
                 })
                 .filter(msg -> {
-                    if (Boolean.FALSE.equals(msg.getIsInMotion())
-                            && msg.getSpeedKmh() != null && msg.getSpeedKmh() == 0
-                            && (msg.getRouteNumber() == null || msg.getRouteNumber().isBlank())) {
+                    if (msg.getRouteNumber() == null || msg.getRouteNumber().isBlank()) {
+                        log.trace("Redis stream filter: dropped vehicle {} — no route",
+                                msg.getVehicleId());
                         return false;
                     }
                     return true;
