@@ -16,7 +16,7 @@ class SnapCorrector {
     private static final double DIRECTION_FLIP_THRESHOLD_DEG = 90.0;
     private static final int OPPOSITE_SNAP_THRESHOLD = 3;
     private static final double MAX_CORRECTION_DISTANCE_METERS = 50.0;
-    private static final double TERMINAL_FLIP_MAX_PHYSICAL_JUMP_METERS = 100.0;
+    private static final double TERMINAL_FLIP_MAX_PHYSICAL_JUMP_METERS = 500.0;
 
     private final PredictionProperties properties;
     private final RouteGeometryCache routeGeometryCache;
