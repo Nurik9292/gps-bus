@@ -257,9 +257,6 @@ public class VehiclePositionPredictionService {
                     pendingAltBaselines.remove(vehicleId);
                     lastDecisions.put(vehicleId, GatekeeperDecision.FORCE_ACCEPT_STALE);
                 } else {
-                    replaceState(vehicleId, existing.toBuilder()
-                            .lastReceivedAt(Instant.now())
-                            .build(), "outlier-reject");
                     lastDecisions.put(vehicleId, GatekeeperDecision.REJECT_OUTLIER);
                     return;
                 }
@@ -267,7 +264,6 @@ public class VehiclePositionPredictionService {
             case REJECT_TELEPORT_GAP -> {
                 replaceState(vehicleId, existing.toBuilder()
                         .lastGpsUpdate(timestamp)
-                        .lastReceivedAt(Instant.now())
                         .build(), "teleport-gap-reject");
                 lastDecisions.put(vehicleId, GatekeeperDecision.REJECT_TELEPORT_GAP);
                 return;

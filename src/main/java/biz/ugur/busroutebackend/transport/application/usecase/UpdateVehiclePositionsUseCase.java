@@ -571,8 +571,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     .map(v -> applyGatekeeperDecision(v, oldCoordsByVehicleId))
                     .toList();
 
-            for (Vehicle v : updatedVehicles) {
-                publishPositionEventIfAccepted(v,
+            for (Vehicle v : gatedVehicles) {
+                publishPositionEvent(v,
                         hasSignificantChangeById.getOrDefault(v.getId().getValue(), false),
                         frozenCoordsWithMotionById.getOrDefault(v.getId().getValue(), false));
             }
@@ -623,39 +623,36 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     }
 
 
-    private void publishPositionEventIfAccepted(Vehicle v, boolean hasSignificantChange, boolean frozenCoordsWithMotion) {
+    private void publishPositionEvent(Vehicle v, boolean hasSignificantChange, boolean frozenCoordsWithMotion) {
         String vehicleId = v.getId().getValue();
         GatekeeperDecision decision = predictionService.evaluateGate(vehicleId);
         boolean forcePublish = shouldForcePublishForVehicle(vehicleId);
-        boolean shouldPublish = (hasSignificantChange || forcePublish)
-                && !frozenCoordsWithMotion
-                && decision.allowsCoordinateWrite();
+        boolean shouldPublish = (hasSignificantChange || forcePublish) && !frozenCoordsWithMotion;
 
-        if (shouldPublish) {
-            lastPublishedTime.put(vehicleId, Instant.now());
-            log.debug("[GPS_PIPELINE] WS_PUBLISH vehicle={} plate={} decision={} lat={} lon={} speed={} moved={}",
-                    vehicleId, v.getLicensePlate(), decision,
-                    v.getCurrentLatitude(), v.getCurrentLongitude(),
-                    v.getSpeedKmh(), hasSignificantChange);
-
-            VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
-                    vehicleId,
-                    v.getDeviceId(),
-                    v.getLicensePlate(),
-                    v.getRouteNumber(),
-                    v.getCurrentLatitude(),
-                    v.getCurrentLongitude(),
-                    v.getSpeedKmh(),
-                    v.getIsInMotion(),
-                    v.getLastPositionUpdate(),
-                    v.getCourse(),
-                    v.getCurrentDirection()
-            );
-            domainEventPublisher.publish(event);
-        } else if (!decision.allowsCoordinateWrite()) {
-            log.debug("[GPS_PIPELINE] WS_PUBLISH_SUPPRESSED vehicle={} plate={} decision={} — DB coords preserved, no event emitted",
-                    vehicleId, v.getLicensePlate(), decision);
+        if (!shouldPublish) {
+            return;
         }
+
+        lastPublishedTime.put(vehicleId, Instant.now());
+        log.debug("[GPS_PIPELINE] WS_PUBLISH vehicle={} plate={} decision={} lat={} lon={} speed={} moved={}",
+                vehicleId, v.getLicensePlate(), decision,
+                v.getCurrentLatitude(), v.getCurrentLongitude(),
+                v.getSpeedKmh(), hasSignificantChange);
+
+        VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
+                vehicleId,
+                v.getDeviceId(),
+                v.getLicensePlate(),
+                v.getRouteNumber(),
+                v.getCurrentLatitude(),
+                v.getCurrentLongitude(),
+                v.getSpeedKmh(),
+                v.getIsInMotion(),
+                v.getLastPositionUpdate(),
+                v.getCourse(),
+                v.getCurrentDirection()
+        );
+        domainEventPublisher.publish(event);
     }
 
     private Vehicle applyGatekeeperDecision(Vehicle v, Map<String, double[]> oldCoordsByVehicleId) {
