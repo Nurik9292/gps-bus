@@ -447,9 +447,9 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             hasSignificantChange,
                             hasSignificantChange ? "significant-change" : "no-change-skip");
 
-                    if (hasSignificantChange) {
-                        vehiclesToUpdate.add(updatedVehicle);
+                    vehiclesToUpdate.add(updatedVehicle);
 
+                    if (hasSignificantChange) {
                         boolean hasCourse = updatedVehicle.getCourse() != null
                                 && updatedVehicle.getCourse() > 0;
                         if (!hasCourse && oldLatitude != null && oldLongitude != null) {
@@ -466,6 +466,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         } else {
                             vehiclesForDetection.add(updatedVehicle);
                         }
+                    } else {
+                        vehiclesForDetection.add(updatedVehicle);
                     }
 
                     String vehicleId = updatedVehicle.getId().getValue();
