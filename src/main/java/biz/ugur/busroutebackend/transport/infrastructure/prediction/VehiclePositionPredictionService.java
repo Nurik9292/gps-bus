@@ -385,8 +385,15 @@ public class VehiclePositionPredictionService {
             positionTeleport = false;
         }
 
-        int newOffRouteCount = existing != null ? existing.getConsecutiveOffRouteCount() : 0;
-        boolean newOffRoute = existing != null && existing.isOffRoute();
+        boolean routeChanged = existing != null
+                && existing.getRouteNumber() != null
+                && !existing.getRouteNumber().equals(routeNumber);
+        if (routeChanged) {
+            log.info("[GPS_PIPELINE] ROUTE_CHANGED vehicle={} plate={} from={} to={} — resetting off-route state",
+                    vehicleId, licensePlate, existing.getRouteNumber(), routeNumber);
+        }
+        int newOffRouteCount = (existing != null && !routeChanged) ? existing.getConsecutiveOffRouteCount() : 0;
+        boolean newOffRoute = existing != null && !routeChanged && existing.isOffRoute();
         if (fraction >= 0 && !teleportRejected) {
             double rawToSnapDist = DistanceCalculationService.haversineDistanceMeters(
                     latitude, longitude, predictedLat, predictedLon);
