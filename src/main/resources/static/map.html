@@ -484,6 +484,7 @@
     let map, ws;
     let vehicles = {};        // id -> vehicle data
     let vehicleMarkers = {};  // id -> L.marker
+    let vehicleDeadReckoning = {}; // id -> {lat, lon, course, speedKmh, lastAt}
     let highlightedBusId = null;
     let stopMarkers = {};
     let stops = [];
@@ -678,6 +679,7 @@
         Object.values(vehicleMarkers).forEach(m => map.removeLayer(m));
         vehicleMarkers = {};
         vehicles = {};
+        vehicleDeadReckoning = {};
         // Clear trails too — stale trail points would create false teleports
         // when reconnecting since vehicle moved during disconnect window
         vehicleTrails = {};
@@ -860,9 +862,52 @@
         panel.innerHTML = html;
     }
 
+    // ===== CLIENT DEAD-RECKONING =====
+    // Between WS updates (which arrive every ~5-15s depending on GPS rate),
+    // extrapolate marker position forward using last known course + speed so
+    // the icon animates smoothly instead of freezing until the next packet.
+    // When a new WS update arrives, `processVehicle` resets the baseline and
+    // the interpolation continues from the fresh position.
+    const DEAD_RECKONING_TICK_MS = 500;
+    const DEAD_RECKONING_MIN_AGE_MS = 1000; // let animateMarker handle the first second
+    const DEAD_RECKONING_MAX_AGE_MS = 30000; // stop extrapolating after 30s of silence
+    const EARTH_METERS_PER_DEG_LAT = 111320;
+
+    function deadReckoningTick() {
+        const now = Date.now();
+        for (const id in vehicleDeadReckoning) {
+            const dr = vehicleDeadReckoning[id];
+            const marker = vehicleMarkers[id];
+            if (!marker || !dr) continue;
+            const ageMs = now - dr.lastAt;
+            if (ageMs < DEAD_RECKONING_MIN_AGE_MS || ageMs > DEAD_RECKONING_MAX_AGE_MS) continue;
+            if (!dr.speedKmh || dr.speedKmh < 1) continue;
+
+            const speedMs = dr.speedKmh / 3.6;
+            const distMeters = speedMs * (ageMs / 1000);
+            const courseRad = (dr.course || 0) * Math.PI / 180;
+            const dLat = (distMeters * Math.cos(courseRad)) / EARTH_METERS_PER_DEG_LAT;
+            const metersPerDegLon = EARTH_METERS_PER_DEG_LAT * Math.cos(dr.lat * Math.PI / 180);
+            const dLon = metersPerDegLon > 0
+                ? (distMeters * Math.sin(courseRad)) / metersPerDegLon
+                : 0;
+            marker.setLatLng([dr.lat + dLat, dr.lon + dLon]);
+        }
+    }
+
+    setInterval(deadReckoningTick, DEAD_RECKONING_TICK_MS);
+
     function processVehicle(raw, options) {
         const v = normalizeVehicle(raw);
         if (!v.id || !v.lat || !v.lon) return;
+
+        vehicleDeadReckoning[v.id] = {
+            lat: v.lat,
+            lon: v.lon,
+            course: v.course || 0,
+            speedKmh: v.moving ? (v.speed || 0) : 0,
+            lastAt: Date.now()
+        };
 
         const isInitial = options && options.initial;
         if (!isInitial) {
