@@ -79,10 +79,7 @@ public class PredictionBroadcaster {
         }
 
         if (state.isOffRoute()) {
-            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "off-route");
-            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_OFF_ROUTE vehicle={} plate={} — vehicle {}+ GPS points away from route",
-                    state.getVehicleId(), state.getLicensePlate(), state.getConsecutiveOffRouteCount());
-            return Mono.empty();
+            return broadcastRawGpsFallback(state, "off-route");
         }
 
         double[] prevBroadcast = lastBroadcastPosition.get(state.getVehicleId());
@@ -105,10 +102,7 @@ public class PredictionBroadcaster {
                 new double[]{state.getPredictedLatitude(), state.getPredictedLongitude()});
 
         if (isInColdStart(state)) {
-            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "cold-start");
-            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_COLD_START vehicle={} plate={} — state stabilizing",
-                    state.getVehicleId(), state.getLicensePlate());
-            return Mono.empty();
+            return broadcastRawGpsFallback(state, "cold-start");
         }
 
         Double fractionValue = (state.getFractionOnRoute() >= 0) ? state.getFractionOnRoute() : null;
@@ -161,6 +155,58 @@ public class PredictionBroadcaster {
                         nextStops.size());
             } catch (Exception e) {
                 log.warn("Failed to broadcast prediction for vehicle {}: {}", state.getVehicleId(), e.getMessage());
+            }
+        });
+    }
+
+    private Mono<Void> broadcastRawGpsFallback(VehiclePredictionState state, String reason) {
+        double lat = state.getGpsLatitude();
+        double lon = state.getGpsLongitude();
+        if (lat == 0.0 && lon == 0.0) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(),
+                    reason + "-no-raw-gps");
+            log.debug("[GPS_PIPELINE] WS_RAW_GPS_SUPPRESSED vehicle={} plate={} reason={} — raw GPS not set",
+                    state.getVehicleId(), state.getLicensePlate(), reason);
+            return Mono.empty();
+        }
+
+        double broadcastSpeedKmh = state.getRawGpsSpeedKmh();
+        boolean broadcastInMotion = broadcastSpeedKmh >= properties.getMinSpeedKmh();
+
+        VehiclePositionWebSocketMessage msg = new VehiclePositionWebSocketMessage(
+                state.getVehicleId(),
+                state.getLicensePlate(),
+                state.getRouteNumber(),
+                lat,
+                lon,
+                broadcastSpeedKmh,
+                broadcastInMotion,
+                LocalDateTime.now(),
+                state.getCourse(),
+                state.getDirection() == 0,
+                null,
+                Boolean.FALSE,
+                null,
+                "RAW_GPS"
+        );
+
+        return Mono.fromRunnable(() -> {
+            try {
+                directBroadcaster.broadcastDirect(msg);
+                pipelineTracer.traceWsBroadcast(
+                        state.getVehicleId(), state.getLicensePlate(),
+                        lat, lon,
+                        broadcastSpeedKmh, broadcastInMotion,
+                        Boolean.FALSE, "RAW_GPS_FALLBACK");
+                log.debug("[GPS_PIPELINE] WS_RAW_GPS_FALLBACK vehicle={} plate={} reason={} lat={} lon={} speed={}km/h moving={}",
+                        state.getVehicleId(), state.getLicensePlate(), reason,
+                        String.format("%.6f", lat),
+                        String.format("%.6f", lon),
+                        String.format("%.1f", broadcastSpeedKmh),
+                        broadcastInMotion);
+            } catch (Exception e) {
+                log.warn("Failed to broadcast raw GPS fallback for vehicle {}: {}",
+                        state.getVehicleId(), e.getMessage());
             }
         });
     }
