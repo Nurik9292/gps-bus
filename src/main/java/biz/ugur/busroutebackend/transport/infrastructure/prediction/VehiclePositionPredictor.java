@@ -198,17 +198,22 @@ class VehiclePositionPredictor {
                                 coords[0], coords[1]);
                 if (snapToPredicted > 300.0) {
                     int newCount = state.getConsecutiveInconsistentAdvanceCount() + 1;
-                    if (newCount >= 10) {
-                        log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE_RESET vehicle={} plate={} consecutiveInconsistent={} — fraction invalidated, route geometry kept for continued on-route prediction",
-                                state.getVehicleId(), state.getLicensePlate(), newCount);
+                    if (newCount >= 3) {
+                        log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE_RESET vehicle={} plate={} consecutiveInconsistent={} driftDist={}m — clearing fraction/lastGpsFraction and triggering cold-start to escape polyline-discontinuity loop",
+                                state.getVehicleId(), state.getLicensePlate(), newCount,
+                                String.format("%.0f", snapToPredicted));
                         return state.toBuilder()
                                 .fractionOnRoute(-1)
+                                .lastGpsFraction(-1)
                                 .lastRejectedGpsFraction(-1)
                                 .consecutiveImplausibleCount(0)
                                 .consecutiveInconsistentAdvanceCount(0)
+                                .offRoute(false)
+                                .consecutiveOffRouteCount(0)
+                                .coldStartUntilAt(Instant.now().plusSeconds(properties.getColdStartDurationSec()))
                                 .build();
                     }
-                    log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE vehicle={} plate={} predicted=({},{}) interpolated=({},{}) frac={} driftDist={}m count={}/10 — holding predicted, awaiting GPS re-sync (not snapping to interpolated which may be polyline artifact)",
+                    log.warn("[GPS_PIPELINE] ADVANCE_INCONSISTENT_STATE vehicle={} plate={} predicted=({},{}) interpolated=({},{}) frac={} driftDist={}m count={}/3 — holding predicted, awaiting GPS re-sync (not snapping to interpolated which may be polyline artifact)",
                             state.getVehicleId(), state.getLicensePlate(),
                             String.format("%.5f", state.getPredictedLatitude()),
                             String.format("%.5f", state.getPredictedLongitude()),
