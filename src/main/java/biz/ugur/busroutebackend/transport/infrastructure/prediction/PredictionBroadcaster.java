@@ -67,6 +67,14 @@ public class PredictionBroadcaster {
             return Mono.empty();
         }
 
+        if (state.isOffRoute()) {
+            return broadcastRawGpsFallback(state, "off-route");
+        }
+
+        if (isInColdStart(state)) {
+            return broadcastRawGpsFallback(state, "cold-start");
+        }
+
         boolean hasRouteGeometry = state.getRouteCoordinates() != null
                 && state.getTotalRouteDistanceMeters() > 0;
         boolean hasAnyFraction = state.getFractionOnRoute() >= 0 || state.getLastGpsFraction() >= 0;
@@ -76,10 +84,6 @@ public class PredictionBroadcaster {
                     state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber(),
                     hasRouteGeometry, hasAnyFraction);
             return Mono.empty();
-        }
-
-        if (state.isOffRoute()) {
-            return broadcastRawGpsFallback(state, "off-route");
         }
 
         double[] prevBroadcast = lastBroadcastPosition.get(state.getVehicleId());
@@ -100,10 +104,6 @@ public class PredictionBroadcaster {
         }
         lastBroadcastPosition.put(state.getVehicleId(),
                 new double[]{state.getPredictedLatitude(), state.getPredictedLongitude()});
-
-        if (isInColdStart(state)) {
-            return broadcastRawGpsFallback(state, "cold-start");
-        }
 
         Double fractionValue = (state.getFractionOnRoute() >= 0) ? state.getFractionOnRoute() : null;
         List<NextStopEta> nextStops = computeNextStopsEta(state, 3);

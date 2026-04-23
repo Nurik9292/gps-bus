@@ -509,7 +509,9 @@ public class VehiclePositionPredictionService {
                 .filter(state -> state.getLastReceivedAt() != null
                         && (now.toEpochMilli() - state.getLastReceivedAt().toEpochMilli()) <= maxAgeMs)
                 .filter(state -> state.getRouteCoordinates() != null
-                        ? state.getFractionOnRoute() >= 0
+                        ? (state.getFractionOnRoute() >= 0
+                                || PredictionBroadcaster.isInColdStart(state)
+                                || state.isOffRoute())
                         : true)
                 .toList();
 
