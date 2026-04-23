@@ -53,14 +53,6 @@ public class PredictionBroadcaster {
     }
 
     public Mono<Void> broadcast(VehiclePredictionState state) {
-        log.info("[GPS_PIPELINE] WS_BROADCAST_ENTRY vehicle={} plate={} garage={} route={} offRoute={} coldStart={} frac={} lastGpsFrac={} gps=({},{}) predicted=({},{})",
-                state.getVehicleId(), state.getLicensePlate(),
-                state.isInGarage(), state.getRouteNumber(),
-                state.isOffRoute(), isInColdStart(state),
-                state.getFractionOnRoute(), state.getLastGpsFraction(),
-                state.getGpsLatitude(), state.getGpsLongitude(),
-                state.getPredictedLatitude(), state.getPredictedLongitude());
-
         if (state.isInGarage()) {
             pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "in-garage");
             log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_IN_GARAGE vehicle={} plate={}",
@@ -170,14 +162,10 @@ public class PredictionBroadcaster {
     private Mono<Void> broadcastRawGpsFallback(VehiclePredictionState state, String reason) {
         double lat = state.getGpsLatitude();
         double lon = state.getGpsLongitude();
-        log.info("[GPS_PIPELINE] WS_RAW_GPS_ENTRY vehicle={} plate={} reason={} gpsLat={} gpsLon={} fraction={} lastGpsFraction={}",
-                state.getVehicleId(), state.getLicensePlate(), reason,
-                lat, lon,
-                state.getFractionOnRoute(), state.getLastGpsFraction());
         if (lat == 0.0 && lon == 0.0) {
             pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(),
                     reason + "-no-raw-gps");
-            log.info("[GPS_PIPELINE] WS_RAW_GPS_SUPPRESSED vehicle={} plate={} reason={} — raw GPS not set (gpsLatitude/gpsLongitude both 0)",
+            log.warn("[GPS_PIPELINE] WS_RAW_GPS_SUPPRESSED vehicle={} plate={} reason={} — raw GPS not set (gpsLatitude/gpsLongitude both 0)",
                     state.getVehicleId(), state.getLicensePlate(), reason);
             return Mono.empty();
         }
@@ -210,7 +198,7 @@ public class PredictionBroadcaster {
                         lat, lon,
                         broadcastSpeedKmh, broadcastInMotion,
                         Boolean.FALSE, "RAW_GPS_FALLBACK");
-                log.info("[GPS_PIPELINE] WS_RAW_GPS_FALLBACK vehicle={} plate={} reason={} lat={} lon={} speed={}km/h moving={}",
+                log.warn("[GPS_PIPELINE] WS_RAW_GPS_FALLBACK vehicle={} plate={} reason={} lat={} lon={} speed={}km/h moving={}",
                         state.getVehicleId(), state.getLicensePlate(), reason,
                         String.format("%.6f", lat),
                         String.format("%.6f", lon),
