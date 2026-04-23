@@ -539,8 +539,10 @@ public class VehiclePositionPredictionService {
 
         long snapped = movingStates.stream().filter(s -> s.getFractionOnRoute() >= 0).count();
         long dr = movingStates.size() - snapped;
-        log.debug("[GPS_PIPELINE] PRED_CYCLE moving={} (snapped={} dr={}) stopped={}",
-                movingStates.size(), snapped, dr, stoppedStates.size());
+        long moveColdStart = movingStates.stream().filter(PredictionBroadcaster::isInColdStart).count();
+        long moveOffRoute = movingStates.stream().filter(VehiclePredictionState::isOffRoute).count();
+        log.info("[GPS_PIPELINE] PRED_CYCLE moving={} (snapped={} dr={} coldStart={} offRoute={}) stopped={}",
+                movingStates.size(), snapped, dr, moveColdStart, moveOffRoute, stoppedStates.size());
 
         Mono<Void> movingMono = Flux.fromIterable(movingStates)
                 .flatMap(snapshot -> {

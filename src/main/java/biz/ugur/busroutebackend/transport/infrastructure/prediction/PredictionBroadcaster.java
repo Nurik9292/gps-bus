@@ -53,6 +53,14 @@ public class PredictionBroadcaster {
     }
 
     public Mono<Void> broadcast(VehiclePredictionState state) {
+        log.info("[GPS_PIPELINE] WS_BROADCAST_ENTRY vehicle={} plate={} garage={} route={} offRoute={} coldStart={} frac={} lastGpsFrac={} gps=({},{}) predicted=({},{})",
+                state.getVehicleId(), state.getLicensePlate(),
+                state.isInGarage(), state.getRouteNumber(),
+                state.isOffRoute(), isInColdStart(state),
+                state.getFractionOnRoute(), state.getLastGpsFraction(),
+                state.getGpsLatitude(), state.getGpsLongitude(),
+                state.getPredictedLatitude(), state.getPredictedLongitude());
+
         if (state.isInGarage()) {
             pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "in-garage");
             log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_IN_GARAGE vehicle={} plate={}",
