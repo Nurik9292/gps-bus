@@ -162,10 +162,14 @@ public class PredictionBroadcaster {
     private Mono<Void> broadcastRawGpsFallback(VehiclePredictionState state, String reason) {
         double lat = state.getGpsLatitude();
         double lon = state.getGpsLongitude();
+        log.info("[GPS_PIPELINE] WS_RAW_GPS_ENTRY vehicle={} plate={} reason={} gpsLat={} gpsLon={} fraction={} lastGpsFraction={}",
+                state.getVehicleId(), state.getLicensePlate(), reason,
+                lat, lon,
+                state.getFractionOnRoute(), state.getLastGpsFraction());
         if (lat == 0.0 && lon == 0.0) {
             pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(),
                     reason + "-no-raw-gps");
-            log.debug("[GPS_PIPELINE] WS_RAW_GPS_SUPPRESSED vehicle={} plate={} reason={} — raw GPS not set",
+            log.info("[GPS_PIPELINE] WS_RAW_GPS_SUPPRESSED vehicle={} plate={} reason={} — raw GPS not set (gpsLatitude/gpsLongitude both 0)",
                     state.getVehicleId(), state.getLicensePlate(), reason);
             return Mono.empty();
         }
