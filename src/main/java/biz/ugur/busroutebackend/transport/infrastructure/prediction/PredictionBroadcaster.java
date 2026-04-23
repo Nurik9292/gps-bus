@@ -159,10 +159,14 @@ public class PredictionBroadcaster {
         });
     }
 
+    private static final double DEAD_RECKONING_MAX_AGE_SEC = 30.0;
+    private static final double DEAD_RECKONING_MIN_SPEED_KMH = 1.0;
+    private static final double EARTH_METERS_PER_DEG_LAT = 111320.0;
+
     private Mono<Void> broadcastRawGpsFallback(VehiclePredictionState state, String reason) {
-        double lat = state.getGpsLatitude();
-        double lon = state.getGpsLongitude();
-        if (lat == 0.0 && lon == 0.0) {
+        double baseLat = state.getGpsLatitude();
+        double baseLon = state.getGpsLongitude();
+        if (baseLat == 0.0 && baseLon == 0.0) {
             pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(),
                     reason + "-no-raw-gps");
             log.warn("[GPS_PIPELINE] WS_RAW_GPS_SUPPRESSED vehicle={} plate={} reason={} — raw GPS not set (gpsLatitude/gpsLongitude both 0)",
@@ -170,8 +174,14 @@ public class PredictionBroadcaster {
             return Mono.empty();
         }
 
-        double broadcastSpeedKmh = state.getRawGpsSpeedKmh();
-        boolean broadcastInMotion = broadcastSpeedKmh >= properties.getMinSpeedKmh();
+        double speedKmh = state.getRawGpsSpeedKmh();
+        double course = state.getCourse();
+        double[] extrapolated = extrapolateDeadReckoning(
+                baseLat, baseLon, speedKmh, course, state.getLastReceivedAt());
+        double lat = extrapolated[0];
+        double lon = extrapolated[1];
+
+        boolean broadcastInMotion = speedKmh >= properties.getMinSpeedKmh();
 
         VehiclePositionWebSocketMessage msg = new VehiclePositionWebSocketMessage(
                 state.getVehicleId(),
@@ -179,10 +189,10 @@ public class PredictionBroadcaster {
                 state.getRouteNumber(),
                 lat,
                 lon,
-                broadcastSpeedKmh,
+                speedKmh,
                 broadcastInMotion,
                 LocalDateTime.now(),
-                state.getCourse(),
+                course,
                 state.getDirection() == 0,
                 null,
                 Boolean.FALSE,
@@ -196,19 +206,39 @@ public class PredictionBroadcaster {
                 pipelineTracer.traceWsBroadcast(
                         state.getVehicleId(), state.getLicensePlate(),
                         lat, lon,
-                        broadcastSpeedKmh, broadcastInMotion,
+                        speedKmh, broadcastInMotion,
                         Boolean.FALSE, "RAW_GPS_FALLBACK");
                 log.warn("[GPS_PIPELINE] WS_RAW_GPS_FALLBACK vehicle={} plate={} reason={} lat={} lon={} speed={}km/h moving={}",
                         state.getVehicleId(), state.getLicensePlate(), reason,
                         String.format("%.6f", lat),
                         String.format("%.6f", lon),
-                        String.format("%.1f", broadcastSpeedKmh),
+                        String.format("%.1f", speedKmh),
                         broadcastInMotion);
             } catch (Exception e) {
                 log.warn("Failed to broadcast raw GPS fallback for vehicle {}: {}",
                         state.getVehicleId(), e.getMessage());
             }
         });
+    }
+
+    private static double[] extrapolateDeadReckoning(double baseLat, double baseLon,
+                                                     double speedKmh, double courseDeg,
+                                                     Instant lastReceivedAt) {
+        if (lastReceivedAt == null || speedKmh < DEAD_RECKONING_MIN_SPEED_KMH) {
+            return new double[]{baseLat, baseLon};
+        }
+        double ageSec = (Instant.now().toEpochMilli() - lastReceivedAt.toEpochMilli()) / 1000.0;
+        if (ageSec <= 0 || ageSec > DEAD_RECKONING_MAX_AGE_SEC) {
+            return new double[]{baseLat, baseLon};
+        }
+        double distMeters = (speedKmh / 3.6) * ageSec;
+        double courseRad = Math.toRadians(courseDeg);
+        double dLat = (distMeters * Math.cos(courseRad)) / EARTH_METERS_PER_DEG_LAT;
+        double metersPerDegLon = EARTH_METERS_PER_DEG_LAT * Math.cos(Math.toRadians(baseLat));
+        double dLon = metersPerDegLon > 0
+                ? (distMeters * Math.sin(courseRad)) / metersPerDegLon
+                : 0.0;
+        return new double[]{baseLat + dLat, baseLon + dLon};
     }
 
     private List<NextStopEta> computeNextStopsEta(VehiclePredictionState state, int maxStops) {
