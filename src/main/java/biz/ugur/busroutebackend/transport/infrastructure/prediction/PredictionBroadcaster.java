@@ -198,7 +198,7 @@ public class PredictionBroadcaster {
                         lat, lon,
                         broadcastSpeedKmh, broadcastInMotion,
                         Boolean.FALSE, "RAW_GPS_FALLBACK");
-                log.debug("[GPS_PIPELINE] WS_RAW_GPS_FALLBACK vehicle={} plate={} reason={} lat={} lon={} speed={}km/h moving={}",
+                log.info("[GPS_PIPELINE] WS_RAW_GPS_FALLBACK vehicle={} plate={} reason={} lat={} lon={} speed={}km/h moving={}",
                         state.getVehicleId(), state.getLicensePlate(), reason,
                         String.format("%.6f", lat),
                         String.format("%.6f", lon),
