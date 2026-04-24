@@ -87,10 +87,13 @@ public class PredictionBroadcaster {
         }
 
         double[] prevBroadcast = lastBroadcastPosition.get(state.getVehicleId());
+        double motionCourseDeg = Double.NaN;
+        double distFromPrevBroadcast = Double.NaN;
         if (prevBroadcast != null) {
             double bDelta = biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService
                     .haversineDistanceMeters(prevBroadcast[0], prevBroadcast[1],
                             state.getPredictedLatitude(), state.getPredictedLongitude());
+            distFromPrevBroadcast = bDelta;
             if (bDelta > 500.0) {
                 log.warn("[GPS_PIPELINE] WS_PRED_BROADCAST_JUMP vehicle={} plate={} delta={}m prev=({},{}) new=({},{}) coldStart={}",
                         state.getVehicleId(), state.getLicensePlate(),
@@ -100,6 +103,11 @@ public class PredictionBroadcaster {
                         String.format("%.5f", state.getPredictedLatitude()),
                         String.format("%.5f", state.getPredictedLongitude()),
                         isInColdStart(state));
+            }
+            if (bDelta >= COURSE_SOURCE_MIN_MOTION_METERS) {
+                motionCourseDeg = bearingDegrees(
+                        prevBroadcast[0], prevBroadcast[1],
+                        state.getPredictedLatitude(), state.getPredictedLongitude());
             }
         }
         lastBroadcastPosition.put(state.getVehicleId(),
@@ -134,6 +142,8 @@ public class PredictionBroadcaster {
                 PredictionMath.computeConfidence(state.getLastReceivedAt(), state.getFractionOnRoute(), Instant.now()).name()
         );
 
+        final double motionCourseFinal = motionCourseDeg;
+        final double distFromPrevBroadcastFinal = distFromPrevBroadcast;
         return Mono.fromRunnable(() -> {
             try {
                 directBroadcaster.broadcastDirect(msg);
@@ -153,6 +163,25 @@ public class PredictionBroadcaster {
                         String.format("%.1f", state.getRawGpsSpeedKmh()),
                         broadcastInMotion,
                         nextStops.size());
+
+                if (!Double.isNaN(motionCourseFinal)
+                        && broadcastSpeedKmh >= COURSE_SOURCE_MIN_SPEED_KMH) {
+                    double broadcastCourse = state.getCourse();
+                    double delta = angularDelta(broadcastCourse, motionCourseFinal);
+                    if (delta >= COURSE_SOURCE_ALERT_DELTA_DEG) {
+                        log.info("[GPS_PIPELINE] COURSE_SOURCE_DIVERGENCE vehicle={} plate={} route={} dir={} " +
+                                        "broadcastCourse={}° motionCourse={}° delta={}° " +
+                                        "distFromPrev={}m speed={}km/h frac={}",
+                                state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber(),
+                                state.getDirection(),
+                                String.format("%.1f", broadcastCourse),
+                                String.format("%.1f", motionCourseFinal),
+                                String.format("%.1f", delta),
+                                String.format("%.1f", distFromPrevBroadcastFinal),
+                                String.format("%.1f", broadcastSpeedKmh),
+                                fractionValue != null ? String.format("%.4f", fractionValue) : "-");
+                    }
+                }
             } catch (Exception e) {
                 log.warn("Failed to broadcast prediction for vehicle {}: {}", state.getVehicleId(), e.getMessage());
             }
@@ -162,6 +191,10 @@ public class PredictionBroadcaster {
     private static final double DEAD_RECKONING_MAX_AGE_SEC = 30.0;
     private static final double DEAD_RECKONING_MIN_SPEED_KMH = 1.0;
     private static final double EARTH_METERS_PER_DEG_LAT = 111320.0;
+
+    private static final double COURSE_SOURCE_MIN_MOTION_METERS = 5.0;
+    private static final double COURSE_SOURCE_MIN_SPEED_KMH = 2.0;
+    private static final double COURSE_SOURCE_ALERT_DELTA_DEG = 30.0;
 
     private Mono<Void> broadcastRawGpsFallback(VehiclePredictionState state, String reason) {
         double baseLat = state.getGpsLatitude();
@@ -219,6 +252,22 @@ public class PredictionBroadcaster {
                         state.getVehicleId(), e.getMessage());
             }
         });
+    }
+
+    private static double bearingDegrees(double lat1, double lon1, double lat2, double lon2) {
+        double dLon = Math.toRadians(lon2 - lon1);
+        double rlat1 = Math.toRadians(lat1);
+        double rlat2 = Math.toRadians(lat2);
+        double y = Math.sin(dLon) * Math.cos(rlat2);
+        double x = Math.cos(rlat1) * Math.sin(rlat2)
+                 - Math.sin(rlat1) * Math.cos(rlat2) * Math.cos(dLon);
+        double bearing = Math.toDegrees(Math.atan2(y, x));
+        return (bearing + 360.0) % 360.0;
+    }
+
+    private static double angularDelta(double a, double b) {
+        double d = Math.abs(a - b) % 360.0;
+        return d > 180.0 ? 360.0 - d : d;
     }
 
     private static double[] extrapolateDeadReckoning(double baseLat, double baseLon,
