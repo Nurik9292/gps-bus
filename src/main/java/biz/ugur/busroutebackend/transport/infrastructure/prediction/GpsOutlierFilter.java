@@ -10,12 +10,12 @@ import java.time.Instant;
 @Slf4j
 class GpsOutlierFilter {
 
-    private static final double MAX_BUS_SPEED_MS = 33.0;
-    private static final double OUTLIER_TOLERANCE = 1.0;
-    private static final double MAX_TELEPORT_DISTANCE_METERS = 5_000.0;
-    private static final double HARD_OUTLIER_METERS = 10_000.0;
+    private static final double MAX_BUS_SPEED_MS = 22.0;
+    private static final double OUTLIER_TOLERANCE = 1.2;
+    private static final double MAX_TELEPORT_DISTANCE_METERS = 3_000.0;
+    private static final double HARD_OUTLIER_METERS = 2_000.0;
     private static final long HARD_OUTLIER_WINDOW_MS = 10_000L;
-    private static final long SOFT_OUTLIER_WINDOW_MS = 300_000L;
+    private static final long SOFT_OUTLIER_WINDOW_MS = 60_000L;
 
     enum Decision {
         ACCEPT,

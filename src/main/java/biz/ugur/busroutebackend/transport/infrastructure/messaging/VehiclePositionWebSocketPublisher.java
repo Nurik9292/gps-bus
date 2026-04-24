@@ -11,7 +11,6 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class VehiclePositionWebSocketPublisher {
 
-    private static final String POSITION_UPDATES_CHANNEL = "vehicle-position-updates";
     private static final String ROUTE_ASSIGNMENTS_CHANNEL = "vehicle-route-assignments";
 
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
@@ -21,16 +20,6 @@ public class VehiclePositionWebSocketPublisher {
                                              RedisPubSubHealthTracker healthTracker) {
         this.redisTemplate = redisTemplate;
         this.healthTracker = healthTracker;
-    }
-
-
-    public Mono<Void> broadcastVehiclePosition(VehiclePositionWebSocketMessage message) {
-        if (message == null) {
-            log.warn("Cannot broadcast null vehicle position message");
-            return Mono.empty();
-        }
-
-        return publishToRedis(POSITION_UPDATES_CHANNEL, message);
     }
 
     public Mono<Void> broadcastRouteAssignment(VehicleRouteAssignmentMessage message) {

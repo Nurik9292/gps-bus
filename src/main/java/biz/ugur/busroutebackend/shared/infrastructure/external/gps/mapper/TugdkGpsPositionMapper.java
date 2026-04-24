@@ -53,11 +53,24 @@ public class TugdkGpsPositionMapper {
 
             dto.setCourse(source.getCourse());
 
-            dto.setFixTime(parseFixTime(source.getFixTime()));
+            LocalDateTime fixTime = parseFixTime(source.getFixTime());
+            if (fixTime == null) {
+                return null;
+            }
+            dto.setFixTime(fixTime);
 
-            dto.setReportTime(formatReportTime(source.getFixTime()));
-            
+            dto.setReportTime(fixTime.format(REPORT_TIME_FORMATTER));
+
             dto.setUtcTime(source.getFixTime());
+
+            dto.setServerTime(parseUtcOffsetTime(source.getServerTime()));
+            dto.setDeviceTime(parseUtcOffsetTime(source.getDeviceTime()));
+            dto.setAccuracy(source.getAccuracy());
+
+            if (source.getAttributes() != null) {
+                dto.setHdop(source.getAttributes().getHdop());
+                dto.setSatellites(source.getAttributes().getSat());
+            }
 
             GpsPositionDTO.GpsAttributesDTO attributes = new GpsPositionDTO.GpsAttributesDTO();
             attributes.setUniqueId(source.getAttributes().getUniqueId());
@@ -84,21 +97,30 @@ public class TugdkGpsPositionMapper {
 
     private LocalDateTime parseFixTime(String isoTime) {
         if (isoTime == null || isoTime.isBlank()) {
-            return LocalDateTime.now();
+            return null;
         }
 
         try {
             OffsetDateTime odt = OffsetDateTime.parse(isoTime, ISO_FORMATTER);
             return odt.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
         } catch (DateTimeParseException e) {
-            log.debug("Failed to parse fixTime '{}': {}", isoTime, e.getMessage());
-            return LocalDateTime.now();
+            log.warn("[GPS_PIPELINE] Dropping TUGDK fix with unparseable fixTime '{}': {}",
+                    isoTime, e.getMessage());
+            return null;
         }
     }
 
-    private String formatReportTime(String isoTime) {
-        LocalDateTime ldt = parseFixTime(isoTime);
-        return ldt.format(REPORT_TIME_FORMATTER);
+    private LocalDateTime parseUtcOffsetTime(String isoTime) {
+        if (isoTime == null || isoTime.isBlank()) {
+            return null;
+        }
+        try {
+            OffsetDateTime odt = OffsetDateTime.parse(isoTime, ISO_FORMATTER);
+            return odt.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
+        } catch (DateTimeParseException e) {
+            log.debug("[GPS_PIPELINE] Ignoring unparseable time '{}': {}", isoTime, e.getMessage());
+            return null;
+        }
     }
 
     private String normalizeLicensePlate(String plate) {

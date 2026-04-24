@@ -57,16 +57,14 @@ final class PredictionMath {
         return LONG_TERM_ALPHA * newSpeed + (1.0 - LONG_TERM_ALPHA) * prevAvg;
     }
 
-    // 1-D Kalman filter over the bus speed.
-    // State: instantaneous speed (km/h). Measurement: raw GPS speed.
-    // Tuned for the city-bus scenario: ~±4 km/h GPS speed error, ~5 km/h²
-    // process noise accounting for acceleration / braking between ticks.
+    // WHY: 1-D Kalman filter on bus speed. Tuned for city-bus: ~±4 km/h GPS
+    // WHY: speed noise, ~5 km/h² process noise covering tick-to-tick accel/brake.
     static final double KALMAN_PROCESS_NOISE = 5.0;
     static final double KALMAN_MEASUREMENT_NOISE = 4.0;
     static final double KALMAN_INITIAL_VARIANCE = 25.0;
 
-    // Returns {newEstimate, newVariance}. prevEstimate < 0 means "not yet
-    // initialised" — the filter bootstraps from the current measurement.
+    // WHY: prevEstimate < 0 is the sentinel for "not yet initialised" — filter
+    // WHY: bootstraps from current measurement to avoid a 0 km/h cold start.
     static double[] updateKalmanSpeed(double prevEstimate, double prevVariance, double measurement) {
         if (prevEstimate < 0) {
             return new double[]{measurement, KALMAN_INITIAL_VARIANCE};

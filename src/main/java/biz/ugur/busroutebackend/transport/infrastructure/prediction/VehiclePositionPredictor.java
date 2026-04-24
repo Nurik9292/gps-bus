@@ -193,7 +193,8 @@ class VehiclePositionPredictor {
                 return dwellTriggered;
             }
 
-            double[] coords = mapMatchingService.interpolateRoutePoint(routeCoords, newFraction, totalRouteDistance);
+            double[] cumDistAdvance = routeGeometryCache.getCumulativeDistances(state.getRouteNumber(), state.getDirection());
+            double[] coords = mapMatchingService.interpolateRoutePoint(routeCoords, cumDistAdvance, newFraction, totalRouteDistance);
             if (coords == null) return state;
 
             if (state.getPredictedLatitude() != 0.0) {
@@ -234,7 +235,7 @@ class VehiclePositionPredictor {
             }
 
             double newCourse = mapMatchingService.calculateCourseFromRoute(
-                    routeCoords, newFraction, state.getDirection(), totalRouteDistance);
+                    routeCoords, cumDistAdvance, newFraction, state.getDirection(), totalRouteDistance);
 
             return state.toBuilder()
                     .speedKmh(decayedSpeedKmh)
@@ -298,7 +299,8 @@ class VehiclePositionPredictor {
                 String.format("%.4f", nextStopFrac),
                 String.format("%.0f", distToNextStopTrue),
                 String.format("%.1f", state.getRawGpsSpeedKmh()));
-        double[] stopCoords = mapMatchingService.interpolateRoutePoint(routeCoords, nextStopFrac, totalRouteDistance);
+        double[] dwellCumDist = routeGeometryCache.getCumulativeDistances(state.getRouteNumber(), state.getDirection());
+        double[] stopCoords = mapMatchingService.interpolateRoutePoint(routeCoords, dwellCumDist, nextStopFrac, totalRouteDistance);
         if (stopCoords == null) return null;
 
         return state.toBuilder()

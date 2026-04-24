@@ -55,6 +55,16 @@ public class MapMatchingService {
                                                double totalRouteDistanceMeters,
                                                double lastKnownFraction,
                                                double windowFraction) {
+        return snapToNearestSegment(gpsLat, gpsLon, routePoints, null,
+                totalRouteDistanceMeters, lastKnownFraction, windowFraction);
+    }
+
+    public SnappedResult snapToNearestSegment(double gpsLat, double gpsLon,
+                                               List<double[]> routePoints,
+                                               double[] cumulativeDistances,
+                                               double totalRouteDistanceMeters,
+                                               double lastKnownFraction,
+                                               double windowFraction) {
         if (lastKnownFraction < 0 || windowFraction <= 0) {
             return snapToNearestSegment(gpsLat, gpsLon, routePoints, totalRouteDistanceMeters);
         }
@@ -66,35 +76,43 @@ public class MapMatchingService {
         double fracMin = Math.max(0, lastKnownFraction - windowFraction);
         double fracMax = Math.min(1, lastKnownFraction + windowFraction);
 
+        int fromIdx;
+        int toIdx;
+        if (cumulativeDistances != null && cumulativeDistances.length == routePoints.size()) {
+            double targetMin = fracMin * totalRouteDistanceMeters;
+            double targetMax = fracMax * totalRouteDistanceMeters;
+            fromIdx = Math.max(0, binarySearchSegment(cumulativeDistances, targetMin) - 1);
+            toIdx = Math.min(routePoints.size() - 2, binarySearchSegment(cumulativeDistances, targetMax));
+        } else {
+            fromIdx = 0;
+            toIdx = routePoints.size() - 2;
+        }
+
         double minDist = Double.MAX_VALUE;
         double bestLat = gpsLat, bestLon = gpsLon, bestFraction = 0;
-        double accumLen = 0;
 
-        for (int i = 0; i < routePoints.size() - 1; i++) {
+        for (int i = fromIdx; i <= toIdx; i++) {
             double[] a = routePoints.get(i);
             double[] b = routePoints.get(i + 1);
-            double segLen = haversine(a, b);
+            double segLen = (cumulativeDistances != null)
+                    ? cumulativeDistances[i + 1] - cumulativeDistances[i]
+                    : haversine(a, b);
+            double accumLen = (cumulativeDistances != null)
+                    ? cumulativeDistances[i]
+                    : sumSegments(routePoints, i);
 
-            double segFracStart = accumLen / totalRouteDistanceMeters;
-            double segFracEnd = (accumLen + segLen) / totalRouteDistanceMeters;
-
-            boolean overlaps = segFracStart <= fracMax && segFracEnd >= fracMin;
-            if (overlaps) {
-                ProjectionResult proj = projectPointOnSegment(gpsLat, gpsLon, a, b);
-                if (proj.distance < minDist) {
-                    minDist = proj.distance;
-                    bestLat = proj.lat;
-                    bestLon = proj.lon;
-                    bestFraction = (accumLen + segLen * proj.t) / totalRouteDistanceMeters;
-                }
+            ProjectionResult proj = projectPointOnSegment(gpsLat, gpsLon, a, b);
+            if (proj.distance < minDist) {
+                minDist = proj.distance;
+                bestLat = proj.lat;
+                bestLon = proj.lon;
+                bestFraction = (accumLen + segLen * proj.t) / totalRouteDistanceMeters;
             }
-
-            accumLen += segLen;
         }
 
         if (minDist <= MAX_SNAP_DISTANCE_METERS) {
-            log.debug(String.format("[GPS_PIPELINE] SNAP_CONTINUITY window=[%.4f..%.4f] dist=%.1fm frac=%.4f",
-                    fracMin, fracMax, minDist, bestFraction));
+            log.debug(String.format("[GPS_PIPELINE] SNAP_CONTINUITY window=[%.4f..%.4f] segs=[%d..%d] dist=%.1fm frac=%.4f",
+                    fracMin, fracMax, fromIdx, toIdx, minDist, bestFraction));
             return new SnappedResult(bestLat, bestLon, bestFraction, minDist, true);
         }
 
@@ -103,15 +121,50 @@ public class MapMatchingService {
         return snapToNearestSegment(gpsLat, gpsLon, routePoints, totalRouteDistanceMeters);
     }
 
+    private static int binarySearchSegment(double[] cumDist, double target) {
+        int idx = java.util.Arrays.binarySearch(cumDist, target);
+        if (idx >= 0) {
+            return idx;
+        }
+        int insertion = -idx - 1;
+        return Math.max(0, insertion - 1);
+    }
+
+    private static double sumSegments(List<double[]> points, int segmentIndex) {
+        double sum = 0;
+        for (int i = 0; i < segmentIndex; i++) {
+            sum += haversine(points.get(i), points.get(i + 1));
+        }
+        return sum;
+    }
+
     public double[] interpolateRoutePoint(List<double[]> routePoints, double fraction,
                                           double totalRouteDistanceMeters) {
+        return interpolateRoutePoint(routePoints, null, fraction, totalRouteDistanceMeters);
+    }
+
+    public double[] interpolateRoutePoint(List<double[]> routePoints, double[] cumulativeDistances,
+                                          double fraction, double totalRouteDistanceMeters) {
         if (routePoints == null || routePoints.isEmpty()) return null;
         if (fraction <= 0) return routePoints.get(0).clone();
         if (fraction >= 1) return routePoints.get(routePoints.size() - 1).clone();
 
         double target = fraction * totalRouteDistanceMeters;
-        double accum  = 0;
 
+        if (cumulativeDistances != null && cumulativeDistances.length == routePoints.size()) {
+            int i = binarySearchSegment(cumulativeDistances, target);
+            i = Math.min(i, routePoints.size() - 2);
+            double[] a = routePoints.get(i);
+            double[] b = routePoints.get(i + 1);
+            double segLen = cumulativeDistances[i + 1] - cumulativeDistances[i];
+            double t = (segLen == 0) ? 0 : (target - cumulativeDistances[i]) / segLen;
+            return new double[]{
+                    a[0] + t * (b[0] - a[0]),
+                    a[1] + t * (b[1] - a[1])
+            };
+        }
+
+        double accum = 0;
         for (int i = 0; i < routePoints.size() - 1; i++) {
             double[] a = routePoints.get(i);
             double[] b = routePoints.get(i + 1);
@@ -130,29 +183,37 @@ public class MapMatchingService {
         return routePoints.get(routePoints.size() - 1).clone();
     }
 
-  
+
     public double calculateCourseFromRoute(List<double[]> routePoints, double fraction,
                                            int direction, double totalRouteDistanceMeters) {
+        return calculateCourseFromRoute(routePoints, null, fraction, direction, totalRouteDistanceMeters);
+    }
+
+    public double calculateCourseFromRoute(List<double[]> routePoints, double[] cumulativeDistances,
+                                           double fraction, int direction, double totalRouteDistanceMeters) {
         if (routePoints == null || routePoints.size() < 2) return 0;
 
-        double target  = fraction * totalRouteDistanceMeters;
-        double accum   = 0;
+        double target = fraction * totalRouteDistanceMeters;
+        int segIndex;
 
-        int segIndex = routePoints.size() - 2;
-        for (int i = 0; i < routePoints.size() - 1; i++) {
-            double segLen = haversine(routePoints.get(i), routePoints.get(i + 1));
-            accum += segLen;
-            if (accum >= target) {
-                segIndex = i;
-                break;
+        if (cumulativeDistances != null && cumulativeDistances.length == routePoints.size()) {
+            segIndex = Math.min(binarySearchSegment(cumulativeDistances, target), routePoints.size() - 2);
+        } else {
+            double accum = 0;
+            segIndex = routePoints.size() - 2;
+            for (int i = 0; i < routePoints.size() - 1; i++) {
+                double segLen = haversine(routePoints.get(i), routePoints.get(i + 1));
+                accum += segLen;
+                if (accum >= target) {
+                    segIndex = i;
+                    break;
+                }
             }
         }
 
         double[] a = routePoints.get(segIndex);
         double[] b = routePoints.get(segIndex + 1);
-        double bearing = bearingDegrees(a[0], a[1], b[0], b[1]);
-
-        return bearing;
+        return bearingDegrees(a[0], a[1], b[0], b[1]);
     }
 
     private ProjectionResult projectPointOnSegment(double lat, double lon,

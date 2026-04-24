@@ -13,10 +13,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 class SnapCorrector {
 
-    private static final double DIRECTION_FLIP_THRESHOLD_DEG = 90.0;
-    private static final int OPPOSITE_SNAP_THRESHOLD = 3;
-    private static final double MAX_CORRECTION_DISTANCE_METERS = 50.0;
-    private static final double TERMINAL_FLIP_MAX_PHYSICAL_JUMP_METERS = 500.0;
 
     private final PredictionProperties properties;
     private final RouteGeometryCache routeGeometryCache;
@@ -82,10 +78,11 @@ class SnapCorrector {
         }
 
         double totalDist = routeGeometryCache.getTotalDistance(routeNumber, direction);
+        double[] cumDist = routeGeometryCache.getCumulativeDistances(routeNumber, direction);
         log.debug("[GPS_PIPELINE] SNAP_ATTEMPT vehicle={} route={} dir={} lat={} lon={}",
                 vehicleId, routeNumber, direction, latitude, longitude);
         MapMatchingService.SnappedResult snap = (existing != null && existing.getLastGpsFraction() >= 0)
-                ? mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, totalDist,
+                ? mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, cumDist, totalDist,
                         existing.getLastGpsFraction(), 0.20)
                 : mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, totalDist);
 
@@ -94,10 +91,10 @@ class SnapCorrector {
 
         if (snap.snapped() && course > 1.0) {
             double routeHeading = mapMatchingService.calculateCourseFromRoute(
-                    routeCoords, snap.fraction(), direction, totalDist);
+                    routeCoords, cumDist, snap.fraction(), direction, totalDist);
             double headingDiff = Math.abs(course - routeHeading);
             if (headingDiff > 180) headingDiff = 360 - headingDiff;
-            if (headingDiff > DIRECTION_FLIP_THRESHOLD_DEG) {
+            if (headingDiff > properties.getDirectionFlipThresholdDeg()) {
                 int flippedDir = (direction == 0) ? 1 : 0;
                 List<double[]> flippedCoords = routeGeometryCache.getPoints(routeNumber, flippedDir);
                 if (flippedCoords != null) {
@@ -279,14 +276,14 @@ class SnapCorrector {
                 predictedLat = snap.latitude();
                 predictedLon = snap.longitude();
                 fraction = realFraction;
-                course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction, totalDist);
+                course = mapMatchingService.calculateCourseFromRoute(routeCoords, cumDist, fraction, direction, totalDist);
                 newRejectedFrac = -1;
                 newImplausibleCount = 0;
             } else {
                 predictedLat = existing.getPredictedLatitude();
                 predictedLon = existing.getPredictedLongitude();
                 fraction = existing.getFractionOnRoute();
-                course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction, totalDist);
+                course = mapMatchingService.calculateCourseFromRoute(routeCoords, cumDist, fraction, direction, totalDist);
                 log.trace("GPS behind predicted for vehicle {} (real={}, predicted={}); keeping predicted",
                         vehicleId, realFraction, predictedFraction);
             }
@@ -303,13 +300,16 @@ class SnapCorrector {
                 double oppositeDist = routeGeometryCache.getTotalDistance(routeNumber, oppositeDir);
                 MapMatchingService.SnappedResult oppositeSnap =
                         mapMatchingService.snapToNearestSegment(latitude, longitude, oppositeCoords, oppositeDist);
-                if (oppositeSnap.snapped()) {
+                boolean oppositePlausible = oppositeSnap.snapped()
+                        && isDirectionFlipPhysicallyPlausible(vehicleId, "OPPOSITE_FALLBACK",
+                                existing, oppositeSnap, oppositeSnap.fraction());
+                if (oppositePlausible) {
                     log.debug("[GPS_PIPELINE] SNAP_OPPOSITE vehicle={} route={} dir={}→{} dist={}m (primary={}m)",
                             vehicleId, routeNumber, direction, oppositeDir,
                             String.format("%.1f", oppositeSnap.distanceMeters()),
                             String.format("%.1f", snap.distanceMeters()));
                     int snapCount = consecutiveOppositeSnaps.merge(vehicleId, 1, Integer::sum);
-                    if (snapCount >= OPPOSITE_SNAP_THRESHOLD) {
+                    if (snapCount >= properties.getOppositeSnapThreshold()) {
                         pendingDirectionFixes.put(vehicleId, oppositeDir);
                         log.info("[GPS_PIPELINE] DIR_AUTO_FIX vehicle={} route={} dir={}→{} ({}x consecutive opposite snap)",
                                 vehicleId, routeNumber, direction, oppositeDir, snapCount);
@@ -323,13 +323,30 @@ class SnapCorrector {
                     predictedLat = snap.latitude();
                     predictedLon = snap.longitude();
                     fraction = realFractionOpposite;
-                    course = mapMatchingService.calculateCourseFromRoute(routeCoords, fraction, direction, totalDist);
+                    double[] oppositeCumDist = routeGeometryCache.getCumulativeDistances(routeNumber, direction);
+                    course = mapMatchingService.calculateCourseFromRoute(routeCoords, oppositeCumDist, fraction, direction, totalDist);
                 } else {
-                    log.debug("[GPS_PIPELINE] SNAP_FAIL vehicle={} route={} dist={}m (opposite={}m) > threshold={}m → keeping predicted on route, awaiting re-snap",
-                            vehicleId, routeNumber,
-                            String.format("%.1f", snap.distanceMeters()),
-                            String.format("%.1f", oppositeSnap.distanceMeters()),
-                            (int) MapMatchingService.MAX_SNAP_DISTANCE_METERS);
+                    if (oppositeSnap.snapped()) {
+                        double physicalJumpMeters = existing != null
+                                && existing.getPredictedLatitude() != 0.0
+                                && existing.getPredictedLongitude() != 0.0
+                                ? DistanceCalculationService.haversineDistanceMeters(
+                                        existing.getPredictedLatitude(), existing.getPredictedLongitude(),
+                                        oppositeSnap.latitude(), oppositeSnap.longitude())
+                                : -1;
+                        log.warn("[GPS_PIPELINE] OPPOSITE_FALLBACK_REJECTED vehicle={} plate={} route={} dir={}→{} " +
+                                        "primaryDist={}m oppositeDist={}m physicalJump={}m — GPS noise near parallel lanes, keeping predicted on route",
+                                vehicleId, licensePlate, routeNumber, direction, oppositeDir,
+                                String.format("%.1f", snap.distanceMeters()),
+                                String.format("%.1f", oppositeSnap.distanceMeters()),
+                                physicalJumpMeters >= 0 ? String.format("%.0f", physicalJumpMeters) : "-");
+                    } else {
+                        log.debug("[GPS_PIPELINE] SNAP_FAIL vehicle={} route={} dist={}m (opposite={}m) > threshold={}m → keeping predicted on route, awaiting re-snap",
+                                vehicleId, routeNumber,
+                                String.format("%.1f", snap.distanceMeters()),
+                                String.format("%.1f", oppositeSnap.distanceMeters()),
+                                (int) MapMatchingService.MAX_SNAP_DISTANCE_METERS);
+                    }
                     consecutiveOppositeSnaps.remove(vehicleId);
                     predictedLat = existing != null ? existing.getPredictedLatitude() : latitude;
                     predictedLon = existing != null ? existing.getPredictedLongitude() : longitude;
@@ -391,12 +408,12 @@ class SnapCorrector {
                 flippedSnap.latitude(), flippedSnap.longitude());
 
         if (curNearTerminal || predNearTerminal) {
-            if (physicalJumpMeters > TERMINAL_FLIP_MAX_PHYSICAL_JUMP_METERS) {
+            if (physicalJumpMeters > properties.getTerminalFlipMaxPhysicalJumpMeters()) {
                 log.warn("[GPS_PIPELINE] DIR_FLIP_REJECTED_TERMINAL_FAR vehicle={} trigger={} physicalJump={}m > {}m " +
                                 "curFrac={} predFrac={} — at-terminal, but flipped snap is physically far (likely two close terminals on different routes)",
                         vehicleId, trigger,
                         String.format("%.0f", physicalJumpMeters),
-                        (int) TERMINAL_FLIP_MAX_PHYSICAL_JUMP_METERS,
+                        (int) properties.getTerminalFlipMaxPhysicalJumpMeters(),
                         curFraction >= 0 ? String.format("%.4f", curFraction) : "-",
                         existing.getFractionOnRoute() >= 0 ? String.format("%.4f", existing.getFractionOnRoute()) : "-");
                 return false;
@@ -423,17 +440,4 @@ class SnapCorrector {
         return false;
     }
 
-    private double blendOrAccept(VehiclePredictionState existing, double realLat, double realLon,
-                                  boolean isLat) {
-        if (existing == null) return isLat ? realLat : realLon;
-        double dist = DistanceCalculationService.haversineDistanceMeters(
-                existing.getPredictedLatitude(), existing.getPredictedLongitude(), realLat, realLon);
-        double cf = properties.getConservativeSpeedFactor();
-        if (dist <= MAX_CORRECTION_DISTANCE_METERS) {
-            return isLat
-                    ? existing.getPredictedLatitude() + cf * (realLat - existing.getPredictedLatitude())
-                    : existing.getPredictedLongitude() + cf * (realLon - existing.getPredictedLongitude());
-        }
-        return isLat ? realLat : realLon;
-    }
 }

@@ -41,9 +41,11 @@ import reactor.core.scheduler.Schedulers;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import java.time.Instant;
@@ -55,9 +57,11 @@ import java.time.ZoneOffset;
 public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionDTO>, VehiclePositionUpdateResult> {
 
     private static final long FORCE_PUBLISH_INTERVAL_SECONDS = 20;
-    private static final long MAX_GPS_AGE_SECONDS = 600;
+    private static final long MAX_GPS_AGE_SECONDS = 120;
+    private static final long IDEMPOTENCY_TTL_SECONDS = 60;
 
     private final ConcurrentHashMap<String, Instant> lastPublishedTime = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, LocalDateTime> lastProcessedFixTimeByDevice = new ConcurrentHashMap<>();
 
     private final VehicleRepository vehicleRepository;
     private final VehicleFactory vehicleFactory;
@@ -154,13 +158,13 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     gpsPositions.size(), validPositions.size(), invalidCount);
 
             if (validPositions.isEmpty()) {
-                log.warn("All positions failed validation: {}", validationCounts);
+                log.warn("[GPS_PIPELINE] All positions failed validation: {}", validationCounts);
                 return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, gpsPositions.size() - validPositions.size(), 0, LocalDateTime.now(), List.of()));
             }
 
             final LocalDateTime staleCutoff = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(MAX_GPS_AGE_SECONDS);
             final List<GpsPositionDTO> freshPositions = validPositions.stream()
-                    .filter(pos -> pos.getFixTime() == null || !pos.getFixTime().isBefore(staleCutoff))
+                    .filter(pos -> pos.getFixTime() != null && !pos.getFixTime().isBefore(staleCutoff))
                     .toList();
             if (freshPositions.size() < validPositions.size()) {
                 log.debug("[GPS_PIPELINE] STALE_FILTER dropped={}/{} (age > {}s)",
@@ -172,26 +176,73 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validPositions.size(), 0, LocalDateTime.now(), List.of()));
             }
 
-            List<String> deviceIds = freshPositions.stream()
+            final List<GpsPositionDTO> highQualityPositions = freshPositions.stream()
+                    .filter(pos -> {
+                        if (pos.isHighQualityFix()) {
+                            return true;
+                        }
+                        log.debug("[GPS_PIPELINE] QUALITY_REJECTED device={} hdop={} sat={}",
+                                pos.getDeviceId(), pos.getHdop(), pos.getSatellites());
+                        return false;
+                    })
+                    .toList();
+            int qualityDropped = freshPositions.size() - highQualityPositions.size();
+            if (qualityDropped > 0) {
+                log.debug("[GPS_PIPELINE] QUALITY_FILTER passed={} rejected={}",
+                        highQualityPositions.size(), qualityDropped);
+            }
+            if (highQualityPositions.isEmpty()) {
+                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, freshPositions.size(), 0, LocalDateTime.now(), List.of()));
+            }
+
+            final List<GpsPositionDTO> idempotencyFiltered = highQualityPositions.stream()
+                    .filter(pos -> {
+                        String deviceId = pos.getDeviceId();
+                        LocalDateTime fixTime = pos.getFixTime();
+                        if (deviceId == null || fixTime == null) {
+                            return true;
+                        }
+                        LocalDateTime lastSeen = lastProcessedFixTimeByDevice.get(deviceId);
+                        return lastSeen == null || fixTime.isAfter(lastSeen);
+                    })
+                    .toList();
+            int duplicateDropped = highQualityPositions.size() - idempotencyFiltered.size();
+            if (duplicateDropped > 0) {
+                log.debug("[GPS_PIPELINE] IDEMPOTENCY_FILTER passed={} duplicates_skipped={}",
+                        idempotencyFiltered.size(), duplicateDropped);
+            }
+            if (idempotencyFiltered.isEmpty()) {
+                log.debug("[GPS_PIPELINE] CYCLE_SKIPPED_NO_FRESH_DATA all {} positions already processed",
+                        highQualityPositions.size());
+                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, 0, 0, LocalDateTime.now(), List.of()));
+            }
+            for (GpsPositionDTO pos : idempotencyFiltered) {
+                if (pos.getDeviceId() != null && pos.getFixTime() != null) {
+                    lastProcessedFixTimeByDevice.merge(pos.getDeviceId(), pos.getFixTime(),
+                            (existing, incoming) -> incoming.isAfter(existing) ? incoming : existing);
+                }
+            }
+
+            List<String> deviceIds = idempotencyFiltered.stream()
                     .map(GpsPositionDTO::getDeviceId)
                     .filter(deviceId -> deviceId != null && !deviceId.isBlank())
                     .distinct()
                     .toList();
 
             if (deviceIds.isEmpty()) {
-                log.warn("No valid device IDs found after filtering {} positions", freshPositions.size());
+                log.warn("[GPS_PIPELINE] No valid device IDs found after filtering {} positions", freshPositions.size());
                 return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, freshPositions.size(), 0, LocalDateTime.now(), List.of()));
             }
 
-            final int validCount = freshPositions.size();
-            return filterOutliers(freshPositions)
+            final int validCount = idempotencyFiltered.size();
+            return filterOutliers(idempotencyFiltered)
                     .flatMap(filteredPositions -> {
                         int outlierCount = validCount - filteredPositions.size();
                         log.debug("[GPS_PIPELINE] OUTLIER_FILTER passed={} rejected={}",
                                 filteredPositions.size(), outlierCount);
 
                         if (filteredPositions.isEmpty()) {
-                            log.warn("All {} positions were filtered as outliers", validCount);
+                            log.warn("[GPS_PIPELINE] All {} positions were filtered as outliers", validCount);
                             return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validCount, 0, LocalDateTime.now(), List.of()));
                         }
 
@@ -204,9 +255,9 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         return vehicleRepository.findByDeviceIds(filteredDeviceIds)
                                 .flatMap(existingVehiclesMap -> processBatch(filteredPositions, existingVehiclesMap));
                     })
-                    .doOnSuccess(result -> log.debug("GPS batch update completed: {}", result.updatedCount()))
+                    .doOnSuccess(result -> log.debug("[GPS_PIPELINE] GPS batch update completed: {}", result.updatedCount()))
                     .onErrorResume(error -> {
-                        log.error("GPS batch update failed, sending {} positions to DLQ", validPositions.size(), error);
+                        log.error("[GPS_PIPELINE] GPS batch update failed, sending {} positions to DLQ", validPositions.size(), error);
                         return Flux.fromIterable(validPositions)
                                 .flatMap(pos -> sendToDeadLetterQueue(pos, error))
                                 .then(Mono.just(new VehiclePositionUpdateResult(
@@ -217,7 +268,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         });
     }
 
-    private static final int OUTLIER_DETECTION_CONCURRENCY = 4;
+    private static final int OUTLIER_DETECTION_CONCURRENCY = 32;
     private static final int GARAGE_DETECTION_CONCURRENCY = 2;
 
     private Mono<List<GpsPositionDTO>> filterOutliers(List<GpsPositionDTO> positions) {
@@ -229,11 +280,27 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         boolean rejectOutliers = outlierDetectionProperties.isRejectOutliers();
         boolean rejectFrozenMotion = outlierDetectionProperties.isRejectFrozenMotion();
 
-        return Flux.fromIterable(positions)
-                .flatMap(position -> detectOutlierForPosition(position, historyLimit)
-                        .map(result -> new PositionWithOutlierResult(position, result)),
-                        OUTLIER_DETECTION_CONCURRENCY)
-                .collectList()
+        List<String> deviceIds = positions.stream()
+                .map(GpsPositionDTO::getDeviceId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        return gpsHistoryService.getHistoryBatch(deviceIds, historyLimit)
+                .flatMap(historyByDevice -> Flux.fromIterable(positions)
+                        .map(position -> {
+                            var history = historyByDevice.getOrDefault(position.getDeviceId(), List.of());
+                            OutlierDetectionResult detection = outlierDetector.detectWithHistory(
+                                    position.getDeviceId(),
+                                    position.getLatitude(),
+                                    position.getLongitude(),
+                                    position.getFixTime(),
+                                    history,
+                                    position.getSpeed()
+                            );
+                            return new PositionWithOutlierResult(position, detection);
+                        })
+                        .collectList())
                 .map(results -> {
                     List<GpsPositionDTO> nonOutliers = new ArrayList<>();
                     List<OutlierDetectionResult> allResults = new ArrayList<>();
@@ -269,31 +336,11 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
                     int totalRejected = teleportRejected + frozenRejected;
                     if (totalRejected > 0) {
-                        log.info("Outlier filter: {}/{} positions rejected (teleport={}, frozen={})",
+                        log.info("[GPS_PIPELINE] Outlier filter: {}/{} positions rejected (teleport={}, frozen={})",
                                 totalRejected, positions.size(), teleportRejected, frozenRejected);
                     }
 
                     return nonOutliers;
-                });
-    }
-
-    private Mono<OutlierDetectionResult> detectOutlierForPosition(GpsPositionDTO position, int historyLimit) {
-        String deviceId = position.getDeviceId();
-
-        return gpsHistoryService.getHistoryList(deviceId, historyLimit)
-                .publishOn(Schedulers.boundedElastic())
-                .map(history -> outlierDetector.detectWithHistory(
-                        deviceId,
-                        position.getLatitude(),
-                        position.getLongitude(),
-                        position.getFixTime(),
-                        history,
-                        position.getSpeed() 
-                ))
-                .onErrorResume(error -> {
-                    log.warn("Failed to check outlier for device {}: {}", deviceId, error.getMessage());
-                    return Mono.just(OutlierDetectionResult.noHistory(deviceId,
-                            outlierDetectionProperties.getMaxImpliedSpeedKmh()));
                 });
     }
 
@@ -390,6 +437,13 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         Map<String, double[]> oldCoordsByVehicleId = new HashMap<>();
         Map<String, Boolean> hasSignificantChangeById = new HashMap<>();
         Map<String, Boolean> frozenCoordsWithMotionById = new HashMap<>();
+        Set<String> frozenCoordsDeviceIds = new HashSet<>();
+        Map<String, Boolean> bufferedByDeviceId = new HashMap<>();
+        for (GpsPositionDTO pos : latestPositionsByDevice.values()) {
+            if (pos.getDeviceId() != null) {
+                bufferedByDeviceId.put(pos.getDeviceId(), pos.isLikelyBuffered());
+            }
+        }
 
         for (GpsPositionDTO gpsPosition : latestPositionsByDevice.values()) {
             try {
@@ -436,6 +490,9 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 String.format("%.1f", updatedVehicle.getSpeedKmh()),
                                 String.format("%.6f", updatedVehicle.getCurrentLatitude()),
                                 String.format("%.6f", updatedVehicle.getCurrentLongitude()));
+                        if (gpsPosition.getDeviceId() != null) {
+                            frozenCoordsDeviceIds.add(gpsPosition.getDeviceId());
+                        }
                     }
 
                     pipelineTracer.traceDbSave(
@@ -508,7 +565,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             );
                 }
             } catch (IllegalArgumentException e) {
-                log.warn("Invalid GPS data for device {}: {}", gpsPosition.getDeviceId(), e.getMessage());
+                log.warn("[GPS_PIPELINE] Invalid GPS data for device {}: {}", gpsPosition.getDeviceId(), e.getMessage());
                 statuses.add(VehicleUpdateStatus.invalid(gpsPosition.getDeviceId(), e.getMessage()));
             }
         }
@@ -546,25 +603,32 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
         return vehiclesWithGarageDetection.flatMap(updatedVehicles -> {
             for (Vehicle v : updatedVehicles) {
-                if (v.getCurrentLatitude() != null && v.getCurrentLongitude() != null) {
-                    predictionService.onGpsUpdate(
-                            v.getId().getValue(),
-                            v.getLicensePlate(),
-                            v.getRouteNumber(),
-                            v.getCurrentLatitude(),
-                            v.getCurrentLongitude(),
-                            v.getSpeedKmh() != null ? v.getSpeedKmh() : 0.0,
-                            (v.getCourse() != null && v.getCourse() > 0.0)
-                                    ? v.getCourse()
-                                    : estimatedBearings.getOrDefault(v.getId().getValue(), 0.0),
-                            Boolean.TRUE.equals(v.getIsInMotion()),
-                            v.getLastPositionUpdate() != null
-                                    ? v.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
-                                    : Instant.now(),
-                            v.getCurrentDirection() != null ? v.getCurrentDirection() : 0,
-                            Boolean.TRUE.equals(v.getIsInGarage())
-                    );
+                if (v.getCurrentLatitude() == null || v.getCurrentLongitude() == null) {
+                    continue;
                 }
+                if (Boolean.TRUE.equals(frozenCoordsWithMotionById.get(v.getId().getValue()))) {
+                    log.debug("[GPS_PIPELINE] FROZEN_FIX_SKIP_PREDICTION vehicle={} plate={} — prediction advance + history suppressed",
+                            v.getId().getValue(), v.getLicensePlate());
+                    continue;
+                }
+                predictionService.onGpsUpdate(
+                        v.getId().getValue(),
+                        v.getLicensePlate(),
+                        v.getRouteNumber(),
+                        v.getCurrentLatitude(),
+                        v.getCurrentLongitude(),
+                        v.getSpeedKmh() != null ? v.getSpeedKmh() : 0.0,
+                        (v.getCourse() != null && v.getCourse() > 0.0)
+                                ? v.getCourse()
+                                : estimatedBearings.getOrDefault(v.getId().getValue(), 0.0),
+                        Boolean.TRUE.equals(v.getIsInMotion()),
+                        v.getLastPositionUpdate() != null
+                                ? v.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
+                                : Instant.now(),
+                        v.getCurrentDirection() != null ? v.getCurrentDirection() : 0,
+                        Boolean.TRUE.equals(v.getIsInGarage()),
+                        Boolean.TRUE.equals(bufferedByDeviceId.get(v.getDeviceId()))
+                );
             }
 
             List<Vehicle> gatedVehicles = updatedVehicles.stream()
@@ -601,6 +665,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
                         return Flux.fromIterable(latestPositionsByDevice.values())
                                 .filter(p -> p.getLatitude() != null && p.getLongitude() != null)
+                                .filter(p -> !frozenCoordsDeviceIds.contains(p.getDeviceId()))
                                 .flatMap(p -> gpsHistoryService.addPoint(
                                         p.getDeviceId(),
                                         p.getLatitude(),
@@ -609,14 +674,15 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                         p.getFixTime()
                                 ), 5)
                                 .then(Mono.defer(() -> {
-                                    log.debug("Saved raw GPS history for {} winners", rawWinnersWithPosition);
+                                    log.debug("[GPS_PIPELINE] Saved raw GPS history for {} winners (frozen-skipped={})",
+                                            rawWinnersWithPosition - frozenCoordsDeviceIds.size(),
+                                            frozenCoordsDeviceIds.size());
                                     return Mono.just(tuple);
                                 }));
                     })
                     .map(tuple -> {
                         log.debug("Batch operations: {} updated, {} created, {} direction fixes",
                                 tuple.getT1(), tuple.getT2().size(), tuple.getT3());
-                        cleanupStalePublishTimes();
                         return createResult(statuses);
                     });
         });
@@ -685,9 +751,28 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         return secondsSinceLastPublish >= FORCE_PUBLISH_INTERVAL_SECONDS;
     }
 
-    private void cleanupStalePublishTimes() {
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60_000)
+    void cleanupStalePublishTimes() {
         Instant cutoff = Instant.now().minusSeconds(300);
+        int before = lastPublishedTime.size();
         lastPublishedTime.entrySet().removeIf(entry -> entry.getValue().isBefore(cutoff));
+        int after = lastPublishedTime.size();
+        if (before != after) {
+            log.debug("[GPS_PIPELINE] lastPublishedTime cleanup: removed {} entries ({} -> {})",
+                    before - after, before, after);
+        }
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60_000)
+    void cleanupStaleIdempotencyEntries() {
+        LocalDateTime cutoff = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(IDEMPOTENCY_TTL_SECONDS);
+        int before = lastProcessedFixTimeByDevice.size();
+        lastProcessedFixTimeByDevice.entrySet().removeIf(entry -> entry.getValue().isBefore(cutoff));
+        int after = lastProcessedFixTimeByDevice.size();
+        if (before != after) {
+            log.debug("[GPS_PIPELINE] idempotency cleanup: removed {} entries ({} -> {})",
+                    before - after, before, after);
+        }
     }
 
     private static double computeBearing(double lat1, double lon1, double lat2, double lon2) {

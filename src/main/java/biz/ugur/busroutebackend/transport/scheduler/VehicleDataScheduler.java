@@ -71,7 +71,27 @@ public class VehicleDataScheduler {
     public void start() {
         if (running.compareAndSet(false, true)) {
             log.info("Starting GPS update scheduler loop");
-            scheduleNextUpdate();
+            Duration interval = schedulerProperties.getUpdateInterval();
+            schedulerDisposable = Flux.interval(interval, interval)
+                    .filter(tick -> running.get())
+                    .filter(tick -> {
+                        if (isActiveHours()) {
+                            return true;
+                        }
+                        log.debug("Outside active hours ({}-{}), skipping GPS update",
+                                schedulerProperties.getActiveHours().getStart(),
+                                schedulerProperties.getActiveHours().getEnd());
+                        return false;
+                    })
+                    .concatMap(tick -> executeWithLock()
+                            .onErrorResume(err -> {
+                                log.error("[GPS_PIPELINE] GPS scheduler tick failed: {}", err.getMessage());
+                                return Mono.empty();
+                            }))
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .subscribe(
+                            null,
+                            err -> log.error("[GPS_PIPELINE] GPS scheduler stream terminated unexpectedly", err));
         }
     }
 
@@ -82,26 +102,6 @@ public class VehicleDataScheduler {
             schedulerDisposable.dispose();
             log.info("GPS update scheduler stopped");
         }
-    }
-
-    private void scheduleNextUpdate() {
-        if (!running.get()) {
-            return;
-        }
-
-        schedulerDisposable = Mono.delay(schedulerProperties.getUpdateInterval())
-                .publishOn(Schedulers.boundedElastic())
-                .flatMap(tick -> {
-                    if (!isActiveHours()) {
-                        log.debug("Outside active hours ({}-{}), skipping GPS update",
-                                schedulerProperties.getActiveHours().getStart(),
-                                schedulerProperties.getActiveHours().getEnd());
-                        return Mono.empty();
-                    }
-                    return executeWithLock();
-                })
-                .doFinally(signal -> scheduleNextUpdate())
-                .subscribe();
     }
 
     private boolean isActiveHours() {

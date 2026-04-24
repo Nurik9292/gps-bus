@@ -2,7 +2,6 @@ package biz.ugur.busroutebackend.transport.infrastructure.messaging;
 
 import biz.ugur.busroutebackend.shared.infrastructure.cache.RedisKeyRegistry;
 import biz.ugur.busroutebackend.shared.infrastructure.messaging.ReactiveEventBus;
-import biz.ugur.busroutebackend.transport.application.services.VehicleEtaEnricherService;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleAssignedToRouteEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent;
@@ -20,7 +19,6 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.Semaphore;
 
 
 @Component
@@ -30,18 +28,14 @@ public class VehicleEventHandler {
     private static final Duration OPERATION_TIMEOUT = Duration.ofSeconds(5);
     private static final int MAX_RETRY_ATTEMPTS = 2;
     private static final Duration RETRY_DELAY = Duration.ofMillis(100);
-    private static final Duration ETA_ENRICHMENT_TIMEOUT = Duration.ofMillis(500);
 
     private static final int POSITION_CONCURRENCY = 16;
-    private static final int MAX_ETA_CONCURRENCY = 3;
-    private final Semaphore etaSemaphore = new Semaphore(MAX_ETA_CONCURRENCY);
     private static final int ROUTE_ASSIGNMENT_CONCURRENCY = 16;
     private static final int REGISTRATION_CONCURRENCY = 8;
 
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final VehiclePositionWebSocketPublisher webSocketPublisher;
     private final ReactiveEventBus reactiveEventBus;
-    private final VehicleEtaEnricherService vehicleEtaEnricherService;
     private final PredictionProperties predictionProperties;
 
     private Disposable positionSubscription;
@@ -51,12 +45,10 @@ public class VehicleEventHandler {
     public VehicleEventHandler(ReactiveRedisTemplate<String, Object> redisTemplate,
                                VehiclePositionWebSocketPublisher webSocketPublisher,
                                ReactiveEventBus reactiveEventBus,
-                               VehicleEtaEnricherService vehicleEtaEnricherService,
                                PredictionProperties predictionProperties) {
         this.redisTemplate = redisTemplate;
         this.webSocketPublisher = webSocketPublisher;
         this.reactiveEventBus = reactiveEventBus;
-        this.vehicleEtaEnricherService = vehicleEtaEnricherService;
         this.predictionProperties = predictionProperties;
     }
 
@@ -178,49 +170,6 @@ public class VehicleEventHandler {
                     }
                 });
     }
-
-    /*
-     * DEPRECATED — legacy WS_PUBLISH broadcast path.
-     * Single-source-ws refactor (2026-04-21) made PredictionBroadcaster the
-     * only WS source of truth. This method is kept temporarily (2 weeks) as
-     * a safety net in case prediction engine needs a fallback. Remove after
-     * 2026-05-05 if no regressions. When removing, also delete:
-     *   - webSocketPublisher, vehicleEtaEnricherService, etaSemaphore fields
-     *   - ETA_ENRICHMENT_TIMEOUT, MAX_ETA_CONCURRENCY constants
-     *   - VehiclePositionWebSocketMessage/VehicleEtaEnricherService imports
-     *
-    private Mono<Void> broadcastPositionUpdate(VehiclePositionUpdatedEvent event) {
-        VehiclePositionWebSocketMessage msg = new VehiclePositionWebSocketMessage(
-                event.getVehicleId(),
-                event.getLicensePlate(),
-                event.getRouteNumber(),
-                event.getLatitude(),
-                event.getLongitude(),
-                event.getSpeedKmh(),
-                event.getIsInMotion(),
-                event.getPositionTimestamp(),
-                event.getCourse(),
-                event.getLine()
-        );
-
-        if (event.getRouteNumber() == null) {
-            return webSocketPublisher.broadcastVehiclePosition(msg)
-                    .doOnSuccess(v -> log.trace("Broadcasted position: {}", event.getVehicleId()));
-        }
-
-        if (etaSemaphore.tryAcquire()) {
-            return vehicleEtaEnricherService.enrichWithEta(msg)
-                    .timeout(ETA_ENRICHMENT_TIMEOUT)
-                    .onErrorReturn(msg)
-                    .doFinally(signal -> etaSemaphore.release())
-                    .flatMap(webSocketPublisher::broadcastVehiclePosition)
-                    .doOnSuccess(v -> log.trace("Broadcasted position (ETA): {}", event.getVehicleId()));
-        } else {
-            return webSocketPublisher.broadcastVehiclePosition(msg)
-                    .doOnSuccess(v -> log.trace("Broadcasted position (no ETA slot): {}", event.getVehicleId()));
-        }
-    }
-    */
 
     private Mono<Boolean> updateRouteAssignmentCache(VehicleAssignedToRouteEvent event) {
         String key = RedisKeyRegistry.Vehicle.route(event.getVehicleId());

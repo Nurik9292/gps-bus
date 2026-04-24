@@ -27,9 +27,12 @@ public class RouteGeometryCache {
     public static final String BACKWARD = "_1";
 
     private final ConcurrentHashMap<String, List<double[]>>    pointsCache        = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, double[]>          cumulativeDistancesCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Double>            distanceCache      = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, double[]>          stopFractionsCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, List<RouteStopInfo>> routeStopsCache  = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, java.util.Map<String, Double>> stopFractionsByIdCache   = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, java.util.Map<String, Double>> stopFractionsByNameCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String>            routeNameCache     = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String>            routeColorCache    = new ConcurrentHashMap<>();
 
@@ -43,15 +46,19 @@ public class RouteGeometryCache {
 
     @PostConstruct
     public void init() {
-        try {
-            loadWithRetry().block(Duration.ofSeconds(60));
-            loaded = true;
-            log.info("Route geometry cache loaded synchronously: {} geometry entries, {} stop-fraction entries",
-                    pointsCache.size(), stopFractionsCache.size());
-        } catch (RuntimeException e) {
-            log.error("Route geometry cache init timed out — prediction will use dead-reckoning until cache warms up: {}",
-                    e.getMessage());
-        }
+        loadWithRetry()
+                .timeout(Duration.ofSeconds(60))
+                .doOnSuccess(v -> {
+                    loaded = true;
+                    log.info("Route geometry cache loaded: {} geometry entries, {} stop-fraction entries",
+                            pointsCache.size(), stopFractionsCache.size());
+                })
+                .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+                .subscribe(
+                        null,
+                        err -> log.error(
+                                "Route geometry cache failed to load — prediction falls back to dead-reckoning: {}",
+                                err.getMessage()));
     }
 
     public boolean isLoaded() {
@@ -104,6 +111,21 @@ public class RouteGeometryCache {
         if (fractions.length > 0) {
             stopFractionsCache.put(key, fractions);
             routeStopsCache.put(key, sorted);
+
+            java.util.Map<String, Double> byId = new java.util.HashMap<>();
+            java.util.Map<String, Double> byName = new java.util.HashMap<>();
+            for (RouteStopInfo s : sorted) {
+                double f = s.getDistanceFromStartMeters() / totalDistance;
+                if (s.getStopId() != null) {
+                    byId.put(s.getStopId(), f);
+                }
+                if (s.getStopName() != null) {
+                    byName.putIfAbsent(s.getStopName().toLowerCase(), f);
+                }
+            }
+            stopFractionsByIdCache.put(key, java.util.Map.copyOf(byId));
+            stopFractionsByNameCache.put(key, java.util.Map.copyOf(byName));
+
             log.debug("Cached {} stop fractions for route {} dir={}", fractions.length, routeNumber, direction);
         }
     }
@@ -153,22 +175,21 @@ public class RouteGeometryCache {
 
  
     public OptionalDouble getStopFraction(String routeNumber, int direction, String stopId) {
-        double totalDistance = getTotalDistance(routeNumber, direction);
-        if (totalDistance <= 0) return OptionalDouble.empty();
-        return getRouteStops(routeNumber, direction).stream()
-                .filter(s -> stopId.equals(s.getStopId()) && s.getDistanceFromStartMeters() != null)
-                .mapToDouble(s -> s.getDistanceFromStartMeters() / totalDistance)
-                .findFirst();
+        if (stopId == null) return OptionalDouble.empty();
+        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+        java.util.Map<String, Double> byId = stopFractionsByIdCache.get(key);
+        if (byId == null) return OptionalDouble.empty();
+        Double frac = byId.get(stopId);
+        return frac != null ? OptionalDouble.of(frac) : OptionalDouble.empty();
     }
 
     public OptionalDouble getStopFractionByName(String routeNumber, int direction, String stopName) {
         if (stopName == null || stopName.isBlank()) return OptionalDouble.empty();
-        double totalDistance = getTotalDistance(routeNumber, direction);
-        if (totalDistance <= 0) return OptionalDouble.empty();
-        return getRouteStops(routeNumber, direction).stream()
-                .filter(s -> stopName.equalsIgnoreCase(s.getStopName()) && s.getDistanceFromStartMeters() != null)
-                .mapToDouble(s -> s.getDistanceFromStartMeters() / totalDistance)
-                .findFirst();
+        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+        java.util.Map<String, Double> byName = stopFractionsByNameCache.get(key);
+        if (byName == null) return OptionalDouble.empty();
+        Double frac = byName.get(stopName.toLowerCase());
+        return frac != null ? OptionalDouble.of(frac) : OptionalDouble.empty();
     }
 
     public OptionalDouble getStopFractionByCoordinates(String routeNumber, int direction,
@@ -241,10 +262,24 @@ public class RouteGeometryCache {
 
             String key = routeNumber + suffix;
             pointsCache.put(key, points);
-            distanceCache.put(key, computeTotalDistance(points));
+
+            double[] cumDist = new double[points.size()];
+            cumDist[0] = 0;
+            for (int i = 1; i < points.size(); i++) {
+                cumDist[i] = cumDist[i - 1] + DistanceCalculationService.haversineDistanceMeters(
+                        points.get(i - 1)[0], points.get(i - 1)[1],
+                        points.get(i)[0], points.get(i)[1]);
+            }
+            cumulativeDistancesCache.put(key, cumDist);
+            distanceCache.put(key, cumDist[cumDist.length - 1]);
         } catch (Exception e) {
             log.warn("Cannot parse WKT for route {} {}: {}", routeNumber, suffix, e.getMessage());
         }
+    }
+
+    public double[] getCumulativeDistances(String routeNumber, int direction) {
+        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+        return cumulativeDistancesCache.get(key);
     }
 
    
@@ -266,13 +301,4 @@ public class RouteGeometryCache {
         return List.of(result);
     }
 
-    private static double computeTotalDistance(List<double[]> points) {
-        double total = 0;
-        for (int i = 0; i < points.size() - 1; i++) {
-            total += DistanceCalculationService.haversineDistanceMeters(
-                    points.get(i)[0], points.get(i)[1],
-                    points.get(i + 1)[0], points.get(i + 1)[1]);
-        }
-        return total;
-    }
 }

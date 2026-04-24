@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 
@@ -43,8 +44,34 @@ public class GpsPositionDTO {
     @JsonProperty("onlineState")
     private String onlineState;
 
+    @JsonProperty("serverTime")
+    private LocalDateTime serverTime;
+
+    @JsonProperty("deviceTime")
+    private LocalDateTime deviceTime;
+
+    @JsonProperty("hdop")
+    private Double hdop;
+
+    @JsonProperty("satellites")
+    private Integer satellites;
+
+    @JsonProperty("accuracy")
+    private Double accuracy;
+
     public boolean isOnline() {
         return "Online".equalsIgnoreCase(onlineState);
+    }
+
+    public boolean isLikelyBuffered() {
+        if (serverTime == null || deviceTime == null) {
+            return false;
+        }
+        return Duration.between(deviceTime, serverTime).toSeconds() > 30;
+    }
+
+    public boolean isHighQualityFix() {
+        return (hdop == null || hdop <= 5.0) && (satellites == null || satellites >= 4);
     }
 
     public String getVehicleName() {

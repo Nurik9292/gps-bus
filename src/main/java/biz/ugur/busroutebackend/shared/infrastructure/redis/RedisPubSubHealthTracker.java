@@ -26,8 +26,11 @@ public class RedisPubSubHealthTracker {
     private final AtomicLong consecutiveFailures = new AtomicLong(0);
     private final AtomicLong totalFailures = new AtomicLong(0);
     private final AtomicLong totalSuccesses = new AtomicLong(0);
+    private final AtomicLong reconnectAttempts = new AtomicLong(0);
+    private final AtomicLong totalDowntimeMs = new AtomicLong(0);
     private final AtomicReference<Instant> lastFailureTime = new AtomicReference<>();
     private final AtomicReference<Instant> lastSuccessTime = new AtomicReference<>();
+    private final AtomicReference<Instant> lastDisconnectAt = new AtomicReference<>();
     private final AtomicReference<String> lastErrorMessage = new AtomicReference<>();
 
     public RedisPubSubHealthTracker(ReactiveRedisTemplate<String, Object> redisTemplate) {
@@ -37,14 +40,32 @@ public class RedisPubSubHealthTracker {
     public void recordSuccess(String channel) {
         long previousConsecutiveFailures = consecutiveFailures.getAndSet(0);
         totalSuccesses.incrementAndGet();
-        lastSuccessTime.set(Instant.now());
+        Instant now = Instant.now();
+        lastSuccessTime.set(now);
 
         if (!healthy.getAndSet(true)) {
-            log.info("REDIS_PUBSUB_RECOVERED: Channel '{}' is healthy again after {} consecutive failures",
-                    channel, previousConsecutiveFailures);
+            Instant disconnectedAt = lastDisconnectAt.getAndSet(null);
+            if (disconnectedAt != null) {
+                long downtimeMs = Duration.between(disconnectedAt, now).toMillis();
+                totalDowntimeMs.addAndGet(downtimeMs);
+                log.info("REDIS_PUBSUB_RECOVERED: Channel '{}' is healthy again after {} consecutive failures (downtime {}ms)",
+                        channel, previousConsecutiveFailures, downtimeMs);
+            } else {
+                log.info("REDIS_PUBSUB_RECOVERED: Channel '{}' is healthy again after {} consecutive failures",
+                        channel, previousConsecutiveFailures);
+            }
         }
 
         incrementRedisCounter("success").subscribe();
+    }
+
+    public void recordReconnectAttempt(long retryCount, Throwable cause) {
+        long attempts = reconnectAttempts.incrementAndGet();
+        if (lastDisconnectAt.get() == null) {
+            lastDisconnectAt.set(Instant.now());
+        }
+        log.warn("REDIS_PUBSUB_RECONNECT attempt {} (total={}) cause={}",
+                retryCount + 1, attempts, cause != null ? cause.getMessage() : "unknown");
     }
 
     public void recordFailure(String channel, Throwable error) {
@@ -84,8 +105,11 @@ public class RedisPubSubHealthTracker {
                 consecutiveFailures.get(),
                 totalFailures.get(),
                 totalSuccesses.get(),
+                reconnectAttempts.get(),
+                totalDowntimeMs.get(),
                 lastFailureTime.get(),
                 lastSuccessTime.get(),
+                lastDisconnectAt.get(),
                 lastErrorMessage.get()
         );
     }
@@ -94,9 +118,12 @@ public class RedisPubSubHealthTracker {
         consecutiveFailures.set(0);
         totalFailures.set(0);
         totalSuccesses.set(0);
+        reconnectAttempts.set(0);
+        totalDowntimeMs.set(0);
         healthy.set(true);
         lastFailureTime.set(null);
         lastSuccessTime.set(null);
+        lastDisconnectAt.set(null);
         lastErrorMessage.set(null);
     }
 
@@ -117,8 +144,11 @@ public class RedisPubSubHealthTracker {
             long consecutiveFailures,
             long totalFailures,
             long totalSuccesses,
+            long reconnectAttempts,
+            long totalDowntimeMs,
             Instant lastFailureTime,
             Instant lastSuccessTime,
+            Instant lastDisconnectAt,
             String lastErrorMessage
     ) {
         public double successRate() {

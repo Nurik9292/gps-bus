@@ -47,7 +47,7 @@ public class TugdkGpsDataProvider extends AbstractGpsDataProvider {
             GpsProviderProperties properties,
             @Value("${external.api.gps-tugdk.token}") String token,
             @Value("${external.api.gps-tugdk.enabled:false}") boolean enabled,
-            @Value("${external.api.gps-tugdk.cache-timeout:5s}") Duration cacheTimeout,
+            @Value("${external.api.gps-tugdk.cache-timeout:3s}") Duration cacheTimeout,
             TugdkGpsPositionMapper mapper,
             GpsFetchOptimizationProperties optimizationProperties,
             GpsFetchStrategyMetricsRecorder metricsRecorder) {

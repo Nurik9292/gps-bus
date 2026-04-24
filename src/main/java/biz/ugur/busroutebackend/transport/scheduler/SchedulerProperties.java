@@ -27,9 +27,9 @@ public class SchedulerProperties {
 
         private int parallelWorkers = 4;
 
-        private Duration batchTimeout = Duration.ofSeconds(30);
+        private Duration batchTimeout = Duration.ofSeconds(10);
 
-        private Duration totalTimeout = Duration.ofSeconds(60);
+        private Duration totalTimeout = Duration.ofSeconds(15);
     }
 
     @Getter

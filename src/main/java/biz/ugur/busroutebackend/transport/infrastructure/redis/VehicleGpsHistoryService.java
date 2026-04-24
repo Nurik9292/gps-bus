@@ -100,6 +100,20 @@ public class VehicleGpsHistoryService {
         return getHistory(vehicleId, limit).collectList();
     }
 
+    public Mono<java.util.Map<String, List<GpsPoint>>> getHistoryBatch(List<String> vehicleIds, int limit) {
+        if (vehicleIds == null || vehicleIds.isEmpty()) {
+            return Mono.just(java.util.Collections.emptyMap());
+        }
+        return Flux.fromIterable(vehicleIds)
+                .flatMap(vid -> getHistoryList(vid, limit)
+                        .map(history -> java.util.Map.entry(vid, history))
+                        .onErrorResume(err -> {
+                            log.warn("[GPS_PIPELINE] history batch fetch failed for {}: {}", vid, err.getMessage());
+                            return Mono.just(java.util.Map.entry(vid, java.util.List.<GpsPoint>of()));
+                        }), 32)
+                .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue));
+    }
+
     public Mono<Long> getPointCount(String vehicleId) {
         if (vehicleId == null) {
             return Mono.just(0L);

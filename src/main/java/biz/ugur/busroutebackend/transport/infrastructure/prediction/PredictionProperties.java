@@ -56,4 +56,10 @@ public class PredictionProperties {
     private double dwellSpeedThresholdKmh = 15.0;
 
     private long coldStartDurationSec = 15;
+
+    private double directionFlipThresholdDeg = 90.0;
+
+    private int oppositeSnapThreshold = 3;
+
+    private double terminalFlipMaxPhysicalJumpMeters = 500.0;
 }
