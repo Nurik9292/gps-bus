@@ -75,4 +75,10 @@ public class VehiclePredictionState {
     @Builder.Default
     private double longTermAvgSpeedKmh = -1;
 
+    @Builder.Default
+    private double kalmanSpeedKmh = -1;
+
+    @Builder.Default
+    private double kalmanSpeedVariance = 0;
+
 }

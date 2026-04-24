@@ -414,6 +414,11 @@ public class VehiclePositionPredictionService {
         double newLongTermAvg = PredictionMath.updateLongTermAvgSpeed(
                 existing != null ? existing.getLongTermAvgSpeedKmh() : -1, speedKmh);
 
+        double[] newKalman = PredictionMath.updateKalmanSpeed(
+                existing != null ? existing.getKalmanSpeedKmh() : -1,
+                existing != null ? existing.getKalmanSpeedVariance() : 0,
+                speedKmh);
+
         VehiclePredictionState.VehiclePredictionStateBuilder builder = VehiclePredictionState.builder()
                 .vehicleId(vehicleId)
                 .licensePlate(licensePlate)
@@ -425,6 +430,8 @@ public class VehiclePositionPredictionService {
                 .smoothedSpeedKmh(PredictionMath.computeSmoothedSpeed(existing != null ? existing.getRecentSpeeds() : null, speedKmh))
                 .recentSpeeds(PredictionMath.appendSpeedToBuffer(existing != null ? existing.getRecentSpeeds() : null, speedKmh))
                 .longTermAvgSpeedKmh(newLongTermAvg)
+                .kalmanSpeedKmh(newKalman[0])
+                .kalmanSpeedVariance(newKalman[1])
                 .course(course)
                 .inMotion(inMotion)
                 .lastGpsUpdate(timestamp)
