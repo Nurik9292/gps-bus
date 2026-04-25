@@ -73,6 +73,9 @@ public class VehicleDataScheduler {
             log.info("Starting GPS update scheduler loop");
             Duration interval = schedulerProperties.getUpdateInterval();
             schedulerDisposable = Flux.interval(interval, interval)
+                    .onBackpressureDrop(droppedTick ->
+                            log.warn("[GPS_PIPELINE] SCHEDULER_TICK_DROPPED tick={} — previous cycle still running, skipping",
+                                    droppedTick))
                     .filter(tick -> running.get())
                     .filter(tick -> {
                         if (isActiveHours()) {
