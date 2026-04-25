@@ -162,8 +162,16 @@ class SnapCorrector {
                 boolean nowNearOppositeTerminal = realFraction >= 0
                         && (lastGpsFrac >= (1.0 - tolerance) ? realFraction <= tolerance * 3
                                 : realFraction >= (1.0 - tolerance * 3));
+                boolean atTerminalFlip = wasNearTerminal && nowNearOppositeTerminal;
+                boolean isStationary = existing.getKalmanSpeedKmh() >= 0
+                        && existing.getKalmanSpeedKmh() < 5.0;
 
-                if (gpsMoveAgainstDir && (plausibleJump || (wasNearTerminal && nowNearOppositeTerminal))) {
+                if (gpsMoveAgainstDir && isStationary && !atTerminalFlip) {
+                    log.debug("[GPS_PIPELINE] DIR_CORRECT_FRAC_SKIP_STATIONARY vehicle={} route={} dir={} delta={} kalmanSpeed={}km/h (GPS noise on stationary bus, not a real direction reversal)",
+                            vehicleId, routeNumber, direction,
+                            String.format("%.4f", fracDelta),
+                            String.format("%.1f", existing.getKalmanSpeedKmh()));
+                } else if (gpsMoveAgainstDir && (plausibleJump || atTerminalFlip)) {
                     int correctedDir = (direction == 0) ? 1 : 0;
                     List<double[]> correctedCoords = routeGeometryCache.getPoints(routeNumber, correctedDir);
                     if (correctedCoords != null) {
