@@ -71,14 +71,14 @@ class OffRouteDetectionRawSnapDistanceTest {
         service = new VehiclePositionPredictionService(
                 properties, broadcaster, routeGeometryCache,
                 stateRepository, gpsRecorderProvider,
-                new GpsOutlierFilter(),
+                new GpsOutlierFilter(new PredictionProperties()),
                 new SnapCorrector(properties, routeGeometryCache, mapMatchingService),
                 new VehiclePositionPredictor(properties, routeGeometryCache, mapMatchingService, dwellStatsRepository)
         );
     }
 
     private void mockSnapDistance(double distMeters) {
-        boolean snapped = distMeters <= MapMatchingService.MAX_SNAP_DISTANCE_METERS;
+        boolean snapped = distMeters <= properties.getMaxSnapDistanceMeters();
         MapMatchingService.SnappedResult snap =
                 new MapMatchingService.SnappedResult(LAT, LON, snapped ? 0.5 : -1, distMeters, snapped);
         lenient().when(mapMatchingService.snapToNearestSegment(anyDouble(), anyDouble(), any(), anyDouble()))

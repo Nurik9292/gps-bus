@@ -13,7 +13,7 @@ class GpsOutlierFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new GpsOutlierFilter();
+        filter = new GpsOutlierFilter(new PredictionProperties());
     }
 
     @Test

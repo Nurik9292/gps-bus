@@ -26,23 +26,8 @@ public class VehiclePositionPredictionService {
     private static final double DT_SECONDS = 1.0;
     private static final long MAX_GPS_AGE_MS = 10 * 60 * 1000L;
 
-    private static final double STATIONARY_GPS_THRESHOLD_METERS = 100.0;
-    private static final double STALE_PREDICTED_FROM_GPS_METERS = 500.0;
-    private static final int TELEPORT_COMMIT_CONFIRMATIONS = 8;
-    private static final int TELEPORT_COMMIT_CONFIRMATIONS_TRAJECTORY = 2;
-    private static final double TELEPORT_COMMIT_RADIUS_METERS = 150.0;
-    private static final double TELEPORT_TRAJECTORY_STEP_METERS = 500.0;
-    private static final double TELEPORT_TRAJECTORY_FRAC_DELTA_MAX = 0.1;
-    private static final long TELEPORT_COMMIT_WINDOW_MS = 120_000;
-    private static final long TELEPORT_FAST_CONFIRM_AFTER_MS = 30_000;
-    private static final double POSITION_JUMP_INTERNAL_THRESHOLD_M = 500.0;
 
-    private static final int OUTLIER_FORCE_ACCEPT_COUNT = 5;
-    private static final double OUTLIER_CLUSTER_RADIUS_METERS = 150.0;
-    private static final long OUTLIER_FORCE_ACCEPT_WINDOW_MS = 120_000;
 
-    private static final double OFF_ROUTE_DISTANCE_THRESHOLD_METERS = 200.0;
-    private static final int OFF_ROUTE_CONFIRMATIONS = 5;
 
     private record OutlierBaseline(double lat, double lon, int count, Instant firstSeen) {}
     private final ConcurrentHashMap<String, OutlierBaseline> pendingAltBaselines = new ConcurrentHashMap<>();
@@ -96,7 +81,7 @@ public class VehiclePositionPredictionService {
         if (prevLat != 0.0 && newLat != 0.0) {
             double delta = biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService
                     .haversineDistanceMeters(prevLat, prevLon, newLat, newLon);
-            if (delta > POSITION_JUMP_INTERNAL_THRESHOLD_M) {
+            if (delta > properties.getPositionJumpInternalThresholdMeters()) {
                 log.warn("[GPS_PIPELINE] POSITION_JUMP_INTERNAL vehicle={} plate={} reason={} delta={}m prev=({},{}) new=({},{})",
                         vehicleId, newState.getLicensePlate(), reason,
                         String.format("%.0f", delta),
@@ -376,7 +361,7 @@ public class VehiclePositionPredictionService {
             double distFromLastGps = DistanceCalculationService.haversineDistanceMeters(
                     existing.getGpsLatitude(), existing.getGpsLongitude(),
                     latitude, longitude);
-            rawGpsStationary = distFromLastGps <= STATIONARY_GPS_THRESHOLD_METERS;
+            rawGpsStationary = distFromLastGps <= properties.getStationaryGpsThresholdMeters();
             boolean snapJumpDisproportionate =
                     distFromLastGps > 0 && distFromPredicted / distFromLastGps > 5.0;
             snapDriftRelativeToGps = rawGpsStationary || snapJumpDisproportionate;
@@ -399,7 +384,7 @@ public class VehiclePositionPredictionService {
                 Instant now = Instant.now();
                 PendingTeleport pending = pendingTeleports.get(vehicleId);
                 boolean pendingActive = pending != null
-                        && now.toEpochMilli() - pending.firstSeen().toEpochMilli() <= TELEPORT_COMMIT_WINDOW_MS;
+                        && now.toEpochMilli() - pending.firstSeen().toEpochMilli() <= properties.getTeleportCommitWindowMs();
 
                 if (pendingActive) {
                     double distToPending = DistanceCalculationService.haversineDistanceMeters(
@@ -410,8 +395,8 @@ public class VehiclePositionPredictionService {
                     int newCount = pending.count() + 1;
 
                     if (trajectoryConsistent) {
-                        boolean fastConfirm = newCount >= TELEPORT_COMMIT_CONFIRMATIONS_TRAJECTORY
-                                || pendingAgeMs > TELEPORT_FAST_CONFIRM_AFTER_MS;
+                        boolean fastConfirm = newCount >= properties.getTeleportCommitConfirmationsTrajectory()
+                                || pendingAgeMs > properties.getTeleportFastConfirmAfterMs();
                         if (fastConfirm) {
                             pendingTeleports.remove(vehicleId);
                             log.info("[GPS_PIPELINE] TELEPORT_CONFIRMED_TRAJECTORY vehicle={} plate={} count={} ageMs={} fracDelta={} — route-consistent advance, accepting",
@@ -423,10 +408,10 @@ public class VehiclePositionPredictionService {
                                             newCount, pending.firstSeen()));
                             teleportRejected = true;
                             log.info("[GPS_PIPELINE] TELEPORT_PENDING_TRAJECTORY vehicle={} plate={} count={}/{} ageMs={} — advancing pending center forward",
-                                    vehicleId, licensePlate, newCount, TELEPORT_COMMIT_CONFIRMATIONS_TRAJECTORY, pendingAgeMs);
+                                    vehicleId, licensePlate, newCount, properties.getTeleportCommitConfirmationsTrajectory(), pendingAgeMs);
                         }
-                    } else if (distToPending <= TELEPORT_COMMIT_RADIUS_METERS) {
-                        if (newCount >= TELEPORT_COMMIT_CONFIRMATIONS) {
+                    } else if (distToPending <= properties.getTeleportCommitRadiusMeters()) {
+                        if (newCount >= properties.getTeleportCommitConfirmations()) {
                             pendingTeleports.remove(vehicleId);
                             log.info("[GPS_PIPELINE] TELEPORT_CONFIRMED vehicle={} plate={} count={} — committing new position",
                                     vehicleId, licensePlate, newCount);
@@ -436,7 +421,7 @@ public class VehiclePositionPredictionService {
                                             newCount, pending.firstSeen()));
                             teleportRejected = true;
                             log.info("[GPS_PIPELINE] TELEPORT_PENDING vehicle={} plate={} count={}/{} — keeping previous position",
-                                    vehicleId, licensePlate, newCount, TELEPORT_COMMIT_CONFIRMATIONS);
+                                    vehicleId, licensePlate, newCount, properties.getTeleportCommitConfirmations());
                         }
                     } else {
                         pendingTeleports.put(vehicleId,
@@ -450,7 +435,7 @@ public class VehiclePositionPredictionService {
                             new PendingTeleport(predictedLat, predictedLon, fraction, direction, 1, now));
                     teleportRejected = true;
                     log.info("[GPS_PIPELINE] TELEPORT_PENDING_NEW vehicle={} plate={} count=1/{} at=({},{}) — keeping previous position",
-                            vehicleId, licensePlate, TELEPORT_COMMIT_CONFIRMATIONS,
+                            vehicleId, licensePlate, properties.getTeleportCommitConfirmations(),
                             String.format("%.5f", predictedLat), String.format("%.5f", predictedLon));
                 }
             }
@@ -485,9 +470,9 @@ public class VehiclePositionPredictionService {
         double rawToSnapDist = snapResult.rawSnapMinDistance();
         boolean snapAttempted = rawToSnapDist < Double.MAX_VALUE;
         if (snapAttempted) {
-            if (rawToSnapDist > OFF_ROUTE_DISTANCE_THRESHOLD_METERS) {
+            if (rawToSnapDist > properties.getOffRouteDistanceThresholdMeters()) {
                 newOffRouteCount += 1;
-                if (newOffRouteCount >= OFF_ROUTE_CONFIRMATIONS && !newOffRoute) {
+                if (newOffRouteCount >= properties.getOffRouteConfirmations() && !newOffRoute) {
                     newOffRoute = true;
                     log.warn("[GPS_PIPELINE] OFF_ROUTE_DETECTED vehicle={} plate={} route={} consecutive={} rawToSnapDist={}m — suppressing broadcast until back on route",
                             vehicleId, licensePlate, routeNumber, newOffRouteCount,
@@ -496,7 +481,7 @@ public class VehiclePositionPredictionService {
             } else {
                 if (newOffRoute) {
                     log.info("[GPS_PIPELINE] OFF_ROUTE_CLEARED vehicle={} plate={} route={} — vehicle returned within {}m of route",
-                            vehicleId, licensePlate, routeNumber, (int) OFF_ROUTE_DISTANCE_THRESHOLD_METERS);
+                            vehicleId, licensePlate, routeNumber, (int) properties.getOffRouteDistanceThresholdMeters());
                 }
                 newOffRouteCount = 0;
                 newOffRoute = false;
@@ -695,6 +680,16 @@ public class VehiclePositionPredictionService {
                                         double pendingLat, double pendingLon,
                                         double newFraction, int newDirection,
                                         double newLat, double newLon) {
+        return isTrajectoryAdvance(pendingFraction, pendingDirection, pendingLat, pendingLon,
+                newFraction, newDirection, newLat, newLon,
+                0.1, 500.0);
+    }
+
+    static boolean isTrajectoryAdvance(double pendingFraction, int pendingDirection,
+                                        double pendingLat, double pendingLon,
+                                        double newFraction, int newDirection,
+                                        double newLat, double newLon,
+                                        double maxFracDelta, double maxStepMeters) {
         if (pendingFraction < 0 || newFraction < 0) {
             return false;
         }
@@ -702,40 +697,42 @@ public class VehiclePositionPredictionService {
             return false;
         }
         double fracDelta = newFraction - pendingFraction;
-        if (fracDelta <= 0 || fracDelta > TELEPORT_TRAJECTORY_FRAC_DELTA_MAX) {
+        if (fracDelta <= 0 || fracDelta > maxFracDelta) {
             return false;
         }
         double dist = DistanceCalculationService.haversineDistanceMeters(
                 pendingLat, pendingLon, newLat, newLon);
-        return dist <= TELEPORT_TRAJECTORY_STEP_METERS;
+        return dist <= maxStepMeters;
     }
 
-    private static boolean isTrajectoryAdvance(PendingTeleport pending,
-                                                double newFraction, int newDirection,
-                                                double newLat, double newLon) {
+    private boolean isTrajectoryAdvance(PendingTeleport pending,
+                                         double newFraction, int newDirection,
+                                         double newLat, double newLon) {
         return isTrajectoryAdvance(pending.fraction(), pending.direction(),
                 pending.lat(), pending.lon(),
-                newFraction, newDirection, newLat, newLon);
+                newFraction, newDirection, newLat, newLon,
+                properties.getTeleportTrajectoryFracDeltaMax(),
+                properties.getTeleportTrajectoryStepMeters());
     }
 
     private boolean shouldForceAcceptStaleBaseline(String vehicleId, String licensePlate,
                                                     double latitude, double longitude) {
         Instant now = Instant.now();
         OutlierBaseline current = pendingAltBaselines.get(vehicleId);
-        if (current == null || now.toEpochMilli() - current.firstSeen().toEpochMilli() > OUTLIER_FORCE_ACCEPT_WINDOW_MS) {
+        if (current == null || now.toEpochMilli() - current.firstSeen().toEpochMilli() > properties.getForceAcceptWindowMs()) {
             pendingAltBaselines.put(vehicleId,
                     new OutlierBaseline(latitude, longitude, 1, now));
             return false;
         }
         double distFromCluster = DistanceCalculationService.haversineDistanceMeters(
                 current.lat(), current.lon(), latitude, longitude);
-        if (distFromCluster > OUTLIER_CLUSTER_RADIUS_METERS) {
+        if (distFromCluster > properties.getForceAcceptClusterRadiusMeters()) {
             pendingAltBaselines.put(vehicleId,
                     new OutlierBaseline(latitude, longitude, 1, now));
             return false;
         }
         int newCount = current.count() + 1;
-        if (newCount >= OUTLIER_FORCE_ACCEPT_COUNT) {
+        if (newCount >= properties.getForceAcceptCount()) {
             log.warn("[GPS_PIPELINE] OUTLIER_FORCE_ACCEPT vehicle={} plate={} count={} cluster=({},{}) — baseline stale, resetting state",
                     vehicleId, licensePlate, newCount,
                     String.format("%.5f", latitude), String.format("%.5f", longitude));

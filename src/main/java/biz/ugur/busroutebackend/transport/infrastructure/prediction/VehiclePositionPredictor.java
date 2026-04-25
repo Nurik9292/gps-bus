@@ -19,18 +19,8 @@ class VehiclePositionPredictor {
 
     private static final double METRES_PER_DEGREE_LAT = 111_320.0;
     private static final double DT_SECONDS = 1.0;
-    private static final double STOP_DECELERATION_TRIGGER_METERS = 300.0;
-    private static final double DWELL_MIN_SECONDS = 3.0;
-    private static final double DWELL_MAX_SECONDS = 600.0;
-    private static final int DWELL_MIN_SAMPLES = 3;
 
-    private static final double REAL_STOP_LONG_TERM_SPEED_KMH = 2.0;
-    private static final double TRAFFIC_CRAWL_MIN_SPEED_KMH = 2.0;
-    private static final double TRAFFIC_CRAWL_MAX_SPEED_KMH = 12.0;
 
-    private static final double CATCH_UP_ERROR_THRESHOLD = 0.002;
-    private static final double CATCH_UP_GAIN = 0.30;
-    private static final double CATCH_UP_MAX_PER_TICK = 0.005;
 
     private final PredictionProperties properties;
     private final RouteGeometryCache routeGeometryCache;
@@ -84,7 +74,7 @@ class VehiclePositionPredictor {
         boolean rawBelowMin = state.getRawGpsSpeedKmh() < properties.getMinSpeedKmh();
         double longTermAvg = state.getLongTermAvgSpeedKmh();
         boolean realStop = freshGps && rawBelowMin
-                && (longTermAvg < 0 || longTermAvg < REAL_STOP_LONG_TERM_SPEED_KMH);
+                && (longTermAvg < 0 || longTermAvg < properties.getRealStopLongTermSpeedKmh());
         if (realStop) {
             log.debug("[GPS_PIPELINE] REAL_STOP vehicle={} plate={} rawSpeed={}km/h longTermAvg={}km/h — freezing predicted",
                     state.getVehicleId(), state.getLicensePlate(),
@@ -128,8 +118,8 @@ class VehiclePositionPredictor {
         boolean rawBelowMin = state.getRawGpsSpeedKmh() < properties.getMinSpeedKmh();
         double longTermAvg = state.getLongTermAvgSpeedKmh();
         boolean trafficCrawl = freshGps && rawBelowMin
-                && longTermAvg >= TRAFFIC_CRAWL_MIN_SPEED_KMH
-                && longTermAvg <= TRAFFIC_CRAWL_MAX_SPEED_KMH;
+                && longTermAvg >= properties.getTrafficCrawlMinSpeedKmh()
+                && longTermAvg <= properties.getTrafficCrawlMaxSpeedKmh();
         if (trafficCrawl) {
             log.debug("[GPS_PIPELINE] TRAFFIC_CRAWL vehicle={} plate={} rawSpeed={}km/h longTermAvg={}km/h — using crawl speed for advance",
                     state.getVehicleId(), state.getLicensePlate(),
@@ -151,9 +141,9 @@ class VehiclePositionPredictor {
 
         if (onRoute) {
             double distToNextStop = computeDistanceToNextStop(state, totalRouteDistance);
-            if (distToNextStop >= 0 && distToNextStop < STOP_DECELERATION_TRIGGER_METERS) {
+            if (distToNextStop >= 0 && distToNextStop < properties.getStopDecelerationTriggerMeters()) {
                 adjustedConservative = conservativeFactor
-                        + (1.0 - conservativeFactor) * (1.0 - distToNextStop / STOP_DECELERATION_TRIGGER_METERS);
+                        + (1.0 - conservativeFactor) * (1.0 - distToNextStop / properties.getStopDecelerationTriggerMeters());
             }
         }
 
@@ -172,9 +162,9 @@ class VehiclePositionPredictor {
             double newFraction = Math.min(effectiveStartFraction + fractionDelta, 1.0);
 
             double lastGpsFrac = state.getLastGpsFraction();
-            if (lastGpsFrac >= 0 && lastGpsFrac > newFraction + CATCH_UP_ERROR_THRESHOLD) {
+            if (lastGpsFrac >= 0 && lastGpsFrac > newFraction + properties.getCatchUpErrorThreshold()) {
                 double trackingError = lastGpsFrac - newFraction;
-                double catchUpBoost = Math.min(trackingError * CATCH_UP_GAIN, CATCH_UP_MAX_PER_TICK);
+                double catchUpBoost = Math.min(trackingError * properties.getCatchUpGain(), properties.getCatchUpMaxPerTick());
                 double before = newFraction;
                 newFraction = Math.min(newFraction + catchUpBoost, 1.0);
                 log.debug("[GPS_PIPELINE] CATCH_UP vehicle={} plate={} trackingError={} boost={} fraction={}→{} (lastGps={})",
@@ -338,7 +328,7 @@ class VehiclePositionPredictor {
             return properties.getDwellTimeSeconds();
         }
         var stat = dwellStatsCache.get(dwellKey(stopId, routeNumber, direction));
-        if (stat == null || stat.getSampleCount() < DWELL_MIN_SAMPLES) {
+        if (stat == null || stat.getSampleCount() < properties.getDwellMinSamples()) {
             return properties.getDwellTimeSeconds();
         }
         return stat.getAvgDwellSeconds();
@@ -350,7 +340,7 @@ class VehiclePositionPredictor {
             return;
         }
         double dwellSec = dwellMs / 1000.0;
-        if (dwellSec < DWELL_MIN_SECONDS || dwellSec > DWELL_MAX_SECONDS) {
+        if (dwellSec < properties.getDwellMinSeconds() || dwellSec > properties.getDwellMaxSeconds()) {
             log.debug("[DWELL] skip record out-of-range: stop={} dwell={}s", stopId, dwellSec);
             return;
         }

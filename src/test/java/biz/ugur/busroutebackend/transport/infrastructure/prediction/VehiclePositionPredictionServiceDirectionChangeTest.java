@@ -81,7 +81,7 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
         service = new VehiclePositionPredictionService(
                 properties, broadcaster, routeGeometryCache,
                 stateRepository, gpsRecorderProvider,
-                new GpsOutlierFilter(),
+                new GpsOutlierFilter(new PredictionProperties()),
                 new SnapCorrector(properties, routeGeometryCache, mapMatchingService),
                 new VehiclePositionPredictor(properties, routeGeometryCache, mapMatchingService, dwellStatsRepository)
         );

@@ -15,7 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 class SnapCorrector {
 
-    private static final long DIR_CHANGE_COOLDOWN_MS = 5_000;
 
     private final PredictionProperties properties;
     private final RouteGeometryCache routeGeometryCache;
@@ -381,7 +380,7 @@ class SnapCorrector {
                                 vehicleId, routeNumber,
                                 String.format("%.1f", snap.distanceMeters()),
                                 String.format("%.1f", oppositeSnap.distanceMeters()),
-                                (int) MapMatchingService.MAX_SNAP_DISTANCE_METERS);
+                                (int) properties.getMaxSnapDistanceMeters());
                     }
                     consecutiveOppositeSnaps.remove(vehicleId);
                     predictedLat = existing != null ? existing.getPredictedLatitude() : latitude;
@@ -394,7 +393,7 @@ class SnapCorrector {
                 log.debug("[GPS_PIPELINE] SNAP_FAIL vehicle={} route={} dist={}m > threshold={}m → keeping predicted on route, awaiting re-snap",
                         vehicleId, routeNumber,
                         String.format("%.1f", snap.distanceMeters()),
-                        (int) MapMatchingService.MAX_SNAP_DISTANCE_METERS);
+                        (int) properties.getMaxSnapDistanceMeters());
                 consecutiveOppositeSnaps.remove(vehicleId);
                 predictedLat = existing != null ? existing.getPredictedLatitude() : latitude;
                 predictedLon = existing != null ? existing.getPredictedLongitude() : longitude;
@@ -422,15 +421,15 @@ class SnapCorrector {
         consecutiveOppositeSnaps.keySet().retainAll(livingVehicleIds);
     }
 
-    private static boolean isInDirectionCooldown(VehiclePredictionState existing) {
+    private boolean isInDirectionCooldown(VehiclePredictionState existing) {
         if (existing == null || existing.getDirectionChangedAt() == null) {
             return false;
         }
         long ageMs = Duration.between(existing.getDirectionChangedAt(), Instant.now()).toMillis();
-        return ageMs >= 0 && ageMs < DIR_CHANGE_COOLDOWN_MS;
+        return ageMs >= 0 && ageMs < properties.getDirChangeCooldownMs();
     }
 
-    private static long directionCooldownAgeMs(VehiclePredictionState existing) {
+    private long directionCooldownAgeMs(VehiclePredictionState existing) {
         if (existing == null || existing.getDirectionChangedAt() == null) {
             return -1;
         }

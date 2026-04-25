@@ -10,8 +10,11 @@ import java.util.List;
 @Slf4j
 public class MapMatchingService {
 
-  
-    static final double MAX_SNAP_DISTANCE_METERS = 150.0;
+    private final PredictionProperties properties;
+
+    public MapMatchingService(PredictionProperties properties) {
+        this.properties = properties;
+    }
 
     public SnappedResult snapToNearestSegment(double gpsLat, double gpsLon,
                                                List<double[]> routePoints,
@@ -41,7 +44,7 @@ public class MapMatchingService {
             accumLen += segLen;
         }
 
-        if (minDist > MAX_SNAP_DISTANCE_METERS) {
+        if (minDist > properties.getMaxSnapDistanceMeters()) {
             log.trace("GPS ({}, {}) is {}m from route — not snapping", gpsLat, gpsLon, (int) minDist);
             return new SnappedResult(gpsLat, gpsLon, -1, minDist, false);
         }
@@ -110,7 +113,7 @@ public class MapMatchingService {
             }
         }
 
-        if (minDist <= MAX_SNAP_DISTANCE_METERS) {
+        if (minDist <= properties.getMaxSnapDistanceMeters()) {
             log.debug(String.format("[GPS_PIPELINE] SNAP_CONTINUITY window=[%.4f..%.4f] segs=[%d..%d] dist=%.1fm frac=%.4f",
                     fracMin, fracMax, fromIdx, toIdx, minDist, bestFraction));
             return new SnappedResult(bestLat, bestLon, bestFraction, minDist, true);
