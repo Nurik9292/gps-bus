@@ -115,6 +115,94 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
     }
 
     @Test
+    void directionExternalChange_resetsAllDirectionTiedFields() {
+        service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                LAT, LON, 30.0, 90.0, true,
+                Instant.now().minusSeconds(1), 0, false, false);
+
+        VehiclePredictionState before = service.snapshotAllStatesForTest().stream()
+                .filter(s -> VEHICLE_ID.equals(s.getVehicleId()))
+                .findFirst()
+                .orElseThrow();
+        VehiclePredictionState polluted = before.toBuilder()
+                .fractionOnRoute(0.5386)
+                .lastGpsFraction(0.5386)
+                .lastRejectedGpsFraction(0.51)
+                .consecutiveImplausibleCount(2)
+                .consecutiveInconsistentAdvanceCount(1)
+                .consecutiveOffRouteCount(3)
+                .offRoute(true)
+                .dwellStartedAt(Instant.now())
+                .dwellStopFraction(0.4)
+                .dwellStopId("stop-X")
+                .build();
+        service.replaceStateForTest(VEHICLE_ID, polluted);
+
+        double newLat = LAT + 0.0001;
+        double newLon = LON + 0.0001;
+        service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                newLat, newLon, 30.0, 90.0, true,
+                Instant.now(), 1, false, false);
+
+        VehiclePredictionState state = service.snapshotAllStatesForTest().stream()
+                .filter(s -> VEHICLE_ID.equals(s.getVehicleId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(state.getDirection()).isEqualTo(1);
+        assertThat(state.getFractionOnRoute())
+                .as("polluted forward frac 0.5386 must NOT survive direction change")
+                .isNotEqualTo(0.5386);
+        assertThat(state.getLastGpsFraction())
+                .as("polluted lastGpsFraction must NOT survive direction change")
+                .isNotEqualTo(0.5386);
+        assertThat(state.getLastRejectedGpsFraction())
+                .as("polluted lastRejectedGpsFraction must NOT survive direction change")
+                .isNotEqualTo(0.51);
+        assertThat(state.getConsecutiveInconsistentAdvanceCount())
+                .as("inconsistent-advance counter must reset on direction change")
+                .isEqualTo(0);
+        assertThat(state.getConsecutiveOffRouteCount())
+                .as("off-route counter must reset on direction change")
+                .isEqualTo(0);
+        assertThat(state.isOffRoute())
+                .as("off-route flag must reset on direction change")
+                .isFalse();
+        assertThat(state.getDwellStartedAt())
+                .as("dwell tracking must reset on direction change")
+                .isNull();
+        assertThat(state.getDwellStopFraction()).isEqualTo(-1);
+        assertThat(state.getDwellStopId()).isNull();
+        assertThat(state.getDirectionChangedAt()).isNotNull();
+    }
+
+    @Test
+    void directionExternalChange_preservesDirectionIndependentFields() {
+        service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                LAT, LON, 30.0, 90.0, true,
+                Instant.now().minusSeconds(1), 0, false, false);
+
+        service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                LAT + 0.0001, LON + 0.0001, 30.0, 90.0, true,
+                Instant.now(), 1, false, false);
+
+        VehiclePredictionState state = service.snapshotAllStatesForTest().stream()
+                .filter(s -> VEHICLE_ID.equals(s.getVehicleId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(state.getRouteNumber())
+                .as("route assignment must be preserved across direction change")
+                .isEqualTo(ROUTE);
+        assertThat(state.getKalmanSpeedKmh())
+                .as("Kalman speed estimate must not be reset by direction change")
+                .isGreaterThanOrEqualTo(0.0);
+        assertThat(state.getKalmanSpeedVariance())
+                .as("Kalman variance must not be reset by direction change")
+                .isLessThan(1000.0);
+    }
+
+    @Test
     void doesNotResetWhenDirectionUnchanged() {
         service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
                 LAT, LON, 30.0, 90.0, true,

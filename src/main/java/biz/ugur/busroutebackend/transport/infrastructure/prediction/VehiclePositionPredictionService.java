@@ -283,11 +283,24 @@ public class VehiclePositionPredictionService {
         VehiclePredictionState existing = vehicleStates.get(vehicleId);
 
         if (existing != null && existing.getDirection() != direction) {
-            log.info("[GPS_PIPELINE] DIR_EXTERNAL_CHANGE vehicle={} plate={} prevDir={} newDir={} — resetting lastGpsFraction, starting cooldown",
+            log.info("[GPS_PIPELINE] DIR_EXTERNAL_CHANGE vehicle={} plate={} prevDir={} newDir={} — full reset of direction-tied state, cooldown started",
                     vehicleId, licensePlate, existing.getDirection(), direction);
             existing = existing.toBuilder()
                     .direction(direction)
+                    .fractionOnRoute(-1)
                     .lastGpsFraction(-1)
+                    .lastRejectedGpsFraction(-1)
+                    .consecutiveImplausibleCount(0)
+                    .consecutiveInconsistentAdvanceCount(0)
+                    .consecutiveOffRouteCount(0)
+                    .offRoute(false)
+                    .predictedLatitude(latitude)
+                    .predictedLongitude(longitude)
+                    .routeCoordinates(null)
+                    .totalRouteDistanceMeters(0)
+                    .dwellStartedAt(null)
+                    .dwellStopFraction(-1)
+                    .dwellStopId(null)
                     .directionChangedAt(Instant.now())
                     .build();
             replaceState(vehicleId, existing, "direction-external-change");
@@ -798,6 +811,10 @@ public class VehiclePositionPredictionService {
 
     List<VehiclePredictionState> snapshotAllStatesForTest() {
         return List.copyOf(vehicleStates.values());
+    }
+
+    void replaceStateForTest(String vehicleId, VehiclePredictionState state) {
+        vehicleStates.put(vehicleId, state);
     }
 
     public boolean isInColdStart(String vehicleId) {
