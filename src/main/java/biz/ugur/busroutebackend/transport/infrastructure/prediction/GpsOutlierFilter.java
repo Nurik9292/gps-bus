@@ -10,12 +10,11 @@ import java.time.Instant;
 @Slf4j
 class GpsOutlierFilter {
 
-    private static final double MAX_BUS_SPEED_MS = 22.0;
-    private static final double OUTLIER_TOLERANCE = 1.2;
-    private static final double MAX_TELEPORT_DISTANCE_METERS = 3_000.0;
-    private static final double HARD_OUTLIER_METERS = 2_000.0;
-    private static final long HARD_OUTLIER_WINDOW_MS = 10_000L;
-    private static final long SOFT_OUTLIER_WINDOW_MS = 60_000L;
+    private final PredictionProperties properties;
+
+    GpsOutlierFilter(PredictionProperties properties) {
+        this.properties = properties;
+    }
 
     enum Decision {
         ACCEPT,
@@ -42,7 +41,7 @@ class GpsOutlierFilter {
         double distFromLastGps = DistanceCalculationService.haversineDistanceMeters(
                 existing.getGpsLatitude(), existing.getGpsLongitude(), latitude, longitude);
 
-        if (elapsedMs < HARD_OUTLIER_WINDOW_MS && distFromLastGps > HARD_OUTLIER_METERS) {
+        if (elapsedMs < properties.getHardOutlierWindowMs() && distFromLastGps > properties.getHardOutlierMeters()) {
             log.warn("[GPS_PIPELINE] HARD_OUTLIER_REJECTED vehicle={} plate={}: {}m in {}ms " +
                             "(implied {}km/h) — baseline preserved",
                     vehicleId, licensePlate,
@@ -51,22 +50,23 @@ class GpsOutlierFilter {
             return Decision.REJECT_HARD_OUTLIER;
         }
 
-        if (elapsedMs < SOFT_OUTLIER_WINDOW_MS) {
-            double maxPossibleDist = (elapsedMs / 1000.0) * MAX_BUS_SPEED_MS * OUTLIER_TOLERANCE;
+        if (elapsedMs < properties.getSoftOutlierWindowMs()) {
+            double maxPossibleDist = (elapsedMs / 1000.0) * properties.getMaxBusSpeedMs() * properties.getOutlierTolerance();
             if (distFromLastGps > maxPossibleDist) {
                 log.warn("GPS outlier rejected for vehicle {}: {}m in {}ms (max {}m at {}km/h×{}) " +
                                 "— baseline preserved",
                         vehicleId, (int) distFromLastGps, elapsedMs,
-                        (int) maxPossibleDist, (int) (MAX_BUS_SPEED_MS * 3.6), OUTLIER_TOLERANCE);
+                        (int) maxPossibleDist, (int) (properties.getMaxBusSpeedMs() * 3.6),
+                        properties.getOutlierTolerance());
                 return Decision.REJECT_SOFT_OUTLIER;
             }
             return Decision.ACCEPT;
         }
 
-        if (distFromLastGps > MAX_TELEPORT_DISTANCE_METERS) {
+        if (distFromLastGps > properties.getMaxTeleportDistanceMeters()) {
             log.warn("GPS teleportation rejected for vehicle {} after {}min gap: {}m (max {}m)",
                     vehicleId, elapsedMs / 60_000, (int) distFromLastGps,
-                    (int) MAX_TELEPORT_DISTANCE_METERS);
+                    (int) properties.getMaxTeleportDistanceMeters());
             return Decision.REJECT_TELEPORT_GAP;
         }
 

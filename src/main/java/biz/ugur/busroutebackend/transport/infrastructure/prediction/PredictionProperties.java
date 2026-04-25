@@ -62,4 +62,70 @@ public class PredictionProperties {
     private int oppositeSnapThreshold = 3;
 
     private double terminalFlipMaxPhysicalJumpMeters = 500.0;
+
+    private double maxBusSpeedMs = 22.0;
+
+    private double outlierTolerance = 1.2;
+
+    private double maxTeleportDistanceMeters = 3_000.0;
+
+    private double hardOutlierMeters = 2_000.0;
+
+    private long hardOutlierWindowMs = 10_000;
+
+    private long softOutlierWindowMs = 60_000;
+
+    private double maxSnapDistanceMeters = 150.0;
+
+    private long dirChangeCooldownMs = 5_000;
+
+    private double offRouteDistanceThresholdMeters = 200.0;
+
+    private int offRouteConfirmations = 5;
+
+    private double stationaryGpsThresholdMeters = 100.0;
+
+    private double stalePredictedFromGpsMeters = 500.0;
+
+    private int teleportCommitConfirmations = 8;
+
+    private int teleportCommitConfirmationsTrajectory = 2;
+
+    private double teleportCommitRadiusMeters = 150.0;
+
+    private double teleportTrajectoryStepMeters = 500.0;
+
+    private double teleportTrajectoryFracDeltaMax = 0.1;
+
+    private long teleportCommitWindowMs = 120_000;
+
+    private long teleportFastConfirmAfterMs = 30_000;
+
+    private double positionJumpInternalThresholdMeters = 500.0;
+
+    private int forceAcceptCount = 5;
+
+    private double forceAcceptClusterRadiusMeters = 150.0;
+
+    private long forceAcceptWindowMs = 120_000;
+
+    private double stopDecelerationTriggerMeters = 300.0;
+
+    private double dwellMinSeconds = 3.0;
+
+    private double dwellMaxSeconds = 600.0;
+
+    private int dwellMinSamples = 3;
+
+    private double realStopLongTermSpeedKmh = 2.0;
+
+    private double trafficCrawlMinSpeedKmh = 2.0;
+
+    private double trafficCrawlMaxSpeedKmh = 12.0;
+
+    private double catchUpErrorThreshold = 0.002;
+
+    private double catchUpGain = 0.30;
+
+    private double catchUpMaxPerTick = 0.005;
 }
