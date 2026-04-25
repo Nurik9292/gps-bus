@@ -148,6 +148,19 @@ public class PredictionBroadcaster {
                 ? state.getRawGpsSpeedKmh() >= properties.getMinSpeedKmh()
                 : state.isInMotion();
 
+        if (state.getRawGpsSpeedKmh() < STATIONARY_RAW_SPEED_THRESHOLD_KMH
+                && !state.isInMotion()) {
+            if (state.getSpeedKmh() > STATIONARY_OVERRIDE_LOG_THRESHOLD_KMH) {
+                log.debug("[GPS_PIPELINE] STATIONARY_BROADCAST_OVERRIDE vehicle={} plate={} kalmanSpeed={}km/h -> 0 (rawSpeed={}km/h moving={})",
+                        state.getVehicleId(), state.getLicensePlate(),
+                        String.format("%.1f", state.getSpeedKmh()),
+                        String.format("%.1f", state.getRawGpsSpeedKmh()),
+                        state.isInMotion());
+            }
+            broadcastSpeedKmh = 0.0;
+            broadcastInMotion = false;
+        }
+
         double broadcastCourse = resolveBroadcastCourse(
                 state, motionCourseDeg, broadcastSpeedKmh);
 
@@ -171,13 +184,15 @@ public class PredictionBroadcaster {
         final double motionCourseFinal = motionCourseDeg;
         final double distFromPrevBroadcastFinal = distFromPrevBroadcast;
         final double broadcastCourseFinal = broadcastCourse;
+        final double broadcastSpeedKmhFinal = broadcastSpeedKmh;
+        final boolean broadcastInMotionFinal = broadcastInMotion;
         return Mono.fromRunnable(() -> {
             try {
                 directBroadcaster.broadcastDirect(msg);
                 pipelineTracer.traceWsBroadcast(
                         state.getVehicleId(), state.getLicensePlate(),
                         state.getPredictedLatitude(), state.getPredictedLongitude(),
-                        broadcastSpeedKmh, broadcastInMotion,
+                        broadcastSpeedKmhFinal, broadcastInMotionFinal,
                         Boolean.TRUE,
                         fractionValue != null ? "SNAPPED" : "DEAD_RECKONING");
                 log.debug("[GPS_PIPELINE] WS_PRED vehicle={} plate={} mode={} frac={} lat={} lon={} speed={}km/h rawSpeed={}km/h moving={} course={}° eta_stops={}",
@@ -186,14 +201,14 @@ public class PredictionBroadcaster {
                         fractionValue != null ? String.format("%.4f", fractionValue) : "-",
                         String.format("%.6f", state.getPredictedLatitude()),
                         String.format("%.6f", state.getPredictedLongitude()),
-                        String.format("%.1f", broadcastSpeedKmh),
+                        String.format("%.1f", broadcastSpeedKmhFinal),
                         String.format("%.1f", state.getRawGpsSpeedKmh()),
-                        broadcastInMotion,
+                        broadcastInMotionFinal,
                         String.format("%.1f", broadcastCourseFinal),
                         nextStops.size());
 
                 if (!Double.isNaN(motionCourseFinal)
-                        && broadcastSpeedKmh >= COURSE_SOURCE_MIN_SPEED_KMH) {
+                        && broadcastSpeedKmhFinal >= COURSE_SOURCE_MIN_SPEED_KMH) {
                     double routeCourse = state.getCourse();
                     double delta = angularDelta(routeCourse, motionCourseFinal);
                     if (delta >= COURSE_SOURCE_ALERT_DELTA_DEG) {
@@ -207,7 +222,7 @@ public class PredictionBroadcaster {
                                 String.format("%.1f", delta),
                                 String.format("%.1f", broadcastCourseFinal),
                                 String.format("%.1f", distFromPrevBroadcastFinal),
-                                String.format("%.1f", broadcastSpeedKmh),
+                                String.format("%.1f", broadcastSpeedKmhFinal),
                                 fractionValue != null ? String.format("%.4f", fractionValue) : "-");
                     }
                 }
@@ -225,6 +240,9 @@ public class PredictionBroadcaster {
     private static final double COURSE_SOURCE_MIN_SPEED_KMH = 2.0;
     private static final double COURSE_SOURCE_ALERT_DELTA_DEG = 30.0;
     private static final double COURSE_SOURCE_MAX_MOTION_METERS = 200.0;
+
+    private static final double STATIONARY_RAW_SPEED_THRESHOLD_KMH = 1.0;
+    private static final double STATIONARY_OVERRIDE_LOG_THRESHOLD_KMH = 5.0;
 
     private Mono<Void> broadcastRawGpsFallback(VehiclePredictionState state, String reason) {
         double baseLat = state.getGpsLatitude();

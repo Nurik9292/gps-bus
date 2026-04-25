@@ -881,6 +881,12 @@
             if (!marker || !dr) continue;
             const ageMs = now - dr.lastAt;
             if (ageMs < DEAD_RECKONING_MIN_AGE_MS || ageMs > DEAD_RECKONING_MAX_AGE_MS) continue;
+            // WHY: stationary buses must not be extrapolated. Backend Kalman-smoothed
+            // speed can hold residual motion memory after the bus parks; if it leaks
+            // into the WS payload despite the backend guard, this guard keeps the
+            // marker pinned. Both checks are required: speedKmh==0 alone is brittle
+            // because Kalman residual can be >= 1 km/h while bus is parked.
+            if (dr.moving === false) continue;
             if (!dr.speedKmh || dr.speedKmh < 1) continue;
 
             const speedMs = dr.speedKmh / 3.6;
@@ -906,6 +912,7 @@
             lon: v.lon,
             course: v.course || 0,
             speedKmh: v.moving ? (v.speed || 0) : 0,
+            moving: v.moving === true,
             lastAt: Date.now()
         };
 
