@@ -21,12 +21,12 @@ class SnapCorrectorStationaryFracFlipTest {
 
     private static final String ROUTE = "160";
     private static final String VEHICLE_ID = "veh-1";
-    private static final String PLATE = "6368 AGJ";
+    private static final String PLATE = "6235 AGJ";
 
-    private static final double FORWARD_LAT = 37.89872;
-    private static final double FORWARD_LON = 58.38837;
-    private static final double BACKWARD_LAT = 37.90015;
-    private static final double BACKWARD_LON = 58.38882;
+    private static final double FORWARD_LAT = 37.90976;
+    private static final double FORWARD_LON = 58.38966;
+    private static final double BACKWARD_LAT = 37.90877;
+    private static final double BACKWARD_LON = 58.38902;
 
     @Mock
     private RouteGeometryCache routeGeometryCache;
@@ -54,84 +54,57 @@ class SnapCorrectorStationaryFracFlipTest {
     }
 
     @Test
-    void doesNotFlipDirectionWhenStationaryBusFracMicroBackward() {
+    void filtersFlipUsingInMotionFlag_NotKalman() {
         VehiclePredictionState existing = VehiclePredictionState.builder()
                 .vehicleId(VEHICLE_ID)
                 .licensePlate(PLATE)
                 .routeNumber(ROUTE)
-                .direction(0)
+                .direction(1)
                 .predictedLatitude(FORWARD_LAT)
                 .predictedLongitude(FORWARD_LON)
-                .fractionOnRoute(0.6195)
-                .lastGpsFraction(0.6195)
-                .kalmanSpeedKmh(0.0)
+                .fractionOnRoute(0.4544)
+                .lastGpsFraction(0.4544)
+                .inMotion(false)
+                .rawGpsSpeedKmh(0.0)
+                .kalmanSpeedKmh(18.0)
                 .build();
 
         MapMatchingService.SnappedResult forwardSnap =
-                new MapMatchingService.SnappedResult(FORWARD_LAT, FORWARD_LON, 0.6106, 2.4, true);
+                new MapMatchingService.SnappedResult(FORWARD_LAT, FORWARD_LON, 0.4483, 5.5, true);
         when(mapMatchingService.snapToNearestSegment(anyDouble(), anyDouble(), any(), any(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(forwardSnap);
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                FORWARD_LAT, FORWARD_LON, 0.0, 0);
+                FORWARD_LAT, FORWARD_LON, 0.0, 1);
 
         assertThat(result.direction())
-                .as("stationary bus must NOT flip direction on micro fraction noise (0.0088 ≈ 194m on 22km route is GPS jitter, not real reversal)")
-                .isEqualTo(0);
-    }
-
-    @Test
-    void flipsDirectionWhenMovingBusFracMicroBackward() {
-        VehiclePredictionState existing = VehiclePredictionState.builder()
-                .vehicleId(VEHICLE_ID)
-                .licensePlate(PLATE)
-                .routeNumber(ROUTE)
-                .direction(0)
-                .predictedLatitude(FORWARD_LAT)
-                .predictedLongitude(FORWARD_LON)
-                .fractionOnRoute(0.6195)
-                .lastGpsFraction(0.6195)
-                .kalmanSpeedKmh(30.0)
-                .build();
-
-        MapMatchingService.SnappedResult forwardSnap =
-                new MapMatchingService.SnappedResult(FORWARD_LAT, FORWARD_LON, 0.6106, 2.4, true);
-        MapMatchingService.SnappedResult backwardSnap =
-                new MapMatchingService.SnappedResult(FORWARD_LAT + 0.0001, FORWARD_LON + 0.0001, 0.3955, 5.0, true);
-
-        when(mapMatchingService.snapToNearestSegment(anyDouble(), anyDouble(), any(), any(), anyDouble(), anyDouble(), anyDouble()))
-                .thenReturn(forwardSnap);
-        when(mapMatchingService.snapToNearestSegment(anyDouble(), anyDouble(), any(), anyDouble()))
-                .thenReturn(backwardSnap);
-
-        SnapCorrector.SnapResult result = snapCorrector.applySnap(
-                existing, VEHICLE_ID, PLATE, ROUTE,
-                FORWARD_LAT, FORWARD_LON, 0.0, 0);
-
-        assertThat(result.direction())
-                .as("moving bus retains existing flip path — micro backward delta with movement may be a real direction reversal")
+                .as("kalmanSpeedKmh=18 still high (slow Kalman convergence after stop), " +
+                    "but inMotion=false says bus is stationary — flip MUST be suppressed " +
+                    "(this is the 6235 AGJ case at 09:24:13)")
                 .isEqualTo(1);
     }
 
     @Test
-    void doesNotFlipWhenKalmanSpeedUninitialized() {
+    void allowsFlipWhenActuallyMoving() {
         VehiclePredictionState existing = VehiclePredictionState.builder()
                 .vehicleId(VEHICLE_ID)
                 .licensePlate(PLATE)
                 .routeNumber(ROUTE)
-                .direction(0)
+                .direction(1)
                 .predictedLatitude(FORWARD_LAT)
                 .predictedLongitude(FORWARD_LON)
-                .fractionOnRoute(0.6195)
-                .lastGpsFraction(0.6195)
-                .kalmanSpeedKmh(-1)
+                .fractionOnRoute(0.4544)
+                .lastGpsFraction(0.4544)
+                .inMotion(true)
+                .rawGpsSpeedKmh(20.0)
+                .kalmanSpeedKmh(20.0)
                 .build();
 
         MapMatchingService.SnappedResult forwardSnap =
-                new MapMatchingService.SnappedResult(FORWARD_LAT, FORWARD_LON, 0.6106, 2.4, true);
+                new MapMatchingService.SnappedResult(FORWARD_LAT, FORWARD_LON, 0.4483, 5.5, true);
         MapMatchingService.SnappedResult backwardSnap =
-                new MapMatchingService.SnappedResult(FORWARD_LAT + 0.0001, FORWARD_LON + 0.0001, 0.3955, 5.0, true);
+                new MapMatchingService.SnappedResult(FORWARD_LAT + 0.0001, FORWARD_LON + 0.0001, 0.5587, 5.0, true);
 
         when(mapMatchingService.snapToNearestSegment(anyDouble(), anyDouble(), any(), any(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(forwardSnap);
@@ -140,10 +113,42 @@ class SnapCorrectorStationaryFracFlipTest {
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                FORWARD_LAT, FORWARD_LON, 0.0, 0);
+                FORWARD_LAT, FORWARD_LON, 0.0, 1);
 
         assertThat(result.direction())
-                .as("uninitialized kalmanSpeed (-1) must not be treated as stationary — flip allowed (default behavior)")
+                .as("inMotion=true rawGpsSpeed=20 — bus is actually moving, " +
+                    "flip path is preserved (legacy behavior unchanged)")
+                .isEqualTo(0);
+    }
+
+    @Test
+    void filtersFlipWhenInMotionTrueButRawSpeedNearZero() {
+        VehiclePredictionState existing = VehiclePredictionState.builder()
+                .vehicleId(VEHICLE_ID)
+                .licensePlate(PLATE)
+                .routeNumber(ROUTE)
+                .direction(1)
+                .predictedLatitude(FORWARD_LAT)
+                .predictedLongitude(FORWARD_LON)
+                .fractionOnRoute(0.4544)
+                .lastGpsFraction(0.4544)
+                .inMotion(true)
+                .rawGpsSpeedKmh(1.0)
+                .kalmanSpeedKmh(15.0)
+                .build();
+
+        MapMatchingService.SnappedResult forwardSnap =
+                new MapMatchingService.SnappedResult(FORWARD_LAT, FORWARD_LON, 0.4483, 5.5, true);
+        when(mapMatchingService.snapToNearestSegment(anyDouble(), anyDouble(), any(), any(), anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(forwardSnap);
+
+        SnapCorrector.SnapResult result = snapCorrector.applySnap(
+                existing, VEHICLE_ID, PLATE, ROUTE,
+                FORWARD_LAT, FORWARD_LON, 0.0, 1);
+
+        assertThat(result.direction())
+                .as("rawGpsSpeed=1 km/h falls below 5 km/h floor — treated as stationary " +
+                    "even when inMotion flag has not flipped yet (e.g. just braking)")
                 .isEqualTo(1);
     }
 }
