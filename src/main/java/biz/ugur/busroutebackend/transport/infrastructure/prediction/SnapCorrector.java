@@ -42,7 +42,8 @@ class SnapCorrector {
             double course,
             double newRejectedFrac,
             int newImplausibleCount,
-            boolean resetTriggered
+            boolean resetTriggered,
+            double rawSnapMinDistance
     ) {}
 
     SnapResult applySnap(VehiclePredictionState existing,
@@ -61,7 +62,7 @@ class SnapCorrector {
             log.debug("[GPS_PIPELINE] SNAP_SKIP vehicle={} snapToRoute={} routeNumber={}",
                     vehicleId, properties.isSnapToRoute(), routeNumber);
             return new SnapResult(latitude, longitude, -1, direction, null, 0,
-                    course, newRejectedFrac, newImplausibleCount, false);
+                    course, newRejectedFrac, newImplausibleCount, false, Double.MAX_VALUE);
         }
 
         List<double[]> routeCoords = routeGeometryCache.getPoints(routeNumber, direction);
@@ -77,7 +78,7 @@ class SnapCorrector {
             log.debug("[GPS_PIPELINE] SNAP_SKIP vehicle={} snapToRoute={} routeNumber={}",
                     vehicleId, properties.isSnapToRoute(), routeNumber);
             return new SnapResult(latitude, longitude, -1, direction, null, 0,
-                    course, newRejectedFrac, newImplausibleCount, false);
+                    course, newRejectedFrac, newImplausibleCount, false, Double.MAX_VALUE);
         }
 
         double totalDist = routeGeometryCache.getTotalDistance(routeNumber, direction);
@@ -88,6 +89,8 @@ class SnapCorrector {
                 ? mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, cumDist, totalDist,
                         existing.getLastGpsFraction(), 0.20)
                 : mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, totalDist);
+
+        double rawSnapMinDistance = snap.distanceMeters();
 
         boolean headingCorrected = false;
         boolean fracCorrected = false;
@@ -109,6 +112,9 @@ class SnapCorrector {
                         double flippedDist = routeGeometryCache.getTotalDistance(routeNumber, flippedDir);
                         MapMatchingService.SnappedResult flippedSnap =
                                 mapMatchingService.snapToNearestSegment(latitude, longitude, flippedCoords, flippedDist);
+                        if (flippedSnap.snapped()) {
+                            rawSnapMinDistance = Math.min(rawSnapMinDistance, flippedSnap.distanceMeters());
+                        }
                         if (flippedSnap.snapped()
                                 && isDirectionFlipPhysicallyPlausible(vehicleId, "HEADING", existing,
                                         flippedSnap, snap.fraction())) {
@@ -164,6 +170,9 @@ class SnapCorrector {
                         double correctedDist = routeGeometryCache.getTotalDistance(routeNumber, correctedDir);
                         MapMatchingService.SnappedResult correctedSnap =
                                 mapMatchingService.snapToNearestSegment(latitude, longitude, correctedCoords, correctedDist);
+                        if (correctedSnap.snapped()) {
+                            rawSnapMinDistance = Math.min(rawSnapMinDistance, correctedSnap.distanceMeters());
+                        }
                         boolean terminalFlipSmoothOnOpposite = wasNearTerminal && correctedSnap.snapped()
                                 && (lastGpsFrac >= (1.0 - tolerance)
                                         ? correctedSnap.fraction() <= tolerance * 3
@@ -315,6 +324,9 @@ class SnapCorrector {
                 double oppositeDist = routeGeometryCache.getTotalDistance(routeNumber, oppositeDir);
                 MapMatchingService.SnappedResult oppositeSnap =
                         mapMatchingService.snapToNearestSegment(latitude, longitude, oppositeCoords, oppositeDist);
+                if (oppositeSnap.snapped()) {
+                    rawSnapMinDistance = Math.min(rawSnapMinDistance, oppositeSnap.distanceMeters());
+                }
                 boolean oppositePlausible = oppositeSnap.snapped()
                         && isDirectionFlipPhysicallyPlausible(vehicleId, "OPPOSITE_FALLBACK",
                                 existing, oppositeSnap, oppositeSnap.fraction());
@@ -385,7 +397,7 @@ class SnapCorrector {
 
         return new SnapResult(predictedLat, predictedLon, fraction, direction,
                 routeCoords, totalDist, course, newRejectedFrac, newImplausibleCount,
-                resetTriggered);
+                resetTriggered, rawSnapMinDistance);
     }
 
     Map<String, Integer> drainPendingDirectionFixes() {

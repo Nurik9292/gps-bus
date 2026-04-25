@@ -482,9 +482,9 @@ public class VehiclePositionPredictionService {
         }
         int newOffRouteCount = (existing != null && !routeChanged) ? existing.getConsecutiveOffRouteCount() : 0;
         boolean newOffRoute = existing != null && !routeChanged && existing.isOffRoute();
-        if (fraction >= 0 && !teleportRejected) {
-            double rawToSnapDist = DistanceCalculationService.haversineDistanceMeters(
-                    latitude, longitude, predictedLat, predictedLon);
+        double rawToSnapDist = snapResult.rawSnapMinDistance();
+        boolean snapAttempted = rawToSnapDist < Double.MAX_VALUE;
+        if (snapAttempted) {
             if (rawToSnapDist > OFF_ROUTE_DISTANCE_THRESHOLD_METERS) {
                 newOffRouteCount += 1;
                 if (newOffRouteCount >= OFF_ROUTE_CONFIRMATIONS && !newOffRoute) {
