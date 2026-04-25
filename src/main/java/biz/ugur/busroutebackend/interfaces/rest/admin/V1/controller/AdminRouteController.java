@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.route.BusRoute
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.route.CheckRouteNumberResponse;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.route.RouteSelectOption;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
+import biz.ugur.busroutebackend.transport.infrastructure.prediction.RouteGeometryCache;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import biz.ugur.busroutebackend.transport.application.dto.route.GetAllRoutePaginationQuery;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
@@ -33,6 +34,7 @@ public class AdminRouteController extends BasePaginatedController {
     private final GetAllBusRoutesUseCase getAllRoutesUseCase;
     private final GetRouteByIdUseCase getRouteByIdUseCase;
     private final BusRouteRepository busRouteRepository;
+    private final RouteGeometryCache routeGeometryCache;
 
 
     public AdminRouteController(CreateBusRouteUseCase createBusRouteUseCase,
@@ -43,6 +45,7 @@ public class AdminRouteController extends BasePaginatedController {
                                 GetAllBusRoutesUseCase getAllRoutesUseCase,
                                 GetRouteByIdUseCase getRouteByIdUseCase,
                                 BusRouteRepository busRouteRepository,
+                                RouteGeometryCache routeGeometryCache,
                                 MessageSource messageSource) {
         super(messageSource);
         this.createBusRouteUseCase = createBusRouteUseCase;
@@ -53,6 +56,7 @@ public class AdminRouteController extends BasePaginatedController {
         this.getAllRoutesUseCase = getAllRoutesUseCase;
         this.getRouteByIdUseCase = getRouteByIdUseCase;
         this.busRouteRepository = busRouteRepository;
+        this.routeGeometryCache = routeGeometryCache;
     }
 
     @Override
@@ -137,6 +141,12 @@ public class AdminRouteController extends BasePaginatedController {
         return ok(Mono.just(routeNumber)
                 .as(checkRouteNumberUseCase::execute)
                 .map(CheckRouteNumberResponse::of));
+    }
+
+    @PostMapping("/{routeNumber}/refresh-cache")
+    public Mono<ResponseEntity<Void>> refreshRouteCache(@PathVariable String routeNumber) {
+        routeGeometryCache.refreshRoute(routeNumber);
+        return noContent();
     }
 
     private BusRouteResponse toBasic(RouteData  routeData) {
