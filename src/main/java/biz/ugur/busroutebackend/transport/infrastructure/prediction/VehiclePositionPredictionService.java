@@ -282,6 +282,17 @@ public class VehiclePositionPredictionService {
 
         VehiclePredictionState existing = vehicleStates.get(vehicleId);
 
+        if (existing != null && existing.getDirection() != direction) {
+            log.info("[GPS_PIPELINE] DIR_EXTERNAL_CHANGE vehicle={} plate={} prevDir={} newDir={} — resetting lastGpsFraction, starting cooldown",
+                    vehicleId, licensePlate, existing.getDirection(), direction);
+            existing = existing.toBuilder()
+                    .direction(direction)
+                    .lastGpsFraction(-1)
+                    .directionChangedAt(Instant.now())
+                    .build();
+            replaceState(vehicleId, existing, "direction-external-change");
+        }
+
         if (existing != null && !timestamp.isAfter(existing.getLastGpsUpdate())) {
             log.trace("Ignoring duplicate GPS for vehicle {}: timestamp {} <= lastGpsUpdate {}",
                     vehicleId, timestamp, existing.getLastGpsUpdate());
@@ -525,9 +536,12 @@ public class VehiclePositionPredictionService {
                 ? Instant.now().plusSeconds(properties.getColdStartDurationSec())
                 : (existing != null ? existing.getColdStartUntilAt() : null);
 
+        Instant directionChangedAt = existing != null ? existing.getDirectionChangedAt() : null;
+
         VehiclePredictionState builtState = builder
                 .lastReceivedAt(Instant.now())
                 .coldStartUntilAt(coldStartUntilAt)
+                .directionChangedAt(directionChangedAt)
                 .build();
         String writeReason = teleportRejected ? "onGpsUpdate-teleport-rejected"
                 : (triggerColdStart ? (snapResult.resetTriggered() ? "onGpsUpdate-snap-reset" : "onGpsUpdate-pos-teleport")

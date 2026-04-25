@@ -81,4 +81,6 @@ public class VehiclePredictionState {
     @Builder.Default
     private double kalmanSpeedVariance = 0;
 
+    private Instant directionChangedAt;
+
 }

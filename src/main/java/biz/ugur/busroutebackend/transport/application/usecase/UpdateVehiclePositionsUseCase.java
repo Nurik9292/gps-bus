@@ -581,8 +581,10 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                     .map(v -> {
                                         Vehicle detected = detectedById.get(v.getId().getValue());
                                         if (detected != null && detected.getCurrentDirection() != null) {
-                                            return v.updateDirection(detected.getLastStopSequence(),
-                                                    detected.getCurrentDirection());
+                                            return v.toBuilder()
+                                                    .currentDirection(detected.getCurrentDirection())
+                                                    .lastStopSequence(detected.getLastStopSequence())
+                                                    .build();
                                         }
                                         return v;
                                     })

@@ -4,6 +4,8 @@ import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationSe
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 class SnapCorrector {
 
+    private static final long DIR_CHANGE_COOLDOWN_MS = 5_000;
 
     private final PredictionProperties properties;
     private final RouteGeometryCache routeGeometryCache;
@@ -95,23 +98,29 @@ class SnapCorrector {
             double headingDiff = Math.abs(course - routeHeading);
             if (headingDiff > 180) headingDiff = 360 - headingDiff;
             if (headingDiff > properties.getDirectionFlipThresholdDeg()) {
-                int flippedDir = (direction == 0) ? 1 : 0;
-                List<double[]> flippedCoords = routeGeometryCache.getPoints(routeNumber, flippedDir);
-                if (flippedCoords != null) {
-                    double flippedDist = routeGeometryCache.getTotalDistance(routeNumber, flippedDir);
-                    MapMatchingService.SnappedResult flippedSnap =
-                            mapMatchingService.snapToNearestSegment(latitude, longitude, flippedCoords, flippedDist);
-                    if (flippedSnap.snapped()
-                            && isDirectionFlipPhysicallyPlausible(vehicleId, "HEADING", existing,
-                                    flippedSnap, snap.fraction())) {
-                        log.debug("Direction corrected for vehicle {}: {} → {} (headingDiff={}°, course={}°, routeHeading={}°)",
-                                vehicleId, direction, flippedDir,
-                                (int) headingDiff, (int) course, (int) routeHeading);
-                        direction = flippedDir;
-                        routeCoords = flippedCoords;
-                        totalDist = flippedDist;
-                        snap = flippedSnap;
-                        headingCorrected = true;
+                if (isInDirectionCooldown(existing)) {
+                    log.info("[GPS_PIPELINE] DIR_FLIP_BLOCKED_COOLDOWN vehicle={} plate={} type=heading ageMs={} headingDiff={}° course={}° routeHeading={}°",
+                            vehicleId, licensePlate, directionCooldownAgeMs(existing),
+                            (int) headingDiff, (int) course, (int) routeHeading);
+                } else {
+                    int flippedDir = (direction == 0) ? 1 : 0;
+                    List<double[]> flippedCoords = routeGeometryCache.getPoints(routeNumber, flippedDir);
+                    if (flippedCoords != null) {
+                        double flippedDist = routeGeometryCache.getTotalDistance(routeNumber, flippedDir);
+                        MapMatchingService.SnappedResult flippedSnap =
+                                mapMatchingService.snapToNearestSegment(latitude, longitude, flippedCoords, flippedDist);
+                        if (flippedSnap.snapped()
+                                && isDirectionFlipPhysicallyPlausible(vehicleId, "HEADING", existing,
+                                        flippedSnap, snap.fraction())) {
+                            log.debug("Direction corrected for vehicle {}: {} → {} (headingDiff={}°, course={}°, routeHeading={}°)",
+                                    vehicleId, direction, flippedDir,
+                                    (int) headingDiff, (int) course, (int) routeHeading);
+                            direction = flippedDir;
+                            routeCoords = flippedCoords;
+                            totalDist = flippedDist;
+                            snap = flippedSnap;
+                            headingCorrected = true;
+                        }
                     }
                 }
             }
@@ -131,7 +140,13 @@ class SnapCorrector {
             double realFraction = snap.fraction();
             double predictedFraction = (existing != null) ? existing.getFractionOnRoute() : -1;
 
-            if (!headingCorrected && existing != null && existing.getLastGpsFraction() >= 0) {
+            if (!headingCorrected && existing != null && existing.getLastGpsFraction() >= 0
+                    && isInDirectionCooldown(existing)) {
+                log.info("[GPS_PIPELINE] DIR_FLIP_BLOCKED_COOLDOWN vehicle={} plate={} type=frac ageMs={} lastGpsFrac={} realFraction={}",
+                        vehicleId, licensePlate, directionCooldownAgeMs(existing),
+                        String.format("%.4f", existing.getLastGpsFraction()),
+                        String.format("%.4f", realFraction));
+            } else if (!headingCorrected && existing != null && existing.getLastGpsFraction() >= 0) {
                 double lastGpsFrac = existing.getLastGpsFraction();
                 double fracDelta = realFraction - lastGpsFrac;
                 boolean gpsMoveAgainstDir = fracDelta < -0.005;
@@ -384,6 +399,21 @@ class SnapCorrector {
 
     void onVehicleStaleCleanup(java.util.Set<String> livingVehicleIds) {
         consecutiveOppositeSnaps.keySet().retainAll(livingVehicleIds);
+    }
+
+    private static boolean isInDirectionCooldown(VehiclePredictionState existing) {
+        if (existing == null || existing.getDirectionChangedAt() == null) {
+            return false;
+        }
+        long ageMs = Duration.between(existing.getDirectionChangedAt(), Instant.now()).toMillis();
+        return ageMs >= 0 && ageMs < DIR_CHANGE_COOLDOWN_MS;
+    }
+
+    private static long directionCooldownAgeMs(VehiclePredictionState existing) {
+        if (existing == null || existing.getDirectionChangedAt() == null) {
+            return -1;
+        }
+        return Duration.between(existing.getDirectionChangedAt(), Instant.now()).toMillis();
     }
 
     private boolean isDirectionFlipPhysicallyPlausible(String vehicleId, String trigger,
