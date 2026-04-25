@@ -604,6 +604,9 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         });
 
         return vehiclesWithGarageDetection.flatMap(updatedVehicles -> {
+            long loopT0 = System.nanoTime();
+            int dispatchedCount = 0;
+            long maxCallMicros = 0;
             for (Vehicle v : updatedVehicles) {
                 if (v.getCurrentLatitude() == null || v.getCurrentLongitude() == null) {
                     continue;
@@ -613,6 +616,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             v.getId().getValue(), v.getLicensePlate());
                     continue;
                 }
+                long callT0 = System.nanoTime();
                 predictionService.onGpsUpdate(
                         v.getId().getValue(),
                         v.getLicensePlate(),
@@ -631,6 +635,24 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                         Boolean.TRUE.equals(v.getIsInGarage()),
                         Boolean.TRUE.equals(bufferedByDeviceId.get(v.getDeviceId()))
                 );
+                long callMicros = (System.nanoTime() - callT0) / 1000;
+                dispatchedCount++;
+                if (callMicros > maxCallMicros) maxCallMicros = callMicros;
+                if (callMicros > 5_000) {
+                    log.warn("[GPS_PIPELINE] ON_GPS_UPDATE_SLOW vehicle={} plate={} route={} durationMicros={} — single call exceeded 5ms blocking budget on event-loop",
+                            v.getId().getValue(), v.getLicensePlate(), v.getRouteNumber(), callMicros);
+                } else {
+                    log.debug("[GPS_PIPELINE] ON_GPS_UPDATE_TIMING vehicle={} durationMicros={}",
+                            v.getId().getValue(), callMicros);
+                }
+            }
+            long loopMicros = (System.nanoTime() - loopT0) / 1000;
+            if (loopMicros > 50_000) {
+                log.warn("[GPS_PIPELINE] ON_GPS_UPDATE_LOOP_SLOW vehicles={} dispatched={} totalMicros={} maxCallMicros={} — for-loop blocked event-loop > 50ms",
+                        updatedVehicles.size(), dispatchedCount, loopMicros, maxCallMicros);
+            } else {
+                log.debug("[GPS_PIPELINE] ON_GPS_UPDATE_LOOP_TIMING vehicles={} dispatched={} totalMicros={} maxCallMicros={}",
+                        updatedVehicles.size(), dispatchedCount, loopMicros, maxCallMicros);
             }
 
             List<Vehicle> gatedVehicles = updatedVehicles.stream()
