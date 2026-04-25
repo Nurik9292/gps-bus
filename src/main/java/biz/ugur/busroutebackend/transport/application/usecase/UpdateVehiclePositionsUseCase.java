@@ -604,57 +604,60 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         });
 
         return vehiclesWithGarageDetection.flatMap(updatedVehicles -> {
-            long loopT0 = System.nanoTime();
-            int dispatchedCount = 0;
-            long maxCallMicros = 0;
-            for (Vehicle v : updatedVehicles) {
-                if (v.getCurrentLatitude() == null || v.getCurrentLongitude() == null) {
-                    continue;
+            Mono<Void> predictionsMono = Mono.<Void>fromRunnable(() -> {
+                long loopT0 = System.nanoTime();
+                int dispatchedCount = 0;
+                long maxCallMicros = 0;
+                for (Vehicle v : updatedVehicles) {
+                    if (v.getCurrentLatitude() == null || v.getCurrentLongitude() == null) {
+                        continue;
+                    }
+                    if (Boolean.TRUE.equals(frozenCoordsWithMotionById.get(v.getId().getValue()))) {
+                        log.debug("[GPS_PIPELINE] FROZEN_FIX_SKIP_PREDICTION vehicle={} plate={} — prediction advance + history suppressed",
+                                v.getId().getValue(), v.getLicensePlate());
+                        continue;
+                    }
+                    long callT0 = System.nanoTime();
+                    predictionService.onGpsUpdate(
+                            v.getId().getValue(),
+                            v.getLicensePlate(),
+                            v.getRouteNumber(),
+                            v.getCurrentLatitude(),
+                            v.getCurrentLongitude(),
+                            v.getSpeedKmh() != null ? v.getSpeedKmh() : 0.0,
+                            (v.getCourse() != null && v.getCourse() > 0.0)
+                                    ? v.getCourse()
+                                    : estimatedBearings.getOrDefault(v.getId().getValue(), 0.0),
+                            Boolean.TRUE.equals(v.getIsInMotion()),
+                            v.getLastPositionUpdate() != null
+                                    ? v.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
+                                    : Instant.now(),
+                            v.getCurrentDirection() != null ? v.getCurrentDirection() : 0,
+                            Boolean.TRUE.equals(v.getIsInGarage()),
+                            Boolean.TRUE.equals(bufferedByDeviceId.get(v.getDeviceId()))
+                    );
+                    long callMicros = (System.nanoTime() - callT0) / 1000;
+                    dispatchedCount++;
+                    if (callMicros > maxCallMicros) maxCallMicros = callMicros;
+                    if (callMicros > 5_000) {
+                        log.warn("[GPS_PIPELINE] ON_GPS_UPDATE_SLOW vehicle={} plate={} route={} durationMicros={} — single call exceeded 5ms blocking budget on event-loop",
+                                v.getId().getValue(), v.getLicensePlate(), v.getRouteNumber(), callMicros);
+                    } else {
+                        log.debug("[GPS_PIPELINE] ON_GPS_UPDATE_TIMING vehicle={} durationMicros={}",
+                                v.getId().getValue(), callMicros);
+                    }
                 }
-                if (Boolean.TRUE.equals(frozenCoordsWithMotionById.get(v.getId().getValue()))) {
-                    log.debug("[GPS_PIPELINE] FROZEN_FIX_SKIP_PREDICTION vehicle={} plate={} — prediction advance + history suppressed",
-                            v.getId().getValue(), v.getLicensePlate());
-                    continue;
-                }
-                long callT0 = System.nanoTime();
-                predictionService.onGpsUpdate(
-                        v.getId().getValue(),
-                        v.getLicensePlate(),
-                        v.getRouteNumber(),
-                        v.getCurrentLatitude(),
-                        v.getCurrentLongitude(),
-                        v.getSpeedKmh() != null ? v.getSpeedKmh() : 0.0,
-                        (v.getCourse() != null && v.getCourse() > 0.0)
-                                ? v.getCourse()
-                                : estimatedBearings.getOrDefault(v.getId().getValue(), 0.0),
-                        Boolean.TRUE.equals(v.getIsInMotion()),
-                        v.getLastPositionUpdate() != null
-                                ? v.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
-                                : Instant.now(),
-                        v.getCurrentDirection() != null ? v.getCurrentDirection() : 0,
-                        Boolean.TRUE.equals(v.getIsInGarage()),
-                        Boolean.TRUE.equals(bufferedByDeviceId.get(v.getDeviceId()))
-                );
-                long callMicros = (System.nanoTime() - callT0) / 1000;
-                dispatchedCount++;
-                if (callMicros > maxCallMicros) maxCallMicros = callMicros;
-                if (callMicros > 5_000) {
-                    log.warn("[GPS_PIPELINE] ON_GPS_UPDATE_SLOW vehicle={} plate={} route={} durationMicros={} — single call exceeded 5ms blocking budget on event-loop",
-                            v.getId().getValue(), v.getLicensePlate(), v.getRouteNumber(), callMicros);
+                long loopMicros = (System.nanoTime() - loopT0) / 1000;
+                if (loopMicros > 50_000) {
+                    log.warn("[GPS_PIPELINE] ON_GPS_UPDATE_LOOP_SLOW vehicles={} dispatched={} totalMicros={} maxCallMicros={} — for-loop on boundedElastic still > 50ms (off event-loop, but heavy)",
+                            updatedVehicles.size(), dispatchedCount, loopMicros, maxCallMicros);
                 } else {
-                    log.debug("[GPS_PIPELINE] ON_GPS_UPDATE_TIMING vehicle={} durationMicros={}",
-                            v.getId().getValue(), callMicros);
+                    log.debug("[GPS_PIPELINE] ON_GPS_UPDATE_LOOP_TIMING vehicles={} dispatched={} totalMicros={} maxCallMicros={}",
+                            updatedVehicles.size(), dispatchedCount, loopMicros, maxCallMicros);
                 }
-            }
-            long loopMicros = (System.nanoTime() - loopT0) / 1000;
-            if (loopMicros > 50_000) {
-                log.warn("[GPS_PIPELINE] ON_GPS_UPDATE_LOOP_SLOW vehicles={} dispatched={} totalMicros={} maxCallMicros={} — for-loop blocked event-loop > 50ms",
-                        updatedVehicles.size(), dispatchedCount, loopMicros, maxCallMicros);
-            } else {
-                log.debug("[GPS_PIPELINE] ON_GPS_UPDATE_LOOP_TIMING vehicles={} dispatched={} totalMicros={} maxCallMicros={}",
-                        updatedVehicles.size(), dispatchedCount, loopMicros, maxCallMicros);
-            }
+            }).subscribeOn(Schedulers.boundedElastic());
 
+            return predictionsMono.then(Mono.defer(() -> {
             List<Vehicle> gatedVehicles = updatedVehicles.stream()
                     .map(v -> applyGatekeeperDecision(v, oldCoordsByVehicleId))
                     .toList();
@@ -709,6 +712,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 tuple.getT1(), tuple.getT2().size(), tuple.getT3());
                         return createResult(statuses);
                     });
+            }));
         });
     }
 
