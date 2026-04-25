@@ -121,8 +121,6 @@ class VehiclePositionPredictor {
     }
 
     private VehiclePredictionState advanceInternal(VehiclePredictionState state, long msSinceGps) {
-        // Prefer Kalman-filtered speed if initialised; fall back to moving-average
-        // so advance uses the smoothest available estimate.
         double baseSpeed = state.getKalmanSpeedKmh() >= 0
                 ? state.getKalmanSpeedKmh()
                 : state.getSpeedKmh();

@@ -480,28 +480,25 @@
         return ROUTE_COLORS[routeNumber];
     }
 
-    // State
     let map, ws;
-    let vehicles = {};        // id -> vehicle data
-    let vehicleMarkers = {};  // id -> L.marker
-    let vehicleDeadReckoning = {}; // id -> {lat, lon, course, speedKmh, lastAt}
+    let vehicles = {};        
+    let vehicleMarkers = {};
+    let vehicleDeadReckoning = {};
     let highlightedBusId = null;
     let stopMarkers = {};
     let stops = [];
     let activeRouteFilters = new Set();
-    let wsSubscribedRoutes = new Set();  // WebSocket server-side subscription
+    let wsSubscribedRoutes = new Set(); 
     let updateCounter = 0;
     let lastCounterReset = Date.now();
 
-    // Trail debug state
-    let vehicleTrails = {};       // id -> [{lat, lon, ts, jump}]
-    let vehicleTrailLayers = {};  // id -> L.layerGroup
+    let vehicleTrails = {};      
+    let vehicleTrailLayers = {}; 
     let trailsVisible = true;
-    let teleportLog = [];         // [{plate, route, dist, from, to, ts}]
+    let teleportLog = [];         
     const TRAIL_MAX_POINTS = 120;
     const TELEPORT_THRESHOLD_M = 500;
 
-    // ===== MAP INIT =====
     function initMap() {
         map = L.map('map', { zoomControl: false }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
 
@@ -519,7 +516,6 @@
         updateTeleportPanel();
         setInterval(updateTeleportPanel, 2000);
 
-        // Update rate counter
         setInterval(() => {
             const elapsed = (Date.now() - lastCounterReset) / 1000;
             document.getElementById('update-rate').textContent = Math.round(updateCounter / elapsed);
@@ -527,11 +523,9 @@
             lastCounterReset = Date.now();
         }, 3000);
 
-        // Update vehicle ages
         setInterval(updateVehicleList, 2000);
     }
 
-    // ===== NORMALIZE VEHICLE DATA =====
     function normalizeVehicle(v) {
         return {
             id: v.vehicleId || v.vehicle_id,
@@ -549,7 +543,6 @@
         };
     }
 
-    // ===== STOPS =====
     async function loadStops() {
         try {
             const res = await fetch(`${API_BASE}/routes/active`);
@@ -605,7 +598,6 @@
         });
     }
 
-    // ===== WEBSOCKET =====
     function buildWsUrl() {
         if (wsSubscribedRoutes.size > 0) {
             return WS_URL + '?routes=' + [...wsSubscribedRoutes].join(',');
@@ -661,8 +653,6 @@
             setWsStatus(false);
             clearInterval(wsPingTimer);
             clearInterval(wsStalenessTimer);
-            // Trails become stale during disconnect — clear to avoid false teleport
-            // detection on first position_update after reconnect
             vehicleTrails = {};
             Object.values(vehicleTrailLayers).forEach(l => map.removeLayer(l));
             vehicleTrailLayers = {};
@@ -672,16 +662,13 @@
 
     function reconnectWebSocket() {
         if (ws) {
-            ws.onclose = null; // prevent auto-reconnect loop
+            ws.onclose = null; 
             ws.close();
         }
-        // Clear all vehicle markers and data when switching subscription
         Object.values(vehicleMarkers).forEach(m => map.removeLayer(m));
         vehicleMarkers = {};
         vehicles = {};
         vehicleDeadReckoning = {};
-        // Clear trails too — stale trail points would create false teleports
-        // when reconnecting since vehicle moved during disconnect window
         vehicleTrails = {};
         Object.values(vehicleTrailLayers).forEach(l => map.removeLayer(l));
         vehicleTrailLayers = {};
@@ -696,7 +683,6 @@
         label.textContent = connected ? 'LIVE' : 'OFF';
     }
 
-    // ===== WS ROUTE SUBSCRIPTION =====
     function addWsRoute(routeNum) {
         routeNum = routeNum.trim().toUpperCase();
         if (!routeNum || wsSubscribedRoutes.has(routeNum)) return;
@@ -744,7 +730,6 @@
         }
     }
 
-    // ===== PROCESS VEHICLE =====
     function haversine(a, b) {
         const R = 6371000;
         const dLat = (b.lat - a.lat) * Math.PI / 180;
@@ -862,15 +847,9 @@
         panel.innerHTML = html;
     }
 
-    // ===== CLIENT DEAD-RECKONING =====
-    // Between WS updates (which arrive every ~5-15s depending on GPS rate),
-    // extrapolate marker position forward using last known course + speed so
-    // the icon animates smoothly instead of freezing until the next packet.
-    // When a new WS update arrives, `processVehicle` resets the baseline and
-    // the interpolation continues from the fresh position.
     const DEAD_RECKONING_TICK_MS = 500;
-    const DEAD_RECKONING_MIN_AGE_MS = 1000; // let animateMarker handle the first second
-    const DEAD_RECKONING_MAX_AGE_MS = 30000; // stop extrapolating after 30s of silence
+    const DEAD_RECKONING_MIN_AGE_MS = 1000; 
+    const DEAD_RECKONING_MAX_AGE_MS = 30000;
     const EARTH_METERS_PER_DEG_LAT = 111320;
 
     function deadReckoningTick() {
@@ -881,11 +860,6 @@
             if (!marker || !dr) continue;
             const ageMs = now - dr.lastAt;
             if (ageMs < DEAD_RECKONING_MIN_AGE_MS || ageMs > DEAD_RECKONING_MAX_AGE_MS) continue;
-            // WHY: stationary buses must not be extrapolated. Backend Kalman-smoothed
-            // speed can hold residual motion memory after the bus parks; if it leaks
-            // into the WS payload despite the backend guard, this guard keeps the
-            // marker pinned. Both checks are required: speedKmh==0 alone is brittle
-            // because Kalman residual can be >= 1 km/h while bus is parked.
             if (dr.moving === false) continue;
             if (!dr.speedKmh || dr.speedKmh < 1) continue;
 
@@ -930,7 +904,6 @@
         const label = v.route || '?';
 
         if (vehicleMarkers[v.id]) {
-            // Smooth move
             const marker = vehicleMarkers[v.id];
             const oldLatLng = marker.getLatLng();
             const newLatLng = L.latLng(v.lat, v.lon);
@@ -939,7 +912,6 @@
                 animateMarker(marker, oldLatLng, newLatLng, 800);
             }
 
-            // Update icon content
             const el = marker.getElement();
             if (el) {
                 const icon = el.querySelector('.bus-icon-v2');
@@ -954,10 +926,8 @@
                 }
             }
 
-            // Update popup
             marker.setPopupContent(createPopupHtml(v, color));
         } else {
-            // Create marker
             const icon = L.divIcon({
                 className: 'bus-marker',
                 html: `<div class="bus-icon-v2 ${v.moving ? 'moving' : ''} ${isFiltered ? 'filtered-out' : ''}" style="background:${color}; opacity:${v.predicted ? '0.6' : '1'}; transform:rotate(${v.moving ? v.course : 0}deg)">${label}</div>`,
@@ -984,7 +954,6 @@
         </div>`;
     }
 
-    // ===== SMOOTH ANIMATION =====
     function animateMarker(marker, from, to, duration) {
         const start = performance.now();
         const latDiff = to.lat - from.lat;
@@ -999,20 +968,17 @@
         requestAnimationFrame(step);
     }
 
-    // ===== WS ROUTE INPUT =====
     const wsRouteInput = document.getElementById('ws-route-input');
     wsRouteInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             const val = wsRouteInput.value.trim();
             if (val) {
-                // Support comma-separated: "160, 29"
                 val.split(',').forEach(r => addWsRoute(r.trim()));
             }
             wsRouteInput.value = '';
         }
     });
 
-    // ===== ROUTE FILTER =====
     const routeInput = document.getElementById('route-input');
     routeInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -1063,7 +1029,6 @@
         }
     }
 
-    // ===== VEHICLE LIST PANEL =====
     function openPanel() {
         document.getElementById('vehicle-panel').classList.add('open');
     }
@@ -1123,13 +1088,12 @@
         document.getElementById('moving-count').textContent = movingCount;
     }
 
-    // ===== ROUTE BUILDER =====
     let routeMode = false;
-    let routeFrom = null;   // {lat, lon}
-    let routeTo = null;     // {lat, lon}
+    let routeFrom = null;  
+    let routeTo = null;     
     let fromMarker = null;
     let toMarker = null;
-    let routeLayers = [];   // polylines/circles drawn for current result
+    let routeLayers = [];  
     let selectedOptionIdx = -1;
     let lastRouteOptions = [];
 
