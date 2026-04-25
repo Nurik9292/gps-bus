@@ -26,6 +26,8 @@ public class PredictionBroadcaster {
     private final biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer;
 
     private final ConcurrentHashMap<String, double[]> lastBroadcastPosition = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Double> lastMotionCourse = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Integer> lastBroadcastDirection = new ConcurrentHashMap<>();
 
     public PredictionBroadcaster(DirectVehiclePositionBroadcaster directBroadcaster,
                                   RouteGeometryCache routeGeometryCache,
@@ -45,6 +47,14 @@ public class PredictionBroadcaster {
 
     public void onVehiclesStaleCleanup(Set<String> activeVehicleIds) {
         lastBroadcastPosition.keySet().retainAll(activeVehicleIds);
+        lastMotionCourse.keySet().retainAll(activeVehicleIds);
+        lastBroadcastDirection.keySet().retainAll(activeVehicleIds);
+    }
+
+    public void resetMotionCourse(String vehicleId) {
+        lastMotionCourse.remove(vehicleId);
+        lastBroadcastPosition.remove(vehicleId);
+        lastBroadcastDirection.remove(vehicleId);
     }
 
     public static boolean isInColdStart(VehiclePredictionState state) {
@@ -86,6 +96,16 @@ public class PredictionBroadcaster {
             return Mono.empty();
         }
 
+        Integer prevDirection = lastBroadcastDirection.get(state.getVehicleId());
+        boolean directionFlipped = prevDirection != null && prevDirection != state.getDirection();
+        if (directionFlipped) {
+            lastMotionCourse.remove(state.getVehicleId());
+            lastBroadcastPosition.remove(state.getVehicleId());
+            log.debug("[GPS_PIPELINE] MOTION_COURSE_RESET vehicle={} plate={} reason=direction-flip prev={} new={}",
+                    state.getVehicleId(), state.getLicensePlate(), prevDirection, state.getDirection());
+        }
+        lastBroadcastDirection.put(state.getVehicleId(), state.getDirection());
+
         double[] prevBroadcast = lastBroadcastPosition.get(state.getVehicleId());
         double motionCourseDeg = Double.NaN;
         double distFromPrevBroadcast = Double.NaN;
@@ -104,10 +124,13 @@ public class PredictionBroadcaster {
                         String.format("%.5f", state.getPredictedLongitude()),
                         isInColdStart(state));
             }
-            if (bDelta >= COURSE_SOURCE_MIN_MOTION_METERS) {
+            if (bDelta >= COURSE_SOURCE_MIN_MOTION_METERS
+                    && bDelta <= COURSE_SOURCE_MAX_MOTION_METERS) {
                 motionCourseDeg = bearingDegrees(
                         prevBroadcast[0], prevBroadcast[1],
                         state.getPredictedLatitude(), state.getPredictedLongitude());
+            } else if (bDelta > COURSE_SOURCE_MAX_MOTION_METERS) {
+                lastMotionCourse.remove(state.getVehicleId());
             }
         }
         lastBroadcastPosition.put(state.getVehicleId(),
@@ -125,6 +148,9 @@ public class PredictionBroadcaster {
                 ? state.getRawGpsSpeedKmh() >= properties.getMinSpeedKmh()
                 : state.isInMotion();
 
+        double broadcastCourse = resolveBroadcastCourse(
+                state, motionCourseDeg, broadcastSpeedKmh);
+
         VehiclePositionWebSocketMessage msg = new VehiclePositionWebSocketMessage(
                 state.getVehicleId(),
                 state.getLicensePlate(),
@@ -134,7 +160,7 @@ public class PredictionBroadcaster {
                 broadcastSpeedKmh,
                 broadcastInMotion,
                 LocalDateTime.now(),
-                state.getCourse(),
+                broadcastCourse,
                 state.getDirection() == 0,
                 nextStops.isEmpty() ? null : nextStops,
                 Boolean.TRUE,
@@ -144,6 +170,7 @@ public class PredictionBroadcaster {
 
         final double motionCourseFinal = motionCourseDeg;
         final double distFromPrevBroadcastFinal = distFromPrevBroadcast;
+        final double broadcastCourseFinal = broadcastCourse;
         return Mono.fromRunnable(() -> {
             try {
                 directBroadcaster.broadcastDirect(msg);
@@ -153,7 +180,7 @@ public class PredictionBroadcaster {
                         broadcastSpeedKmh, broadcastInMotion,
                         Boolean.TRUE,
                         fractionValue != null ? "SNAPPED" : "DEAD_RECKONING");
-                log.debug("[GPS_PIPELINE] WS_PRED vehicle={} plate={} mode={} frac={} lat={} lon={} speed={}km/h rawSpeed={}km/h moving={} eta_stops={}",
+                log.debug("[GPS_PIPELINE] WS_PRED vehicle={} plate={} mode={} frac={} lat={} lon={} speed={}km/h rawSpeed={}km/h moving={} course={}° eta_stops={}",
                         state.getVehicleId(), state.getLicensePlate(),
                         fractionValue != null ? "SNAPPED" : "DEAD_RECKONING",
                         fractionValue != null ? String.format("%.4f", fractionValue) : "-",
@@ -162,21 +189,23 @@ public class PredictionBroadcaster {
                         String.format("%.1f", broadcastSpeedKmh),
                         String.format("%.1f", state.getRawGpsSpeedKmh()),
                         broadcastInMotion,
+                        String.format("%.1f", broadcastCourseFinal),
                         nextStops.size());
 
                 if (!Double.isNaN(motionCourseFinal)
                         && broadcastSpeedKmh >= COURSE_SOURCE_MIN_SPEED_KMH) {
-                    double broadcastCourse = state.getCourse();
-                    double delta = angularDelta(broadcastCourse, motionCourseFinal);
+                    double routeCourse = state.getCourse();
+                    double delta = angularDelta(routeCourse, motionCourseFinal);
                     if (delta >= COURSE_SOURCE_ALERT_DELTA_DEG) {
                         log.info("[GPS_PIPELINE] COURSE_SOURCE_DIVERGENCE vehicle={} plate={} route={} dir={} " +
-                                        "broadcastCourse={}° motionCourse={}° delta={}° " +
+                                        "routeCourse={}° motionCourse={}° delta={}° broadcastCourse={}° " +
                                         "distFromPrev={}m speed={}km/h frac={}",
                                 state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber(),
                                 state.getDirection(),
-                                String.format("%.1f", broadcastCourse),
+                                String.format("%.1f", routeCourse),
                                 String.format("%.1f", motionCourseFinal),
                                 String.format("%.1f", delta),
+                                String.format("%.1f", broadcastCourseFinal),
                                 String.format("%.1f", distFromPrevBroadcastFinal),
                                 String.format("%.1f", broadcastSpeedKmh),
                                 fractionValue != null ? String.format("%.4f", fractionValue) : "-");
@@ -195,6 +224,7 @@ public class PredictionBroadcaster {
     private static final double COURSE_SOURCE_MIN_MOTION_METERS = 5.0;
     private static final double COURSE_SOURCE_MIN_SPEED_KMH = 2.0;
     private static final double COURSE_SOURCE_ALERT_DELTA_DEG = 30.0;
+    private static final double COURSE_SOURCE_MAX_MOTION_METERS = 200.0;
 
     private Mono<Void> broadcastRawGpsFallback(VehiclePredictionState state, String reason) {
         double baseLat = state.getGpsLatitude();
@@ -252,6 +282,20 @@ public class PredictionBroadcaster {
                         state.getVehicleId(), e.getMessage());
             }
         });
+    }
+
+    private double resolveBroadcastCourse(VehiclePredictionState state,
+                                           double motionCourseDeg,
+                                           double speedKmh) {
+        if (!Double.isNaN(motionCourseDeg) && speedKmh >= COURSE_SOURCE_MIN_SPEED_KMH) {
+            lastMotionCourse.put(state.getVehicleId(), motionCourseDeg);
+            return motionCourseDeg;
+        }
+        Double sticky = lastMotionCourse.get(state.getVehicleId());
+        if (sticky != null) {
+            return sticky;
+        }
+        return state.getCourse();
     }
 
     private static double bearingDegrees(double lat1, double lon1, double lat2, double lon2) {
