@@ -13,6 +13,7 @@ import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
 import biz.ugur.busroutebackend.transport.application.factory.VehicleFactory;
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.GpsValidationStage;
+import biz.ugur.busroutebackend.transport.application.usecase.pipeline.OutlierFilterStage;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
@@ -72,12 +73,10 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private final VehicleGpsHistoryService gpsHistoryService;
     private final DomainEventPublisher domainEventPublisher;
     private final GpsUpdateDeadLetterQueue deadLetterQueue;
-    private final GpsOutlierDetector outlierDetector;
-    private final GpsOutlierMetricsRecorder outlierMetricsRecorder;
-    private final GpsOutlierDetectionProperties outlierDetectionProperties;
     private final VehiclePositionPredictionService predictionService;
     private final biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer;
     private final GpsValidationStage validationStage;
+    private final OutlierFilterStage outlierFilterStage;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
                                          VehicleFactory vehicleFactory,
@@ -92,12 +91,10 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                          DomainEventPublisher domainEventPublisher,
                                          CorrelationContextService correlationContextService,
                                          GpsUpdateDeadLetterQueue deadLetterQueue,
-                                         GpsOutlierDetector outlierDetector,
-                                         GpsOutlierMetricsRecorder outlierMetricsRecorder,
-                                         GpsOutlierDetectionProperties outlierDetectionProperties,
                                          VehiclePositionPredictionService predictionService,
                                          biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer,
-                                         GpsValidationStage validationStage) {
+                                         GpsValidationStage validationStage,
+                                         OutlierFilterStage outlierFilterStage) {
         super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
         this.vehicleFactory = vehicleFactory;
@@ -110,12 +107,10 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         this.gpsHistoryService = gpsHistoryService;
         this.domainEventPublisher = domainEventPublisher;
         this.deadLetterQueue = deadLetterQueue;
-        this.outlierDetector = outlierDetector;
-        this.outlierMetricsRecorder = outlierMetricsRecorder;
-        this.outlierDetectionProperties = outlierDetectionProperties;
         this.predictionService = predictionService;
         this.pipelineTracer = pipelineTracer;
         this.validationStage = validationStage;
+        this.outlierFilterStage = outlierFilterStage;
     }
 
     @Override
@@ -152,7 +147,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             }
 
             final int validCount = idempotencyFiltered.size();
-            return filterOutliers(idempotencyFiltered)
+            return outlierFilterStage.apply(idempotencyFiltered)
                     .flatMap(filteredPositions -> {
                         int outlierCount = validCount - filteredPositions.size();
                         log.debug("[GPS_PIPELINE] OUTLIER_FILTER passed={} rejected={}",
@@ -185,83 +180,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         });
     }
 
-    private static final int OUTLIER_DETECTION_CONCURRENCY = 32;
     private static final int GARAGE_DETECTION_CONCURRENCY = 2;
-
-    private Mono<List<GpsPositionDTO>> filterOutliers(List<GpsPositionDTO> positions) {
-        if (!outlierDetectionProperties.isEnabled()) {
-            return Mono.just(positions);
-        }
-
-        int historyLimit = outlierDetectionProperties.getHistoryPointsToCheck();
-        boolean rejectOutliers = outlierDetectionProperties.isRejectOutliers();
-        boolean rejectFrozenMotion = outlierDetectionProperties.isRejectFrozenMotion();
-
-        List<String> deviceIds = positions.stream()
-                .map(GpsPositionDTO::getDeviceId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-
-        return gpsHistoryService.getHistoryBatch(deviceIds, historyLimit)
-                .flatMap(historyByDevice -> Flux.fromIterable(positions)
-                        .map(position -> {
-                            var history = historyByDevice.getOrDefault(position.getDeviceId(), List.of());
-                            OutlierDetectionResult detection = outlierDetector.detectWithHistory(
-                                    position.getDeviceId(),
-                                    position.getLatitude(),
-                                    position.getLongitude(),
-                                    position.getFixTime(),
-                                    history,
-                                    position.getSpeed()
-                            );
-                            return new PositionWithOutlierResult(position, detection);
-                        })
-                        .collectList())
-                .map(results -> {
-                    List<GpsPositionDTO> nonOutliers = new ArrayList<>();
-                    List<OutlierDetectionResult> allResults = new ArrayList<>();
-                    int teleportRejected = 0;
-                    int frozenRejected = 0;
-
-                    for (PositionWithOutlierResult r : results) {
-                        allResults.add(r.detectionResult());
-                        OutlierDetectionResult.OutlierType type = r.detectionResult().type();
-
-                        boolean isTeleportation = type == OutlierDetectionResult.OutlierType.SPEED_EXCEEDED;
-                        boolean isFrozen = type == OutlierDetectionResult.OutlierType.FROZEN_COORDINATES_WITH_MOTION;
-
-                        if (isTeleportation && rejectOutliers) {
-                            teleportRejected++;
-                            log.warn("[GPS_ANOMALY|SOURCE:SERVER] TELEPORTATION_REJECTED: " +
-                                            "device={}, impliedSpeed={}km/h — {}",
-                                    r.detectionResult().deviceId(),
-                                    String.format("%.1f", r.detectionResult().impliedSpeedKmh()),
-                                    r.detectionResult().getDescription());
-                            continue;
-                        }
-
-                        if (isFrozen && rejectFrozenMotion) {
-                            frozenRejected++;
-                            continue;
-                        }
-
-                        nonOutliers.add(r.position());
-                    }
-
-                    outlierMetricsRecorder.recordBatch(allResults);
-
-                    int totalRejected = teleportRejected + frozenRejected;
-                    if (totalRejected > 0) {
-                        log.info("[GPS_PIPELINE] Outlier filter: {}/{} positions rejected (teleport={}, frozen={})",
-                                totalRejected, positions.size(), teleportRejected, frozenRejected);
-                    }
-
-                    return nonOutliers;
-                });
-    }
-
-    private record PositionWithOutlierResult(GpsPositionDTO position, OutlierDetectionResult detectionResult) {}
 
     private Mono<VehiclePositionUpdateResult> processBatch(List<GpsPositionDTO> validPositions, Map<String, Vehicle> existingVehicles) {
         for (GpsPositionDTO position : validPositions) {
