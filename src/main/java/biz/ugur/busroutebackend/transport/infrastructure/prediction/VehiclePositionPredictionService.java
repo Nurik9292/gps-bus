@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 
@@ -573,25 +574,50 @@ public class VehiclePositionPredictionService {
             return Mono.empty();
         }
 
-        cleanupStaleStates();
+        Instant cycleStart = Instant.now();
 
+        cleanupStaleStates();
+        long cleanupMs = elapsedMs(cycleStart);
+
+        Instant phaseStart = Instant.now();
         Instant now = Instant.now();
         long maxAgeMs = properties.getMaxAgeMs();
         double minSpeed = properties.getMinSpeedKmh();
         long stoppedIntervalMs = properties.getStoppedBroadcastIntervalMs();
 
-        vehicleStates.keySet().forEach(vid -> {
-            updateState(vid, current -> {
-                if (isAtRouteBoundary(current)
-                        && current.isInMotion()
-                        && current.getSpeedKmh() >= minSpeed) {
-                    return current.toBuilder().fractionOnRoute(-1).build();
-                }
-                return null;
-            }, "route-boundary-reset");
-        });
+        applyRouteBoundaryReset(minSpeed);
+        long boundaryMs = elapsedMs(phaseStart);
 
-        List<VehiclePredictionState> movingStates = vehicleStates.values().stream()
+        phaseStart = Instant.now();
+        List<VehiclePredictionState> movingStates = collectMovingStates(now, maxAgeMs, minSpeed);
+        List<VehiclePredictionState> stoppedStates = collectStoppedStates(now, maxAgeMs, minSpeed, stoppedIntervalMs);
+        long collectMs = elapsedMs(phaseStart);
+
+        if (movingStates.isEmpty() && stoppedStates.isEmpty()) {
+            return Mono.empty();
+        }
+
+        long snapped = movingStates.stream().filter(s -> s.getFractionOnRoute() >= 0).count();
+        long dr = movingStates.size() - snapped;
+        log.debug("[GPS_PIPELINE] PRED_CYCLE moving={} (snapped={} dr={}) stopped={}",
+                movingStates.size(), snapped, dr, stoppedStates.size());
+
+        return advanceAndBroadcast(movingStates, stoppedStates, now, cycleStart, cleanupMs, boundaryMs, collectMs);
+    }
+
+    private void applyRouteBoundaryReset(double minSpeed) {
+        vehicleStates.keySet().forEach(vid -> updateState(vid, current -> {
+            if (isAtRouteBoundary(current)
+                    && current.isInMotion()
+                    && current.getSpeedKmh() >= minSpeed) {
+                return current.toBuilder().fractionOnRoute(-1).build();
+            }
+            return null;
+        }, "route-boundary-reset"));
+    }
+
+    private List<VehiclePredictionState> collectMovingStates(Instant now, long maxAgeMs, double minSpeed) {
+        return vehicleStates.values().stream()
                 .filter(state -> state.isInMotion() && state.getSpeedKmh() >= minSpeed)
                 .filter(state -> state.getLastReceivedAt() != null
                         && (now.toEpochMilli() - state.getLastReceivedAt().toEpochMilli()) <= maxAgeMs)
@@ -601,8 +627,11 @@ public class VehiclePositionPredictionService {
                                 || state.isOffRoute())
                         : true)
                 .toList();
+    }
 
-        List<VehiclePredictionState> stoppedStates = vehicleStates.values().stream()
+    private List<VehiclePredictionState> collectStoppedStates(Instant now, long maxAgeMs,
+                                                               double minSpeed, long stoppedIntervalMs) {
+        return vehicleStates.values().stream()
                 .filter(state -> !state.isInMotion() || state.getSpeedKmh() < minSpeed)
                 .filter(state -> state.getLastReceivedAt() != null
                         && (now.toEpochMilli() - state.getLastReceivedAt().toEpochMilli()) <= maxAgeMs)
@@ -619,38 +648,63 @@ public class VehiclePositionPredictionService {
                             || (now.toEpochMilli() - lastBroadcast.toEpochMilli()) >= stoppedIntervalMs;
                 })
                 .toList();
+    }
 
-        if (movingStates.isEmpty() && stoppedStates.isEmpty()) {
-            return Mono.empty();
+    private Mono<Void> advanceAndBroadcast(List<VehiclePredictionState> movingStates,
+                                            List<VehiclePredictionState> stoppedStates,
+                                            Instant now,
+                                            Instant cycleStart,
+                                            long cleanupMs,
+                                            long boundaryMs,
+                                            long collectMs) {
+        int parallelism = Math.max(1, Runtime.getRuntime().availableProcessors());
+        Instant advanceStart = Instant.now();
+
+        Flux<VehiclePredictionState> advancedMoving = movingStates.isEmpty()
+                ? Flux.empty()
+                : Flux.fromIterable(movingStates)
+                        .parallel(parallelism)
+                        .runOn(Schedulers.parallel())
+                        .map(snapshot -> updateState(snapshot.getVehicleId(),
+                                current -> predictor.advance(current)
+                                        .toBuilder().lastBroadcastAt(now).build(),
+                                "predictor-advance"))
+                        .filter(Objects::nonNull)
+                        .sequential();
+
+        Flux<VehiclePredictionState> markedStopped = stoppedStates.isEmpty()
+                ? Flux.empty()
+                : Flux.fromIterable(stoppedStates)
+                        .parallel(parallelism)
+                        .runOn(Schedulers.parallel())
+                        .map(snapshot -> updateState(snapshot.getVehicleId(),
+                                current -> current.toBuilder().lastBroadcastAt(now).build(),
+                                "stopped-mark-broadcast"))
+                        .filter(Objects::nonNull)
+                        .sequential();
+
+        return Flux.concat(advancedMoving, markedStopped)
+                .concatMap(broadcaster::broadcast)
+                .then()
+                .doFinally(sig -> logCycleTiming(cycleStart, cleanupMs, boundaryMs, collectMs,
+                        advanceStart, movingStates.size(), stoppedStates.size()));
+    }
+
+    private void logCycleTiming(Instant cycleStart, long cleanupMs, long boundaryMs, long collectMs,
+                                  Instant advanceStart, int movingCount, int stoppedCount) {
+        long advanceBroadcastMs = elapsedMs(advanceStart);
+        long totalMs = elapsedMs(cycleStart);
+        if (totalMs > 1000) {
+            log.warn("[GPS_PIPELINE] PRED_CYCLE_SLOW total={}ms cleanup={}ms boundary={}ms collect={}ms advance+broadcast={}ms moving={} stopped={}",
+                    totalMs, cleanupMs, boundaryMs, collectMs, advanceBroadcastMs, movingCount, stoppedCount);
+        } else {
+            log.debug("[GPS_PIPELINE] PRED_CYCLE_TIMING total={}ms cleanup={}ms boundary={}ms collect={}ms advance+broadcast={}ms moving={} stopped={}",
+                    totalMs, cleanupMs, boundaryMs, collectMs, advanceBroadcastMs, movingCount, stoppedCount);
         }
+    }
 
-        long snapped = movingStates.stream().filter(s -> s.getFractionOnRoute() >= 0).count();
-        long dr = movingStates.size() - snapped;
-        log.debug("[GPS_PIPELINE] PRED_CYCLE moving={} (snapped={} dr={}) stopped={}",
-                movingStates.size(), snapped, dr, stoppedStates.size());
-
-        Mono<Void> movingMono = Flux.fromIterable(movingStates)
-                .flatMap(snapshot -> {
-                    VehiclePredictionState advanced = updateState(snapshot.getVehicleId(),
-                            current -> predictor.advance(current)
-                                    .toBuilder().lastBroadcastAt(now).build(),
-                            "predictor-advance");
-                    if (advanced == null) return Mono.empty();
-                    return broadcaster.broadcast(advanced);
-                })
-                .then();
-
-        Mono<Void> stoppedMono = Flux.fromIterable(stoppedStates)
-                .flatMap(snapshot -> {
-                    VehiclePredictionState marked = updateState(snapshot.getVehicleId(),
-                            current -> current.toBuilder().lastBroadcastAt(now).build(),
-                            "stopped-mark-broadcast");
-                    if (marked == null) return Mono.empty();
-                    return broadcaster.broadcast(marked);
-                })
-                .then();
-
-        return movingMono.then(stoppedMono);
+    private static long elapsedMs(Instant from) {
+        return Instant.now().toEpochMilli() - from.toEpochMilli();
     }
 
 
