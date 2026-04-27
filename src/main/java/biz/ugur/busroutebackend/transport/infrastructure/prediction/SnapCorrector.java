@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.Consecu
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.FracFlipStrategy;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.HeadingFlipStrategy;
+import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ImplausibleJumpHandler;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.OppositeFallbackStrategy;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ class SnapCorrector {
     private final OppositeFallbackStrategy oppositeFallback;
     private final HeadingFlipStrategy headingFlip;
     private final FracFlipStrategy fracFlip;
+    private final ImplausibleJumpHandler implausibleJumpHandler;
 
     SnapCorrector(PredictionProperties properties,
                   RouteGeometryCache routeGeometryCache,
@@ -36,7 +38,8 @@ class SnapCorrector {
                   ConsecutiveOppositeCounter oppositeCounter,
                   OppositeFallbackStrategy oppositeFallback,
                   HeadingFlipStrategy headingFlip,
-                  FracFlipStrategy fracFlip) {
+                  FracFlipStrategy fracFlip,
+                  ImplausibleJumpHandler implausibleJumpHandler) {
         this.properties = properties;
         this.routeGeometryCache = routeGeometryCache;
         this.mapMatchingService = mapMatchingService;
@@ -46,6 +49,7 @@ class SnapCorrector {
         this.oppositeFallback = oppositeFallback;
         this.headingFlip = headingFlip;
         this.fracFlip = fracFlip;
+        this.implausibleJumpHandler = implausibleJumpHandler;
     }
 
     record SnapResult(
@@ -167,43 +171,16 @@ class SnapCorrector {
                         String.format("%.4f", realFraction));
             }
 
-            if (!headingCorrected && !fracCorrected && !routeChanged && existing != null && existing.getLastGpsFraction() >= 0) {
-                double jumpSize = Math.abs(realFraction - existing.getLastGpsFraction());
-                if (jumpSize > 0.25) {
-                    boolean sameRejectedLocation = existing.getLastRejectedGpsFraction() >= 0
-                            && Math.abs(realFraction - existing.getLastRejectedGpsFraction()) < 0.05;
-                    if (sameRejectedLocation) {
-                        newImplausibleCount = existing.getConsecutiveImplausibleCount() + 1;
-                    } else {
-                        newImplausibleCount = 1;
-                    }
-                    newRejectedFrac = realFraction;
-
-                    if (newImplausibleCount >= 3) {
-                        log.info("[GPS_PIPELINE] SNAP_IMPLAUSIBLE_RESET vehicle={} route={} dir={} frac={}→{} jump={} ({}x) — resetting to dead-reckoning at GPS position",
-                                vehicleId, routeNumber, direction,
-                                String.format("%.4f", existing.getLastGpsFraction()),
-                                String.format("%.4f", realFraction),
-                                String.format("%.4f", jumpSize),
-                                newImplausibleCount);
-                        newImplausibleCount = 0;
-                        newRejectedFrac = -1;
-                        resetToDR = true;
-                        resetTriggered = true;
-                    } else {
-                        plausibleSnap = false;
-                        resetTriggered = true;
-                        log.debug("[GPS_PIPELINE] SNAP_IMPLAUSIBLE vehicle={} route={} dir={} lastFrac={}→newFrac={} jump={} ({}/3) — keeping predicted, entering cold-start",
-                                vehicleId, routeNumber, direction,
-                                String.format("%.4f", existing.getLastGpsFraction()),
-                                String.format("%.4f", realFraction),
-                                String.format("%.4f", jumpSize),
-                                newImplausibleCount);
-                    }
-                } else {
-                    newRejectedFrac = -1;
-                    newImplausibleCount = 0;
-                }
+            ImplausibleJumpHandler.Result implausible = implausibleJumpHandler.evaluate(
+                    existing, vehicleId, routeNumber, direction, realFraction,
+                    headingCorrected, fracCorrected, routeChanged,
+                    newRejectedFrac, newImplausibleCount);
+            plausibleSnap = implausible.plausibleSnap();
+            resetToDR = implausible.resetToDR();
+            newRejectedFrac = implausible.newRejectedFrac();
+            newImplausibleCount = implausible.newImplausibleCount();
+            if (implausible.resetTriggered()) {
+                resetTriggered = true;
             }
 
             boolean realIsAhead = headingCorrected || fracCorrected
