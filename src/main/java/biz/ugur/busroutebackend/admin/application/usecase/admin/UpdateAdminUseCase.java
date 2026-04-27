@@ -81,22 +81,12 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
     }
 
     private Mono<Admin> applyUpdates(Admin admin, UpdateCommand command, String adminId) {
-        log.info("Applying updates for admin: {} - Current password hash: {}", adminId,
-            admin.getPasswordHash() != null ? admin.getPasswordHash().substring(0, Math.min(20, admin.getPasswordHash().length())) + "..." : "null");
-
         Admin updatedAdmin = admin.updateProfile(command.username(), command.fullName());
 
         if (command.newPassword() != null && !command.newPassword().trim().isEmpty()) {
-            log.info("New password provided for admin: {} - Encoding password", adminId);
             String encodedPassword = passwordEncoder.encode(command.newPassword());
-            log.info("Password encoded for admin: {} - New hash: {}", adminId,
-                encodedPassword.substring(0, Math.min(20, encodedPassword.length())) + "...");
             updatedAdmin = updatedAdmin.changePassword(encodedPassword);
-            log.info("Password changed for admin: {} - Updated hash: {}", adminId,
-                updatedAdmin.getPasswordHash() != null ? updatedAdmin.getPasswordHash().substring(0, Math.min(20, updatedAdmin.getPasswordHash().length())) + "..." : "null");
-        } else {
-            log.info("No password update for admin: {} - newPassword is {}",  adminId,
-                command.newPassword() == null ? "null" : "empty string");
+            log.info("Password changed for admin: {}", adminId);
         }
 
         if (command.isActive() != null) {
@@ -110,17 +100,11 @@ public class UpdateAdminUseCase extends BaseUseCase<Mono<UpdateAdminUseCase.Requ
             String oldAvatarPath = admin.getAvatar();
             Admin finalAdmin = updatedAdmin;
 
-            log.info("Processing avatar update for admin: {} - Old avatar: {} - New avatar provided: {}",
-                adminId, oldAvatarPath, command.avatar().substring(0, Math.min(50, command.avatar().length())));
-
             return processAvatar(command.avatar(), adminId)
-                .flatMap(newAvatarPath -> {
-                    log.info("New avatar saved: {} - Deleting old avatar: {}", newAvatarPath, oldAvatarPath);
-
-                    return deleteOldAvatar(oldAvatarPath, newAvatarPath)
+                .flatMap(newAvatarPath ->
+                    deleteOldAvatar(oldAvatarPath, newAvatarPath)
                         .then(Mono.just(finalAdmin.updateAvatar(newAvatarPath)))
-                        .doOnSuccess(a -> log.info("Avatar updated successfully for admin: {}", adminId));
-                });
+                        .doOnSuccess(a -> log.info("Avatar updated for admin: {}", adminId)));
         }
 
         return Mono.just(updatedAdmin);

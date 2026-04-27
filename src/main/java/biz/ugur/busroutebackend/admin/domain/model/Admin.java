@@ -50,11 +50,10 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 .isActive(isActive)
                 .lastLoginAt(now)
                 .avatar(avatar)
+                .createdAt(now)
+                .updatedAt(now)
+                .version(0L)
                 .build();
-
-        admin.createdAt = now;
-        admin.updatedAt = now;
-        admin.version = 0L;
 
         admin.registerEvent(new AdminCreatedEvent(
                 admin.id.getValue(),
@@ -80,7 +79,7 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
             LocalDateTime updatedAt,
             Long version
     ) {
-        Admin admin = builder()
+        return builder()
                 .id(id)
                 .username(username)
                 .passwordHash(passwordHash)
@@ -89,11 +88,10 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 .isActive(isActive)
                 .isSuperAdmin(isSuperAdmin)
                 .lastLoginAt(lastLoginAt)
+                .createdAt(createdAt)
+                .updatedAt(updatedAt)
+                .version(version)
                 .build();
-        admin.createdAt = createdAt;
-        admin.updatedAt = updatedAt;
-        admin.version = version;
-        return  admin;
     }
 
 
@@ -101,10 +99,6 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         Admin updatedAdmin = this.toBuilder()
                 .passwordHash(encodedNewPassword)
                 .build();
-
-        updatedAdmin.createdAt = this.createdAt;
-        updatedAdmin.updatedAt = this.updatedAt;
-        updatedAdmin.version = this.version;
 
         updatedAdmin.registerEvent(new AdminPasswordChangedEvent(
                 this.id.getValue(),
@@ -119,47 +113,27 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     }
 
     public Admin updateLastLogin() {
-        Admin updatedAdmin = this.toBuilder()
+        return this.toBuilder()
                 .lastLoginAt(LocalDateTime.now())
                 .build();
-
-        updatedAdmin.createdAt = this.createdAt;
-        updatedAdmin.updatedAt = this.updatedAt;
-        updatedAdmin.version = this.version;
-
-        return updatedAdmin;
     }
 
     public Admin deactivate() {
         if (Boolean.FALSE.equals(this.isActive)) {
             return this;
         }
-
-        Admin updatedAdmin = this.toBuilder()
+        return this.toBuilder()
                 .isActive(false)
                 .build();
-
-        updatedAdmin.createdAt = this.createdAt;
-        updatedAdmin.updatedAt = this.updatedAt;
-        updatedAdmin.version = this.version;
-
-        return updatedAdmin;
     }
 
     public Admin activate() {
         if (Boolean.TRUE.equals(this.isActive)) {
             return this;
         }
-
-        Admin updatedAdmin = this.toBuilder()
+        return this.toBuilder()
                 .isActive(true)
                 .build();
-
-        updatedAdmin.createdAt = this.createdAt;
-        updatedAdmin.updatedAt = this.updatedAt;
-        updatedAdmin.version = this.version;
-
-        return updatedAdmin;
     }
 
     public Admin updateAvatar(String avatar) {
@@ -170,10 +144,6 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
         Admin updatedAdmin = this.toBuilder()
                 .avatar(avatar)
                 .build();
-
-        updatedAdmin.createdAt = this.createdAt;
-        updatedAdmin.updatedAt = this.updatedAt;
-        updatedAdmin.version = this.version;
 
         updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
                 this.id.getValue(),
@@ -196,10 +166,6 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 .avatar(null)
                 .build();
 
-        updatedAdmin.createdAt = this.createdAt;
-        updatedAdmin.updatedAt = this.updatedAt;
-        updatedAdmin.version = this.version;
-
         updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
                 this.id.getValue(),
                 this.username,
@@ -213,42 +179,7 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
 
 
     public Admin updateProfile(String username, String fullName) {
-        String newUsername = this.username;
-        String newFullName = this.fullName;
-        boolean changed = false;
-
-        if (username != null && !username.trim().isEmpty()) {
-            newUsername = username.trim();
-            changed = true;
-        }
-
-        if (fullName != null && !fullName.trim().isEmpty()) {
-            newFullName = fullName.trim();
-            changed = true;
-        }
-
-        if (!changed) {
-            return this;
-        }
-
-        Admin updatedAdmin = this.toBuilder()
-                .username(newUsername)
-                .fullName(newFullName)
-                .build();
-
-        updatedAdmin.createdAt = this.createdAt;
-        updatedAdmin.updatedAt = this.updatedAt;
-        updatedAdmin.version = this.version;
-
-        updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
-                updatedAdmin.id.getValue(),
-                updatedAdmin.username,
-                updatedAdmin.fullName,
-                updatedAdmin.avatar,
-                false
-        ));
-
-        return updatedAdmin;
+        return updateProfile(username, fullName, this.avatar);
     }
 
 
@@ -284,10 +215,6 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
                 .fullName(newFullName)
                 .avatar(newAvatar)
                 .build();
-
-        updatedAdmin.createdAt = this.createdAt;
-        updatedAdmin.updatedAt = this.updatedAt;
-        updatedAdmin.version = this.version;
 
         updatedAdmin.registerEvent(new AdminProfileUpdatedEvent(
                 updatedAdmin.id.getValue(),
@@ -334,17 +261,5 @@ public class Admin extends AggregateRoot<Admin, AdminId> {
     @Override
     public void setVersion(Long version) {
         this.version = version;
-    }
-
-    private String validateUsername(String username) {
-        if (username == null || username.trim().isEmpty()) {
-            throw new IllegalArgumentException("Username cannot be null or empty");
-        }
-
-        String cleaned = username.trim().toLowerCase();
-        if (!cleaned.matches("^[a-z0-9_]{3,20}$")) {
-            throw new IllegalArgumentException("Username must be 3-20 characters, alphanumeric and underscore only");
-        }
-        return cleaned;
     }
 }

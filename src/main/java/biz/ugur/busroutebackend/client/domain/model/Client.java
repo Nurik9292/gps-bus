@@ -177,12 +177,13 @@ public class Client extends AggregateRoot<Client, ClientId> {
 
     public VerificationResult verifyOtpCenter(String inputOtp) {
         if (this.otpCode != null && this.otpCode.equals(inputOtp)) {
+            LocalDateTime now = LocalDateTime.now();
             Client verified = this.toBuilder()
                     .otpVerify(true)
                     .status(ClientStatus.ACTIVE)
-                    .lastActivity(LocalDateTime.now())
+                    .lastActivity(now)
+                    .updatedAt(now)
                     .build();
-            verified.setUpdatedAt(LocalDateTime.now());
             return new VerificationResult(true, verified);
         }
         return new VerificationResult(false, this);
@@ -190,12 +191,13 @@ public class Client extends AggregateRoot<Client, ClientId> {
 
     public VerificationResult verifyOtp(String inputOtp) {
         if (this.otpCode != null && this.otpCode.equals(inputOtp)) {
+            LocalDateTime now = LocalDateTime.now();
             Client verified = this.toBuilder()
                     .otpVerify(true)
                     .status(ClientStatus.ACTIVE)
-                    .lastActivity(LocalDateTime.now())
+                    .lastActivity(now)
+                    .updatedAt(now)
                     .build();
-            verified.setUpdatedAt(LocalDateTime.now());
 
             verified.registerEvent(new ClientOtpVerifiedEvent(
                     this.id.getValue(),
@@ -247,12 +249,11 @@ public class Client extends AggregateRoot<Client, ClientId> {
 
 
     public Client logout() {
-        Client loggedOut = this.toBuilder()
+        return this.toBuilder()
                 .accessToken(null)
                 .refreshToken(null)
+                .updatedAt(LocalDateTime.now())
                 .build();
-        loggedOut.setUpdatedAt(LocalDateTime.now());
-        return loggedOut;
     }
 
     public boolean isRefreshTokenValid(String providedRefreshToken) {
