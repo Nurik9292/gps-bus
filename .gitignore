@@ -31,6 +31,10 @@ build/
 .env
 logs/
 docs/
+problems/
+map/
+data/
+app/
 CLAUDE.md
 
 # OSRM preprocessed data (large binary files, generated via make osrm-setup)
