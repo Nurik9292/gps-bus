@@ -14,6 +14,7 @@ public interface TransitGraphDataRepository {
             String toStopId,
             String routeId,
             String routeNumber,
+            int direction,
             int weightMinutes
     ) {}
 

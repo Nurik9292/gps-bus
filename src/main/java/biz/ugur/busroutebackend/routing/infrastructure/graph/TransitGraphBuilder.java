@@ -65,7 +65,8 @@ public class TransitGraphBuilder {
                                 EdgeType.BUS_RIDE,
                                 edge.weightMinutes(),
                                 edge.routeNumber(),
-                                edge.routeId()
+                                edge.routeId(),
+                                edge.direction()
                         ));
                         busEdgeCount++;
                     }
@@ -73,9 +74,9 @@ public class TransitGraphBuilder {
                     int walkEdgeCount = 0;
                     for (TransitGraphDataRepository.WalkingEdgeRecord edge : walkingEdges) {
                         adj.computeIfAbsent(edge.stopId1(), k -> new ArrayList<>())
-                                .add(new TransitEdge(edge.stopId2(), EdgeType.WALKING, edge.walkingMinutes(), null, null));
+                                .add(new TransitEdge(edge.stopId2(), EdgeType.WALKING, edge.walkingMinutes(), null, null, null));
                         adj.computeIfAbsent(edge.stopId2(), k -> new ArrayList<>())
-                                .add(new TransitEdge(edge.stopId1(), EdgeType.WALKING, edge.walkingMinutes(), null, null));
+                                .add(new TransitEdge(edge.stopId1(), EdgeType.WALKING, edge.walkingMinutes(), null, null, null));
                         walkEdgeCount += 2;
                     }
 

@@ -21,7 +21,7 @@ class TransitGraphTypesTest {
 
         @Test
         void busEdgeIdentifiesItself() {
-            TransitEdge e = new TransitEdge("stop-B", EdgeType.BUS_RIDE, 5, "29A", "route-1");
+            TransitEdge e = new TransitEdge("stop-B", EdgeType.BUS_RIDE, 5, "29A", "route-1", 0);
             assertTrue(e.isBusRide());
             assertFalse(e.isWalking());
             assertEquals("stop-B", e.toStopId());
@@ -30,7 +30,7 @@ class TransitGraphTypesTest {
 
         @Test
         void walkingEdgeIdentifiesItself() {
-            TransitEdge e = new TransitEdge("stop-B", EdgeType.WALKING, 2, null, null);
+            TransitEdge e = new TransitEdge("stop-B", EdgeType.WALKING, 2, null, null, null);
             assertTrue(e.isWalking());
             assertFalse(e.isBusRide());
         }
@@ -42,7 +42,7 @@ class TransitGraphTypesTest {
         @Test
         void busRideSegmentDetectsType() {
             TransitPathSegment s = new TransitPathSegment(
-                    "A", "B", EdgeType.BUS_RIDE, 10, "29A", "route-1");
+                    "A", "B", EdgeType.BUS_RIDE, 10, "29A", "route-1", 0);
             assertTrue(s.isBusRide());
             assertFalse(s.isWalking());
         }
@@ -50,7 +50,7 @@ class TransitGraphTypesTest {
         @Test
         void walkingSegmentDetectsType() {
             TransitPathSegment s = new TransitPathSegment(
-                    "A", "B", EdgeType.WALKING, 3, null, null);
+                    "A", "B", EdgeType.WALKING, 3, null, null, null);
             assertTrue(s.isWalking());
             assertFalse(s.isBusRide());
         }
@@ -62,9 +62,9 @@ class TransitGraphTypesTest {
         @Test
         void collapsedMergesConsecutiveBusRidesOnSameRoute() {
             TransitPath path = new TransitPath(List.of(
-                    new TransitPathSegment("A", "B", EdgeType.BUS_RIDE, 5, "29A", "r1"),
-                    new TransitPathSegment("B", "C", EdgeType.BUS_RIDE, 4, "29A", "r1"),
-                    new TransitPathSegment("C", "D", EdgeType.BUS_RIDE, 3, "29A", "r1")
+                    new TransitPathSegment("A", "B", EdgeType.BUS_RIDE, 5, "29A", "r1", 0),
+                    new TransitPathSegment("B", "C", EdgeType.BUS_RIDE, 4, "29A", "r1", 0),
+                    new TransitPathSegment("C", "D", EdgeType.BUS_RIDE, 3, "29A", "r1", 0)
             ), 12, 0);
 
             List<TransitPathSegment> collapsed = path.collapsed();
@@ -77,9 +77,20 @@ class TransitGraphTypesTest {
         @Test
         void collapsedKeepsSegmentsOnDifferentRoutes() {
             TransitPath path = new TransitPath(List.of(
-                    new TransitPathSegment("A", "B", EdgeType.BUS_RIDE, 5, "1", "r1"),
-                    new TransitPathSegment("B", "C", EdgeType.BUS_RIDE, 3, "2", "r2")
+                    new TransitPathSegment("A", "B", EdgeType.BUS_RIDE, 5, "1", "r1", 0),
+                    new TransitPathSegment("B", "C", EdgeType.BUS_RIDE, 3, "2", "r2", 0)
             ), 8, 1);
+
+            List<TransitPathSegment> collapsed = path.collapsed();
+            assertEquals(2, collapsed.size());
+        }
+
+        @Test
+        void collapsedKeepsSegmentsOnSameRouteButDifferentDirection() {
+            TransitPath path = new TransitPath(List.of(
+                    new TransitPathSegment("A", "B", EdgeType.BUS_RIDE, 5, "29A", "r1", 0),
+                    new TransitPathSegment("B", "C", EdgeType.BUS_RIDE, 4, "29A", "r1", 1)
+            ), 9, 0);
 
             List<TransitPathSegment> collapsed = path.collapsed();
             assertEquals(2, collapsed.size());
@@ -88,8 +99,8 @@ class TransitGraphTypesTest {
         @Test
         void collapsedKeepsWalkingSegmentsSeparate() {
             TransitPath path = new TransitPath(List.of(
-                    new TransitPathSegment("A", "B", EdgeType.WALKING, 3, null, null),
-                    new TransitPathSegment("B", "C", EdgeType.WALKING, 2, null, null)
+                    new TransitPathSegment("A", "B", EdgeType.WALKING, 3, null, null, null),
+                    new TransitPathSegment("B", "C", EdgeType.WALKING, 2, null, null, null)
             ), 5, 0);
             assertEquals(2, path.collapsed().size());
         }
@@ -103,10 +114,10 @@ class TransitGraphTypesTest {
         @Test
         void busSegmentCountReflectsCollapsed() {
             TransitPath path = new TransitPath(List.of(
-                    new TransitPathSegment("A", "B", EdgeType.BUS_RIDE, 5, "29A", "r1"),
-                    new TransitPathSegment("B", "C", EdgeType.BUS_RIDE, 4, "29A", "r1"),
-                    new TransitPathSegment("C", "D", EdgeType.WALKING, 2, null, null),
-                    new TransitPathSegment("D", "E", EdgeType.BUS_RIDE, 5, "2", "r2")
+                    new TransitPathSegment("A", "B", EdgeType.BUS_RIDE, 5, "29A", "r1", 0),
+                    new TransitPathSegment("B", "C", EdgeType.BUS_RIDE, 4, "29A", "r1", 0),
+                    new TransitPathSegment("C", "D", EdgeType.WALKING, 2, null, null, null),
+                    new TransitPathSegment("D", "E", EdgeType.BUS_RIDE, 5, "2", "r2", 0)
             ), 16, 1);
 
             assertEquals(2, path.busSegmentCount());
@@ -115,9 +126,9 @@ class TransitGraphTypesTest {
         @Test
         void usedRouteIdsDeduplicates() {
             TransitPath path = new TransitPath(List.of(
-                    new TransitPathSegment("A", "B", EdgeType.BUS_RIDE, 5, "29A", "r1"),
-                    new TransitPathSegment("B", "C", EdgeType.BUS_RIDE, 3, "29A", "r1"),
-                    new TransitPathSegment("C", "D", EdgeType.BUS_RIDE, 4, "2", "r2")
+                    new TransitPathSegment("A", "B", EdgeType.BUS_RIDE, 5, "29A", "r1", 0),
+                    new TransitPathSegment("B", "C", EdgeType.BUS_RIDE, 3, "29A", "r1", 0),
+                    new TransitPathSegment("C", "D", EdgeType.BUS_RIDE, 4, "2", "r2", 0)
             ), 12, 1);
 
             Set<String> ids = path.usedRouteIds();
@@ -129,8 +140,8 @@ class TransitGraphTypesTest {
         @Test
         void usedRouteIdsSkipsNullsAndWalking() {
             TransitPath path = new TransitPath(List.of(
-                    new TransitPathSegment("A", "B", EdgeType.BUS_RIDE, 5, "29A", null),
-                    new TransitPathSegment("B", "C", EdgeType.WALKING, 3, null, null)
+                    new TransitPathSegment("A", "B", EdgeType.BUS_RIDE, 5, "29A", null, 0),
+                    new TransitPathSegment("B", "C", EdgeType.WALKING, 3, null, null, null)
             ), 8, 0);
             assertEquals(0, path.usedRouteIds().size());
         }
@@ -153,7 +164,7 @@ class TransitGraphTypesTest {
         @Test
         void graphExposesStopsRoutesAndEdges() {
             TransitEdge edge = new TransitEdge(stopB.getId().getValue(), EdgeType.BUS_RIDE, 5, "1",
-                    route.getId().getValue());
+                    route.getId().getValue(), 0);
             TransitGraph graph = new TransitGraph(
                     Map.of(stopA.getId().getValue(), stopA, stopB.getId().getValue(), stopB),
                     Map.of(route.getId().getValue(), route),

@@ -22,6 +22,7 @@ public class R2dbcTransitGraphDataRepository implements TransitGraphDataReposito
                     rs2.stop_id::text  AS to_stop_id,
                     rs1.route_id::text AS route_id,
                     br.route_number,
+                    rs1.direction      AS direction,
                     GREATEST(2, COALESCE(
                         CASE
                             WHEN br.estimated_duration_minutes IS NOT NULL
@@ -52,6 +53,7 @@ public class R2dbcTransitGraphDataRepository implements TransitGraphDataReposito
                         row.get("to_stop_id", String.class),
                         row.get("route_id", String.class),
                         row.get("route_number", String.class),
+                        row.get("direction", Integer.class),
                         row.get("weight_minutes", Integer.class)
                 ))
                 .all()

@@ -132,7 +132,8 @@ public class DijkstraEngine {
                     rec.fromStopId(), rec.edge().toStopId(),
                     rec.edge().type(),
                     rec.edge().weightMinutes(),
-                    rec.edge().routeNumber(), rec.edge().routeId()
+                    rec.edge().routeNumber(), rec.edge().routeId(),
+                    rec.edge().direction()
             ));
             curKey = rec.prevKey();
         }

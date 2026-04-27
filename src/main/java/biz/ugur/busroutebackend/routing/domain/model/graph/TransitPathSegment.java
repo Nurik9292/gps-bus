@@ -5,8 +5,9 @@ public record TransitPathSegment(
         String toStopId,
         EdgeType type,
         int costMinutes,
-        String routeNumber,  
-        String routeId     
+        String routeNumber,
+        String routeId,
+        Integer direction
 ) {
     public boolean isBusRide() {
         return type == EdgeType.BUS_RIDE;

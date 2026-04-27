@@ -23,14 +23,16 @@ public record TransitPath(
         for (int i = 1; i < segments.size(); i++) {
             TransitPathSegment next = segments.get(i);
             if (current.isBusRide() && next.isBusRide()
-                    && Objects.equals(current.routeId(), next.routeId())) {
+                    && Objects.equals(current.routeId(), next.routeId())
+                    && Objects.equals(current.direction(), next.direction())) {
                 current = new TransitPathSegment(
                         current.fromStopId(),
                         next.toStopId(),
                         EdgeType.BUS_RIDE,
                         current.costMinutes() + next.costMinutes(),
                         current.routeNumber(),
-                        current.routeId()
+                        current.routeId(),
+                        current.direction()
                 );
             } else {
                 result.add(current);

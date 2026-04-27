@@ -32,7 +32,8 @@ public interface RouteCalculationService {
             BusStop toStop,
             int estimatedTravelMinutes,
             double walkingDistanceToStart,
-            double walkingDistanceFromEnd
+            double walkingDistanceFromEnd,
+            Integer direction
     ) {}
 
     record TransferRouteResult(
@@ -45,7 +46,9 @@ public interface RouteCalculationService {
             int transferWaitMinutes,
             int secondRouteTravelMinutes,
             double walkingDistanceToStart,
-            double walkingDistanceFromEnd
+            double walkingDistanceFromEnd,
+            Integer firstDirection,
+            Integer secondDirection
     ) {}
 
     record TwoTransferRouteResult(
@@ -62,6 +65,9 @@ public interface RouteCalculationService {
             int secondTransferWaitMinutes,
             int thirdRouteTravelMinutes,
             double walkingDistanceToStart,
-            double walkingDistanceFromEnd
+            double walkingDistanceFromEnd,
+            Integer firstDirection,
+            Integer secondDirection,
+            Integer thirdDirection
     ) {}
 }

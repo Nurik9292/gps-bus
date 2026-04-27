@@ -145,16 +145,16 @@ class DijkstraEngineTest {
         routes.put(ROUTE2_ID, makeRoute(ROUTE2_ID, "2"));
         routes.put(ROUTE3_ID, makeRoute(ROUTE3_ID, "3"));
 
-        adj.get(A).add(new TransitEdge(B, EdgeType.BUS_RIDE, 2, "1", ROUTE1_ID));
-        adj.get(B).add(new TransitEdge(C, EdgeType.BUS_RIDE, 2, "1", ROUTE1_ID));
+        adj.get(A).add(new TransitEdge(B, EdgeType.BUS_RIDE, 2, "1", ROUTE1_ID, 0));
+        adj.get(B).add(new TransitEdge(C, EdgeType.BUS_RIDE, 2, "1", ROUTE1_ID, 0));
 
-        adj.get(C).add(new TransitEdge(D, EdgeType.BUS_RIDE, 2, "2", ROUTE2_ID));
-        adj.get(D).add(new TransitEdge(E, EdgeType.BUS_RIDE, 2, "2", ROUTE2_ID));
+        adj.get(C).add(new TransitEdge(D, EdgeType.BUS_RIDE, 2, "2", ROUTE2_ID, 0));
+        adj.get(D).add(new TransitEdge(E, EdgeType.BUS_RIDE, 2, "2", ROUTE2_ID, 0));
 
-        adj.get(F).add(new TransitEdge(E, EdgeType.BUS_RIDE, 2, "3", ROUTE3_ID));
+        adj.get(F).add(new TransitEdge(E, EdgeType.BUS_RIDE, 2, "3", ROUTE3_ID, 0));
 
-        adj.get(A).add(new TransitEdge(F, EdgeType.WALKING, 3, null, null));
-        adj.get(F).add(new TransitEdge(A, EdgeType.WALKING, 3, null, null));
+        adj.get(A).add(new TransitEdge(F, EdgeType.WALKING, 3, null, null, null));
+        adj.get(F).add(new TransitEdge(A, EdgeType.WALKING, 3, null, null, null));
 
         return new TransitGraph(stops, routes, adj);
     }

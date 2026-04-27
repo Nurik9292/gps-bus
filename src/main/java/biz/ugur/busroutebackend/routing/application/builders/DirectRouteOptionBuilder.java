@@ -9,6 +9,7 @@ import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
+import biz.ugur.busroutebackend.routing.infrastructure.services.RouteGeometrySelector;
 import biz.ugur.busroutebackend.routing.infrastructure.services.RouteGeometryTrimmingService;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import lombok.extern.slf4j.Slf4j;
@@ -131,14 +132,13 @@ public class DirectRouteOptionBuilder {
                 ? directRoute.route().getRouteGeometryForward() : null;
         String backwardGeom = directRoute.route().hasBackwardGeometry()
                 ? directRoute.route().getRouteGeometryBackward() : null;
-
-        if (forwardGeom == null && backwardGeom == null) {
+        String chosen = RouteGeometrySelector.select(forwardGeom, backwardGeom,
+                directRoute.direction(), directRoute.fromStop(), directRoute.toStop(),
+                geometryTrimmingService);
+        if (chosen == null) {
             log.warn("⚠️ No geometry found for route {}", directRoute.route().getRouteNumber());
-            return null;
         }
-
-        return geometryTrimmingService.selectGeometryForDirection(
-                forwardGeom, backwardGeom, directRoute.fromStop(), directRoute.toStop());
+        return chosen;
     }
 
 

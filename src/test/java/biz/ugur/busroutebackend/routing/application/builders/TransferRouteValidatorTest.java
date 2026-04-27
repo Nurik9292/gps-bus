@@ -40,7 +40,8 @@ class TransferRouteValidatorTest {
                 route(firstRouteNumber), stop("from"), stop("transfer"),
                 route(secondRouteNumber), stop("to"),
                 firstMinutes, waitMinutes, secondMinutes,
-                100.0, 100.0
+                100.0, 100.0,
+                null, null
         );
     }
 
@@ -50,7 +51,8 @@ class TransferRouteValidatorTest {
                 route(r2), stop("t2"),
                 route(r3), stop("to"),
                 10, 5, 10, 5, 10,
-                100.0, 100.0
+                100.0, 100.0,
+                null, null, null
         );
     }
 

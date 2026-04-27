@@ -9,6 +9,7 @@ import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
+import biz.ugur.busroutebackend.routing.infrastructure.services.RouteGeometrySelector;
 import biz.ugur.busroutebackend.routing.infrastructure.services.RouteGeometryTrimmingService;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
@@ -93,9 +94,13 @@ public class TransferRouteOptionBuilder {
             WalkingRouteService.WalkingRouteResult walkFromLast = tuple.getT3();
 
             String firstRouteGeometry = selectGeometryForDirection(
-                    transferRoute.firstRoute(), transferRoute.fromStop(), transferRoute.transferStop());
+                    transferRoute.firstRoute(),
+                    transferRoute.firstDirection(),
+                    transferRoute.fromStop(), transferRoute.transferStop());
             String secondRouteGeometry = selectGeometryForDirection(
-                    transferRoute.secondRoute(), transferRoute.transferStop(), transferRoute.toStop());
+                    transferRoute.secondRoute(),
+                    transferRoute.secondDirection(),
+                    transferRoute.transferStop(), transferRoute.toStop());
 
             String firstRouteTrimmed = trimRouteGeometry(
                     firstRouteGeometry,
@@ -177,11 +182,17 @@ public class TransferRouteOptionBuilder {
             WalkingRouteService.WalkingRouteResult walkFromFinal = tuple.getT3();
 
             String firstRouteGeometry = selectGeometryForDirection(
-                    twoTransferRoute.firstRoute(), twoTransferRoute.fromStop(), twoTransferRoute.firstTransferStop());
+                    twoTransferRoute.firstRoute(),
+                    twoTransferRoute.firstDirection(),
+                    twoTransferRoute.fromStop(), twoTransferRoute.firstTransferStop());
             String secondRouteGeometry = selectGeometryForDirection(
-                    twoTransferRoute.secondRoute(), twoTransferRoute.firstTransferStop(), twoTransferRoute.secondTransferStop());
+                    twoTransferRoute.secondRoute(),
+                    twoTransferRoute.secondDirection(),
+                    twoTransferRoute.firstTransferStop(), twoTransferRoute.secondTransferStop());
             String thirdRouteGeometry = selectGeometryForDirection(
-                    twoTransferRoute.thirdRoute(), twoTransferRoute.secondTransferStop(), twoTransferRoute.toStop());
+                    twoTransferRoute.thirdRoute(),
+                    twoTransferRoute.thirdDirection(),
+                    twoTransferRoute.secondTransferStop(), twoTransferRoute.toStop());
 
             String firstRouteTrimmed = trimRouteGeometry(
                     firstRouteGeometry,
@@ -259,16 +270,16 @@ public class TransferRouteOptionBuilder {
         );
     }
 
-    private String selectGeometryForDirection(BusRoute route, BusStop fromStop, BusStop toStop) {
+    private String selectGeometryForDirection(BusRoute route, Integer direction,
+                                              BusStop fromStop, BusStop toStop) {
         String forwardGeom = route.hasForwardGeometry() ? route.getRouteGeometryForward() : null;
         String backwardGeom = route.hasBackwardGeometry() ? route.getRouteGeometryBackward() : null;
-
-        if (forwardGeom == null && backwardGeom == null) {
+        String chosen = RouteGeometrySelector.select(
+                forwardGeom, backwardGeom, direction, fromStop, toStop, geometryTrimmingService);
+        if (chosen == null) {
             log.warn("⚠️ No geometry found for route {}", route.getRouteNumber());
-            return null;
         }
-
-        return geometryTrimmingService.selectGeometryForDirection(forwardGeom, backwardGeom, fromStop, toStop);
+        return chosen;
     }
 
     private String trimRouteGeometry(String originalGeometry, BusStop fromStop, BusStop toStop) {

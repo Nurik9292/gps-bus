@@ -79,7 +79,8 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
                                                 route, boarding, alighting,
                                                 seg.costMinutes(),
                                                 leadingWalkKm(collapsed),
-                                                trailingWalkKm(collapsed)
+                                                trailingWalkKm(collapsed),
+                                                seg.direction()
                                         ));
                                     }
                                 }
@@ -140,7 +141,9 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
                                                 transferWaitMinutes(collapsed, first, second),
                                                 second.costMinutes(),
                                                 leadingWalkKm(collapsed),
-                                                trailingWalkKm(collapsed)
+                                                trailingWalkKm(collapsed),
+                                                first.direction(),
+                                                second.direction()
                                         ));
                                     }
                                 }
@@ -209,7 +212,10 @@ public class DijkstraRouteCalculationService implements RouteCalculationService 
                                                 transferWaitMinutes(collapsed, second, third),
                                                 third.costMinutes(),
                                                 leadingWalkKm(collapsed),
-                                                trailingWalkKm(collapsed)
+                                                trailingWalkKm(collapsed),
+                                                first.direction(),
+                                                second.direction(),
+                                                third.direction()
                                         ));
                                     }
                                 }

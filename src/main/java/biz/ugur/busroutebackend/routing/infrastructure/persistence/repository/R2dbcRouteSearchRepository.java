@@ -146,7 +146,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
         Integer estimatedMinutes = row.get("estimated_travel_minutes", Integer.class);
 
         return new DirectRouteResult(route, fromStop, toStop,
-                estimatedMinutes != null ? estimatedMinutes : 10, 0.0, 0.0);
+                estimatedMinutes != null ? estimatedMinutes : 10, 0.0, 0.0, null);
     }
 
 
@@ -375,7 +375,8 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 firstRoute, fromStop, transferStop,
                 secondRoute, toStop,
                 adjustedFirstMinutes, transferWaitMinutes, adjustedSecondMinutes,
-                0.0, 0.0
+                0.0, 0.0,
+                null, null
         );
     }
 
@@ -888,7 +889,8 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
                 secondTransferWait,
                 adjustedThirdMinutes,
                 0.0,
-                0.0
+                0.0,
+                null, null, null
         );
     }
 
