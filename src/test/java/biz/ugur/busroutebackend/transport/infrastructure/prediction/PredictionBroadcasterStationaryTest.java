@@ -41,7 +41,8 @@ class PredictionBroadcasterStationaryTest {
     void setUp() {
         broadcaster = new PredictionBroadcaster(
                 directBroadcaster, routeGeometryCache, etaProperties,
-                new PredictionProperties(), new PipelineTracer());
+                new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
+                new PipelineTracer());
         lenient().when(routeGeometryCache.getStopsAhead(anyString(), anyInt(), anyDouble()))
                 .thenReturn(List.of());
     }

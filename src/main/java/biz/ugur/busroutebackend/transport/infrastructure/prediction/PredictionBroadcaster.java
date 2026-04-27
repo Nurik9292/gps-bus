@@ -2,15 +2,21 @@ package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TimePeriod;
 import biz.ugur.busroutebackend.routing.infrastructure.config.ETAProperties;
+import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
+import biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.DirectVehiclePositionBroadcaster;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage.NextStopEta;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,10 +25,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class PredictionBroadcaster {
 
+    private static final long HISTORICAL_ETA_MIN_SAMPLES = 3;
+
     private final DirectVehiclePositionBroadcaster directBroadcaster;
     private final RouteGeometryCache routeGeometryCache;
     private final ETAProperties etaProperties;
     private final PredictionProperties properties;
+    private final VehiclePositionPredictor predictor;
     private final biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer;
 
     private final ConcurrentHashMap<String, double[]> lastBroadcastPosition = new ConcurrentHashMap<>();
@@ -33,11 +42,13 @@ public class PredictionBroadcaster {
                                   RouteGeometryCache routeGeometryCache,
                                   ETAProperties etaProperties,
                                   PredictionProperties properties,
+                                  @Lazy VehiclePositionPredictor predictor,
                                   biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer) {
         this.directBroadcaster = directBroadcaster;
         this.routeGeometryCache = routeGeometryCache;
         this.etaProperties = etaProperties;
         this.properties = properties;
+        this.predictor = predictor;
         this.pipelineTracer = pipelineTracer;
     }
 
@@ -360,7 +371,7 @@ public class PredictionBroadcaster {
                 || state.getRouteNumber() == null) {
             return List.of();
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Ashgabat"));
         TimePeriod period = TimePeriod.fromDateTime(now);
         double speedKmh = state.getSmoothedSpeedKmh() > 0
                 ? state.getSmoothedSpeedKmh()
@@ -370,19 +381,48 @@ public class PredictionBroadcaster {
         }
         double effectiveSpeed = speedKmh;
         double totalDist = state.getTotalRouteDistanceMeters();
-        double currentFrac = trueFraction;
         double trafficMult = period.getTrafficMultiplier(TimePeriod.isWeekend(now));
+        int hourOfDay = now.getHour();
+        boolean weekend = now.getDayOfWeek() == DayOfWeek.SATURDAY
+                || now.getDayOfWeek() == DayOfWeek.SUNDAY;
 
-        return routeGeometryCache.getStopsAhead(state.getRouteNumber(), state.getDirection(), currentFrac)
+        List<RouteStopInfo> stopsAhead = routeGeometryCache
+                .getStopsAhead(state.getRouteNumber(), state.getDirection(), trueFraction)
                 .stream()
                 .limit(maxStops)
-                .map(stop -> {
-                    double stopFrac = stop.getDistanceFromStartMeters() / totalDist;
-                    double distMeters = (stopFrac - currentFrac) * totalDist;
-                    int etaMin = (int) Math.max(1, Math.ceil(
-                            (distMeters / 1000.0 / effectiveSpeed) * 60.0 * trafficMult));
-                    return new NextStopEta(stop.getStopId(), stop.getStopName(), etaMin, (int) distMeters);
-                })
                 .toList();
+        if (stopsAhead.isEmpty()) {
+            return List.of();
+        }
+
+        List<NextStopEta> etas = new ArrayList<>(stopsAhead.size());
+        double cumulativeSeconds = 0.0;
+        double prevStopFrac = trueFraction;
+        String prevStopId = null;
+
+        for (RouteStopInfo stop : stopsAhead) {
+            double stopFrac = stop.getDistanceFromStartMeters() / totalDist;
+            double distMeters = (stopFrac - prevStopFrac) * totalDist;
+
+            double segmentSeconds;
+            SegmentTravelStat historical = prevStopId != null
+                    ? predictor.getSegmentTravelStat(state.getRouteNumber(), state.getDirection(),
+                            prevStopId, stop.getStopId(), hourOfDay, weekend)
+                    : null;
+            if (historical != null && historical.getSampleCount() >= HISTORICAL_ETA_MIN_SAMPLES) {
+                segmentSeconds = historical.getAvgTravelSeconds();
+            } else {
+                segmentSeconds = (distMeters / 1000.0 / effectiveSpeed) * 3600.0 * trafficMult;
+            }
+
+            cumulativeSeconds += segmentSeconds;
+            int etaMin = (int) Math.max(1, Math.ceil(cumulativeSeconds / 60.0));
+            int distFromVehicleMeters = (int) ((stopFrac - trueFraction) * totalDist);
+            etas.add(new NextStopEta(stop.getStopId(), stop.getStopName(), etaMin, distFromVehicleMeters));
+
+            prevStopFrac = stopFrac;
+            prevStopId = stop.getStopId();
+        }
+        return etas;
     }
 }

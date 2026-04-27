@@ -34,7 +34,7 @@ class PredictionBroadcasterOffRouteTest {
     @Test
     void broadcast_suppressesWhenOffRouteAndRawGpsNotSet() {
         PredictionBroadcaster broadcaster = new PredictionBroadcaster(
-                directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(),
+                directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
                 new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer());
 
         VehiclePredictionState state = VehiclePredictionState.builder()
@@ -60,7 +60,7 @@ class PredictionBroadcasterOffRouteTest {
     @Test
     void broadcast_emitsRawGpsFallback_whenOffRouteAndGpsAvailable() {
         PredictionBroadcaster broadcaster = new PredictionBroadcaster(
-                directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(),
+                directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
                 new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer());
 
         VehiclePredictionState state = VehiclePredictionState.builder()

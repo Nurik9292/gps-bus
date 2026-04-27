@@ -64,7 +64,7 @@ class PredictionBroadcasterColdStartTest {
     @Test
     void broadcast_skipsPublish_whenInColdStart() {
         PredictionBroadcaster broadcaster = new PredictionBroadcaster(
-                directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(),
+                directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
                 new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer());
 
         VehiclePredictionState state = VehiclePredictionState.builder()
@@ -83,7 +83,7 @@ class PredictionBroadcasterColdStartTest {
     @Test
     void broadcast_emitsRawGpsFallback_whenInColdStartWithGps() {
         PredictionBroadcaster broadcaster = new PredictionBroadcaster(
-                directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(),
+                directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
                 new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer());
 
         VehiclePredictionState state = VehiclePredictionState.builder()
