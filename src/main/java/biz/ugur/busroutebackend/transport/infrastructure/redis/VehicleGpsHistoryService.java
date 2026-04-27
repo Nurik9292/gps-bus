@@ -6,13 +6,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 @Service
 @Slf4j
@@ -21,8 +26,22 @@ public class VehicleGpsHistoryService {
     private static final String KEY_PREFIX = "gps:history:";
     private static final String OPERATION_ADD_POINT = "gps_history_add";
     private static final String OPERATION_GET_HISTORY = "gps_history_get";
+    private static final String OPERATION_GET_HISTORY_BATCH = "gps_history_get_batch";
     private static final String OPERATION_GET_COUNT = "gps_history_count";
     private static final String OPERATION_CLEAR = "gps_history_clear";
+
+    private static final String GET_HISTORY_BATCH_LUA = """
+            local result = {}
+            local limit = tonumber(ARGV[1])
+            for i = 1, #KEYS do
+                result[i] = redis.call('LRANGE', KEYS[i], 0, limit - 1)
+            end
+            return result
+            """;
+
+    @SuppressWarnings("rawtypes")
+    private final RedisScript<List> getHistoryBatchScript =
+            RedisScript.of(GET_HISTORY_BATCH_LUA, List.class);
 
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
@@ -100,18 +119,56 @@ public class VehicleGpsHistoryService {
         return getHistory(vehicleId, limit).collectList();
     }
 
-    public Mono<java.util.Map<String, List<GpsPoint>>> getHistoryBatch(List<String> vehicleIds, int limit) {
+    public Mono<Map<String, List<GpsPoint>>> getHistoryBatch(List<String> vehicleIds, int limit) {
         if (vehicleIds == null || vehicleIds.isEmpty()) {
-            return Mono.just(java.util.Collections.emptyMap());
+            return Mono.just(Collections.emptyMap());
         }
-        return Flux.fromIterable(vehicleIds)
-                .flatMap(vid -> getHistoryList(vid, limit)
-                        .map(history -> java.util.Map.entry(vid, history))
-                        .onErrorResume(err -> {
-                            log.warn("[GPS_PIPELINE] history batch fetch failed for {}: {}", vid, err.getMessage());
-                            return Mono.just(java.util.Map.entry(vid, java.util.List.<GpsPoint>of()));
-                        }), 32)
-                .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue));
+
+        int effectiveLimit = limit > 0 ? Math.min(limit, maxPoints) : maxPoints;
+        List<String> keys = vehicleIds.stream().map(KEY_PREFIX::concat).toList();
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Mono<List> rawResult = redisTemplate
+                .execute(getHistoryBatchScript, keys, List.<Object>of(String.valueOf(effectiveLimit)))
+                .next()
+                .defaultIfEmpty(Collections.emptyList());
+
+        return timeoutHandler.wrapWithTimeout(
+                        rawResult,
+                        OPERATION_GET_HISTORY_BATCH,
+                        "batchSize=" + vehicleIds.size())
+                .defaultIfEmpty(Collections.emptyList())
+                .map(raw -> mapBatchResults(vehicleIds, raw))
+                .onErrorResume(err -> {
+                    log.warn("[GPS_PIPELINE] history batch fetch failed for {} vehicles: {}",
+                            vehicleIds.size(), err.getMessage());
+                    return Mono.just(emptyBatch(vehicleIds));
+                });
+    }
+
+    private Map<String, List<GpsPoint>> mapBatchResults(List<String> vehicleIds, List<?> rawResults) {
+        Map<String, List<GpsPoint>> result = new HashMap<>(vehicleIds.size());
+        for (int i = 0; i < vehicleIds.size(); i++) {
+            String vid = vehicleIds.get(i);
+            if (rawResults == null || i >= rawResults.size() || !(rawResults.get(i) instanceof List<?> list)) {
+                result.put(vid, List.of());
+                continue;
+            }
+            List<GpsPoint> points = list.stream()
+                    .map(this::deserializePoint)
+                    .filter(Objects::nonNull)
+                    .toList();
+            result.put(vid, points);
+        }
+        return result;
+    }
+
+    private Map<String, List<GpsPoint>> emptyBatch(List<String> vehicleIds) {
+        Map<String, List<GpsPoint>> result = new HashMap<>(vehicleIds.size());
+        for (String vid : vehicleIds) {
+            result.put(vid, List.of());
+        }
+        return result;
     }
 
     public Mono<Long> getPointCount(String vehicleId) {
