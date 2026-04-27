@@ -1,112 +1,75 @@
 package biz.ugur.busroutebackend.transport.application.usecase;
 
-import biz.ugur.busroutebackend.geospatial.application.usecase.DetectGarageTransitionsUseCase;
-import biz.ugur.busroutebackend.geospatial.application.usecase.ProcessGarageEntryUseCase;
-import biz.ugur.busroutebackend.geospatial.application.usecase.ProcessGarageExitUseCase;
-import biz.ugur.busroutebackend.geospatial.domain.model.Garage;
-import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
-import biz.ugur.busroutebackend.shared.domain.event.DomainEventPublisher;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
-import biz.ugur.busroutebackend.transport.application.factory.VehicleFactory;
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.DirectionGarageStage;
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.GpsPositionResolver;
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.GpsValidationStage;
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.OutlierFilterStage;
-import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
+import biz.ugur.busroutebackend.transport.application.usecase.pipeline.PersistAndBroadcastStage;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
-import biz.ugur.busroutebackend.transport.domain.service.GpsOutlierDetector;
 import biz.ugur.busroutebackend.transport.domain.service.LicensePlateExtractor;
 import biz.ugur.busroutebackend.transport.domain.service.PositionChangeDetector;
-import biz.ugur.busroutebackend.transport.domain.service.VehicleDirectionDetectionService;
-import biz.ugur.busroutebackend.transport.domain.service.VehicleValidationService;
 import biz.ugur.busroutebackend.transport.domain.valueobject.FailedGpsUpdate;
-import biz.ugur.busroutebackend.transport.domain.valueobject.GpsValidationResult;
-import biz.ugur.busroutebackend.transport.domain.valueobject.OutlierDetectionResult;
-import biz.ugur.busroutebackend.transport.infrastructure.config.GpsOutlierDetectionProperties;
-import biz.ugur.busroutebackend.transport.infrastructure.metrics.GpsOutlierMetricsRecorder;
-import biz.ugur.busroutebackend.transport.infrastructure.metrics.GpsValidationMetricsRecorder;
-import biz.ugur.busroutebackend.transport.infrastructure.prediction.GatekeeperDecision;
-import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePositionPredictionService;
-import biz.ugur.busroutebackend.transport.infrastructure.redis.GpsPoint;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.GpsUpdateDeadLetterQueue;
-import biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistoryService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 
 @Service
 @Slf4j
 public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionDTO>, VehiclePositionUpdateResult> {
 
-    private static final long FORCE_PUBLISH_INTERVAL_SECONDS = 20;
-
-    private final ConcurrentHashMap<String, Instant> lastPublishedTime = new ConcurrentHashMap<>();
 
     private final VehicleRepository vehicleRepository;
-    private final VehicleFactory vehicleFactory;
     private final PositionChangeDetector positionChangeDetector;
     private final LicensePlateExtractor licensePlateExtractor;
-    private final VehicleGpsHistoryService gpsHistoryService;
-    private final DomainEventPublisher domainEventPublisher;
     private final GpsUpdateDeadLetterQueue deadLetterQueue;
-    private final VehiclePositionPredictionService predictionService;
     private final biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer;
     private final GpsValidationStage validationStage;
     private final OutlierFilterStage outlierFilterStage;
     private final GpsPositionResolver positionResolver;
     private final DirectionGarageStage directionGarageStage;
+    private final PersistAndBroadcastStage persistAndBroadcastStage;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
-                                         VehicleFactory vehicleFactory,
                                          PositionChangeDetector positionChangeDetector,
                                          LicensePlateExtractor licensePlateExtractor,
-                                         VehicleGpsHistoryService gpsHistoryService,
                                          EventBus eventBus,
-                                         DomainEventPublisher domainEventPublisher,
                                          CorrelationContextService correlationContextService,
                                          GpsUpdateDeadLetterQueue deadLetterQueue,
-                                         VehiclePositionPredictionService predictionService,
                                          biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer,
                                          GpsValidationStage validationStage,
                                          OutlierFilterStage outlierFilterStage,
                                          GpsPositionResolver positionResolver,
-                                         DirectionGarageStage directionGarageStage) {
+                                         DirectionGarageStage directionGarageStage,
+                                         PersistAndBroadcastStage persistAndBroadcastStage) {
         super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
-        this.vehicleFactory = vehicleFactory;
         this.positionChangeDetector = positionChangeDetector;
         this.licensePlateExtractor = licensePlateExtractor;
-        this.gpsHistoryService = gpsHistoryService;
-        this.domainEventPublisher = domainEventPublisher;
         this.deadLetterQueue = deadLetterQueue;
-        this.predictionService = predictionService;
         this.pipelineTracer = pipelineTracer;
         this.validationStage = validationStage;
         this.outlierFilterStage = outlierFilterStage;
         this.positionResolver = positionResolver;
         this.directionGarageStage = directionGarageStage;
+        this.persistAndBroadcastStage = persistAndBroadcastStage;
     }
 
     @Override
@@ -336,192 +299,22 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 directionGarageStage.apply(vehiclesToUpdate, vehiclesForDetection);
 
         return vehiclesWithGarageDetection.flatMap(updatedVehicles -> {
-            Mono<Void> predictionsMono = Mono.<Void>fromRunnable(() -> {
-                long loopT0 = System.nanoTime();
-                int dispatchedCount = 0;
-                long maxCallMicros = 0;
-                for (Vehicle v : updatedVehicles) {
-                    if (v.getCurrentLatitude() == null || v.getCurrentLongitude() == null) {
-                        continue;
-                    }
-                    if (Boolean.TRUE.equals(frozenCoordsWithMotionById.get(v.getId().getValue()))) {
-                        log.debug("[GPS_PIPELINE] FROZEN_FIX_SKIP_PREDICTION vehicle={} plate={} — prediction advance + history suppressed",
-                                v.getId().getValue(), v.getLicensePlate());
-                        continue;
-                    }
-                    long callT0 = System.nanoTime();
-                    predictionService.onGpsUpdate(
-                            v.getId().getValue(),
-                            v.getLicensePlate(),
-                            v.getRouteNumber(),
-                            v.getCurrentLatitude(),
-                            v.getCurrentLongitude(),
-                            v.getSpeedKmh() != null ? v.getSpeedKmh() : 0.0,
-                            (v.getCourse() != null && v.getCourse() > 0.0)
-                                    ? v.getCourse()
-                                    : estimatedBearings.getOrDefault(v.getId().getValue(), 0.0),
-                            Boolean.TRUE.equals(v.getIsInMotion()),
-                            v.getLastPositionUpdate() != null
-                                    ? v.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
-                                    : Instant.now(),
-                            v.getCurrentDirection() != null ? v.getCurrentDirection() : 0,
-                            Boolean.TRUE.equals(v.getIsInGarage()),
-                            Boolean.TRUE.equals(bufferedByDeviceId.get(v.getDeviceId()))
-                    );
-                    long callMicros = (System.nanoTime() - callT0) / 1000;
-                    dispatchedCount++;
-                    if (callMicros > maxCallMicros) maxCallMicros = callMicros;
-                    if (callMicros > 5_000) {
-                        log.warn("[GPS_PIPELINE] ON_GPS_UPDATE_SLOW vehicle={} plate={} route={} durationMicros={} — single call exceeded 5ms blocking budget on event-loop",
-                                v.getId().getValue(), v.getLicensePlate(), v.getRouteNumber(), callMicros);
-                    } else {
-                        log.debug("[GPS_PIPELINE] ON_GPS_UPDATE_TIMING vehicle={} durationMicros={}",
-                                v.getId().getValue(), callMicros);
-                    }
-                }
-                long loopMicros = (System.nanoTime() - loopT0) / 1000;
-                if (loopMicros > 50_000) {
-                    log.warn("[GPS_PIPELINE] ON_GPS_UPDATE_LOOP_SLOW vehicles={} dispatched={} totalMicros={} maxCallMicros={} — for-loop on boundedElastic still > 50ms (off event-loop, but heavy)",
-                            updatedVehicles.size(), dispatchedCount, loopMicros, maxCallMicros);
-                } else {
-                    log.debug("[GPS_PIPELINE] ON_GPS_UPDATE_LOOP_TIMING vehicles={} dispatched={} totalMicros={} maxCallMicros={}",
-                            updatedVehicles.size(), dispatchedCount, loopMicros, maxCallMicros);
-                }
-            }).subscribeOn(Schedulers.boundedElastic());
-
-            return predictionsMono.then(Mono.defer(() -> {
-            List<Vehicle> gatedVehicles = updatedVehicles.stream()
-                    .map(v -> applyGatekeeperDecision(v, oldCoordsByVehicleId))
-                    .toList();
-
-            for (Vehicle v : gatedVehicles) {
-                publishPositionEvent(v,
-                        hasSignificantChangeById.getOrDefault(v.getId().getValue(), false),
-                        frozenCoordsWithMotionById.getOrDefault(v.getId().getValue(), false));
-            }
-
-            Map<String, Integer> directionFixes = predictionService.drainPendingDirectionFixes();
-            Mono<Integer> dirFixMono = directionFixes.isEmpty()
-                    ? Mono.just(0)
-                    : vehicleRepository.batchUpdateDirections(directionFixes)
-                            .doOnNext(n -> log.debug("[GPS_PIPELINE] DIR_AUTO_FIX applied {} direction corrections", n));
-
-            Mono<Integer> updateMono = gatedVehicles.isEmpty() ?
-                    Mono.just(0) : vehicleRepository.batchUpdate(gatedVehicles);
-
-            Mono<List<Vehicle>> insertMono = vehiclesToCreate.isEmpty() ?
-                    Mono.just(List.of()) : vehicleRepository.batchInsert(vehiclesToCreate).collectList();
-
-            return Mono.zip(updateMono, insertMono, dirFixMono)
-                    .flatMap(tuple -> {
-                        long rawWinnersWithPosition = latestPositionsByDevice.values().stream()
-                                .filter(p -> p.getLatitude() != null && p.getLongitude() != null)
-                                .count();
-
-                        if (rawWinnersWithPosition == 0) {
-                            return Mono.just(tuple);
-                        }
-
-                        return Flux.fromIterable(latestPositionsByDevice.values())
-                                .filter(p -> p.getLatitude() != null && p.getLongitude() != null)
-                                .filter(p -> !frozenCoordsDeviceIds.contains(p.getDeviceId()))
-                                .flatMap(p -> gpsHistoryService.addPoint(
-                                        p.getDeviceId(),
-                                        p.getLatitude(),
-                                        p.getLongitude(),
-                                        p.getSpeed(),
-                                        p.getFixTime()
-                                ), 5)
-                                .then(Mono.defer(() -> {
-                                    log.debug("[GPS_PIPELINE] Saved raw GPS history for {} winners (frozen-skipped={})",
-                                            rawWinnersWithPosition - frozenCoordsDeviceIds.size(),
-                                            frozenCoordsDeviceIds.size());
-                                    return Mono.just(tuple);
-                                }));
-                    })
-                    .map(tuple -> {
-                        log.debug("Batch operations: {} updated, {} created, {} direction fixes",
-                                tuple.getT1(), tuple.getT2().size(), tuple.getT3());
-                        return createResult(statuses);
-                    });
-            }));
+            PersistAndBroadcastStage.Context ctx = new PersistAndBroadcastStage.Context(
+                    updatedVehicles,
+                    vehiclesToCreate,
+                    estimatedBearings,
+                    oldCoordsByVehicleId,
+                    hasSignificantChangeById,
+                    frozenCoordsWithMotionById,
+                    frozenCoordsDeviceIds,
+                    bufferedByDeviceId,
+                    latestPositionsByDevice
+            );
+            return persistAndBroadcastStage.apply(ctx)
+                    .thenReturn(createResult(statuses));
         });
     }
 
-
-    private void publishPositionEvent(Vehicle v, boolean hasSignificantChange, boolean frozenCoordsWithMotion) {
-        String vehicleId = v.getId().getValue();
-        GatekeeperDecision decision = predictionService.evaluateGate(vehicleId);
-        boolean forcePublish = shouldForcePublishForVehicle(vehicleId);
-        boolean shouldPublish = (hasSignificantChange || forcePublish) && !frozenCoordsWithMotion;
-
-        if (!shouldPublish) {
-            return;
-        }
-
-        lastPublishedTime.put(vehicleId, Instant.now());
-        log.debug("[GPS_PIPELINE] WS_PUBLISH vehicle={} plate={} decision={} lat={} lon={} speed={} moved={}",
-                vehicleId, v.getLicensePlate(), decision,
-                v.getCurrentLatitude(), v.getCurrentLongitude(),
-                v.getSpeedKmh(), hasSignificantChange);
-
-        VehiclePositionUpdatedEvent event = new VehiclePositionUpdatedEvent(
-                vehicleId,
-                v.getDeviceId(),
-                v.getLicensePlate(),
-                v.getRouteNumber(),
-                v.getCurrentLatitude(),
-                v.getCurrentLongitude(),
-                v.getSpeedKmh(),
-                v.getIsInMotion(),
-                v.getLastPositionUpdate(),
-                v.getCourse(),
-                v.getCurrentDirection()
-        );
-        domainEventPublisher.publish(event);
-    }
-
-    private Vehicle applyGatekeeperDecision(Vehicle v, Map<String, double[]> oldCoordsByVehicleId) {
-        String vehicleId = v.getId().getValue();
-        GatekeeperDecision decision = predictionService.evaluateGate(vehicleId);
-        if (decision.allowsCoordinateWrite()) {
-            return v;
-        }
-        double[] oldCoords = oldCoordsByVehicleId.get(vehicleId);
-        if (oldCoords == null) {
-            return v;
-        }
-        log.debug("[GPS_PIPELINE] DB_HEARTBEAT_ONLY vehicle={} plate={} decision={} — preserving coords, updating timing only",
-                vehicleId, v.getLicensePlate(), decision);
-        return v.toBuilder()
-                .currentLatitude(oldCoords[0])
-                .currentLongitude(oldCoords[1])
-                .build();
-    }
-
-    private boolean shouldForcePublishForVehicle(String vehicleId) {
-        if (predictionService.isActivelyPredicting(vehicleId)) {
-            return false;
-        }
-        Instant lastPublished = lastPublishedTime.get(vehicleId);
-        if (lastPublished == null) {
-            return true;
-        }
-        long secondsSinceLastPublish = Instant.now().getEpochSecond() - lastPublished.getEpochSecond();
-        return secondsSinceLastPublish >= FORCE_PUBLISH_INTERVAL_SECONDS;
-    }
-
-    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60_000)
-    void cleanupStalePublishTimes() {
-        Instant cutoff = Instant.now().minusSeconds(300);
-        int before = lastPublishedTime.size();
-        lastPublishedTime.entrySet().removeIf(entry -> entry.getValue().isBefore(cutoff));
-        int after = lastPublishedTime.size();
-        if (before != after) {
-            log.debug("[GPS_PIPELINE] lastPublishedTime cleanup: removed {} entries ({} -> {})",
-                    before - after, before, after);
-        }
-    }
 
     private static double computeBearing(double lat1, double lon1, double lat2, double lon2) {
         double lat1r = Math.toRadians(lat1);
