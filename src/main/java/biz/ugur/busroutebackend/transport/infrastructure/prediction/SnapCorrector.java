@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ConsecutiveOppositeCounter;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown;
+import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.FracFlipStrategy;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.HeadingFlipStrategy;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.OppositeFallbackStrategy;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker;
@@ -25,6 +26,7 @@ class SnapCorrector {
     private final ConsecutiveOppositeCounter oppositeCounter;
     private final OppositeFallbackStrategy oppositeFallback;
     private final HeadingFlipStrategy headingFlip;
+    private final FracFlipStrategy fracFlip;
 
     SnapCorrector(PredictionProperties properties,
                   RouteGeometryCache routeGeometryCache,
@@ -33,7 +35,8 @@ class SnapCorrector {
                   PlausibilityChecker plausibilityChecker,
                   ConsecutiveOppositeCounter oppositeCounter,
                   OppositeFallbackStrategy oppositeFallback,
-                  HeadingFlipStrategy headingFlip) {
+                  HeadingFlipStrategy headingFlip,
+                  FracFlipStrategy fracFlip) {
         this.properties = properties;
         this.routeGeometryCache = routeGeometryCache;
         this.mapMatchingService = mapMatchingService;
@@ -42,6 +45,7 @@ class SnapCorrector {
         this.oppositeCounter = oppositeCounter;
         this.oppositeFallback = oppositeFallback;
         this.headingFlip = headingFlip;
+        this.fracFlip = fracFlip;
     }
 
     record SnapResult(
@@ -134,71 +138,19 @@ class SnapCorrector {
             double realFraction = snap.fraction();
             double predictedFraction = (existing != null) ? existing.getFractionOnRoute() : -1;
 
-            if (!headingCorrected && existing != null && existing.getLastGpsFraction() >= 0
-                    && cooldown.isActive(existing)) {
-                log.info("[GPS_PIPELINE] DIR_FLIP_BLOCKED_COOLDOWN vehicle={} plate={} type=frac ageMs={} lastGpsFrac={} realFraction={}",
-                        vehicleId, licensePlate, cooldown.ageMs(existing),
-                        String.format("%.4f", existing.getLastGpsFraction()),
-                        String.format("%.4f", realFraction));
-            } else if (!headingCorrected && existing != null && existing.getLastGpsFraction() >= 0) {
-                double lastGpsFrac = existing.getLastGpsFraction();
-                double fracDelta = realFraction - lastGpsFrac;
-                boolean gpsMoveAgainstDir = fracDelta < -0.005;
-                boolean plausibleJump = Math.abs(fracDelta) <= 0.25;
-                double tolerance = properties.getTerminalFractionTolerance();
-                boolean wasNearTerminal = lastGpsFrac <= tolerance || lastGpsFrac >= (1.0 - tolerance);
-                boolean nowNearOppositeTerminal = realFraction >= 0
-                        && (lastGpsFrac >= (1.0 - tolerance) ? realFraction <= tolerance * 3
-                                : realFraction >= (1.0 - tolerance * 3));
-                boolean atTerminalFlip = wasNearTerminal && nowNearOppositeTerminal;
-                boolean isStationary = !existing.isInMotion()
-                        || (existing.getRawGpsSpeedKmh() >= 0 && existing.getRawGpsSpeedKmh() < 5.0);
-
-                if (gpsMoveAgainstDir && isStationary && !atTerminalFlip) {
-                    log.debug("[GPS_PIPELINE] DIR_CORRECT_FRAC_SKIP_STATIONARY vehicle={} route={} dir={} delta={} inMotion={} rawSpeed={}km/h (GPS noise on stationary bus, not a real direction reversal)",
-                            vehicleId, routeNumber, direction,
-                            String.format("%.4f", fracDelta),
-                            existing.isInMotion(),
-                            String.format("%.1f", existing.getRawGpsSpeedKmh()));
-                } else if (gpsMoveAgainstDir && (plausibleJump || atTerminalFlip)) {
-                    int correctedDir = (direction == 0) ? 1 : 0;
-                    List<double[]> correctedCoords = routeGeometryCache.getPoints(routeNumber, correctedDir);
-                    if (correctedCoords != null) {
-                        double correctedDist = routeGeometryCache.getTotalDistance(routeNumber, correctedDir);
-                        MapMatchingService.SnappedResult correctedSnap =
-                                mapMatchingService.snapToNearestSegment(latitude, longitude, correctedCoords, correctedDist);
-                        if (correctedSnap.snapped()) {
-                            rawSnapMinDistance = Math.min(rawSnapMinDistance, correctedSnap.distanceMeters());
-                        }
-                        boolean terminalFlipSmoothOnOpposite = wasNearTerminal && correctedSnap.snapped()
-                                && (lastGpsFrac >= (1.0 - tolerance)
-                                        ? correctedSnap.fraction() <= tolerance * 3
-                                        : correctedSnap.fraction() >= (1.0 - tolerance * 3));
-                        boolean flipAcceptable = correctedSnap.snapped()
-                                && (plausibleJump
-                                        ? plausibilityChecker.isDirectionFlipPhysicallyPlausible(vehicleId, "FRAC", existing,
-                                                correctedSnap, lastGpsFrac)
-                                        : terminalFlipSmoothOnOpposite);
-                        if (flipAcceptable) {
-                            log.info("[GPS_PIPELINE] DIR_CORRECT_FRAC vehicle={} route={} dir={}→{} gpsFrac={}→{} oppositeFrac={} (delta={}{})",
-                                    vehicleId, routeNumber, direction, correctedDir,
-                                    String.format("%.4f", lastGpsFrac),
-                                    String.format("%.4f", realFraction),
-                                    String.format("%.4f", correctedSnap.fraction()),
-                                    String.format("%.4f", fracDelta),
-                                    wasNearTerminal && !plausibleJump ? " terminal-flip" : "");
-                            direction = correctedDir;
-                            routeCoords = correctedCoords;
-                            totalDist = correctedDist;
-                            snap = correctedSnap;
-                            realFraction = snap.fraction();
-                            fracCorrected = true;
-                        }
-                    }
-                } else if (gpsMoveAgainstDir) {
-                    log.debug("[GPS_PIPELINE] DIR_CORRECT_FRAC_SKIP vehicle={} route={} dir={} delta={} (jump too large or heading corrected)",
-                            vehicleId, routeNumber, direction, String.format("%.4f", fracDelta));
-                }
+            FracFlipStrategy.Result fracResult = fracFlip.maybeFlip(
+                    existing, vehicleId, licensePlate, routeNumber,
+                    latitude, longitude,
+                    direction, routeCoords, totalDist,
+                    snap, rawSnapMinDistance, headingCorrected);
+            rawSnapMinDistance = fracResult.rawSnapMinDistance();
+            if (fracResult.flipped()) {
+                direction = fracResult.direction();
+                routeCoords = fracResult.routeCoords();
+                totalDist = fracResult.totalDist();
+                snap = fracResult.snap();
+                realFraction = snap.fraction();
+                fracCorrected = true;
             }
 
             boolean plausibleSnap = true;
