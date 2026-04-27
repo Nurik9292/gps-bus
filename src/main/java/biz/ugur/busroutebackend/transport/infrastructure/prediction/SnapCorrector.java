@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ConsecutiveOppositeCounter;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown;
+import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.HeadingFlipStrategy;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.OppositeFallbackStrategy;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ class SnapCorrector {
     private final PlausibilityChecker plausibilityChecker;
     private final ConsecutiveOppositeCounter oppositeCounter;
     private final OppositeFallbackStrategy oppositeFallback;
+    private final HeadingFlipStrategy headingFlip;
 
     SnapCorrector(PredictionProperties properties,
                   RouteGeometryCache routeGeometryCache,
@@ -30,7 +32,8 @@ class SnapCorrector {
                   DirectionChangeCooldown cooldown,
                   PlausibilityChecker plausibilityChecker,
                   ConsecutiveOppositeCounter oppositeCounter,
-                  OppositeFallbackStrategy oppositeFallback) {
+                  OppositeFallbackStrategy oppositeFallback,
+                  HeadingFlipStrategy headingFlip) {
         this.properties = properties;
         this.routeGeometryCache = routeGeometryCache;
         this.mapMatchingService = mapMatchingService;
@@ -38,6 +41,7 @@ class SnapCorrector {
         this.plausibilityChecker = plausibilityChecker;
         this.oppositeCounter = oppositeCounter;
         this.oppositeFallback = oppositeFallback;
+        this.headingFlip = headingFlip;
     }
 
     record SnapResult(
@@ -100,44 +104,20 @@ class SnapCorrector {
 
         double rawSnapMinDistance = snap.distanceMeters();
 
-        boolean headingCorrected = false;
         boolean fracCorrected = false;
 
-        if (snap.snapped() && course > 1.0) {
-            double routeHeading = mapMatchingService.calculateCourseFromRoute(
-                    routeCoords, cumDist, snap.fraction(), direction, totalDist);
-            double headingDiff = Math.abs(course - routeHeading);
-            if (headingDiff > 180) headingDiff = 360 - headingDiff;
-            if (headingDiff > properties.getDirectionFlipThresholdDeg()) {
-                if (cooldown.isActive(existing)) {
-                    log.info("[GPS_PIPELINE] DIR_FLIP_BLOCKED_COOLDOWN vehicle={} plate={} type=heading ageMs={} headingDiff={}° course={}° routeHeading={}°",
-                            vehicleId, licensePlate, cooldown.ageMs(existing),
-                            (int) headingDiff, (int) course, (int) routeHeading);
-                } else {
-                    int flippedDir = (direction == 0) ? 1 : 0;
-                    List<double[]> flippedCoords = routeGeometryCache.getPoints(routeNumber, flippedDir);
-                    if (flippedCoords != null) {
-                        double flippedDist = routeGeometryCache.getTotalDistance(routeNumber, flippedDir);
-                        MapMatchingService.SnappedResult flippedSnap =
-                                mapMatchingService.snapToNearestSegment(latitude, longitude, flippedCoords, flippedDist);
-                        if (flippedSnap.snapped()) {
-                            rawSnapMinDistance = Math.min(rawSnapMinDistance, flippedSnap.distanceMeters());
-                        }
-                        if (flippedSnap.snapped()
-                                && plausibilityChecker.isDirectionFlipPhysicallyPlausible(vehicleId, "HEADING", existing,
-                                        flippedSnap, snap.fraction())) {
-                            log.debug("Direction corrected for vehicle {}: {} → {} (headingDiff={}°, course={}°, routeHeading={}°)",
-                                    vehicleId, direction, flippedDir,
-                                    (int) headingDiff, (int) course, (int) routeHeading);
-                            direction = flippedDir;
-                            routeCoords = flippedCoords;
-                            totalDist = flippedDist;
-                            snap = flippedSnap;
-                            headingCorrected = true;
-                        }
-                    }
-                }
-            }
+        HeadingFlipStrategy.Result headingResult = headingFlip.maybeFlip(
+                existing, vehicleId, licensePlate, routeNumber,
+                latitude, longitude, course,
+                direction, routeCoords, totalDist, cumDist,
+                snap, rawSnapMinDistance);
+        rawSnapMinDistance = headingResult.rawSnapMinDistance();
+        boolean headingCorrected = headingResult.flipped();
+        if (headingCorrected) {
+            direction = headingResult.direction();
+            routeCoords = headingResult.routeCoords();
+            totalDist = headingResult.totalDist();
+            snap = headingResult.snap();
         }
 
         double predictedLat;
