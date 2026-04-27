@@ -118,6 +118,11 @@ public class WsSessionRegistry {
         Map<String, String> params = parseQueryString(query);
         log.info("Parsed query params: {}", params);
 
+        if ("true".equalsIgnoreCase(params.get("initial-chunked"))) {
+            config.setChunkedInitial(true);
+            log.info("Initial-chunked mode enabled for session");
+        }
+
         if (params.containsKey("bounds")) {
             String[] bounds = params.get("bounds").split(",");
             if (bounds.length == 4) {

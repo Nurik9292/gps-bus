@@ -31,6 +31,10 @@ class SessionConfig {
     @Setter
     private String clientIp;
 
+    @Getter
+    @Setter
+    private boolean chunkedInitial = false;
+
     public SessionConfig() {
         this.lastActivityTime = Instant.now();
     }

@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.websocket;
 
+import biz.ugur.busroutebackend.interfaces.websocket.dto.InitialPositionsChunk;
 import biz.ugur.busroutebackend.interfaces.websocket.dto.InitialPositionsMessage;
 import biz.ugur.busroutebackend.interfaces.websocket.dto.PositionUpdateMessage;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
@@ -31,6 +32,7 @@ public class WsOutboundStreamBuilder {
     private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(30);
     private static final Duration MAX_INITIAL_POSITION_AGE = Duration.ofMinutes(5);
     private static final int INITIAL_POSITIONS_LIMIT = 2000;
+    private static final int INITIAL_POSITIONS_CHUNK_SIZE = 500;
     private static final int SUBSCRIPTION_CHANGE_LIMIT = 100;
     private static final int LIVE_BATCH_LIMIT = 1000;
     private static final Duration LIVE_BATCH_TIMEOUT = Duration.ofMillis(500);
@@ -91,6 +93,9 @@ public class WsOutboundStreamBuilder {
     }
 
     private Flux<WebSocketMessage> initialPositionsStream(WebSocketSession session, SessionConfig config) {
+        if (config.isChunkedInitial()) {
+            return chunkedInitialPositionsStream(session, config);
+        }
         return getVehiclesForConfig(config)
                 .take(INITIAL_POSITIONS_LIMIT)
                 .map(this::convertToWebSocketMessage)
@@ -108,6 +113,43 @@ public class WsOutboundStreamBuilder {
                 })
                 .flux()
                 .doOnNext(msg -> log.debug("Sent initial positions to session"));
+    }
+
+    private Flux<WebSocketMessage> chunkedInitialPositionsStream(WebSocketSession session, SessionConfig config) {
+        return getVehiclesForConfig(config)
+                .take(INITIAL_POSITIONS_LIMIT)
+                .map(this::convertToWebSocketMessage)
+                .buffer(INITIAL_POSITIONS_CHUNK_SIZE)
+                .collectList()
+                .flatMapMany(allChunks -> {
+                    int totalChunks = allChunks.size();
+                    int totalPositions = allChunks.stream().mapToInt(List::size).sum();
+                    log.info("Sending {} initial positions in {} chunks of up to {} for subscription type: {}, filter: {}",
+                            totalPositions, totalChunks, INITIAL_POSITIONS_CHUNK_SIZE,
+                            config.getSubscriptionType(), config.getRouteFilter());
+                    if (allChunks.isEmpty()) {
+                        InitialPositionsChunk empty = InitialPositionsChunk.of(0L, true, List.of());
+                        return Flux.just(serialiseChunk(session, empty));
+                    }
+                    return Flux.range(0, totalChunks)
+                            .map(idx -> {
+                                boolean last = idx == totalChunks - 1;
+                                InitialPositionsChunk chunk = InitialPositionsChunk.of(
+                                        idx.longValue(), last, allChunks.get(idx));
+                                return serialiseChunk(session, chunk);
+                            });
+                })
+                .doOnNext(msg -> log.debug("Sent initial positions chunk to session"));
+    }
+
+    private WebSocketMessage serialiseChunk(WebSocketSession session, InitialPositionsChunk chunk) {
+        try {
+            return session.textMessage(objectMapper.writeValueAsString(chunk));
+        } catch (JsonProcessingException e) {
+            log.error("Error serializing initial positions chunk page={}: {}",
+                    chunk.page(), e.getMessage());
+            return session.textMessage("{\"type\":\"error\",\"message\":\"Serialization error\"}");
+        }
     }
 
     private Flux<WebSocketMessage> liveUpdatesStream(WebSocketSession session, SessionConfig config) {
