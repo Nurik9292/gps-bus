@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ConsecutiveOppositeCounter;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown;
+import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.OppositeFallbackStrategy;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -21,19 +22,22 @@ class SnapCorrector {
     private final DirectionChangeCooldown cooldown;
     private final PlausibilityChecker plausibilityChecker;
     private final ConsecutiveOppositeCounter oppositeCounter;
+    private final OppositeFallbackStrategy oppositeFallback;
 
     SnapCorrector(PredictionProperties properties,
                   RouteGeometryCache routeGeometryCache,
                   MapMatchingService mapMatchingService,
                   DirectionChangeCooldown cooldown,
                   PlausibilityChecker plausibilityChecker,
-                  ConsecutiveOppositeCounter oppositeCounter) {
+                  ConsecutiveOppositeCounter oppositeCounter,
+                  OppositeFallbackStrategy oppositeFallback) {
         this.properties = properties;
         this.routeGeometryCache = routeGeometryCache;
         this.mapMatchingService = mapMatchingService;
         this.cooldown = cooldown;
         this.plausibilityChecker = plausibilityChecker;
         this.oppositeCounter = oppositeCounter;
+        this.oppositeFallback = oppositeFallback;
     }
 
     record SnapResult(
@@ -331,78 +335,26 @@ class SnapCorrector {
                 fraction = -1;
             }
         } else {
-            int oppositeDir = (direction == 0) ? 1 : 0;
-            List<double[]> oppositeCoords = routeGeometryCache.getPoints(routeNumber, oppositeDir);
-            if (oppositeCoords != null) {
-                double oppositeDist = routeGeometryCache.getTotalDistance(routeNumber, oppositeDir);
-                MapMatchingService.SnappedResult oppositeSnap =
-                        mapMatchingService.snapToNearestSegment(latitude, longitude, oppositeCoords, oppositeDist);
-                if (oppositeSnap.snapped()) {
-                    rawSnapMinDistance = Math.min(rawSnapMinDistance, oppositeSnap.distanceMeters());
-                }
-                boolean oppositePlausible = oppositeSnap.snapped()
-                        && plausibilityChecker.isDirectionFlipPhysicallyPlausible(vehicleId, "OPPOSITE_FALLBACK",
-                                existing, oppositeSnap, oppositeSnap.fraction());
-                if (oppositePlausible) {
-                    log.debug("[GPS_PIPELINE] SNAP_OPPOSITE vehicle={} route={} dir={}→{} dist={}m (primary={}m)",
-                            vehicleId, routeNumber, direction, oppositeDir,
-                            String.format("%.1f", oppositeSnap.distanceMeters()),
-                            String.format("%.1f", snap.distanceMeters()));
-                    int snapCount = oppositeCounter.incrementAndGet(vehicleId);
-                    if (snapCount >= properties.getOppositeSnapThreshold()) {
-                        oppositeCounter.queueDirectionFix(vehicleId, oppositeDir);
-                        log.info("[GPS_PIPELINE] DIR_AUTO_FIX vehicle={} route={} dir={}→{} ({}x consecutive opposite snap)",
-                                vehicleId, routeNumber, direction, oppositeDir, snapCount);
-                        oppositeCounter.reset(vehicleId);
-                    }
-                    direction = oppositeDir;
-                    routeCoords = oppositeCoords;
-                    totalDist = oppositeDist;
-                    snap = oppositeSnap;
-                    double realFractionOpposite = snap.fraction();
-                    predictedLat = snap.latitude();
-                    predictedLon = snap.longitude();
-                    fraction = realFractionOpposite;
-                    double[] oppositeCumDist = routeGeometryCache.getCumulativeDistances(routeNumber, direction);
-                    course = mapMatchingService.calculateCourseFromRoute(routeCoords, oppositeCumDist, fraction, direction, totalDist);
-                } else {
-                    if (oppositeSnap.snapped()) {
-                        double physicalJumpMeters = existing != null
-                                && existing.getPredictedLatitude() != 0.0
-                                && existing.getPredictedLongitude() != 0.0
-                                ? DistanceCalculationService.haversineDistanceMeters(
-                                        existing.getPredictedLatitude(), existing.getPredictedLongitude(),
-                                        oppositeSnap.latitude(), oppositeSnap.longitude())
-                                : -1;
-                        log.warn("[GPS_PIPELINE] OPPOSITE_FALLBACK_REJECTED vehicle={} plate={} route={} dir={}→{} " +
-                                        "primaryDist={}m oppositeDist={}m physicalJump={}m — GPS noise near parallel lanes, keeping predicted on route",
-                                vehicleId, licensePlate, routeNumber, direction, oppositeDir,
-                                String.format("%.1f", snap.distanceMeters()),
-                                String.format("%.1f", oppositeSnap.distanceMeters()),
-                                physicalJumpMeters >= 0 ? String.format("%.0f", physicalJumpMeters) : "-");
-                    } else {
-                        log.debug("[GPS_PIPELINE] SNAP_FAIL vehicle={} route={} dist={}m (opposite={}m) > threshold={}m → keeping predicted on route, awaiting re-snap",
-                                vehicleId, routeNumber,
-                                String.format("%.1f", snap.distanceMeters()),
-                                String.format("%.1f", oppositeSnap.distanceMeters()),
-                                (int) properties.getMaxSnapDistanceMeters());
-                    }
-                    oppositeCounter.reset(vehicleId);
-                    predictedLat = existing != null ? existing.getPredictedLatitude() : latitude;
-                    predictedLon = existing != null ? existing.getPredictedLongitude() : longitude;
-                    fraction = !routeReassigned && existing != null && existing.getFractionOnRoute() >= 0
-                            ? existing.getFractionOnRoute()
-                            : -1;
-                }
+            OppositeFallbackStrategy.Result fallback = oppositeFallback.tryFlip(
+                    existing, vehicleId, licensePlate, routeNumber,
+                    direction, latitude, longitude, snap, rawSnapMinDistance);
+            rawSnapMinDistance = fallback.rawSnapMinDistance();
+
+            if (fallback.accepted()) {
+                direction = fallback.direction();
+                routeCoords = fallback.routeCoords();
+                totalDist = fallback.totalDist();
+                snap = fallback.snap();
+                double realFractionOpposite = snap.fraction();
+                predictedLat = snap.latitude();
+                predictedLon = snap.longitude();
+                fraction = realFractionOpposite;
+                double[] oppositeCumDist = routeGeometryCache.getCumulativeDistances(routeNumber, direction);
+                course = mapMatchingService.calculateCourseFromRoute(routeCoords, oppositeCumDist, fraction, direction, totalDist);
             } else {
-                log.debug("[GPS_PIPELINE] SNAP_FAIL vehicle={} route={} dist={}m > threshold={}m → keeping predicted on route, awaiting re-snap",
-                        vehicleId, routeNumber,
-                        String.format("%.1f", snap.distanceMeters()),
-                        (int) properties.getMaxSnapDistanceMeters());
-                oppositeCounter.reset(vehicleId);
                 predictedLat = existing != null ? existing.getPredictedLatitude() : latitude;
                 predictedLon = existing != null ? existing.getPredictedLongitude() : longitude;
-                fraction = existing != null && existing.getFractionOnRoute() >= 0
+                fraction = !routeReassigned && existing != null && existing.getFractionOnRoute() >= 0
                         ? existing.getFractionOnRoute()
                         : -1;
             }
