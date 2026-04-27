@@ -83,4 +83,8 @@ public class VehiclePredictionState {
 
     private Instant directionChangedAt;
 
+    private Instant lastSegmentDepartureAt;
+
+    private String lastSegmentDepartureStopId;
+
 }

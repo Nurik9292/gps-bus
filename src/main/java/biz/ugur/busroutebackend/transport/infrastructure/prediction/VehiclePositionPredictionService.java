@@ -141,7 +141,7 @@ public class VehiclePositionPredictionService {
     public void restoreFromRedis() {
         if (!properties.isEnabled()) return;
 
-        Mono.when(predictor.loadDwellStats(), loadPredictionStates())
+        Mono.when(predictor.loadDwellStats(), predictor.loadSegmentTravelStats(), loadPredictionStates())
                 .timeout(RESTORE_TIMEOUT)
                 .subscribeOn(Schedulers.boundedElastic())
                 .subscribe(

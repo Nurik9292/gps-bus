@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
+import biz.ugur.busroutebackend.transport.domain.repository.SegmentTravelStatsRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository;
 import biz.ugur.busroutebackend.transport.infrastructure.debug.GpsRecorder;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,9 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
     @Mock
     private StopDwellStatsRepository dwellStatsRepository;
 
+    @Mock
+    private SegmentTravelStatsRepository segmentTravelStatsRepository;
+
     private PredictionProperties properties;
     private VehiclePositionPredictionService service;
 
@@ -57,6 +61,7 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
         lenient().when(stateRepository.loadAll()).thenReturn(Flux.empty());
         lenient().when(stateRepository.save(any())).thenReturn(Mono.empty());
         lenient().when(dwellStatsRepository.findAll()).thenReturn(Flux.empty());
+        lenient().when(segmentTravelStatsRepository.findAll()).thenReturn(Flux.empty());
 
         List<double[]> coords = List.of(
                 new double[]{LAT, LON},
@@ -83,7 +88,7 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
                 stateRepository, gpsRecorderProvider,
                 new GpsOutlierFilter(new PredictionProperties()),
                 new SnapCorrector(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ConsecutiveOppositeCounter(), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.OppositeFallbackStrategy(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ConsecutiveOppositeCounter()), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.HeadingFlipStrategy(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties)), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.FracFlipStrategy(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties)), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ImplausibleJumpHandler()),
-                new VehiclePositionPredictor(properties, routeGeometryCache, mapMatchingService, dwellStatsRepository)
+                new VehiclePositionPredictor(properties, routeGeometryCache, mapMatchingService, dwellStatsRepository, segmentTravelStatsRepository)
         );
     }
 

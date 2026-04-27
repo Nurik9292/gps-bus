@@ -1,6 +1,8 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
+import biz.ugur.busroutebackend.transport.domain.repository.SegmentTravelStatsRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository;
+import biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat;
 import biz.ugur.busroutebackend.transport.domain.valueobject.StopDwellStat;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -8,7 +10,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,17 +31,21 @@ class VehiclePositionPredictor {
     private final RouteGeometryCache routeGeometryCache;
     private final MapMatchingService mapMatchingService;
     private final StopDwellStatsRepository dwellStatsRepository;
+    private final SegmentTravelStatsRepository segmentTravelStatsRepository;
 
     private final ConcurrentHashMap<String, StopDwellStat> dwellStatsCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, SegmentTravelStat> segmentTravelStatsCache = new ConcurrentHashMap<>();
 
     VehiclePositionPredictor(PredictionProperties properties,
                               RouteGeometryCache routeGeometryCache,
                               MapMatchingService mapMatchingService,
-                              StopDwellStatsRepository dwellStatsRepository) {
+                              StopDwellStatsRepository dwellStatsRepository,
+                              SegmentTravelStatsRepository segmentTravelStatsRepository) {
         this.properties = properties;
         this.routeGeometryCache = routeGeometryCache;
         this.mapMatchingService = mapMatchingService;
         this.dwellStatsRepository = dwellStatsRepository;
+        this.segmentTravelStatsRepository = segmentTravelStatsRepository;
     }
 
     Mono<Void> loadDwellStats() {
@@ -47,6 +56,23 @@ class VehiclePositionPredictor {
                 .onErrorResume(err -> Flux.empty())
                 .then(Mono.fromRunnable(() ->
                         log.info("Loaded dwell stats cache: {} entries", dwellStatsCache.size())));
+    }
+
+    Mono<Void> loadSegmentTravelStats() {
+        return segmentTravelStatsRepository.findAll()
+                .doOnNext(stat -> segmentTravelStatsCache.put(segmentKey(stat), stat))
+                .doOnError(err -> log.warn("[GPS_PIPELINE] Failed to load segment travel stats: {}", err.getMessage()))
+                .onErrorResume(err -> Flux.empty())
+                .then(Mono.fromRunnable(() ->
+                        log.info("[GPS_PIPELINE] Loaded segment travel stats cache: {} entries",
+                                segmentTravelStatsCache.size())));
+    }
+
+    SegmentTravelStat getSegmentTravelStat(String routeNumber, int direction,
+                                           String fromStopId, String toStopId,
+                                           int hourOfDay, boolean weekend) {
+        return segmentTravelStatsCache.get(
+                segmentKey(routeNumber, direction, fromStopId, toStopId, hourOfDay, weekend));
     }
 
     VehiclePredictionState advance(VehiclePredictionState state) {
@@ -259,6 +285,8 @@ class VehiclePositionPredictor {
                 .dwellStartedAt(null)
                 .dwellStopFraction(-1)
                 .dwellStopId(null)
+                .lastSegmentDepartureAt(Instant.now())
+                .lastSegmentDepartureStopId(state.getDwellStopId())
                 .speedKmh(resumeSpeed)
                 .build();
     }
@@ -287,6 +315,9 @@ class VehiclePositionPredictor {
                 String.format("%.4f", nextStopFrac),
                 String.format("%.0f", distToNextStopTrue),
                 String.format("%.1f", state.getRawGpsSpeedKmh()));
+
+        recordSegmentTravelObservation(state, nextStop.getStopId());
+
         double[] dwellCumDist = routeGeometryCache.getCumulativeDistances(state.getRouteNumber(), state.getDirection());
         double[] stopCoords = mapMatchingService.interpolateRoutePoint(routeCoords, dwellCumDist, nextStopFrac, totalRouteDistance);
         if (stopCoords == null) return null;
@@ -332,6 +363,70 @@ class VehiclePositionPredictor {
             return properties.getDwellTimeSeconds();
         }
         return stat.getAvgDwellSeconds();
+    }
+
+    private static String segmentKey(SegmentTravelStat stat) {
+        return segmentKey(stat.getRouteNumber(), stat.getDirection(),
+                stat.getFromStopId(), stat.getToStopId(),
+                stat.getHourOfDay(), stat.isWeekend());
+    }
+
+    private static String segmentKey(String routeNumber, int direction,
+                                      String fromStopId, String toStopId,
+                                      int hourOfDay, boolean weekend) {
+        return routeNumber + ":" + direction + ":" + fromStopId + "->" + toStopId
+                + ":h" + hourOfDay + ":" + (weekend ? "we" : "wd");
+    }
+
+    private void recordSegmentTravelObservation(VehiclePredictionState state, String toStopId) {
+        String fromStopId = state.getLastSegmentDepartureStopId();
+        Instant departureAt = state.getLastSegmentDepartureAt();
+        if (fromStopId == null || departureAt == null
+                || state.getRouteNumber() == null
+                || toStopId == null
+                || fromStopId.equals(toStopId)) {
+            return;
+        }
+
+        long elapsedMs = Instant.now().toEpochMilli() - departureAt.toEpochMilli();
+        double elapsedSec = elapsedMs / 1000.0;
+        if (elapsedSec < properties.getDwellMinSeconds() || elapsedSec > properties.getDwellMaxSeconds() * 4) {
+            log.debug("[GPS_PIPELINE] SEGMENT_TRAVEL_SKIP_OUT_OF_RANGE route={} dir={} {}->{}: elapsed={}s",
+                    state.getRouteNumber(), state.getDirection(), fromStopId, toStopId,
+                    String.format("%.1f", elapsedSec));
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Ashgabat"));
+        int hourOfDay = now.getHour();
+        boolean weekend = now.getDayOfWeek() == DayOfWeek.SATURDAY
+                || now.getDayOfWeek() == DayOfWeek.SUNDAY;
+        String key = segmentKey(state.getRouteNumber(), state.getDirection(),
+                fromStopId, toStopId, hourOfDay, weekend);
+
+        SegmentTravelStat existing = segmentTravelStatsCache.get(key);
+        SegmentTravelStat updated = (existing != null
+                ? existing
+                : SegmentTravelStat.initial(state.getRouteNumber(), state.getDirection(),
+                        fromStopId, toStopId, hourOfDay, weekend))
+                .withNewSample(elapsedSec, Instant.now());
+
+        segmentTravelStatsCache.put(key, updated);
+
+        log.info("[GPS_PIPELINE] SEGMENT_TRAVEL_OBSERVED route={} dir={} {}->{} hour={} weekend={} elapsed={}s avg={}s samples={}",
+                state.getRouteNumber(), state.getDirection(), fromStopId, toStopId,
+                hourOfDay, weekend,
+                String.format("%.1f", elapsedSec),
+                String.format("%.1f", updated.getAvgTravelSeconds()),
+                updated.getSampleCount());
+
+        segmentTravelStatsRepository.save(updated)
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe(
+                        null,
+                        err -> log.warn("[GPS_PIPELINE] SEGMENT_TRAVEL_PERSIST_FAILED route={} {}->{} err={}",
+                                state.getRouteNumber(), fromStopId, toStopId, err.getMessage())
+                );
     }
 
     private void recordDwellObservation(VehiclePredictionState state, long dwellMs) {
