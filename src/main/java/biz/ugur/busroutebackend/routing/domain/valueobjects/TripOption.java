@@ -31,10 +31,18 @@ public class TripOption extends ValueObject {
     private final LocalDateTime estimatedDeparture;
     private final LocalDateTime estimatedArrival;
     private final double comfortScore;
+    private final TripScoring scoring;
 
 
     public TripOption(TripType tripType, List<RouteSegment> routeSegments,
                       int initialWaitingMinutes, LocalDateTime departureTime) {
+        this(tripType, routeSegments, initialWaitingMinutes, departureTime, TripScoring.defaults());
+    }
+
+    public TripOption(TripType tripType, List<RouteSegment> routeSegments,
+                      int initialWaitingMinutes, LocalDateTime departureTime,
+                      TripScoring scoring) {
+        this.scoring = scoring != null ? scoring : TripScoring.defaults();
         this.optionId = UUID.randomUUID().toString();
         this.tripType = validateTripType(tripType);
         this.routeSegments = validateAndCopySegments(routeSegments);
@@ -57,7 +65,7 @@ public class TripOption extends ValueObject {
         if (waitingMinutes < 0) {
             throw new IllegalArgumentException("Initial waiting time cannot be negative");
         }
-        return Math.min(waitingMinutes, 60);
+        return Math.min(waitingMinutes, scoring.maxInitialWaitingMinutes());
     }
 
     public boolean isFasterThan(TripOption other) {
@@ -157,12 +165,15 @@ public class TripOption extends ValueObject {
     }
 
     public double getQualityScore() {
-        double speedScore = Math.max(0, 100 - totalTravelMinutes);
-        double transferScore = Math.max(0, 100 - transfersCount * 25);
-        double walkingScore = Math.max(0, 100 - totalWalkingMinutes * 3);
+        TripScoring.QualityCoefficients q = scoring.quality();
+        double speedScore = Math.max(0, q.speedBaselineMinutes() - totalTravelMinutes);
+        double transferScore = Math.max(0, q.speedBaselineMinutes() - transfersCount * q.transferPenalty());
+        double walkingScore = Math.max(0, q.speedBaselineMinutes() - totalWalkingMinutes * q.walkingPenaltyPerMinute());
 
-
-        return (speedScore * 0.4 + transferScore * 0.3 + walkingScore * 0.2 + comfortScore * 0.1);
+        return speedScore * q.speedWeight()
+                + transferScore * q.transferWeight()
+                + walkingScore * q.walkingWeight()
+                + comfortScore * q.comfortWeight();
     }
 
     public boolean isAccessible() {
@@ -178,15 +189,11 @@ public class TripOption extends ValueObject {
     }
 
     public double getReliabilityScore() {
-        double baseReliability = 0.95;
-
-
-        double transferPenalty = transfersCount * 0.05;
-
-
-        double walkingPenalty = Math.max(0, (totalWalkingMinutes - 10) * 0.01);
-
-        return Math.max(0.5, baseReliability - transferPenalty - walkingPenalty);
+        TripScoring.ReliabilityCoefficients r = scoring.reliability();
+        double transferPenalty = transfersCount * r.transferPenalty();
+        double walkingPenalty = Math.max(0,
+                (totalWalkingMinutes - r.walkingGraceMinutes()) * r.walkingPenaltyPerMinute());
+        return Math.max(r.floor(), r.base() - transferPenalty - walkingPenalty);
     }
 
 
@@ -302,14 +309,12 @@ public class TripOption extends ValueObject {
     }
 
     private double calculateComfortScore() {
-        double baseScore = 100.0;
-
-
-        baseScore -= transfersCount * 15;
-        baseScore -= Math.max(0, totalWalkingMinutes - 5) * 2;
-        baseScore -= Math.max(0, totalTravelMinutes - 30) * 0.5;
-
-        return Math.max(0, Math.min(100, baseScore));
+        TripScoring.ComfortCoefficients c = scoring.comfort();
+        double baseScore = c.base();
+        baseScore -= transfersCount * c.transferPenalty();
+        baseScore -= Math.max(0, totalWalkingMinutes - c.walkingGraceMinutes()) * c.walkingPenaltyPerMinute();
+        baseScore -= Math.max(0, totalTravelMinutes - c.travelGraceMinutes()) * c.travelPenaltyPerMinute();
+        return Math.max(0, Math.min(c.base(), baseScore));
     }
 
     private String getTransferSuffix(int count) {

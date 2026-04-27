@@ -4,8 +4,8 @@ import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationSe
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.dto.SearchResult;
+import biz.ugur.busroutebackend.routing.application.factory.TripOptionFactory;
 import biz.ugur.busroutebackend.routing.domain.enums.SegmentType;
-import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
@@ -29,9 +29,12 @@ public class WalkingOnlyRouteSearchService {
 
     private final DistanceCalculationService distanceService;
     private final WalkingRouteService walkingRouteService;
+    private final TripOptionFactory tripOptionFactory;
 
     public WalkingOnlyRouteSearchService(DistanceCalculationService distanceService,
-                                          WalkingRouteService walkingRouteService) {
+                                          WalkingRouteService walkingRouteService,
+                                          TripOptionFactory tripOptionFactory) {
+        this.tripOptionFactory = tripOptionFactory;
         this.distanceService = distanceService;
         this.walkingRouteService = walkingRouteService;
     }
@@ -93,10 +96,8 @@ public class WalkingOnlyRouteSearchService {
                 : new RouteSegment(SegmentType.WALKING, from, to, walkingMinutes, null, instruction,
                         (String) null, distanceMeters);
 
-        TripOption walkingOption = new TripOption(
-                TripType.WALKING_ONLY,
+        TripOption walkingOption = tripOptionFactory.createWalkingOnlyOption(
                 List.of(walkSegment),
-                0,
                 LocalDateTime.now()
         );
 

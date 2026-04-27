@@ -274,6 +274,30 @@ business:
     max-transfer-wait-time: 30
     walking-speed: 5.0
 
+    trip-scoring:
+      max-initial-waiting-minutes: ${TRIP_SCORING_MAX_INITIAL_WAITING_MINUTES:60}
+      quality-score:
+        speed-weight: ${TRIP_SCORING_QUALITY_SPEED_WEIGHT:0.4}
+        transfer-weight: ${TRIP_SCORING_QUALITY_TRANSFER_WEIGHT:0.3}
+        walking-weight: ${TRIP_SCORING_QUALITY_WALKING_WEIGHT:0.2}
+        comfort-weight: ${TRIP_SCORING_QUALITY_COMFORT_WEIGHT:0.1}
+        speed-baseline-minutes: ${TRIP_SCORING_QUALITY_SPEED_BASELINE_MIN:100}
+        transfer-penalty: ${TRIP_SCORING_QUALITY_TRANSFER_PENALTY:25}
+        walking-penalty-per-minute: ${TRIP_SCORING_QUALITY_WALKING_PENALTY_PER_MIN:3}
+      comfort-score:
+        base: ${TRIP_SCORING_COMFORT_BASE:100.0}
+        transfer-penalty: ${TRIP_SCORING_COMFORT_TRANSFER_PENALTY:15.0}
+        walking-grace-minutes: ${TRIP_SCORING_COMFORT_WALKING_GRACE_MIN:5}
+        walking-penalty-per-minute: ${TRIP_SCORING_COMFORT_WALKING_PENALTY_PER_MIN:2.0}
+        travel-grace-minutes: ${TRIP_SCORING_COMFORT_TRAVEL_GRACE_MIN:30}
+        travel-penalty-per-minute: ${TRIP_SCORING_COMFORT_TRAVEL_PENALTY_PER_MIN:0.5}
+      reliability-score:
+        base: ${TRIP_SCORING_RELIABILITY_BASE:0.95}
+        transfer-penalty: ${TRIP_SCORING_RELIABILITY_TRANSFER_PENALTY:0.05}
+        walking-grace-minutes: ${TRIP_SCORING_RELIABILITY_WALKING_GRACE_MIN:10}
+        walking-penalty-per-minute: ${TRIP_SCORING_RELIABILITY_WALKING_PENALTY_PER_MIN:0.01}
+        floor: ${TRIP_SCORING_RELIABILITY_FLOOR:0.5}
+
   vehicle-tracking:
     position-update-interval: 30
     position-max-age: 5
