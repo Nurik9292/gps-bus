@@ -86,8 +86,8 @@ app:
     gps:
       batch-size: ${SCHEDULER_GPS_BATCH_SIZE:100}
       parallel-workers: ${SCHEDULER_GPS_PARALLEL_WORKERS:2}
-      batch-timeout: ${SCHEDULER_GPS_BATCH_TIMEOUT:30s}
-      total-timeout: ${SCHEDULER_GPS_TOTAL_TIMEOUT:120s}
+      batch-timeout: ${SCHEDULER_GPS_BATCH_TIMEOUT:10s}
+      total-timeout: ${SCHEDULER_GPS_TOTAL_TIMEOUT:15s}
 
   eta:
     position:

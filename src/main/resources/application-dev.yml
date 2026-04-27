@@ -73,7 +73,7 @@ external:
       connect-timeout: ${GPS_TUGDK_CONNECT_TIMEOUT:10s}
       read-timeout: ${GPS_TUGDK_READ_TIMEOUT:60s}
       write-timeout: ${GPS_TUGDK_WRITE_TIMEOUT:10s}
-      cache-timeout: ${GPS_TUGDK_CACHE_TIMEOUT:5s}
+      cache-timeout: ${GPS_TUGDK_CACHE_TIMEOUT:3s}
 
 
 app:
