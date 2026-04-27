@@ -4,6 +4,8 @@ import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+
 @Component
 @Slf4j
 public class TransferRouteValidator {
@@ -25,6 +27,12 @@ public class TransferRouteValidator {
 
         if (route.firstRouteTravelMinutes() < 1 || route.secondRouteTravelMinutes() < 1) {
             log.debug("One-transfer route rejected: segments too short");
+            return false;
+        }
+
+        if (isSameRouteNumber(route.firstRoute().getRouteNumber(), route.secondRoute().getRouteNumber())) {
+            log.debug("One-transfer route rejected: same route on both legs ({})",
+                    route.firstRoute().getRouteNumber());
             return false;
         }
 
@@ -55,7 +63,10 @@ public class TransferRouteValidator {
             return false;
         }
 
-        if (hasDuplicateRoutes(route)) {
+        if (hasAnyDuplicateRoute(
+                route.firstRoute().getRouteNumber(),
+                route.secondRoute().getRouteNumber(),
+                route.thirdRoute().getRouteNumber())) {
             log.debug("Two-transfer route rejected: duplicate routes");
             return false;
         }
@@ -63,11 +74,18 @@ public class TransferRouteValidator {
         return true;
     }
 
-    private boolean hasDuplicateRoutes(RouteCalculationService.TwoTransferRouteResult route) {
-        String route1 = route.firstRoute().getRouteNumber();
-        String route2 = route.secondRoute().getRouteNumber();
-        String route3 = route.thirdRoute().getRouteNumber();
+    private boolean isSameRouteNumber(String a, String b) {
+        return Objects.equals(a, b);
+    }
 
-        return route1.equals(route2) || route2.equals(route3) || route1.equals(route3);
+    private boolean hasAnyDuplicateRoute(String... routeNumbers) {
+        for (int i = 0; i < routeNumbers.length; i++) {
+            for (int j = i + 1; j < routeNumbers.length; j++) {
+                if (isSameRouteNumber(routeNumbers[i], routeNumbers[j])) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

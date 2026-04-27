@@ -178,6 +178,12 @@ public class StopBasedRouteSearchService {
                 route.transferWaitMinutes() +
                 route.secondRouteTravelMinutes();
 
+        if (java.util.Objects.equals(
+                route.firstRoute().getRouteNumber(),
+                route.secondRoute().getRouteNumber())) {
+            return false;
+        }
+
         return route.firstRouteTravelMinutes() >= 3 &&
                 route.secondRouteTravelMinutes() >= 3 &&
                 route.transferWaitMinutes() <= 15 &&
@@ -192,6 +198,15 @@ public class StopBasedRouteSearchService {
                 route.thirdRouteTravelMinutes() +
                 route.firstTransferWaitMinutes() +
                 route.secondTransferWaitMinutes();
+
+        String r1 = route.firstRoute().getRouteNumber();
+        String r2 = route.secondRoute().getRouteNumber();
+        String r3 = route.thirdRoute().getRouteNumber();
+        if (java.util.Objects.equals(r1, r2)
+                || java.util.Objects.equals(r2, r3)
+                || java.util.Objects.equals(r1, r3)) {
+            return false;
+        }
 
         return route.firstRouteTravelMinutes() >= 3 &&
                 route.secondRouteTravelMinutes() >= 3 &&
