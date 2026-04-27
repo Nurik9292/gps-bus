@@ -43,7 +43,7 @@ class SnapCorrectorDirectionCooldownTest {
     @BeforeEach
     void setUp() {
         properties = new PredictionProperties();
-        snapCorrector = new SnapCorrector(properties, routeGeometryCache, mapMatchingService);
+        snapCorrector = new SnapCorrector(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ConsecutiveOppositeCounter());
 
         List<double[]> backwardCoords = List.of(
                 new double[]{37.90319, 58.34163},

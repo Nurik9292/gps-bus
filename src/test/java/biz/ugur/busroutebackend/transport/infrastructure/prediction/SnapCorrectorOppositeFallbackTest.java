@@ -44,7 +44,7 @@ class SnapCorrectorOppositeFallbackTest {
     @BeforeEach
     void setUp() {
         properties = new PredictionProperties();
-        snapCorrector = new SnapCorrector(properties, routeGeometryCache, mapMatchingService);
+        snapCorrector = new SnapCorrector(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ConsecutiveOppositeCounter());
 
         List<double[]> forwardCoords = List.of(new double[]{PRED_LAT, PRED_LON});
         List<double[]> backwardCoords = List.of(new double[]{OPPOSITE_SNAP_LAT, OPPOSITE_SNAP_LON});
