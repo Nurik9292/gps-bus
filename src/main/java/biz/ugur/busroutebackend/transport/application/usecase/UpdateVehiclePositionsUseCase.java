@@ -12,6 +12,7 @@ import biz.ugur.busroutebackend.shared.domain.event.DomainEventPublisher;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
 import biz.ugur.busroutebackend.transport.application.factory.VehicleFactory;
+import biz.ugur.busroutebackend.transport.application.usecase.pipeline.GpsValidationStage;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
@@ -57,15 +58,11 @@ import java.time.ZoneOffset;
 public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionDTO>, VehiclePositionUpdateResult> {
 
     private static final long FORCE_PUBLISH_INTERVAL_SECONDS = 20;
-    private static final long MAX_GPS_AGE_SECONDS = 120;
-    private static final long IDEMPOTENCY_TTL_SECONDS = 60;
 
     private final ConcurrentHashMap<String, Instant> lastPublishedTime = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, LocalDateTime> lastProcessedFixTimeByDevice = new ConcurrentHashMap<>();
 
     private final VehicleRepository vehicleRepository;
     private final VehicleFactory vehicleFactory;
-    private final VehicleValidationService validationService;
     private final PositionChangeDetector positionChangeDetector;
     private final LicensePlateExtractor licensePlateExtractor;
     private final VehicleDirectionDetectionService directionDetectionService;
@@ -74,17 +71,16 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private final ProcessGarageExitUseCase processGarageExitUseCase;
     private final VehicleGpsHistoryService gpsHistoryService;
     private final DomainEventPublisher domainEventPublisher;
-    private final GpsValidationMetricsRecorder validationMetricsRecorder;
     private final GpsUpdateDeadLetterQueue deadLetterQueue;
     private final GpsOutlierDetector outlierDetector;
     private final GpsOutlierMetricsRecorder outlierMetricsRecorder;
     private final GpsOutlierDetectionProperties outlierDetectionProperties;
     private final VehiclePositionPredictionService predictionService;
     private final biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer;
+    private final GpsValidationStage validationStage;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
                                          VehicleFactory vehicleFactory,
-                                         VehicleValidationService validationService,
                                          PositionChangeDetector positionChangeDetector,
                                          LicensePlateExtractor licensePlateExtractor,
                                          VehicleDirectionDetectionService directionDetectionService,
@@ -95,17 +91,16 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                          EventBus eventBus,
                                          DomainEventPublisher domainEventPublisher,
                                          CorrelationContextService correlationContextService,
-                                         GpsValidationMetricsRecorder validationMetricsRecorder,
                                          GpsUpdateDeadLetterQueue deadLetterQueue,
                                          GpsOutlierDetector outlierDetector,
                                          GpsOutlierMetricsRecorder outlierMetricsRecorder,
                                          GpsOutlierDetectionProperties outlierDetectionProperties,
                                          VehiclePositionPredictionService predictionService,
-                                         biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer) {
+                                         biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer,
+                                         GpsValidationStage validationStage) {
         super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
         this.vehicleFactory = vehicleFactory;
-        this.validationService = validationService;
         this.positionChangeDetector = positionChangeDetector;
         this.licensePlateExtractor = licensePlateExtractor;
         this.directionDetectionService = directionDetectionService;
@@ -114,13 +109,13 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         this.processGarageExitUseCase = processGarageExitUseCase;
         this.gpsHistoryService = gpsHistoryService;
         this.domainEventPublisher = domainEventPublisher;
-        this.validationMetricsRecorder = validationMetricsRecorder;
         this.deadLetterQueue = deadLetterQueue;
         this.outlierDetector = outlierDetector;
         this.outlierMetricsRecorder = outlierMetricsRecorder;
         this.outlierDetectionProperties = outlierDetectionProperties;
         this.predictionService = predictionService;
         this.pipelineTracer = pipelineTracer;
+        this.validationStage = validationStage;
     }
 
     @Override
@@ -137,91 +132,13 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.debug("[GPS_PIPELINE] USE_CASE_INPUT total={} correlationId={}", gpsPositions.size(), correlationId);
 
-            List<GpsPositionDTO> validPositions = new ArrayList<>();
-            Map<GpsValidationResult, Long> validationCounts = new EnumMap<>(GpsValidationResult.class);
-            for (GpsValidationResult r : GpsValidationResult.values()) {
-                validationCounts.put(r, 0L);
+            GpsValidationStage.ValidatedGpsBatch validated = validationStage.apply(gpsPositions);
+
+            if (validated.isEmpty()) {
+                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validated.invalidCount(), 0, LocalDateTime.now(), List.of()));
             }
 
-            for (GpsPositionDTO position : gpsPositions) {
-                GpsValidationResult result = validationService.validateGpsPosition(position);
-                validationCounts.merge(result, 1L, Long::sum);
-                if (result.isValid()) {
-                    validPositions.add(position);
-                }
-            }
-
-            validationMetricsRecorder.recordBatch(validationCounts);
-
-            long invalidCount = gpsPositions.size() - validPositions.size();
-            log.debug("[GPS_PIPELINE] VALIDATION total={} valid={} invalid={}",
-                    gpsPositions.size(), validPositions.size(), invalidCount);
-
-            if (validPositions.isEmpty()) {
-                log.warn("[GPS_PIPELINE] All positions failed validation: {}", validationCounts);
-                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, gpsPositions.size() - validPositions.size(), 0, LocalDateTime.now(), List.of()));
-            }
-
-            final LocalDateTime staleCutoff = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(MAX_GPS_AGE_SECONDS);
-            final List<GpsPositionDTO> freshPositions = validPositions.stream()
-                    .filter(pos -> pos.getFixTime() != null && !pos.getFixTime().isBefore(staleCutoff))
-                    .toList();
-            if (freshPositions.size() < validPositions.size()) {
-                log.debug("[GPS_PIPELINE] STALE_FILTER dropped={}/{} (age > {}s)",
-                        validPositions.size() - freshPositions.size(), validPositions.size(), MAX_GPS_AGE_SECONDS);
-            }
-            log.debug("[GPS_PIPELINE] STALE_FILTER passed={} dropped={}",
-                    freshPositions.size(), validPositions.size() - freshPositions.size());
-            if (freshPositions.isEmpty()) {
-                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, validPositions.size(), 0, LocalDateTime.now(), List.of()));
-            }
-
-            final List<GpsPositionDTO> highQualityPositions = freshPositions.stream()
-                    .filter(pos -> {
-                        if (pos.isHighQualityFix()) {
-                            return true;
-                        }
-                        log.debug("[GPS_PIPELINE] QUALITY_REJECTED device={} hdop={} sat={}",
-                                pos.getDeviceId(), pos.getHdop(), pos.getSatellites());
-                        return false;
-                    })
-                    .toList();
-            int qualityDropped = freshPositions.size() - highQualityPositions.size();
-            if (qualityDropped > 0) {
-                log.debug("[GPS_PIPELINE] QUALITY_FILTER passed={} rejected={}",
-                        highQualityPositions.size(), qualityDropped);
-            }
-            if (highQualityPositions.isEmpty()) {
-                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, freshPositions.size(), 0, LocalDateTime.now(), List.of()));
-            }
-
-            final List<GpsPositionDTO> idempotencyFiltered = highQualityPositions.stream()
-                    .filter(pos -> {
-                        String deviceId = pos.getDeviceId();
-                        LocalDateTime fixTime = pos.getFixTime();
-                        if (deviceId == null || fixTime == null) {
-                            return true;
-                        }
-                        LocalDateTime lastSeen = lastProcessedFixTimeByDevice.get(deviceId);
-                        return lastSeen == null || fixTime.isAfter(lastSeen);
-                    })
-                    .toList();
-            int duplicateDropped = highQualityPositions.size() - idempotencyFiltered.size();
-            if (duplicateDropped > 0) {
-                log.debug("[GPS_PIPELINE] IDEMPOTENCY_FILTER passed={} duplicates_skipped={}",
-                        idempotencyFiltered.size(), duplicateDropped);
-            }
-            if (idempotencyFiltered.isEmpty()) {
-                log.debug("[GPS_PIPELINE] CYCLE_SKIPPED_NO_FRESH_DATA all {} positions already processed",
-                        highQualityPositions.size());
-                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, 0, 0, LocalDateTime.now(), List.of()));
-            }
-            for (GpsPositionDTO pos : idempotencyFiltered) {
-                if (pos.getDeviceId() != null && pos.getFixTime() != null) {
-                    lastProcessedFixTimeByDevice.merge(pos.getDeviceId(), pos.getFixTime(),
-                            (existing, incoming) -> incoming.isAfter(existing) ? incoming : existing);
-                }
-            }
+            List<GpsPositionDTO> idempotencyFiltered = validated.accepted();
 
             List<String> deviceIds = idempotencyFiltered.stream()
                     .map(GpsPositionDTO::getDeviceId)
@@ -230,8 +147,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     .toList();
 
             if (deviceIds.isEmpty()) {
-                log.warn("[GPS_PIPELINE] No valid device IDs found after filtering {} positions", freshPositions.size());
-                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, freshPositions.size(), 0, LocalDateTime.now(), List.of()));
+                log.warn("[GPS_PIPELINE] No valid device IDs found after filtering {} positions", idempotencyFiltered.size());
+                return Mono.just(new VehiclePositionUpdateResult(0, 0, 0, idempotencyFiltered.size(), 0, LocalDateTime.now(), List.of()));
             }
 
             final int validCount = idempotencyFiltered.size();
@@ -257,11 +174,11 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     })
                     .doOnSuccess(result -> log.debug("[GPS_PIPELINE] GPS batch update completed: {}", result.updatedCount()))
                     .onErrorResume(error -> {
-                        log.error("[GPS_PIPELINE] GPS batch update failed, sending {} positions to DLQ", validPositions.size(), error);
-                        return Flux.fromIterable(validPositions)
+                        log.error("[GPS_PIPELINE] GPS batch update failed, sending {} positions to DLQ", idempotencyFiltered.size(), error);
+                        return Flux.fromIterable(idempotencyFiltered)
                                 .flatMap(pos -> sendToDeadLetterQueue(pos, error))
                                 .then(Mono.just(new VehiclePositionUpdateResult(
-                                        0, 0, validPositions.size(), 0, 0,
+                                        0, 0, idempotencyFiltered.size(), 0, 0,
                                         LocalDateTime.now(), List.of()
                                 )));
                     });
@@ -787,18 +704,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         int after = lastPublishedTime.size();
         if (before != after) {
             log.debug("[GPS_PIPELINE] lastPublishedTime cleanup: removed {} entries ({} -> {})",
-                    before - after, before, after);
-        }
-    }
-
-    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60_000)
-    void cleanupStaleIdempotencyEntries() {
-        LocalDateTime cutoff = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(IDEMPOTENCY_TTL_SECONDS);
-        int before = lastProcessedFixTimeByDevice.size();
-        lastProcessedFixTimeByDevice.entrySet().removeIf(entry -> entry.getValue().isBefore(cutoff));
-        int after = lastProcessedFixTimeByDevice.size();
-        if (before != after) {
-            log.debug("[GPS_PIPELINE] idempotency cleanup: removed {} entries ({} -> {})",
                     before - after, before, after);
         }
     }
