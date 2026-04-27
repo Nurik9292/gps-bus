@@ -12,6 +12,7 @@ import biz.ugur.busroutebackend.shared.domain.event.DomainEventPublisher;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
 import biz.ugur.busroutebackend.transport.application.factory.VehicleFactory;
+import biz.ugur.busroutebackend.transport.application.usecase.pipeline.DirectionGarageStage;
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.GpsPositionResolver;
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.GpsValidationStage;
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.OutlierFilterStage;
@@ -67,10 +68,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private final VehicleFactory vehicleFactory;
     private final PositionChangeDetector positionChangeDetector;
     private final LicensePlateExtractor licensePlateExtractor;
-    private final VehicleDirectionDetectionService directionDetectionService;
-    private final DetectGarageTransitionsUseCase garageTransitionsUseCase;
-    private final ProcessGarageEntryUseCase processGarageEntryUseCase;
-    private final ProcessGarageExitUseCase processGarageExitUseCase;
     private final VehicleGpsHistoryService gpsHistoryService;
     private final DomainEventPublisher domainEventPublisher;
     private final GpsUpdateDeadLetterQueue deadLetterQueue;
@@ -79,15 +76,12 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private final GpsValidationStage validationStage;
     private final OutlierFilterStage outlierFilterStage;
     private final GpsPositionResolver positionResolver;
+    private final DirectionGarageStage directionGarageStage;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
                                          VehicleFactory vehicleFactory,
                                          PositionChangeDetector positionChangeDetector,
                                          LicensePlateExtractor licensePlateExtractor,
-                                         VehicleDirectionDetectionService directionDetectionService,
-                                         DetectGarageTransitionsUseCase garageTransitionsUseCase,
-                                         ProcessGarageEntryUseCase processGarageEntryUseCase,
-                                         ProcessGarageExitUseCase processGarageExitUseCase,
                                          VehicleGpsHistoryService gpsHistoryService,
                                          EventBus eventBus,
                                          DomainEventPublisher domainEventPublisher,
@@ -97,16 +91,13 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                          biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer,
                                          GpsValidationStage validationStage,
                                          OutlierFilterStage outlierFilterStage,
-                                         GpsPositionResolver positionResolver) {
+                                         GpsPositionResolver positionResolver,
+                                         DirectionGarageStage directionGarageStage) {
         super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
         this.vehicleFactory = vehicleFactory;
         this.positionChangeDetector = positionChangeDetector;
         this.licensePlateExtractor = licensePlateExtractor;
-        this.directionDetectionService = directionDetectionService;
-        this.garageTransitionsUseCase = garageTransitionsUseCase;
-        this.processGarageEntryUseCase = processGarageEntryUseCase;
-        this.processGarageExitUseCase = processGarageExitUseCase;
         this.gpsHistoryService = gpsHistoryService;
         this.domainEventPublisher = domainEventPublisher;
         this.deadLetterQueue = deadLetterQueue;
@@ -115,6 +106,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         this.validationStage = validationStage;
         this.outlierFilterStage = outlierFilterStage;
         this.positionResolver = positionResolver;
+        this.directionGarageStage = directionGarageStage;
     }
 
     @Override
@@ -183,8 +175,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     });
         });
     }
-
-    private static final int GARAGE_DETECTION_CONCURRENCY = 2;
 
     private Mono<VehiclePositionUpdateResult> processBatch(List<GpsPositionDTO> validPositions, Map<String, Vehicle> existingVehicles) {
         for (GpsPositionDTO position : validPositions) {
@@ -342,38 +332,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
             }
         }
 
-        Mono<List<Vehicle>> vehiclesWithDirections = vehiclesToUpdate.isEmpty() ?
-                Mono.just(List.of()) :
-                directionDetectionService.updateVehicleDirectionsBatch(vehiclesForDetection)
-                        .map(detectedVehicles -> {
-                            Map<String, Vehicle> detectedById = detectedVehicles.stream()
-                                    .collect(java.util.stream.Collectors.toMap(
-                                            v -> v.getId().getValue(), v -> v));
-                            return vehiclesToUpdate.stream()
-                                    .map(v -> {
-                                        Vehicle detected = detectedById.get(v.getId().getValue());
-                                        if (detected != null && detected.getCurrentDirection() != null) {
-                                            return v.toBuilder()
-                                                    .currentDirection(detected.getCurrentDirection())
-                                                    .lastStopSequence(detected.getLastStopSequence())
-                                                    .build();
-                                        }
-                                        return v;
-                                    })
-                                    .collect(java.util.stream.Collectors.toList());
-                        })
-                        .doOnNext(updated -> log.debug("Direction detection completed for {} vehicles", updated.size()));
-
-        Mono<List<Vehicle>> vehiclesWithGarageDetection = vehiclesWithDirections.flatMap(vehicles -> {
-            if (vehicles.isEmpty()) {
-                return Mono.just(List.of());
-            }
-
-            return Flux.fromIterable(vehicles)
-                    .flatMap(this::detectAndHandleGarageTransition, GARAGE_DETECTION_CONCURRENCY)
-                    .collectList()
-                    .doOnNext(updated -> log.debug("Garage detection completed for {} vehicles", updated.size()));
-        });
+        Mono<List<Vehicle>> vehiclesWithGarageDetection =
+                directionGarageStage.apply(vehiclesToUpdate, vehiclesForDetection);
 
         return vehiclesWithGarageDetection.flatMap(updatedVehicles -> {
             Mono<Void> predictionsMono = Mono.<Void>fromRunnable(() -> {
@@ -584,75 +544,6 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                 updated, created, failed, invalid, conflicts,
                 LocalDateTime.now(), statuses
         );
-    }
-
-
-    private Mono<Vehicle> detectAndHandleGarageTransition(Vehicle vehicle) {
-        if (vehicle == null || !vehicle.hasPosition()) {
-            return Mono.just(Objects.requireNonNull(vehicle));
-        }
-
-        Coordinates position = vehicle.toCoordinates();
-        Double speed = vehicle.getSpeedKmh();
-
-        boolean wasInGarage = vehicle.isCurrentlyInGarage();
-
-        if (wasInGarage) {
-            return checkGarageExit(vehicle, position, speed);
-        } else {
-            return checkGarageEntry(vehicle, position, speed);
-        }
-    }
-
-
-    private Mono<Vehicle> checkGarageEntry(Vehicle vehicle, Coordinates position, Double speed) {
-        return garageTransitionsUseCase.isVehicleEntryCandidate(position, speed)
-                .flatMap(isCandidate -> {
-                    if (!isCandidate) {
-                        return Mono.just(vehicle);
-                    }
-
-                    return garageTransitionsUseCase.findGarageAtPosition(position)
-                            .flatMap(garageOpt -> {
-                                if (garageOpt.isPresent()) {
-                                    Garage garage = garageOpt.get();
-                                    log.info("Vehicle {} entering garage {} at speed {} km/h",
-                                            vehicle.getLicensePlate(),
-                                            garage.getName(),
-                                            speed);
-                                    return processGarageEntryUseCase.execute(
-                                            new ProcessGarageEntryUseCase.Request(vehicle, garage.getId().getValue().toString())
-                                    );
-                                }
-                                return Mono.just(vehicle);
-                            });
-                });
-    }
-
-
-    private Mono<Vehicle> checkGarageExit(Vehicle vehicle, Coordinates position, Double speed) {
-        String lastGarageId = vehicle.getLastGarageId();
-        if (lastGarageId == null) {
-            return Mono.just(vehicle);
-        }
-
-        return garageTransitionsUseCase.getAllActiveGarages()
-                .filter(garage -> garage.getId().getValue().toString().equals(lastGarageId))
-                .next()
-                .flatMap(garage -> garageTransitionsUseCase.hasVehicleExitedGarage(garage, position, speed)
-                        .flatMap(hasExited -> {
-                            if (hasExited) {
-                                log.info("Vehicle {} exiting garage {} at speed {} km/h",
-                                        vehicle.getLicensePlate(),
-                                        garage.getName(),
-                                        speed);
-                                return processGarageExitUseCase.execute(
-                                        new ProcessGarageExitUseCase.Request(vehicle)
-                                );
-                            }
-                            return Mono.just(vehicle);
-                        }))
-                .defaultIfEmpty(vehicle);
     }
 
 
