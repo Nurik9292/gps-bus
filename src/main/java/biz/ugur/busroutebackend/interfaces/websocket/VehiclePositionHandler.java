@@ -18,16 +18,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
-import org.springframework.scheduling.annotation.Scheduled;
-
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -35,20 +29,14 @@ import java.util.stream.Collectors;
 @Slf4j
 public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePositionBroadcaster {
 
-    private static final Duration SESSION_TIMEOUT = Duration.ofMinutes(5);
     private static final Duration MAX_INITIAL_POSITION_AGE = Duration.ofMinutes(5);
-
-    private static final long CLEANUP_INTERVAL_MS = 30_000;
     private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(30);
 
     private final GetActiveVehiclesUseCase getActiveVehiclesUseCase;
     private final ObjectMapper objectMapper;
     private final WebSocketBufferMetricsTracker bufferMetrics;
     private final VehiclePositionPredictionService predictionService;
-
-    private final Map<String, SessionConfig> activeSessions = new ConcurrentHashMap<>();
-    private final AtomicInteger sessionCounter = new AtomicInteger(0);
-    private final AtomicLong totalExpiredSessions = new AtomicLong(0);
+    private final WsSessionRegistry sessionRegistry;
 
     private final Sinks.Many<VehiclePositionWebSocketMessage> broadcastSink =
             Sinks.many().multicast().directBestEffort();
@@ -56,25 +44,24 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
     public VehiclePositionHandler(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                   ObjectMapper objectMapper,
                                   WebSocketBufferMetricsTracker bufferMetrics,
-                                  @org.springframework.context.annotation.Lazy VehiclePositionPredictionService predictionService) {
+                                  @org.springframework.context.annotation.Lazy VehiclePositionPredictionService predictionService,
+                                  WsSessionRegistry sessionRegistry) {
         this.getActiveVehiclesUseCase = getActiveVehiclesUseCase;
         this.objectMapper = objectMapper;
         this.bufferMetrics = bufferMetrics;
         this.predictionService = predictionService;
+        this.sessionRegistry = sessionRegistry;
     }
 
 
 
     @Override
     public Mono<Void> handle(WebSocketSession session) {
-        String sessionId = generateSessionId();
-        SessionConfig sessionConfig = parseSessionConfig(session);
-        String clientIp = getClientIp(session);
-        sessionConfig.setClientIp(clientIp);
-        activeSessions.put(sessionId, sessionConfig);
+        String sessionId = sessionRegistry.register(session);
+        SessionConfig sessionConfig = sessionRegistry.get(sessionId).orElseThrow();
 
         log.info("WebSocket connection established: {} from {} (total: {}, routes: {})",
-                sessionId, clientIp, activeSessions.size(), sessionConfig.getRouteFilter());
+                sessionId, sessionConfig.getClientIp(), sessionRegistry.activeCount(), sessionConfig.getRouteFilter());
 
         Flux<WebSocketMessage> outbound = createOutboundMessageStream(session, sessionConfig);
 
@@ -93,22 +80,10 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
         return session.send(outbound)
                 .and(inbound)
                 .doFinally(signalType -> {
-                    activeSessions.remove(sessionId);
+                    sessionRegistry.remove(sessionId);
                     log.info("WebSocket connection closed: {} from {} (total: {}, signal: {})",
-                            sessionId, clientIp, activeSessions.size(), signalType);
+                            sessionId, sessionConfig.getClientIp(), sessionRegistry.activeCount(), signalType);
                 });
-    }
-
-    private String getClientIp(WebSocketSession session) {
-        try {
-            var remoteAddress = session.getHandshakeInfo().getRemoteAddress();
-            if (remoteAddress != null) {
-                return remoteAddress.getAddress().getHostAddress();
-            }
-        } catch (Exception e) {
-            log.debug("Could not get client IP: {}", e.getMessage());
-        }
-        return "unknown";
     }
 
     private Flux<WebSocketMessage> createOutboundMessageStream(WebSocketSession session,
@@ -312,10 +287,10 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
         config.setSubscriptionType("routes");
 
         log.info("Session {} updated route subscription: {} -> {} (total active sessions: {})",
-                sessionId, oldFilter, message.getRoutes(), activeSessions.size());
+                sessionId, oldFilter, message.getRoutes(), sessionRegistry.activeCount());
 
         if (log.isDebugEnabled()) {
-            activeSessions.forEach((sid, cfg) ->
+            sessionRegistry.snapshotForLog().forEach((sid, cfg) ->
                     log.debug("Active session {}: type={}, routes={}",
                             sid, cfg.getSubscriptionType(), cfg.getRouteFilter()));
         }
@@ -370,7 +345,7 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
         log.debug("[GPS_PIPELINE] WS_SINK vehicle={} plate={} type={} sessions={}",
                 message.getVehicleId(), message.getLicensePlate(),
                 Boolean.TRUE.equals(message.getPredicted()) ? "PRED" : "GPS",
-                activeSessions.size());
+                sessionRegistry.activeCount());
         broadcastVehiclePosition(message);
     }
 
@@ -382,68 +357,14 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
         return bufferMetrics.isHealthy();
     }
 
-
-    @Scheduled(fixedRate = CLEANUP_INTERVAL_MS)
-    public void cleanupExpiredSessions() {
-        if (activeSessions.isEmpty()) {
-            return;
-        }
-
-        int beforeSize = activeSessions.size();
-        List<String> expiredSessionIds = new ArrayList<>();
-
-        activeSessions.forEach((sessionId, config) -> {
-            if (config.isExpired(SESSION_TIMEOUT)) {
-                expiredSessionIds.add(sessionId);
-            }
-        });
-
-        if (expiredSessionIds.isEmpty()) {
-            log.debug("Session cleanup: no expired sessions found (active: {})", beforeSize);
-            return;
-        }
-
-        for (String sessionId : expiredSessionIds) {
-            SessionConfig config = activeSessions.remove(sessionId);
-            if (config != null) {
-                totalExpiredSessions.incrementAndGet();
-                log.info("WEBSOCKET_SESSION_EXPIRED: Removed stale session {} from {} " +
-                         "(inactive for {}, subscription: {})",
-                        sessionId,
-                        config.getClientIp(),
-                        formatDuration(config.getInactiveDuration()),
-                        config.getSubscriptionType());
-            }
-        }
-
-        log.warn("WEBSOCKET_SESSION_CLEANUP: Removed {} expired sessions (was: {}, now: {}, total expired: {})",
-                expiredSessionIds.size(), beforeSize, activeSessions.size(), totalExpiredSessions.get());
-    }
-
     public long getTotalExpiredSessions() {
-        return totalExpiredSessions.get();
-    }
-
-    private String formatDuration(Duration duration) {
-        long seconds = duration.getSeconds();
-        if (seconds < 60) {
-            return seconds + "s";
-        } else if (seconds < 3600) {
-            return (seconds / 60) + "m " + (seconds % 60) + "s";
-        } else {
-            return (seconds / 3600) + "h " + ((seconds % 3600) / 60) + "m";
-        }
+        return sessionRegistry.totalExpired();
     }
 
     public Mono<WebSocketStatsDTO> getConnectionStats() {
         return Mono.fromCallable(() -> {
-            int totalSessions = activeSessions.size();
-
-            Map<String, Long> subscriptionTypes = activeSessions.values().stream()
-                    .collect(java.util.stream.Collectors.groupingBy(
-                            SessionConfig::getSubscriptionType,
-                            java.util.stream.Collectors.counting()
-                    ));
+            int totalSessions = sessionRegistry.activeCount();
+            Map<String, Long> subscriptionTypes = sessionRegistry.subscriptionTypeCounts();
 
             return new WebSocketStatsDTO(
                     totalSessions,
@@ -452,72 +373,6 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                     LocalDateTime.now()
             );
         });
-    }
-
-    private String generateSessionId() {
-        return "ws-" + sessionCounter.incrementAndGet() + "-" + System.currentTimeMillis();
-    }
-
-    private SessionConfig parseSessionConfig(WebSocketSession session) {
-        SessionConfig config = new SessionConfig();
-
-        String query = session.getHandshakeInfo().getUri().getQuery();
-        String uri = session.getHandshakeInfo().getUri().toString();
-        log.info("WebSocket connection URI: {}", uri);
-        log.info("WebSocket query string: {}", query);
-
-        if (query == null) {
-            config.setSubscriptionType("all");
-            log.info("No query params - subscription type: all");
-            return config;
-        }
-
-        Map<String, String> params = parseQueryString(query);
-        log.info("Parsed query params: {}", params);
-
-        if (params.containsKey("bounds")) {
-            String[] bounds = params.get("bounds").split(",");
-            if (bounds.length == 4) {
-                try {
-                    double lat1 = Double.parseDouble(bounds[0]);
-                    double lon1 = Double.parseDouble(bounds[1]);
-                    double lat2 = Double.parseDouble(bounds[2]);
-                    double lon2 = Double.parseDouble(bounds[3]);
-
-                    config.setBounds(lat1, lon1, lat2, lon2);
-                    config.setSubscriptionType("bounds");
-                    log.info("Configured bounds subscription: {}", config.getBoundsString());
-                } catch (NumberFormatException e) {
-                    log.warn("Invalid bounds format: {}", params.get("bounds"));
-                }
-            }
-        }
-        else if (params.containsKey("routes")) {
-            String[] routes = params.get("routes").split(",");
-            config.setRouteFilter(Set.of(routes));
-            config.setSubscriptionType("routes");
-            log.info("Configured routes subscription: routes={}", config.getRouteFilter());
-        }
-        else {
-            config.setSubscriptionType("all");
-            log.info("No specific filter - subscription type: all");
-        }
-
-        return config;
-    }
-
-    private Map<String, String> parseQueryString(String query) {
-        Map<String, String> params = new HashMap<>();
-        if (query != null && !query.isEmpty()) {
-            String[] pairs = query.split("&");
-            for (String pair : pairs) {
-                String[] keyValue = pair.split("=", 2);
-                if (keyValue.length == 2) {
-                    params.put(keyValue[0], keyValue[1]);
-                }
-            }
-        }
-        return params;
     }
 
     private boolean isVehicleInScope(VehiclePositionDTO vehicle, SessionConfig config) {
@@ -629,4 +484,3 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
         );
     }
 }
-
