@@ -128,4 +128,10 @@ public class PredictionProperties {
     private double catchUpGain = 0.30;
 
     private double catchUpMaxPerTick = 0.005;
+
+    private double stationarySpeedThresholdKmh = 5.0;
+
+    private double windowedSnapFractionWindow = 0.20;
+
+    private double fracFlipPlausibleJumpThreshold = 0.25;
 }

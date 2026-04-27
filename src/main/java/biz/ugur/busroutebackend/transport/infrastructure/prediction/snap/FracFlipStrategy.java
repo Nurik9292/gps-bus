@@ -90,7 +90,7 @@ public class FracFlipStrategy {
             return noFlip;
         }
 
-        boolean plausibleJump = Math.abs(fracDelta) <= 0.25;
+        boolean plausibleJump = Math.abs(fracDelta) <= properties.getFracFlipPlausibleJumpThreshold();
         double tolerance = properties.getTerminalFractionTolerance();
         boolean wasNearTerminal = lastGpsFrac <= tolerance || lastGpsFrac >= (1.0 - tolerance);
         boolean nowNearOppositeTerminal = realFraction >= 0
@@ -99,7 +99,8 @@ public class FracFlipStrategy {
                         : realFraction >= (1.0 - tolerance * 3));
         boolean atTerminalFlip = wasNearTerminal && nowNearOppositeTerminal;
         boolean isStationary = !existing.isInMotion()
-                || (existing.getRawGpsSpeedKmh() >= 0 && existing.getRawGpsSpeedKmh() < 5.0);
+                || (existing.getRawGpsSpeedKmh() >= 0
+                        && existing.getRawGpsSpeedKmh() < properties.getStationarySpeedThresholdKmh());
 
         if (isStationary && !atTerminalFlip) {
             log.debug("[GPS_PIPELINE] DIR_CORRECT_FRAC_SKIP_STATIONARY vehicle={} route={} dir={} delta={} inMotion={} rawSpeed={}km/h (GPS noise on stationary bus, not a real direction reversal)",

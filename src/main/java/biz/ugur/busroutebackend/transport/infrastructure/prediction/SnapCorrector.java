@@ -107,7 +107,7 @@ class SnapCorrector {
                 vehicleId, routeNumber, direction, latitude, longitude);
         MapMatchingService.SnappedResult snap = (existing != null && existing.getLastGpsFraction() >= 0)
                 ? mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, cumDist, totalDist,
-                        existing.getLastGpsFraction(), 0.20)
+                        existing.getLastGpsFraction(), properties.getWindowedSnapFractionWindow())
                 : mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, totalDist);
 
         double rawSnapMinDistance = snap.distanceMeters();
