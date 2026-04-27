@@ -227,7 +227,7 @@ public class PredictionBroadcaster {
                     }
                 }
             } catch (Exception e) {
-                log.warn("Failed to broadcast prediction for vehicle {}: {}", state.getVehicleId(), e.getMessage());
+                log.warn("[GPS_PIPELINE] BROADCAST_FAILED vehicle={}: {}", state.getVehicleId(), e.getMessage());
             }
         });
     }
@@ -296,7 +296,7 @@ public class PredictionBroadcaster {
                         String.format("%.1f", speedKmh),
                         broadcastInMotion);
             } catch (Exception e) {
-                log.warn("Failed to broadcast raw GPS fallback for vehicle {}: {}",
+                log.warn("[GPS_PIPELINE] WS_RAW_GPS_BROADCAST_FAILED vehicle={}: {}",
                         state.getVehicleId(), e.getMessage());
             }
         });

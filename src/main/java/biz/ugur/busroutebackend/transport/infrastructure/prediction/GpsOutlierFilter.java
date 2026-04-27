@@ -53,9 +53,9 @@ class GpsOutlierFilter {
         if (elapsedMs < properties.getSoftOutlierWindowMs()) {
             double maxPossibleDist = (elapsedMs / 1000.0) * properties.getMaxBusSpeedMs() * properties.getOutlierTolerance();
             if (distFromLastGps > maxPossibleDist) {
-                log.warn("GPS outlier rejected for vehicle {}: {}m in {}ms (max {}m at {}km/h×{}) " +
-                                "— baseline preserved",
-                        vehicleId, (int) distFromLastGps, elapsedMs,
+                log.warn("[GPS_PIPELINE] SOFT_OUTLIER_REJECTED vehicle={} plate={}: {}m in {}ms " +
+                                "(max {}m at {}km/h×{}) — baseline preserved",
+                        vehicleId, licensePlate, (int) distFromLastGps, elapsedMs,
                         (int) maxPossibleDist, (int) (properties.getMaxBusSpeedMs() * 3.6),
                         properties.getOutlierTolerance());
                 return Decision.REJECT_SOFT_OUTLIER;
@@ -64,8 +64,8 @@ class GpsOutlierFilter {
         }
 
         if (distFromLastGps > properties.getMaxTeleportDistanceMeters()) {
-            log.warn("GPS teleportation rejected for vehicle {} after {}min gap: {}m (max {}m)",
-                    vehicleId, elapsedMs / 60_000, (int) distFromLastGps,
+            log.warn("[GPS_PIPELINE] TELEPORT_GAP_REJECTED vehicle={} plate={} after {}min gap: {}m (max {}m)",
+                    vehicleId, licensePlate, elapsedMs / 60_000, (int) distFromLastGps,
                     (int) properties.getMaxTeleportDistanceMeters());
             return Decision.REJECT_TELEPORT_GAP;
         }

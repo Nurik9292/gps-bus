@@ -50,14 +50,14 @@ public class RouteGeometryCache {
                 .timeout(Duration.ofSeconds(60))
                 .doOnSuccess(v -> {
                     loaded = true;
-                    log.info("Route geometry cache loaded: {} geometry entries, {} stop-fraction entries",
+                    log.info("[GPS_PIPELINE] Route geometry cache loaded: {} geometry entries, {} stop-fraction entries",
                             pointsCache.size(), stopFractionsCache.size());
                 })
                 .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
                 .subscribe(
                         null,
                         err -> log.error(
-                                "Route geometry cache failed to load — prediction falls back to dead-reckoning: {}",
+                                "[GPS_PIPELINE] Route geometry cache failed to load — prediction falls back to dead-reckoning: {}",
                                 err.getMessage()));
     }
 
@@ -72,12 +72,12 @@ public class RouteGeometryCache {
                 .retryWhen(reactor.util.retry.Retry.backoff(5, Duration.ofSeconds(2))
                         .maxBackoff(Duration.ofSeconds(32))
                         .doBeforeRetry(signal -> log.warn(
-                                "Route geometry cache load failed (attempt {}), retrying in {}s: {}",
+                                "[GPS_PIPELINE] Route geometry cache load failed (attempt {}), retrying in {}s: {}",
                                 signal.totalRetries() + 1,
                                 Math.min(2 << (int) signal.totalRetries(), 32),
                                 signal.failure().getMessage())))
                 .doOnError(e -> log.error(
-                        "Route geometry cache failed after all retries — prediction will use dead-reckoning: {}",
+                        "[GPS_PIPELINE] Route geometry cache failed after all retries — prediction will use dead-reckoning: {}",
                         e.getMessage()))
                 .then();
     }
@@ -227,8 +227,8 @@ public class RouteGeometryCache {
                 .flatMap(route -> loadStopFractions(routeNumber))
                 .subscribe(
                         ignored -> {},
-                        error -> log.error("Failed to refresh route {}: {}", routeNumber, error.getMessage()),
-                        () -> log.info("Refreshed route geometry cache for route {}", routeNumber)
+                        error -> log.error("[GPS_PIPELINE] Failed to refresh route {}: {}", routeNumber, error.getMessage()),
+                        () -> log.info("[GPS_PIPELINE] Refreshed route geometry cache for route {}", routeNumber)
                 );
     }
 
@@ -273,7 +273,7 @@ public class RouteGeometryCache {
             cumulativeDistancesCache.put(key, cumDist);
             distanceCache.put(key, cumDist[cumDist.length - 1]);
         } catch (Exception e) {
-            log.warn("Cannot parse WKT for route {} {}: {}", routeNumber, suffix, e.getMessage());
+            log.warn("[GPS_PIPELINE] Cannot parse WKT for route {} {}: {}", routeNumber, suffix, e.getMessage());
         }
     }
 

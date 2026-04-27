@@ -147,10 +147,10 @@ public class VehiclePositionPredictionService {
                 .subscribe(
                         null,
                         err -> log.warn(
-                                "Prediction state restore aborted after {}s, continuing with empty cache: {}",
+                                "[GPS_PIPELINE] Prediction state restore aborted after {}s, continuing with empty cache: {}",
                                 RESTORE_TIMEOUT.toSeconds(), err.getMessage()),
                         () -> log.info(
-                                "Prediction state restored from Redis: {} vehicles",
+                                "[GPS_PIPELINE] Prediction state restored from Redis: {} vehicles",
                                 vehicleStates.size()));
     }
 
@@ -168,10 +168,10 @@ public class VehiclePositionPredictionService {
                             state.getFractionOnRoute() >= 0
                                     ? String.format("%.4f", state.getFractionOnRoute()) : "-");
                 })
-                .doOnError(err -> log.warn("Error restoring prediction states: {}", err.getMessage()))
+                .doOnError(err -> log.warn("[GPS_PIPELINE] Error restoring prediction states: {}", err.getMessage()))
                 .onErrorResume(err -> Flux.empty())
                 .then(Mono.fromRunnable(() ->
-                        log.info("Prediction states restored from Redis: {} vehicles (awaiting fresh GPS before broadcast)",
+                        log.info("[GPS_PIPELINE] Prediction states restored from Redis: {} vehicles (awaiting fresh GPS before broadcast)",
                                 vehicleStates.size())));
     }
 
@@ -664,7 +664,7 @@ public class VehiclePositionPredictionService {
                 stateRepository.delete(vehicleId)
                         .subscribeOn(Schedulers.boundedElastic())
                         .subscribe(null, err -> log.warn(
-                                "Redis state delete failed for stale vehicle {}: {}",
+                                "[GPS_PIPELINE] Redis state delete failed for stale vehicle {}: {}",
                                 vehicleId, err.getMessage()));
             }
             return stale;
