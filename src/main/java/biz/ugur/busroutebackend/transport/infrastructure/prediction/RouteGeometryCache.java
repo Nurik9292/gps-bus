@@ -157,20 +157,30 @@ public class RouteGeometryCache {
 
 
     public List<RouteStopInfo> getStopsAhead(String routeNumber, int direction, double currentFraction) {
-        double totalDistance = getTotalDistance(routeNumber, direction);
-        if (totalDistance <= 0) return Collections.emptyList();
-        return getRouteStops(routeNumber, direction).stream()
-                .filter(s -> s.getDistanceFromStartMeters() / totalDistance > currentFraction + 0.0001)
-                .toList();
+        int idx = firstStopIndexAhead(routeNumber, direction, currentFraction);
+        if (idx < 0) return Collections.emptyList();
+        List<RouteStopInfo> stops = getRouteStops(routeNumber, direction);
+        if (idx >= stops.size()) return Collections.emptyList();
+        return List.copyOf(stops.subList(idx, stops.size()));
     }
 
     public Optional<RouteStopInfo> getNextStop(String routeNumber, int direction, double currentFraction) {
-        double totalDistance = getTotalDistance(routeNumber, direction);
-        if (totalDistance <= 0) return Optional.empty();
-        return getRouteStops(routeNumber, direction).stream()
-                .filter(s -> s.getDistanceFromStartMeters() != null
-                        && s.getDistanceFromStartMeters() / totalDistance > currentFraction + 0.0001)
-                .findFirst();
+        int idx = firstStopIndexAhead(routeNumber, direction, currentFraction);
+        if (idx < 0) return Optional.empty();
+        List<RouteStopInfo> stops = getRouteStops(routeNumber, direction);
+        if (idx >= stops.size()) return Optional.empty();
+        return Optional.of(stops.get(idx));
+    }
+
+    private int firstStopIndexAhead(String routeNumber, int direction, double currentFraction) {
+        if (getTotalDistance(routeNumber, direction) <= 0) return -1;
+        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+        double[] fractions = stopFractionsCache.get(key);
+        if (fractions == null || fractions.length == 0) return -1;
+
+        double threshold = currentFraction + 0.0001;
+        int idx = java.util.Arrays.binarySearch(fractions, threshold);
+        return idx >= 0 ? idx + 1 : -idx - 1;
     }
 
  
