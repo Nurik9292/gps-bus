@@ -12,6 +12,7 @@ import biz.ugur.busroutebackend.shared.domain.event.DomainEventPublisher;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionUpdateResult;
 import biz.ugur.busroutebackend.transport.application.factory.VehicleFactory;
+import biz.ugur.busroutebackend.transport.application.usecase.pipeline.GpsPositionResolver;
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.GpsValidationStage;
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.OutlierFilterStage;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
@@ -77,6 +78,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
     private final biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer;
     private final GpsValidationStage validationStage;
     private final OutlierFilterStage outlierFilterStage;
+    private final GpsPositionResolver positionResolver;
 
     public UpdateVehiclePositionsUseCase(VehicleRepository vehicleRepository,
                                          VehicleFactory vehicleFactory,
@@ -94,7 +96,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                          VehiclePositionPredictionService predictionService,
                                          biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer,
                                          GpsValidationStage validationStage,
-                                         OutlierFilterStage outlierFilterStage) {
+                                         OutlierFilterStage outlierFilterStage,
+                                         GpsPositionResolver positionResolver) {
         super(correlationContextService, eventBus);
         this.vehicleRepository = vehicleRepository;
         this.vehicleFactory = vehicleFactory;
@@ -111,6 +114,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
         this.pipelineTracer = pipelineTracer;
         this.validationStage = validationStage;
         this.outlierFilterStage = outlierFilterStage;
+        this.positionResolver = positionResolver;
     }
 
     @Override
@@ -194,76 +198,8 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                     position.getSpeed());
         }
 
-        Map<String, GpsPositionDTO> latestPositionsByDevice = new java.util.LinkedHashMap<>();
-        java.util.Map<String, java.util.List<GpsPositionDTO>> duplicatesByDevice = new java.util.HashMap<>();
-        for (GpsPositionDTO position : validPositions) {
-            String deviceId = position.getDeviceId();
-            GpsPositionDTO existing = latestPositionsByDevice.get(deviceId);
-
-            if (existing != null) {
-                duplicatesByDevice.computeIfAbsent(deviceId, k -> new java.util.ArrayList<>()).add(existing);
-            }
-
-            if (existing == null
-                    || position.getFixTime() != null
-                    && (existing.getFixTime() == null
-                        || position.getFixTime().isAfter(existing.getFixTime()))) {
-                latestPositionsByDevice.put(deviceId, position);
-            }
-        }
-
-        for (Map.Entry<String, GpsPositionDTO> e : latestPositionsByDevice.entrySet()) {
-            GpsPositionDTO winner = e.getValue();
-            Vehicle v = existingVehicles.get(e.getKey());
-            String plate = v != null ? v.getLicensePlate() : null;
-            int candidatesCount = 1 + (duplicatesByDevice.containsKey(e.getKey())
-                    ? duplicatesByDevice.get(e.getKey()).size() : 0);
-            pipelineTracer.traceBatchWinner(e.getKey(), plate,
-                    winner.getGpsProvider() != null ? winner.getGpsProvider().name() : "UNKNOWN",
-                    candidatesCount,
-                    String.valueOf(winner.getFixTime()));
-        }
-
-        for (var entry : duplicatesByDevice.entrySet()) {
-            String deviceId = entry.getKey();
-            GpsPositionDTO winner = latestPositionsByDevice.get(deviceId);
-            java.util.List<GpsPositionDTO> losers = entry.getValue();
-            losers.add(winner);
-            Vehicle v = existingVehicles.get(deviceId);
-            String plate = v != null ? v.getLicensePlate() : "?";
-            StringBuilder sb = new StringBuilder();
-            for (GpsPositionDTO p : losers) {
-                double distFromWinner = (p == winner || p.getLatitude() == null || winner.getLatitude() == null)
-                        ? 0.0
-                        : biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService
-                                .haversineDistanceMeters(p.getLatitude(), p.getLongitude(),
-                                        winner.getLatitude(), winner.getLongitude());
-                sb.append(String.format(" [%s %s lat=%.5f lon=%.5f fixTime=%s dist=%.0fm]",
-                        p.getGpsProvider(), p == winner ? "WINNER" : "loser",
-                        p.getLatitude() != null ? p.getLatitude() : 0.0,
-                        p.getLongitude() != null ? p.getLongitude() : 0.0,
-                        p.getFixTime(),
-                        distFromWinner));
-            }
-            log.info("[GPS_PIPELINE] GPS_DUPLICATE_SOURCES device={} plate={} winner={} candidates={}{}",
-                    deviceId, plate, winner.getGpsProvider(), losers.size(), sb);
-        }
-
-        for (GpsPositionDTO winner : latestPositionsByDevice.values()) {
-            String deviceId = winner.getDeviceId();
-            Vehicle v = existingVehicles.get(deviceId);
-            String plate = v != null ? v.getLicensePlate() : "?";
-            String storedProvider = v != null && v.getGpsProvider() != null ? v.getGpsProvider().getCode() : null;
-            String newProvider = winner.getGpsProvider() != null ? winner.getGpsProvider().getCode() : null;
-            if (storedProvider != null && newProvider != null && !storedProvider.equals(newProvider)) {
-                log.info("[GPS_PIPELINE] GPS_PROVIDER_SWITCH device={} plate={} from={} to={} newLat={} newLon={}",
-                        deviceId, plate, storedProvider, newProvider,
-                        winner.getLatitude(), winner.getLongitude());
-            }
-        }
-
-        log.debug("[GPS_PIPELINE] PROCESS_BATCH input={} unique_vehicles={} cross_provider_duplicates={}",
-                validPositions.size(), latestPositionsByDevice.size(), duplicatesByDevice.size());
+        Map<String, GpsPositionDTO> latestPositionsByDevice =
+                positionResolver.resolveLatestByDevice(validPositions, existingVehicles);
 
         List<Vehicle> vehiclesToUpdate = new ArrayList<>();
         List<Vehicle> vehiclesForDetection = new ArrayList<>();
