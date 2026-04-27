@@ -4,7 +4,6 @@ import biz.ugur.busroutebackend.interfaces.websocket.dto.InitialPositionsMessage
 import biz.ugur.busroutebackend.interfaces.websocket.dto.PositionUpdateMessage;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
 import biz.ugur.busroutebackend.transport.application.usecase.GetActiveVehiclesUseCase;
-import biz.ugur.busroutebackend.transport.infrastructure.messaging.DirectVehiclePositionBroadcaster;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePositionPredictionService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -16,7 +15,6 @@ import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.Sinks;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -27,30 +25,27 @@ import java.util.stream.Collectors;
 
 @Component
 @Slf4j
-public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePositionBroadcaster {
+public class VehiclePositionHandler implements WebSocketHandler {
 
     private static final Duration MAX_INITIAL_POSITION_AGE = Duration.ofMinutes(5);
     private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(30);
 
     private final GetActiveVehiclesUseCase getActiveVehiclesUseCase;
     private final ObjectMapper objectMapper;
-    private final WebSocketBufferMetricsTracker bufferMetrics;
     private final VehiclePositionPredictionService predictionService;
     private final WsSessionRegistry sessionRegistry;
-
-    private final Sinks.Many<VehiclePositionWebSocketMessage> broadcastSink =
-            Sinks.many().multicast().directBestEffort();
+    private final WsBroadcastSink broadcastSink;
 
     public VehiclePositionHandler(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                   ObjectMapper objectMapper,
-                                  WebSocketBufferMetricsTracker bufferMetrics,
                                   @org.springframework.context.annotation.Lazy VehiclePositionPredictionService predictionService,
-                                  WsSessionRegistry sessionRegistry) {
+                                  WsSessionRegistry sessionRegistry,
+                                  WsBroadcastSink broadcastSink) {
         this.getActiveVehiclesUseCase = getActiveVehiclesUseCase;
         this.objectMapper = objectMapper;
-        this.bufferMetrics = bufferMetrics;
         this.predictionService = predictionService;
         this.sessionRegistry = sessionRegistry;
+        this.broadcastSink = broadcastSink;
     }
 
 
@@ -318,43 +313,6 @@ public class VehiclePositionHandler implements WebSocketHandler, DirectVehiclePo
                 .doOnSuccess(v -> log.debug("Sent updated positions for bounds change"))
                 .doOnError(error -> log.warn("Error sending positions after bounds change: {}", error.getMessage()))
                 .onErrorResume(e -> Mono.empty());
-    }
-
-    private void emitWithMetrics(VehiclePositionWebSocketMessage message) {
-        Sinks.EmitResult result = broadcastSink.tryEmitNext(message);
-        if (result == Sinks.EmitResult.OK) {
-            bufferMetrics.recordEmitted();
-        } else if (result != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
-                && result != Sinks.EmitResult.FAIL_CANCELLED) {
-            bufferMetrics.recordDropped(message.getVehicleId());
-            log.debug("Dropped position update for vehicle {}: {}", message.getVehicleId(), result);
-        }
-    }
-
-    public void broadcastVehiclePosition(VehiclePositionWebSocketMessage message) {
-        if (message == null) {
-            log.warn("Cannot broadcast null WebSocket message");
-            return;
-        }
-
-        emitWithMetrics(message);
-    }
-
-    @Override
-    public void broadcastDirect(VehiclePositionWebSocketMessage message) {
-        log.debug("[GPS_PIPELINE] WS_SINK vehicle={} plate={} type={} sessions={}",
-                message.getVehicleId(), message.getLicensePlate(),
-                Boolean.TRUE.equals(message.getPredicted()) ? "PRED" : "GPS",
-                sessionRegistry.activeCount());
-        broadcastVehiclePosition(message);
-    }
-
-    public WebSocketBufferMetricsTracker.BufferHealthStats getBufferStats() {
-        return bufferMetrics.getStats();
-    }
-
-    public boolean isBufferHealthy() {
-        return bufferMetrics.isHealthy();
     }
 
     public long getTotalExpiredSessions() {
