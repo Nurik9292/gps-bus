@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Service
@@ -20,6 +21,7 @@ import java.util.List;
 public class VehicleEtaEnricherServiceImpl implements VehicleEtaEnricherService {
 
     private static final int DEFAULT_MAX_STOPS = 3;
+    private static final ZoneId LOCAL_ZONE = ZoneId.of("Asia/Ashgabat");
 
     private final BusStopRepository busStopRepository;
     private final DistanceCalculationService distanceCalculationService;
@@ -167,12 +169,13 @@ public class VehicleEtaEnricherServiceImpl implements VehicleEtaEnricherService 
     private double getEffectiveSpeed(Double actualSpeedKmh) {
         ETAProperties.SpeedConfig speedConfig = etaProperties.getSpeed();
 
+        LocalDateTime now = LocalDateTime.now(LOCAL_ZONE);
+        TimePeriod period = TimePeriod.fromDateTime(now);
+
         if (actualSpeedKmh == null || actualSpeedKmh < speedConfig.getMovingThresholdKmh()) {
-            TimePeriod period = TimePeriod.fromDateTime(LocalDateTime.now());
             return period.getAverageSpeedKmh();
         }
 
-        TimePeriod period = TimePeriod.fromDateTime(LocalDateTime.now());
         double maxSpeedForPeriod = getMaxSpeedForPeriod(period, speedConfig);
 
         return Math.min(actualSpeedKmh, maxSpeedForPeriod);
@@ -189,8 +192,9 @@ public class VehicleEtaEnricherServiceImpl implements VehicleEtaEnricherService 
     }
 
     private int calculateEtaMinutes(double distanceMeters, double speedKmh) {
-        TimePeriod period = TimePeriod.fromDateTime(LocalDateTime.now());
-        boolean isWeekend = TimePeriod.isWeekend(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now(LOCAL_ZONE);
+        TimePeriod period = TimePeriod.fromDateTime(now);
+        boolean isWeekend = TimePeriod.isWeekend(now);
 
         if (speedKmh <= 0) {
             speedKmh = period.getAverageSpeedKmh();

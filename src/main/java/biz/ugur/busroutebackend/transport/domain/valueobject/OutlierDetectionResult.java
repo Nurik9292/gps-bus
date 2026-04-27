@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.transport.domain.valueobject;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record OutlierDetectionResult(
         boolean isOutlier,
@@ -17,7 +17,7 @@ public record OutlierDetectionResult(
 
         String deviceId,
 
-        LocalDateTime detectedAt
+        Instant detectedAt
 ) {
 
     public enum OutlierType {
@@ -49,7 +49,7 @@ public record OutlierDetectionResult(
                 timeDifferenceSeconds,
                 maxAllowedSpeedKmh,
                 deviceId,
-                LocalDateTime.now()
+                Instant.now()
         );
     }
 
@@ -64,7 +64,7 @@ public record OutlierDetectionResult(
                 timeDifferenceSeconds,
                 maxAllowedSpeedKmh,
                 deviceId,
-                LocalDateTime.now()
+                Instant.now()
         );
     }
 
@@ -77,7 +77,7 @@ public record OutlierDetectionResult(
                 0,
                 maxAllowedSpeedKmh,
                 deviceId,
-                LocalDateTime.now()
+                Instant.now()
         );
     }
 
@@ -91,7 +91,7 @@ public record OutlierDetectionResult(
                 timeDifferenceSeconds,
                 maxAllowedSpeedKmh,
                 deviceId,
-                LocalDateTime.now()
+                Instant.now()
         );
     }
 
@@ -105,7 +105,7 @@ public record OutlierDetectionResult(
                 timeDifferenceSeconds,
                 maxAllowedSpeedKmh,
                 deviceId,
-                LocalDateTime.now()
+                Instant.now()
         );
     }
 
@@ -119,7 +119,7 @@ public record OutlierDetectionResult(
                 0,
                 maxAllowedSpeedKmh,
                 deviceId,
-                LocalDateTime.now()
+                Instant.now()
         );
     }
 
@@ -133,7 +133,7 @@ public record OutlierDetectionResult(
                 0,
                 reportedSpeedKmh,
                 deviceId,
-                LocalDateTime.now()
+                Instant.now()
         );
     }
 
@@ -146,7 +146,7 @@ public record OutlierDetectionResult(
                 0,
                 0.0,
                 deviceId,
-                LocalDateTime.now()
+                Instant.now()
         );
     }
 

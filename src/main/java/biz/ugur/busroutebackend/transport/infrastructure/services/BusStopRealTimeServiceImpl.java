@@ -25,6 +25,7 @@ import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.OptionalDouble;
 import java.util.stream.Collectors;
@@ -32,6 +33,8 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
+
+    private static final ZoneId LOCAL_ZONE = ZoneId.of("Asia/Ashgabat");
 
     private final BusStopRepository busStopRepository;
     private final PerformanceLogRepository performanceLogRepository;
@@ -189,7 +192,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
     }
 
     private int computeEtaMinutes(double distanceMeters, double speedKmh) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(LOCAL_ZONE);
         TimePeriod period = TimePeriod.fromDateTime(now);
         double effective = (speedKmh >= etaProperties.getSpeed().getMovingThresholdKmh())
                 ? speedKmh : period.getAverageSpeedKmh();
