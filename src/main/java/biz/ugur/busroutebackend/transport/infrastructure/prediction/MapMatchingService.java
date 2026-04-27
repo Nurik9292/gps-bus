@@ -79,9 +79,12 @@ public class MapMatchingService {
         double fracMin = Math.max(0, lastKnownFraction - windowFraction);
         double fracMax = Math.min(1, lastKnownFraction + windowFraction);
 
+        boolean hasCumDist = cumulativeDistances != null
+                && cumulativeDistances.length == routePoints.size();
+
         int fromIdx;
         int toIdx;
-        if (cumulativeDistances != null && cumulativeDistances.length == routePoints.size()) {
+        if (hasCumDist) {
             double targetMin = fracMin * totalRouteDistanceMeters;
             double targetMax = fracMax * totalRouteDistanceMeters;
             fromIdx = Math.max(0, binarySearchSegment(cumulativeDistances, targetMin) - 1);
@@ -97,10 +100,10 @@ public class MapMatchingService {
         for (int i = fromIdx; i <= toIdx; i++) {
             double[] a = routePoints.get(i);
             double[] b = routePoints.get(i + 1);
-            double segLen = (cumulativeDistances != null)
+            double segLen = hasCumDist
                     ? cumulativeDistances[i + 1] - cumulativeDistances[i]
                     : haversine(a, b);
-            double accumLen = (cumulativeDistances != null)
+            double accumLen = hasCumDist
                     ? cumulativeDistances[i]
                     : sumSegments(routePoints, i);
 
