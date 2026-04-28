@@ -132,4 +132,46 @@ class RouteGeometryTest {
         RouteGeometry g = new RouteGeometry(List.of(A, B, C));
         assertTrue(g.toString().contains("points=3"));
     }
+
+    @Test
+    void calculateDistanceMetersUsesProvidedService() {
+        RouteGeometry g = new RouteGeometry(List.of(A, B, C));
+        biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService service =
+                new biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService();
+
+        double distance = g.calculateDistanceMeters(service);
+
+        assertTrue(distance > 0);
+    }
+
+    @Test
+    void calculateDistanceMetersRejectsNullService() {
+        RouteGeometry g = new RouteGeometry(List.of(A, B));
+        assertThrows(IllegalArgumentException.class, () -> g.calculateDistanceMeters(null));
+    }
+
+    @Test
+    void containsPointTrueWhenWithinTolerance() {
+        RouteGeometry g = new RouteGeometry(List.of(A, B));
+        biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService service =
+                new biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService();
+
+        assertTrue(g.containsPoint(A, 1.0, service));
+    }
+
+    @Test
+    void containsPointFalseWhenOutsideTolerance() {
+        RouteGeometry g = new RouteGeometry(List.of(A, B));
+        biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService service =
+                new biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService();
+        Coordinates faraway = Coordinates.of(38.5, 59.0);
+
+        assertFalse(g.containsPoint(faraway, 1.0, service));
+    }
+
+    @Test
+    void containsPointRejectsNullService() {
+        RouteGeometry g = new RouteGeometry(List.of(A, B));
+        assertThrows(IllegalArgumentException.class, () -> g.containsPoint(A, 1.0, null));
+    }
 }
