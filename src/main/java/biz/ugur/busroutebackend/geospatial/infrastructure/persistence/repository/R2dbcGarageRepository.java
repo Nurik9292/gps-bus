@@ -28,6 +28,12 @@ import java.util.function.BiFunction;
 @Transactional(readOnly = true)
 public class R2dbcGarageRepository extends BaseR2dbcRepository<Garage, GarageId> implements GarageRepository {
 
+    private static final String GARAGE_COLUMNS = """
+            id, name, name_tm, name_en, latitude, longitude, radius_meters,
+            city_id, is_active, created_at, updated_at, version,
+            ST_AsText(boundary) AS boundary_wkt
+            """;
+
     private final GarageEntityMapper entityMapper;
 
     public R2dbcGarageRepository(DatabaseClient databaseClient, GarageEntityMapper entityMapper) {
@@ -148,7 +154,7 @@ public class R2dbcGarageRepository extends BaseR2dbcRepository<Garage, GarageId>
 
     @Override
     public Flux<Garage> findAllActive() {
-        String sql = "SELECT *, ST_AsText(boundary) as boundary_wkt FROM garages WHERE is_active = true ORDER BY name";
+        String sql = "SELECT " + GARAGE_COLUMNS + " FROM garages WHERE is_active = true ORDER BY name";
 
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -158,7 +164,7 @@ public class R2dbcGarageRepository extends BaseR2dbcRepository<Garage, GarageId>
 
     @Override
     public Flux<Garage> findByCityId(String cityId) {
-        String sql = "SELECT *, ST_AsText(boundary) as boundary_wkt FROM garages WHERE city_id = :cityId AND is_active = true ORDER BY name";
+        String sql = "SELECT " + GARAGE_COLUMNS + " FROM garages WHERE city_id = :cityId AND is_active = true ORDER BY name";
 
         return databaseClient.sql(sql)
                 .bind("cityId", cityId)
@@ -169,8 +175,8 @@ public class R2dbcGarageRepository extends BaseR2dbcRepository<Garage, GarageId>
 
     @Override
     public Mono<Optional<Garage>> findGarageContainingPosition(Coordinates position) {
-        String sql = """
-            SELECT *, ST_AsText(boundary) as boundary_wkt
+        String sql = String.format("""
+            SELECT %s
             FROM garages
             WHERE is_active = true
             AND (
@@ -184,7 +190,7 @@ public class R2dbcGarageRepository extends BaseR2dbcRepository<Garage, GarageId>
                 END
             )
             LIMIT 1
-            """;
+            """, GARAGE_COLUMNS);
 
         return databaseClient.sql(sql)
                 .bind("lon", position.getLongitudeAsDouble())
