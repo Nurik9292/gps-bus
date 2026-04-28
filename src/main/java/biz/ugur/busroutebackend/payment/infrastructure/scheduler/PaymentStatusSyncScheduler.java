@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 
@@ -56,6 +57,7 @@ public class PaymentStatusSyncScheduler {
                         }), CONCURRENCY)
                 .then()
                 .timeout(TICK_TIMEOUT)
+                .subscribeOn(Schedulers.boundedElastic())
                 .doOnError(err -> log.warn("[SCHEDULER] PaymentStatusSync tick failed: {}", err.toString()))
                 .onErrorResume(err -> Mono.empty())
                 .subscribe();

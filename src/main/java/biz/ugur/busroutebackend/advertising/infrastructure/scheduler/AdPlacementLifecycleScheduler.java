@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -23,6 +24,7 @@ public class AdPlacementLifecycleScheduler {
     private static final int BATCH_SIZE = 100;
     private static final int CONCURRENCY = 8;
     private static final Duration TICK_TIMEOUT = Duration.ofMinutes(1);
+    private static final Duration PER_ITEM_TIMEOUT = Duration.ofSeconds(10);
 
     private final AdPlacementRepository placementRepository;
 
@@ -35,11 +37,13 @@ public class AdPlacementLifecycleScheduler {
         LocalDateTime now = LocalDateTime.now();
         activateDue(now)
                 .timeout(TICK_TIMEOUT)
+                .subscribeOn(Schedulers.boundedElastic())
                 .doOnError(err -> log.warn("[SCHEDULER] AdPlacement activate tick failed: {}", err.toString()))
                 .onErrorResume(err -> Mono.empty())
                 .subscribe();
         expireDue(now)
                 .timeout(TICK_TIMEOUT)
+                .subscribeOn(Schedulers.boundedElastic())
                 .doOnError(err -> log.warn("[SCHEDULER] AdPlacement expire tick failed: {}", err.toString()))
                 .onErrorResume(err -> Mono.empty())
                 .subscribe();
@@ -63,6 +67,7 @@ public class AdPlacementLifecycleScheduler {
         try {
             AdPlacement next = placement.markAsActive();
             return placementRepository.save(next)
+                    .timeout(PER_ITEM_TIMEOUT)
                     .doOnSuccess(p -> log.info(
                             "AdPlacement activated: id={} tariff={} business={}",
                             p.getId().getValue(), p.getTariffId().getValue(),
@@ -81,6 +86,7 @@ public class AdPlacementLifecycleScheduler {
         try {
             AdPlacement next = placement.markAsExpired();
             return placementRepository.save(next)
+                    .timeout(PER_ITEM_TIMEOUT)
                     .doOnSuccess(p -> log.info(
                             "AdPlacement expired: id={} ended_at={}",
                             p.getId().getValue(),
