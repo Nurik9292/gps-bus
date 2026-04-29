@@ -41,6 +41,7 @@ public class DijkstraEngine {
 
         List<TransitPath> results = new ArrayList<>();
         Set<String> penalizedRoutes = new HashSet<>();
+        boolean singleSharedRouteScenario = onlySharedSingleBusRoute(graph, fromStopId, toStopId);
 
         for (int k = 0; k < maxPaths; k++) {
             TransitPath path = runDijkstra(graph, fromStopId, toStopId, penalizedRoutes);
@@ -48,9 +49,19 @@ public class DijkstraEngine {
 
             results.add(path);
             penalizedRoutes.addAll(path.usedRouteIds());
+
+            if (singleSharedRouteScenario) break;
         }
 
         return results;
+    }
+
+    private boolean onlySharedSingleBusRoute(TransitGraph graph, String fromStopId, String toStopId) {
+        Set<String> fromRoutes = graph.getBusRouteIdsAtStop(fromStopId);
+        Set<String> toRoutes = graph.getBusRouteIdsAtStop(toStopId);
+        return fromRoutes.size() == 1
+                && toRoutes.size() == 1
+                && fromRoutes.equals(toRoutes);
     }
 
     private TransitPath runDijkstra(TransitGraph graph, String fromStopId, String toStopId,

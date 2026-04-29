@@ -113,6 +113,72 @@ class DijkstraEngineTest {
     }
 
     @Test
+    void findPaths_skipsKAbove0_whenFromAndToShareSingleRoute() {
+        TransitGraph singleRouteGraph = buildSingleRouteGraph();
+        List<TransitPath> paths = engine.findPaths(singleRouteGraph, "X", "Y", 5);
+        assertThat(paths).hasSize(1);
+        assertThat(paths.get(0).usedRouteIds()).containsExactly("only-route");
+    }
+
+    @Test
+    void findPaths_doesNotSkip_whenSingleRouteButDifferent() {
+        TransitGraph differentSingleRouteGraph = buildDifferentSingleRouteGraph();
+        List<TransitPath> paths = engine.findPaths(differentSingleRouteGraph, "X", "Y", 5);
+        assertThat(paths.get(0).busSegmentCount()).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void findPaths_doesNotSkip_whenFromHasMultipleRoutes() {
+        TransitGraph multiRouteGraph = buildMultiRouteOriginGraph();
+        List<TransitPath> paths = engine.findPaths(multiRouteGraph, "X", "Y", 3);
+        assertThat(paths.size()).isGreaterThanOrEqualTo(1);
+    }
+
+    private TransitGraph buildSingleRouteGraph() {
+        Map<String, BusStop> stops = new HashMap<>();
+        Map<String, BusRoute> routes = new HashMap<>();
+        Map<String, List<TransitEdge>> adj = new HashMap<>();
+        for (String id : List.of("X", "M", "Y")) {
+            stops.put(id, makeStop(id));
+            adj.put(id, new ArrayList<>());
+        }
+        routes.put("only-route", makeRoute("only-route", "single"));
+        adj.get("X").add(new TransitEdge("M", EdgeType.BUS_RIDE, 5, "single", "only-route", 0));
+        adj.get("M").add(new TransitEdge("Y", EdgeType.BUS_RIDE, 5, "single", "only-route", 0));
+        return new TransitGraph(stops, routes, adj);
+    }
+
+    private TransitGraph buildDifferentSingleRouteGraph() {
+        Map<String, BusStop> stops = new HashMap<>();
+        Map<String, BusRoute> routes = new HashMap<>();
+        Map<String, List<TransitEdge>> adj = new HashMap<>();
+        for (String id : List.of("X", "M", "Y")) {
+            stops.put(id, makeStop(id));
+            adj.put(id, new ArrayList<>());
+        }
+        routes.put("rA", makeRoute("rA", "A"));
+        routes.put("rB", makeRoute("rB", "B"));
+        adj.get("X").add(new TransitEdge("M", EdgeType.BUS_RIDE, 5, "A", "rA", 0));
+        adj.get("M").add(new TransitEdge("Y", EdgeType.BUS_RIDE, 5, "B", "rB", 0));
+        return new TransitGraph(stops, routes, adj);
+    }
+
+    private TransitGraph buildMultiRouteOriginGraph() {
+        Map<String, BusStop> stops = new HashMap<>();
+        Map<String, BusRoute> routes = new HashMap<>();
+        Map<String, List<TransitEdge>> adj = new HashMap<>();
+        for (String id : List.of("X", "Y")) {
+            stops.put(id, makeStop(id));
+            adj.put(id, new ArrayList<>());
+        }
+        routes.put("rA", makeRoute("rA", "A"));
+        routes.put("rB", makeRoute("rB", "B"));
+        adj.get("X").add(new TransitEdge("Y", EdgeType.BUS_RIDE, 5, "A", "rA", 0));
+        adj.get("X").add(new TransitEdge("Y", EdgeType.BUS_RIDE, 6, "B", "rB", 0));
+        return new TransitGraph(stops, routes, adj);
+    }
+
+    @Test
     void findPaths_collapsed_mergesConsecutiveSameRouteSegments() {
         List<TransitPath> paths = engine.findPaths(graph, A, C);
         assertThat(paths).isNotEmpty();

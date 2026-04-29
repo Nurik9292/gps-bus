@@ -15,8 +15,10 @@ import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Component
 @Slf4j
@@ -52,6 +54,7 @@ public class TransitGraphBuilder {
                     List<TransitGraphDataRepository.WalkingEdgeRecord> walkingEdges = tuple.getT4();
 
                     Map<String, List<TransitEdge>> adj = new HashMap<>(stops.size() * 2);
+                    Map<String, Set<String>> busRouteIdsAtStop = new HashMap<>(stops.size() * 2);
 
                     for (String stopId : stops.keySet()) {
                         adj.put(stopId, new ArrayList<>());
@@ -68,6 +71,8 @@ public class TransitGraphBuilder {
                                 edge.routeId(),
                                 edge.direction()
                         ));
+                        busRouteIdsAtStop.computeIfAbsent(edge.fromStopId(), k -> new HashSet<>()).add(edge.routeId());
+                        busRouteIdsAtStop.computeIfAbsent(edge.toStopId(), k -> new HashSet<>()).add(edge.routeId());
                         busEdgeCount++;
                     }
 
@@ -80,7 +85,7 @@ public class TransitGraphBuilder {
                         walkEdgeCount += 2;
                     }
 
-                    TransitGraph graph = new TransitGraph(stops, routes, adj);
+                    TransitGraph graph = new TransitGraph(stops, routes, adj, busRouteIdsAtStop);
                     log.info("✅ Transit graph built: {} stops, {} routes, {} bus edges, {} walking edges",
                             stops.size(), routes.size(), busEdgeCount, walkEdgeCount);
                     return graph;
