@@ -574,25 +574,6 @@ routing:
     max-iterations: 50000
     max-cost-minutes: 180
 
-  stop-based-search:
-    enabled: true
-    timeout-seconds: 18
-    max-results: 6
-    max-layers: 3
-
-    validation:
-      max-walking-distance-meters: 800
-      min-travel-minutes: 2
-      max-travel-minutes: 120
-      max-transfer-travel-minutes: 150
-      max-transfer-wait-minutes: 15
-
-
-    layers:
-      radiuses: [0.3, 0.6, 1.0]
-      transfer-distances: [0.3, 0.4, 0.5]
-      max-stops-per-layer: [4, 6, 8]
-
 
 springdoc:
   api-docs:

@@ -75,8 +75,3 @@ server:
     include-message: never
     include-binding-errors: never
     include-stacktrace: never
-
-routing:
-  stop-based-search:
-    enabled: true
-    timeout-seconds: 15

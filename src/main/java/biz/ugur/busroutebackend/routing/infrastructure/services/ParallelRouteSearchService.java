@@ -29,7 +29,6 @@ public class ParallelRouteSearchService {
     private final RouteDeduplicationService deduplicationService;
     private final DistanceCalculationService distanceService;
     private final TripPlanFactory tripPlanFactory;
-    private StopBasedRouteSearchService stopBasedSearch;
 
     public ParallelRouteSearchService(DirectRouteSearchService directRouteSearch,
                                       OneTransferRouteSearchService oneTransferSearch,
@@ -113,35 +112,7 @@ public class ParallelRouteSearchService {
         Mono<SearchResult> walkingOnlySearch = this.walkingOnlySearch.search(context)
                 .onErrorResume(e -> Mono.just(SearchResult.failed("walking_only", e.getMessage())));
 
-        if (stopBasedSearch != null) {
-            return executeEnhancedSearch(context, stopsContext, directSearch, oneTransferSearch, twoTransferSearch);
-        } else {
-            return executeStandardSearch(context, directSearch, oneTransferSearch, twoTransferSearch, walkingOnlySearch);
-        }
-    }
-
-    private Mono<TripPlan> executeEnhancedSearch(SearchContext context,
-                                                 StopsContext stopsContext,
-                                                 Mono<SearchResult> directSearch,
-                                                 Mono<SearchResult> oneTransferSearch,
-                                                 Mono<SearchResult> twoTransferSearch) {
-        Mono<SearchResult> stopBasedSearch = this.stopBasedSearch.search(context, stopsContext);
-
-        return directSearch.flatMap(directResult -> {
-            log.info("[{}] 🔍 Direct search completed: {} options",
-                    context.searchId(), directResult.getOptionsCount());
-
-            return Mono.zip(oneTransferSearch, twoTransferSearch, stopBasedSearch)
-                    .map(transferResults -> {
-                        List<SearchResult> allResults = List.of(
-                                directResult,
-                                transferResults.getT1(),
-                                transferResults.getT2(),
-                                transferResults.getT3()
-                        );
-                        return combineWithDeduplication(context, allResults);
-                    });
-        });
+        return executeStandardSearch(context, directSearch, oneTransferSearch, twoTransferSearch, walkingOnlySearch);
     }
 
     private Mono<TripPlan> executeStandardSearch(SearchContext context,
