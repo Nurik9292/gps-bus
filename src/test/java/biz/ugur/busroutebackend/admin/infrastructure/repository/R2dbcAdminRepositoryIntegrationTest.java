@@ -1,9 +1,12 @@
 package biz.ugur.busroutebackend.admin.infrastructure.repository;
 
 import biz.ugur.busroutebackend.admin.domain.model.Admin;
+import biz.ugur.busroutebackend.admin.domain.specification.AdminSpecifications;
 import biz.ugur.busroutebackend.admin.domain.valueobjects.AdminId;
 import biz.ugur.busroutebackend.admin.infrastructure.persistence.repository.R2dbcAdminRepository;
 import biz.ugur.busroutebackend.shared.domain.services.PasswordEncoder;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -270,6 +273,43 @@ class R2dbcAdminRepositoryIntegrationTest {
 
         StepVerifier.create(repository.findAll())
                 .expectNextCount(2)
+                .verifyComplete();
+    }
+
+    @Test
+    void findBySpecification_WithCamelCaseSortField_ShouldNotThrow() {
+        repository.save(Admin.create("alpha", passwordEncoder.encode("pw"), "Alpha", null, false, true)).block();
+        repository.save(Admin.create("beta",  passwordEncoder.encode("pw"), "Beta",  null, false, false)).block();
+
+        PageRequest pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        StepVerifier.create(repository.findBySpecification(AdminSpecifications.isActive(), pageable).collectList())
+                .assertNext(list -> {
+                    assertEquals(1, list.size());
+                    assertEquals("alpha", list.get(0).getUsername());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void findBySpecification_WithDefaultControllerSortField_ShouldSucceed() {
+        repository.save(Admin.create("gamma", passwordEncoder.encode("pw"), "Gamma", null, false, true)).block();
+
+        PageRequest pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "created_at"));
+
+        StepVerifier.create(repository.findBySpecification(AdminSpecifications.isActive(), pageable).collectList())
+                .assertNext(list -> assertEquals(1, list.size()))
+                .verifyComplete();
+    }
+
+    @Test
+    void findBySpecification_WithUnknownSortField_ShouldFallBackToCreatedAt() {
+        repository.save(Admin.create("delta", passwordEncoder.encode("pw"), "Delta", null, false, true)).block();
+
+        PageRequest pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "doesNotExist"));
+
+        StepVerifier.create(repository.findBySpecification(AdminSpecifications.isActive(), pageable).collectList())
+                .assertNext(list -> assertEquals(1, list.size()))
                 .verifyComplete();
     }
 

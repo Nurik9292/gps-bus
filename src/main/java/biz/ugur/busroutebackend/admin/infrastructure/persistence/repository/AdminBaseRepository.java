@@ -17,6 +17,7 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 
 public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, AdminId> {
@@ -99,6 +100,29 @@ public abstract class AdminBaseRepository extends BaseR2dbcRepository<Admin, Adm
         return executeSpec
                 .map(getRowMapper())
                 .all();
+    }
+
+    @Override
+    protected String getOrderByClause(Pageable pageable) {
+        if (pageable.getSort().isEmpty()) {
+            return "ORDER BY created_at DESC";
+        }
+        return "ORDER BY " + pageable.getSort().stream()
+                .map(order -> mapSortField(order.getProperty()) + " " + order.getDirection().name())
+                .collect(Collectors.joining(", "));
+    }
+
+    private String mapSortField(String sortField) {
+        return switch (sortField != null ? sortField.toLowerCase() : "created_at") {
+            case "username" -> "username";
+            case "fullname", "full_name" -> "full_name";
+            case "createdat", "created_at" -> "created_at";
+            case "updatedat", "updated_at" -> "updated_at";
+            case "lastloginat", "last_login_at" -> "last_login_at";
+            case "isactive", "is_active", "active" -> "is_active";
+            case "issuperadmin", "is_super_admin" -> "is_super_admin";
+            default -> "created_at";
+        };
     }
 
     public Flux<Admin> findBySpecification(Specification<Admin> specification, Pageable pageable) {

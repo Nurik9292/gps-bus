@@ -69,7 +69,7 @@ public class AdminUserController extends BasePaginatedController {
     public Mono<ResponseEntity<ApiResponse<AdminListResponse>>> getAllAdmins(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "do") String sort,
+            @RequestParam(defaultValue = "created_at") String sort,
             @RequestParam(defaultValue = "desc") String order,
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) String search,
