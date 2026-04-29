@@ -571,8 +571,8 @@ routing:
     max-transfers: 2
     k-paths: 3
     route-penalty-minutes: 30
-    max-iterations: 50000
-    max-cost-minutes: 180
+    max-iterations: 10000
+    max-cost-minutes: 120
 
 
 springdoc:
