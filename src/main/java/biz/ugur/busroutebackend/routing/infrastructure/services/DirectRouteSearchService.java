@@ -15,7 +15,9 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
@@ -49,14 +51,25 @@ public class DirectRouteSearchService {
                         stopsContext.fromStops(), stopsContext.toStops())
                 .filter(this::isRouteViable)
                 .collectList()
-                .map(routes -> sortByProximity(routes, context.fromLocation())
-                        .stream().limit(MAX_RESULTS).toList())
+                .map(routes -> dedupeByRouteNumberAndLimit(
+                        sortByProximity(routes, context.fromLocation())))
                 .flatMapMany(Flux::fromIterable)
                 .flatMap(route -> optionBuilder.createOption(route, context)
                         .timeout(OPTION_BUILD_TIMEOUT, Mono.empty()), BUILD_CONCURRENCY)
                 .filter(Objects::nonNull)
                 .collectList()
                 .map(options -> SearchResult.successful("direct", options));
+    }
+
+    static List<RouteCalculationService.DirectRouteResult> dedupeByRouteNumberAndLimit(
+            List<RouteCalculationService.DirectRouteResult> sortedRoutes) {
+        Map<String, RouteCalculationService.DirectRouteResult> bestPerRouteNumber = new LinkedHashMap<>();
+        for (RouteCalculationService.DirectRouteResult route : sortedRoutes) {
+            bestPerRouteNumber.putIfAbsent(route.route().getRouteNumber(), route);
+        }
+        return bestPerRouteNumber.values().stream()
+                .limit(MAX_RESULTS)
+                .toList();
     }
 
     private boolean isRouteViable(RouteCalculationService.DirectRouteResult route) {
