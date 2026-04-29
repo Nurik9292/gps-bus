@@ -59,6 +59,15 @@ class TransferRouteValidatorTest {
     @Nested
     class OneTransfer {
 
+        /**
+         * Regression test for Bug A: UI showing "15 → 15" as a one-transfer
+         * route. Original fix: commit 7b70f78. Smoke-checked 2026-04-29:
+         * commenting out the duplicate-check block in
+         * {@code TransferRouteValidator.isOneTransferRouteViable} causes
+         * this test to fail.
+         *
+         * <p>See {@code docs/DIJKSTRA_AUDIT_REPORT.md §2}.
+         */
         @Test
         void rejectsDuplicateRoute() {
             TransferRouteResult sameOnBothLegs = oneTransfer("15", "15", 10, 5, 10);
@@ -66,6 +75,16 @@ class TransferRouteValidatorTest {
             assertFalse(validator.isOneTransferRouteViable(sameOnBothLegs));
         }
 
+        /**
+         * Regression test paired with {@link #rejectsDuplicateRoute()} —
+         * ensures the duplicate-check is not over-eager and still accepts
+         * legitimate one-transfer routes with distinct route numbers.
+         * Smoke-checked 2026-04-29: forcing
+         * {@code isOneTransferRouteViable} to return false makes this test
+         * fail.
+         *
+         * <p>See {@code docs/DIJKSTRA_AUDIT_REPORT.md §2}.
+         */
         @Test
         void acceptsDifferentRoutes() {
             TransferRouteResult differentRoutes = oneTransfer("15", "23", 10, 5, 10);
