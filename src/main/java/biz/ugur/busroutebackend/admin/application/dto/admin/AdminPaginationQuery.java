@@ -1,7 +1,5 @@
 package biz.ugur.busroutebackend.admin.application.dto.admin;
 
-import biz.ugur.busroutebackend.transport.application.dto.stop.GetAllStopPaginationQuery;
-
 public record AdminPaginationQuery(
         int page,
         int size,
@@ -23,7 +21,7 @@ public record AdminPaginationQuery(
         return new AdminPaginationQuery(
                 page,
                 size,
-                sortField != null ? sortField : "createdAt",
+                sortField != null ? sortField : "created_at",
                 sortOrder != null ? sortOrder : "desc",
                 isActivate,
                 searchQuery != null && !searchQuery.isBlank() ? searchQuery.trim() : null,
