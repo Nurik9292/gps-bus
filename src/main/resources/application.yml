@@ -149,7 +149,7 @@ app:
         issuer: "bus-route-system"
 
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8080}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:8080}
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:}
     allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
 
