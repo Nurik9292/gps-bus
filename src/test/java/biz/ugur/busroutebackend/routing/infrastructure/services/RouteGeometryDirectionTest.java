@@ -46,6 +46,17 @@ class RouteGeometryDirectionTest {
             assertThat(chosen).isEqualTo(FORWARD_WKT);
         }
 
+        /**
+         * Regression test for Bug B: bus-segment polyline rendered on the
+         * opposite lane (forward when the trip is going backward). Original
+         * fix: commit a924c6c made direction propagate authoritatively
+         * through {@code TransitPathSegment} all the way to
+         * {@code RouteGeometrySelector.select}. Smoke-checked 2026-04-29:
+         * commenting out the {@code if (direction != null)} block in
+         * {@code RouteGeometrySelector.select} causes this test to fail.
+         *
+         * <p>See {@code docs/DIJKSTRA_AUDIT_REPORT.md §3}.
+         */
         @Test
         void direction1SelectsBackwardEvenWhenForwardHeuristicWouldPass() {
             BusStop from = stop("A", 37.9505, 58.355);
@@ -57,6 +68,18 @@ class RouteGeometryDirectionTest {
             assertThat(chosen).isEqualTo(BACKWARD_WKT);
         }
 
+        /**
+         * Regression test for Bug B specifically on Ashgabat frontage-road
+         * pattern: a setup where the legacy heuristic
+         * {@code RouteGeometryTrimmingService.selectGeometryForDirection}
+         * would project both forward and backward polylines and pick
+         * {@code FORWARD_WKT} — but the authoritative {@code direction=1}
+         * must override and return {@code BACKWARD_WKT}. Smoke-checked
+         * 2026-04-29: disabling the authoritative path makes this test
+         * fail.
+         *
+         * <p>See {@code docs/DIJKSTRA_AUDIT_REPORT.md §3.4}.
+         */
         @Test
         void authoritativeDirectionWinsOverHeuristicOnFrontageRoadPattern() {
             BusStop from = stop("A", 37.9505, 58.355);
@@ -75,6 +98,20 @@ class RouteGeometryDirectionTest {
     @Nested
     class Fallbacks {
 
+        /**
+         * Regression test for the SQL-fallback path: when the search
+         * pipeline ends up running through {@code GraphRouteCalculationService}
+         * (Dijkstra disabled), result records carry {@code direction=null}
+         * and the deprecated heuristic is the only thing keeping the
+         * polyline on the right lane. If a future cleanup removes the
+         * heuristic, this test will fail and force a conscious decision.
+         * Smoke-checked 2026-04-29: short-circuiting the heuristic call
+         * in {@code RouteGeometrySelector.select} (returning null instead)
+         * causes this test to fail.
+         *
+         * <p>See {@code docs/DIJKSTRA_AUDIT_REPORT.md §3.2 line 10},
+         * {@code §8.4} (planned heuristic removal as backlog).
+         */
         @Test
         void nullDirectionFallsBackToHeuristic() {
             BusStop from = stop("A", 37.9505, 58.355);
