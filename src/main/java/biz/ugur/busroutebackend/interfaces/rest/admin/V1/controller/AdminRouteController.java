@@ -145,8 +145,8 @@ public class AdminRouteController extends BasePaginatedController {
 
     @PostMapping("/{routeNumber}/refresh-cache")
     public Mono<ResponseEntity<Void>> refreshRouteCache(@PathVariable String routeNumber) {
-        routeGeometryCache.refreshRoute(routeNumber);
-        return noContent();
+        return routeGeometryCache.refreshRoute(routeNumber)
+                .then(noContent());
     }
 
     private BusRouteResponse toBasic(RouteData  routeData) {
