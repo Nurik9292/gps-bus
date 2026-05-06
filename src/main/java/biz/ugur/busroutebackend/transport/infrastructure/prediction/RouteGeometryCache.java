@@ -231,15 +231,13 @@ public class RouteGeometryCache {
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    public void refreshRoute(String routeNumber) {
-        busRouteRepository.findByRouteNumber(routeNumber)
+    public reactor.core.publisher.Mono<Void> refreshRoute(String routeNumber) {
+        return busRouteRepository.findByRouteNumber(routeNumber)
                 .doOnNext(this::cacheRoute)
                 .flatMap(route -> loadStopFractions(routeNumber))
-                .subscribe(
-                        ignored -> {},
-                        error -> log.error("[GPS_PIPELINE] Failed to refresh route {}: {}", routeNumber, error.getMessage()),
-                        () -> log.info("[GPS_PIPELINE] Refreshed route geometry cache for route {}", routeNumber)
-                );
+                .doOnSuccess(ignored -> log.info("[GPS_PIPELINE] Refreshed route geometry cache for route {}", routeNumber))
+                .doOnError(error -> log.error("[GPS_PIPELINE] Failed to refresh route {}: {}", routeNumber, error.getMessage()))
+                .then();
     }
 
 
