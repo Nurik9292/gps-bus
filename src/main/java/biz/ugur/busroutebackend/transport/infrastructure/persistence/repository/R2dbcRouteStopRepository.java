@@ -332,7 +332,7 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
     }
 
     @Override
-    public Mono<NearestStopResult> findDirectionByCourse(String routeId, Double latitude, Double longitude, Double course) {
+    public Mono<NearestStopResult> findDirectionByCourse(String routeId, Double latitude, Double longitude, Double course, Integer currentDirection) {
         if (routeId == null || latitude == null || longitude == null || course == null) {
             return Mono.empty();
         }
@@ -433,54 +433,57 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
                 FROM (SELECT 1) dummy
                 LEFT JOIN forward_next fn ON true
                 LEFT JOIN backward_next bn ON true
+            ),
+            diffs AS (
+                SELECT
+                    forward_seq, backward_seq, forward_bearing, backward_bearing,
+                    CASE WHEN forward_bearing IS NOT NULL THEN
+                        LEAST(ABS(:course - forward_bearing), 360 - ABS(:course - forward_bearing))
+                    END as fwd_diff,
+                    CASE WHEN backward_bearing IS NOT NULL THEN
+                        LEAST(ABS(:course - backward_bearing), 360 - ABS(:course - backward_bearing))
+                    END as bwd_diff
+                FROM bearings
+            ),
+            chosen AS (
+                SELECT
+                    forward_seq, backward_seq, forward_bearing, backward_bearing,
+                    CASE
+                        WHEN forward_bearing IS NOT NULL AND backward_bearing IS NULL THEN 0
+                        WHEN forward_bearing IS NULL AND backward_bearing IS NOT NULL THEN 1
+                        WHEN forward_bearing IS NOT NULL AND backward_bearing IS NOT NULL THEN
+                            CASE
+                                WHEN ABS(fwd_diff - bwd_diff) <= 30 AND :currentDirection IN (0, 1)
+                                    THEN :currentDirection
+                                WHEN fwd_diff <= bwd_diff THEN 0
+                                ELSE 1
+                            END
+                        ELSE CASE WHEN forward_seq IS NOT NULL THEN 0 ELSE 1 END
+                    END as direction
+                FROM diffs
             )
             SELECT
                 CASE
-                    -- If only forward bearing available
                     WHEN forward_bearing IS NOT NULL AND backward_bearing IS NULL THEN forward_seq
-                    -- If only backward bearing available
                     WHEN forward_bearing IS NULL AND backward_bearing IS NOT NULL THEN backward_seq
-                    -- If both bearings available, compare angle differences
-                    WHEN forward_bearing IS NOT NULL AND backward_bearing IS NOT NULL THEN
-                        CASE
-                            WHEN LEAST(
-                                    ABS(:course - forward_bearing),
-                                    360 - ABS(:course - forward_bearing)
-                                ) <= LEAST(
-                                    ABS(:course - backward_bearing),
-                                    360 - ABS(:course - backward_bearing)
-                                )
-                            THEN forward_seq
-                            ELSE backward_seq
-                        END
-                    -- Fallback: use nearest stop from any direction
+                    WHEN direction = 0 THEN forward_seq
+                    WHEN direction = 1 THEN backward_seq
                     ELSE COALESCE(forward_seq, backward_seq)
                 END as stop_sequence,
-                CASE
-                    WHEN forward_bearing IS NOT NULL AND backward_bearing IS NULL THEN 0
-                    WHEN forward_bearing IS NULL AND backward_bearing IS NOT NULL THEN 1
-                    WHEN forward_bearing IS NOT NULL AND backward_bearing IS NOT NULL THEN
-                        CASE
-                            WHEN LEAST(
-                                    ABS(:course - forward_bearing),
-                                    360 - ABS(:course - forward_bearing)
-                                ) <= LEAST(
-                                    ABS(:course - backward_bearing),
-                                    360 - ABS(:course - backward_bearing)
-                                )
-                            THEN 0
-                            ELSE 1
-                        END
-                    ELSE CASE WHEN forward_seq IS NOT NULL THEN 0 ELSE 1 END
-                END as direction
-            FROM bearings
+                direction
+            FROM chosen
             """;
+
+        int currentDirectionParam = (currentDirection != null && (currentDirection == 0 || currentDirection == 1))
+                ? currentDirection
+                : -1;
 
         return databaseClient.sql(sql)
                 .bind("routeId", routeId)
                 .bind("latitude", latitude)
                 .bind("longitude", longitude)
                 .bind("course", course)
+                .bind("currentDirection", currentDirectionParam)
                 .map(row -> new NearestStopResult(
                         row.get("stop_sequence", Integer.class),
                         row.get("direction", Integer.class)))
@@ -495,7 +498,7 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
 
         return reactor.core.publisher.Flux.fromIterable(vehiclePositions)
                 .filter(pos -> pos.course() != null && pos.course() > 0)
-                .flatMap(pos -> findDirectionByCourse(pos.routeId(), pos.latitude(), pos.longitude(), pos.course())
+                .flatMap(pos -> findDirectionByCourse(pos.routeId(), pos.latitude(), pos.longitude(), pos.course(), pos.currentDirection())
                         .map(result -> Map.entry(pos.vehicleId(), result))
                 )
                 .collectMap(Map.Entry::getKey, Map.Entry::getValue);
