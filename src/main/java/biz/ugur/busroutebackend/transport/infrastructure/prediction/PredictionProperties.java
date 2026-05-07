@@ -83,6 +83,8 @@ public class PredictionProperties {
 
     private int offRouteConfirmations = 5;
 
+    private double hardOffRouteDistanceMeters = 500.0;
+
     private double stationaryGpsThresholdMeters = 100.0;
 
     private double stalePredictedFromGpsMeters = 500.0;

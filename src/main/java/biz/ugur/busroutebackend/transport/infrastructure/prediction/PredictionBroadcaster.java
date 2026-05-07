@@ -88,6 +88,17 @@ public class PredictionBroadcaster {
             return Mono.empty();
         }
 
+        double snapDistance = state.getLastRawToSnapDistanceMeters();
+        double hardOffRouteMeters = properties.getHardOffRouteDistanceMeters();
+        if (!Double.isNaN(snapDistance) && snapDistance > hardOffRouteMeters) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(),
+                    "hard-off-route");
+            log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_HARD_OFF_ROUTE vehicle={} plate={} route={} dist={}m threshold={}m",
+                    state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber(),
+                    String.format("%.0f", snapDistance), String.format("%.0f", hardOffRouteMeters));
+            return Mono.empty();
+        }
+
         if (state.isOffRoute()) {
             return broadcastRawGpsFallback(state, "off-route");
         }

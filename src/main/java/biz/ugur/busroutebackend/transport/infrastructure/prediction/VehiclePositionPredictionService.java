@@ -527,6 +527,7 @@ public class VehiclePositionPredictionService {
                 .consecutiveImplausibleCount(newImplausibleCount)
                 .consecutiveOffRouteCount(newOffRouteCount)
                 .offRoute(newOffRoute)
+                .lastRawToSnapDistanceMeters(snapAttempted ? rawToSnapDist : Double.NaN)
                 .inGarage(false)
                 .direction(direction);
 

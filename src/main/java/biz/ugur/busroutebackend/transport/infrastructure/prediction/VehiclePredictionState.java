@@ -73,6 +73,9 @@ public class VehiclePredictionState {
     private boolean offRoute = false;
 
     @Builder.Default
+    private double lastRawToSnapDistanceMeters = Double.NaN;
+
+    @Builder.Default
     private double longTermAvgSpeedKmh = -1;
 
     @Builder.Default
