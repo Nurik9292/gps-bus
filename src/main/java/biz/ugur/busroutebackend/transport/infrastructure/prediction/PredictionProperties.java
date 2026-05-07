@@ -59,6 +59,8 @@ public class PredictionProperties {
 
     private double directionFlipThresholdDeg = 90.0;
 
+    private double headingFlipHardOverrideDeg = 150.0;
+
     private int oppositeSnapThreshold = 3;
 
     private double terminalFlipMaxPhysicalJumpMeters = 500.0;
