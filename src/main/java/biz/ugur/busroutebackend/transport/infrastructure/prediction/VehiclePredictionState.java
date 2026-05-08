@@ -49,6 +49,9 @@ public class VehiclePredictionState {
     @Builder.Default
     private int direction = 0;
 
+    @Builder.Default
+    private boolean directionConfirmed = false;
+
     private Instant lastBroadcastAt;
 
     private Instant dwellStartedAt;

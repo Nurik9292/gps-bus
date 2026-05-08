@@ -186,6 +186,9 @@ public class PredictionBroadcaster {
         double broadcastCourse = resolveBroadcastCourse(
                 state, motionCourseDeg, broadcastSpeedKmh);
 
+        Integer broadcastDirection = state.isDirectionConfirmed() ? state.getDirection() : null;
+        Boolean broadcastLine = broadcastDirection == null ? null : (broadcastDirection == 0);
+
         VehiclePositionWebSocketMessage msg = new VehiclePositionWebSocketMessage(
                 state.getVehicleId(),
                 state.getLicensePlate(),
@@ -196,11 +199,12 @@ public class PredictionBroadcaster {
                 broadcastInMotion,
                 LocalDateTime.now(),
                 broadcastCourse,
-                state.getDirection() == 0,
+                broadcastLine,
                 nextStops.isEmpty() ? null : nextStops,
                 Boolean.TRUE,
                 fractionValue,
-                PredictionMath.computeConfidence(state.getLastReceivedAt(), state.getFractionOnRoute(), Instant.now()).name()
+                PredictionMath.computeConfidence(state.getLastReceivedAt(), state.getFractionOnRoute(), Instant.now()).name(),
+                broadcastDirection
         );
 
         final double motionCourseFinal = motionCourseDeg;
@@ -286,6 +290,9 @@ public class PredictionBroadcaster {
 
         boolean broadcastInMotion = speedKmh >= properties.getMinSpeedKmh();
 
+        Integer fallbackDirection = state.isDirectionConfirmed() ? state.getDirection() : null;
+        Boolean fallbackLine = fallbackDirection == null ? null : (fallbackDirection == 0);
+
         VehiclePositionWebSocketMessage msg = new VehiclePositionWebSocketMessage(
                 state.getVehicleId(),
                 state.getLicensePlate(),
@@ -296,11 +303,12 @@ public class PredictionBroadcaster {
                 broadcastInMotion,
                 LocalDateTime.now(),
                 course,
-                state.getDirection() == 0,
+                fallbackLine,
                 null,
                 Boolean.FALSE,
                 null,
-                "RAW_GPS"
+                "RAW_GPS",
+                fallbackDirection
         );
 
         return Mono.fromRunnable(() -> {
@@ -375,6 +383,9 @@ public class PredictionBroadcaster {
     }
 
     private List<NextStopEta> computeNextStopsEta(VehiclePredictionState state, int maxStops) {
+        if (!state.isDirectionConfirmed()) {
+            return List.of();
+        }
         double trueFraction = state.getLastGpsFraction() >= 0
                 ? state.getLastGpsFraction()
                 : state.getFractionOnRoute();

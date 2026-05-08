@@ -59,6 +59,7 @@ public class GpsPipelineReplayRunner {
                     event.inMotion(),
                     shiftedTimestamp,
                     event.direction(),
+                    true,
                     false
             );
             snapshots.add(PredictionSnapshot.fromAll(stateSupplier.get()));
