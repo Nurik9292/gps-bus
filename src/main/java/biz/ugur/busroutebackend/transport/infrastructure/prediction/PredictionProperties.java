@@ -59,6 +59,8 @@ public class PredictionProperties {
 
     private double directionFlipThresholdDeg = 90.0;
 
+    private double headingFlipHardOverrideDeg = 150.0;
+
     private int oppositeSnapThreshold = 3;
 
     private double terminalFlipMaxPhysicalJumpMeters = 500.0;
@@ -82,6 +84,8 @@ public class PredictionProperties {
     private double offRouteDistanceThresholdMeters = 200.0;
 
     private int offRouteConfirmations = 5;
+
+    private double hardOffRouteDistanceMeters = 500.0;
 
     private double stationaryGpsThresholdMeters = 100.0;
 

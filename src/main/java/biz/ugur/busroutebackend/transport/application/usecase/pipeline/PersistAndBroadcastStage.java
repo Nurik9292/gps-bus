@@ -129,6 +129,7 @@ public class PersistAndBroadcastStage {
                             ? v.getLastPositionUpdate().toInstant(ZoneOffset.UTC)
                             : Instant.now(),
                     v.getCurrentDirection() != null ? v.getCurrentDirection() : 0,
+                    v.getCurrentDirection() != null,
                     Boolean.TRUE.equals(v.getIsInGarage()),
                     Boolean.TRUE.equals(ctx.bufferedByDeviceId().get(v.getDeviceId()))
             );

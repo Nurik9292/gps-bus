@@ -292,6 +292,9 @@
                         <exclude>**/*IT.java</exclude>
                         <exclude>**/*IntegrationTest.java</exclude>
                     </excludes>
+                    <systemPropertyVariables>
+                        <api.version>1.45</api.version>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
             <plugin>
@@ -302,6 +305,9 @@
                         <include>**/*IT.java</include>
                         <include>**/*IntegrationTest.java</include>
                     </includes>
+                    <systemPropertyVariables>
+                        <api.version>1.45</api.version>
+                    </systemPropertyVariables>
                 </configuration>
                 <executions>
                     <execution>

@@ -37,7 +37,7 @@ public interface RouteStopRepository {
 
     record NearestStopResult(Integer sequence, Integer direction) {}
 
-    Mono<NearestStopResult> findDirectionByCourse(String routeId, Double latitude, Double longitude, Double course);
+    Mono<NearestStopResult> findDirectionByCourse(String routeId, Double latitude, Double longitude, Double course, Integer currentDirection);
 
     Mono<Map<String, NearestStopResult>> findDirectionByCoursesBatch(List<VehiclePositionKey> vehiclePositions);
 }

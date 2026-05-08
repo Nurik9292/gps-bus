@@ -202,9 +202,10 @@ public class VehiclePositionPredictionService {
                             boolean inMotion,
                             Instant timestamp,
                             int direction,
+                            boolean directionConfirmed,
                             boolean inGarage) {
         onGpsUpdate(vehicleId, licensePlate, routeNumber, latitude, longitude, speedKmh,
-                course, inMotion, timestamp, direction, inGarage, false);
+                course, inMotion, timestamp, direction, directionConfirmed, inGarage, false);
     }
 
     public void onGpsUpdate(String vehicleId,
@@ -217,6 +218,7 @@ public class VehiclePositionPredictionService {
                             boolean inMotion,
                             Instant timestamp,
                             int direction,
+                            boolean directionConfirmed,
                             boolean inGarage,
                             boolean isBuffered) {
         if (!properties.isEnabled()) {
@@ -273,6 +275,7 @@ public class VehiclePositionPredictionService {
                     vehicleId, licensePlate, existing.getDirection(), direction);
             existing = existing.toBuilder()
                     .direction(direction)
+                    .directionConfirmed(directionConfirmed || existing.isDirectionConfirmed())
                     .fractionOnRoute(-1)
                     .lastGpsFraction(-1)
                     .lastRejectedGpsFraction(-1)
@@ -527,8 +530,12 @@ public class VehiclePositionPredictionService {
                 .consecutiveImplausibleCount(newImplausibleCount)
                 .consecutiveOffRouteCount(newOffRouteCount)
                 .offRoute(newOffRoute)
+                .lastRawToSnapDistanceMeters(snapAttempted ? rawToSnapDist : Double.NaN)
                 .inGarage(false)
-                .direction(direction);
+                .direction(direction)
+                .directionConfirmed(directionConfirmed
+                        || (existing != null && existing.isDirectionConfirmed())
+                        || snapAttempted);
 
         boolean triggerColdStart = snapResult.resetTriggered() || positionTeleport;
         Instant coldStartUntilAt = triggerColdStart

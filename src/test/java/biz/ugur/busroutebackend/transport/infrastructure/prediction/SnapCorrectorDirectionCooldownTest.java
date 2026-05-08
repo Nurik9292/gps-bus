@@ -84,18 +84,20 @@ class SnapCorrectorDirectionCooldownTest {
     }
 
     @Test
-    void blocksHeadingFlipDuringCooldown() {
+    void blocksHeadingFlipDuringCooldownWithSoftEvidence() {
         VehiclePredictionState existing = backwardBaseline()
                 .directionChangedAt(Instant.now().minusSeconds(2))
                 .lastGpsFraction(-1)
                 .build();
 
+        double softOppositeCourse = 200.0;
+
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                GPS_LAT, GPS_LON, 270.0, 1);
+                GPS_LAT, GPS_LON, softOppositeCourse, 1);
 
         assertThat(result.direction())
-                .as("during cooldown the heading-based flip must NOT change direction back to forward")
+                .as("during cooldown a soft heading delta (<150deg) must NOT flip direction back to forward")
                 .isEqualTo(1);
     }
 
@@ -106,12 +108,32 @@ class SnapCorrectorDirectionCooldownTest {
                 .lastGpsFraction(-1)
                 .build();
 
+        double softOppositeCourse = 200.0;
+
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                GPS_LAT, GPS_LON, 270.0, 1);
+                GPS_LAT, GPS_LON, softOppositeCourse, 1);
 
         assertThat(result.direction())
                 .as("after cooldown expires, normal heading-flip behaviour resumes")
+                .isEqualTo(0);
+    }
+
+    @Test
+    void allowsHeadingFlipDuringCooldownWithHardEvidence() {
+        VehiclePredictionState existing = backwardBaseline()
+                .directionChangedAt(Instant.now().minusSeconds(2))
+                .lastGpsFraction(-1)
+                .build();
+
+        double hardOppositeCourse = 270.0;
+
+        SnapCorrector.SnapResult result = snapCorrector.applySnap(
+                existing, VEHICLE_ID, PLATE, ROUTE,
+                GPS_LAT, GPS_LON, hardOppositeCourse, 1);
+
+        assertThat(result.direction())
+                .as("hard heading delta (>=150deg) overrides cooldown and flips direction")
                 .isEqualTo(0);
     }
 

@@ -55,7 +55,7 @@ public class BusRouteResponse {
     @JsonProperty("active_vehicles_count")
     private Long activeVehiclesCount;
 
-    @JsonProperty("backword_geometry")
+    @JsonProperty("backward_geometry")
     private List<Coordinates> backwardGeometry;
 
     @JsonProperty("forward_geometry")
@@ -64,7 +64,7 @@ public class BusRouteResponse {
     @JsonProperty("forward_stops_ids")
     private List<String> forwardStopsIds;
 
-    @JsonProperty("backword_stops_ids")
+    @JsonProperty("backward_stops_ids")
     private List<String> backwardStopsIds;
 
     @JsonProperty("created_at")

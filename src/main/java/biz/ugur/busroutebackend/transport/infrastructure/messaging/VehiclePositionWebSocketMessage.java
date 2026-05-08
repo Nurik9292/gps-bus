@@ -45,6 +45,9 @@ public class VehiclePositionWebSocketMessage {
     @JsonProperty("line")
     private final Boolean line;
 
+    @JsonProperty("direction")
+    private final Integer direction;
+
     @JsonProperty("next_stops")
     private final List<NextStopEta> nextStops;
 
@@ -70,7 +73,7 @@ public class VehiclePositionWebSocketMessage {
             @JsonProperty("dir") Double course,
             @JsonProperty("line") Boolean line) {
         this(vehicleId, licensePlate, routeNumber, latitude, longitude,
-                speedKmh, isInMotion, timestamp, course, line, null, null, null, null);
+                speedKmh, isInMotion, timestamp, course, line, null, null, null, null, null);
     }
 
     public VehiclePositionWebSocketMessage(
@@ -86,7 +89,7 @@ public class VehiclePositionWebSocketMessage {
             Boolean line,
             List<NextStopEta> nextStops) {
         this(vehicleId, licensePlate, routeNumber, latitude, longitude,
-                speedKmh, isInMotion, timestamp, course, line, nextStops, null, null, null);
+                speedKmh, isInMotion, timestamp, course, line, nextStops, null, null, null, null);
     }
 
     public VehiclePositionWebSocketMessage(
@@ -104,7 +107,7 @@ public class VehiclePositionWebSocketMessage {
             Boolean predicted,
             Double fraction) {
         this(vehicleId, licensePlate, routeNumber, latitude, longitude,
-                speedKmh, isInMotion, timestamp, course, line, nextStops, predicted, fraction, null);
+                speedKmh, isInMotion, timestamp, course, line, nextStops, predicted, fraction, null, null);
     }
 
     public VehiclePositionWebSocketMessage(
@@ -122,6 +125,26 @@ public class VehiclePositionWebSocketMessage {
             Boolean predicted,
             Double fraction,
             String confidence) {
+        this(vehicleId, licensePlate, routeNumber, latitude, longitude,
+                speedKmh, isInMotion, timestamp, course, line, nextStops, predicted, fraction, confidence, null);
+    }
+
+    public VehiclePositionWebSocketMessage(
+            String vehicleId,
+            String licensePlate,
+            String routeNumber,
+            Double latitude,
+            Double longitude,
+            Double speedKmh,
+            Boolean isInMotion,
+            LocalDateTime timestamp,
+            Double course,
+            Boolean line,
+            List<NextStopEta> nextStops,
+            Boolean predicted,
+            Double fraction,
+            String confidence,
+            Integer direction) {
         this.vehicleId = vehicleId;
         this.licensePlate = licensePlate;
         this.routeNumber = routeNumber;
@@ -136,6 +159,7 @@ public class VehiclePositionWebSocketMessage {
         this.predicted = predicted;
         this.fraction = fraction;
         this.confidence = confidence;
+        this.direction = direction;
     }
 
 

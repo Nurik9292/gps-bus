@@ -49,6 +49,9 @@ public class VehiclePredictionState {
     @Builder.Default
     private int direction = 0;
 
+    @Builder.Default
+    private boolean directionConfirmed = false;
+
     private Instant lastBroadcastAt;
 
     private Instant dwellStartedAt;
@@ -71,6 +74,9 @@ public class VehiclePredictionState {
 
     @Builder.Default
     private boolean offRoute = false;
+
+    @Builder.Default
+    private double lastRawToSnapDistanceMeters = Double.NaN;
 
     @Builder.Default
     private double longTermAvgSpeedKmh = -1;

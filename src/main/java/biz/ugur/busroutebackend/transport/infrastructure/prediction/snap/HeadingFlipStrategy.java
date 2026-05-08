@@ -82,12 +82,21 @@ public class HeadingFlipStrategy {
                     primarySnap, currentRawSnapMinDistance);
         }
 
-        if (cooldown.isActive(existing)) {
+        boolean hardOppositeEvidence = headingDiff >= properties.getHeadingFlipHardOverrideDeg();
+
+        if (cooldown.isActive(existing) && !hardOppositeEvidence) {
             log.info("[GPS_PIPELINE] DIR_FLIP_BLOCKED_COOLDOWN vehicle={} plate={} type=heading ageMs={} headingDiff={}° course={}° routeHeading={}°",
                     vehicleId, licensePlate, cooldown.ageMs(existing),
                     (int) headingDiff, (int) course, (int) routeHeading);
             return Result.notFlipped(currentDirection, currentRouteCoords, currentTotalDist,
                     primarySnap, currentRawSnapMinDistance);
+        }
+
+        if (cooldown.isActive(existing)) {
+            log.info("[GPS_PIPELINE] DIR_FLIP_COOLDOWN_OVERRIDE vehicle={} plate={} type=heading ageMs={} headingDiff={}° threshold={}° course={}° routeHeading={}°",
+                    vehicleId, licensePlate, cooldown.ageMs(existing),
+                    (int) headingDiff, (int) properties.getHeadingFlipHardOverrideDeg(),
+                    (int) course, (int) routeHeading);
         }
 
         int flippedDir = (currentDirection == 0) ? 1 : 0;

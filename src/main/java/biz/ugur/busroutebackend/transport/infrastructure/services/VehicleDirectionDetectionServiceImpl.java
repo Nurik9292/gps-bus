@@ -33,7 +33,8 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
                     vehicle.getAssignedRouteId().getValue(),
                     vehicle.getCurrentLatitude(),
                     vehicle.getCurrentLongitude(),
-                    vehicle.getCourse()
+                    vehicle.getCourse(),
+                    vehicle.getCurrentDirection()
             ).switchIfEmpty(
                     routeStopRepository.findNearestStopSequence(
                             vehicle.getAssignedRouteId().getValue(),
