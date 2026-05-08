@@ -11,6 +11,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 import reactor.test.StepVerifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,7 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class R2dbcRouteStopRepositoryIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
+            DockerImageName.parse("postgis/postgis:16-3.4-alpine").asCompatibleSubstituteFor("postgres"))
             .withDatabaseName("testdb")
             .withUsername("test")
             .withPassword("test");
@@ -54,8 +56,19 @@ class R2dbcRouteStopRepositoryIntegrationTest {
     void setUp() {
         repository = new R2dbcRouteStopRepository(databaseClient);
 
+        databaseClient.sql("CREATE EXTENSION IF NOT EXISTS postgis").then().block();
+
         databaseClient.sql("DROP TABLE IF EXISTS route_stops CASCADE").then().block();
         databaseClient.sql("DROP TABLE IF EXISTS bus_stops CASCADE").then().block();
+        databaseClient.sql("DROP TABLE IF EXISTS bus_routes CASCADE").then().block();
+
+        databaseClient.sql("""
+                CREATE TABLE bus_routes (
+                    id                 VARCHAR(36) PRIMARY KEY,
+                    geometry_forward   geometry(LineString, 4326),
+                    geometry_backward  geometry(LineString, 4326)
+                )
+                """).then().block();
 
         databaseClient.sql("""
                 CREATE TABLE bus_stops (
@@ -82,6 +95,8 @@ class R2dbcRouteStopRepositoryIntegrationTest {
                 )
                 """).then().block();
 
+        insertRouteRow(ROUTE_ID, null, null);
+
         insertStop(FWD_1, "Forward 1", 38.0000, 57.9990);
         insertStop(FWD_2, "Forward 2", 38.0000, 58.0000);
         insertStop(FWD_3, "Forward 3", 38.0000, 58.0010);
@@ -97,6 +112,47 @@ class R2dbcRouteStopRepositoryIntegrationTest {
         insertRouteStop("rs-bwd-1", ROUTE_ID, BWD_1, 1, 1, 0);
         insertRouteStop("rs-bwd-2", ROUTE_ID, BWD_2, 1, 2, 88);
         insertRouteStop("rs-bwd-3", ROUTE_ID, BWD_3, 1, 3, 176);
+    }
+
+    private void insertRouteRow(String routeId, String forwardWkt, String backwardWkt) {
+        databaseClient.sql("""
+                INSERT INTO bus_routes (id, geometry_forward, geometry_backward)
+                VALUES (
+                    :id,
+                    CASE WHEN :fwd IS NULL THEN NULL ELSE ST_GeomFromText(:fwd, 4326) END,
+                    CASE WHEN :bwd IS NULL THEN NULL ELSE ST_GeomFromText(:bwd, 4326) END
+                )
+                """)
+                .bind("id", routeId)
+                .bind("fwd", forwardWkt == null ? io.r2dbc.spi.Parameters.in(String.class) : io.r2dbc.spi.Parameters.in(forwardWkt))
+                .bind("bwd", backwardWkt == null ? io.r2dbc.spi.Parameters.in(String.class) : io.r2dbc.spi.Parameters.in(backwardWkt))
+                .then()
+                .block();
+    }
+
+    private void updateRouteGeometry(String routeId, String forwardWkt, String backwardWkt) {
+        databaseClient.sql("""
+                UPDATE bus_routes
+                   SET geometry_forward  = CASE WHEN :fwd IS NULL THEN NULL ELSE ST_GeomFromText(:fwd, 4326) END,
+                       geometry_backward = CASE WHEN :bwd IS NULL THEN NULL ELSE ST_GeomFromText(:bwd, 4326) END
+                 WHERE id = :id
+                """)
+                .bind("id", routeId)
+                .bind("fwd", forwardWkt == null ? io.r2dbc.spi.Parameters.in(String.class) : io.r2dbc.spi.Parameters.in(forwardWkt))
+                .bind("bwd", backwardWkt == null ? io.r2dbc.spi.Parameters.in(String.class) : io.r2dbc.spi.Parameters.in(backwardWkt))
+                .then()
+                .block();
+    }
+
+    private void replaceRouteStops(int direction, String[][] stops) {
+        databaseClient.sql("DELETE FROM route_stops WHERE route_id = :rid AND direction = :dir")
+                .bind("rid", ROUTE_ID)
+                .bind("dir", direction)
+                .then()
+                .block();
+        for (int i = 0; i < stops.length; i++) {
+            insertRouteStop("rs-d" + direction + "-" + (i + 1), ROUTE_ID, stops[i][0], direction, i + 1, i * 100);
+        }
     }
 
     private void insertStop(String id, String name, double lat, double lon) {
@@ -219,6 +275,66 @@ class R2dbcRouteStopRepositoryIntegrationTest {
                 .verifyComplete();
 
         StepVerifier.create(repository.findDirectionByCourse(ROUTE_ID, VEHICLE_LAT, VEHICLE_LON, null, 0))
+                .verifyComplete();
+    }
+
+    @Test
+    void findDirectionByCourse_sharedTerminalStopKeepsCurrentDirection() {
+        String sharedTermId = "shared-term";
+        insertStop(sharedTermId, "Shared terminal", 38.0000, 58.0000);
+
+        replaceRouteStops(0, new String[][]{
+                {sharedTermId},
+                {FWD_3}
+        });
+        replaceRouteStops(1, new String[][]{
+                {sharedTermId},
+                {BWD_3}
+        });
+
+        Double ambiguousCourse = 200.0;
+
+        StepVerifier.create(repository.findDirectionByCourse(ROUTE_ID, 38.0000, 58.0000, ambiguousCourse, 0))
+                .assertNext(result -> assertThat(result.direction())
+                        .as("when nearest forward and nearest backward are the same physical stop, sticky direction must be preserved")
+                        .isEqualTo(0))
+                .verifyComplete();
+
+        StepVerifier.create(repository.findDirectionByCourse(ROUTE_ID, 38.0000, 58.0000, ambiguousCourse, 1))
+                .assertNext(result -> assertThat(result.direction())
+                        .as("same shared terminal, current direction = backward stays backward")
+                        .isEqualTo(1))
+                .verifyComplete();
+    }
+
+    @Test
+    void findDirectionByCourse_lateralTieBreakerPicksClosestPolyline() {
+        String forwardWkt  = "LINESTRING(57.999 38.0010, 58.000 38.0010, 58.001 38.0010)";
+        String backwardWkt = "LINESTRING(57.999 38.0000, 58.000 38.0000, 58.001 38.0000)";
+        updateRouteGeometry(ROUTE_ID, forwardWkt, backwardWkt);
+
+        String fwdNear = "fwd-near"; insertStop(fwdNear, "fnear", 38.0010, 58.0000);
+        String shared  = "shared-next"; insertStop(shared,  "snext", 38.0005, 58.0010);
+        String bwdNear = "bwd-near"; insertStop(bwdNear, "bnear", 38.0000, 58.0000);
+
+        replaceRouteStops(0, new String[][]{{fwdNear}, {shared}});
+        replaceRouteStops(1, new String[][]{{bwdNear}, {shared}});
+
+        double busLon = 58.0001;
+        Double tieCourse = 90.0;
+
+        double busLatNearForward = 38.00075;
+        StepVerifier.create(repository.findDirectionByCourse(ROUTE_ID, busLatNearForward, busLon, tieCourse, null))
+                .assertNext(result -> assertThat(result.direction())
+                        .as("frontage-road: bearings tie (next stop shared), bus is laterally closer to forward polyline → 0")
+                        .isEqualTo(0))
+                .verifyComplete();
+
+        double busLatNearBackward = 38.00025;
+        StepVerifier.create(repository.findDirectionByCourse(ROUTE_ID, busLatNearBackward, busLon, tieCourse, null))
+                .assertNext(result -> assertThat(result.direction())
+                        .as("symmetric case: bus near backward polyline must flip the verdict to 1")
+                        .isEqualTo(1))
                 .verifyComplete();
     }
 }

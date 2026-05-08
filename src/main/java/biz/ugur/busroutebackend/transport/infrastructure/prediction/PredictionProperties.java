@@ -63,6 +63,12 @@ public class PredictionProperties {
 
     private int oppositeSnapThreshold = 3;
 
+    private int oppositeSnapHardThreshold = 1;
+
+    private double oppositeSnapHardPrimaryDistanceMeters = 200.0;
+
+    private double oppositeSnapHardOppositeDistanceMeters = 50.0;
+
     private double terminalFlipMaxPhysicalJumpMeters = 500.0;
 
     private double maxBusSpeedMs = 22.0;

@@ -339,7 +339,7 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
 
         String sql = """
             WITH forward_stops AS (
-                SELECT rs.stop_sequence, bs.latitude as stop_lat, bs.longitude as stop_lon,
+                SELECT rs.stop_sequence, rs.stop_id, bs.latitude as stop_lat, bs.longitude as stop_lon,
                     6371000 * acos(
                         LEAST(1.0, GREATEST(-1.0,
                             cos(radians(:latitude)) * cos(radians(bs.latitude)) *
@@ -353,7 +353,7 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
                 ORDER BY distance
             ),
             backward_stops AS (
-                SELECT rs.stop_sequence, bs.latitude as stop_lat, bs.longitude as stop_lon,
+                SELECT rs.stop_sequence, rs.stop_id, bs.latitude as stop_lat, bs.longitude as stop_lon,
                     6371000 * acos(
                         LEAST(1.0, GREATEST(-1.0,
                             cos(radians(:latitude)) * cos(radians(bs.latitude)) *
@@ -367,10 +367,10 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
                 ORDER BY distance
             ),
             nearest_forward AS (
-                SELECT stop_sequence FROM forward_stops LIMIT 1
+                SELECT stop_sequence, stop_id FROM forward_stops LIMIT 1
             ),
             nearest_backward AS (
-                SELECT stop_sequence FROM backward_stops LIMIT 1
+                SELECT stop_sequence, stop_id FROM backward_stops LIMIT 1
             ),
             forward_next AS (
                 SELECT fs.stop_sequence, fs.stop_lat, fs.stop_lon
@@ -386,10 +386,35 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
                 ORDER BY bs.stop_sequence
                 LIMIT 1
             ),
+            polyline_distances AS (
+                SELECT
+                    CASE
+                        WHEN br.geometry_forward IS NOT NULL THEN
+                            ST_Distance(
+                                ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography,
+                                br.geometry_forward::geography
+                            )
+                        ELSE NULL
+                    END as dist_to_forward_polyline_m,
+                    CASE
+                        WHEN br.geometry_backward IS NOT NULL THEN
+                            ST_Distance(
+                                ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography,
+                                br.geometry_backward::geography
+                            )
+                        ELSE NULL
+                    END as dist_to_backward_polyline_m
+                FROM bus_routes br
+                WHERE br.id = :routeId
+            ),
             bearings AS (
                 SELECT
                     (SELECT stop_sequence FROM nearest_forward) as forward_seq,
                     (SELECT stop_sequence FROM nearest_backward) as backward_seq,
+                    (SELECT stop_id FROM nearest_forward) as forward_stop_id,
+                    (SELECT stop_id FROM nearest_backward) as backward_stop_id,
+                    (SELECT dist_to_forward_polyline_m FROM polyline_distances) as dist_fwd_poly,
+                    (SELECT dist_to_backward_polyline_m FROM polyline_distances) as dist_bwd_poly,
                     -- Bearing to forward next stop (normalized to 0-360)
                     CASE WHEN fn.stop_lat IS NOT NULL THEN
                         CASE
@@ -436,7 +461,9 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
             ),
             diffs AS (
                 SELECT
-                    forward_seq, backward_seq, forward_bearing, backward_bearing,
+                    forward_seq, backward_seq, forward_stop_id, backward_stop_id,
+                    forward_bearing, backward_bearing,
+                    dist_fwd_poly, dist_bwd_poly,
                     CASE WHEN forward_bearing IS NOT NULL THEN
                         LEAST(ABS(:course - forward_bearing), 360 - ABS(:course - forward_bearing))
                     END as fwd_diff,
@@ -453,6 +480,16 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
                         WHEN forward_bearing IS NULL AND backward_bearing IS NOT NULL THEN 1
                         WHEN forward_bearing IS NOT NULL AND backward_bearing IS NOT NULL THEN
                             CASE
+                                WHEN forward_stop_id IS NOT NULL
+                                     AND backward_stop_id IS NOT NULL
+                                     AND forward_stop_id = backward_stop_id
+                                     AND :currentDirection IN (0, 1)
+                                    THEN :currentDirection
+                                WHEN ABS(fwd_diff - bwd_diff) <= 30
+                                     AND dist_fwd_poly IS NOT NULL
+                                     AND dist_bwd_poly IS NOT NULL
+                                     AND ABS(dist_fwd_poly - dist_bwd_poly) > 50
+                                    THEN CASE WHEN dist_fwd_poly < dist_bwd_poly THEN 0 ELSE 1 END
                                 WHEN ABS(fwd_diff - bwd_diff) <= 30 AND :currentDirection IN (0, 1)
                                     THEN :currentDirection
                                 WHEN fwd_diff <= bwd_diff THEN 0
