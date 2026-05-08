@@ -48,7 +48,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
             "course", "current_direction", "last_stop_sequence",
             "last_garage_id", "garage_entry_time", "garage_exit_time", "is_in_garage",
             "route_source", "route_confidence",
-            "gps_detection_enabled", "gps_provider",
+            "gps_detection_enabled", "gps_provider", "city_id",
             "created_at", "updated_at", "version"
     );
 
@@ -104,6 +104,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         columns.put("route_confidence", persistenceEntity.getRouteConfidence());
         columns.put("gps_detection_enabled", persistenceEntity.getGpsDetectionEnabled());
         columns.put("gps_provider", persistenceEntity.getGpsProvider());
+        columns.put("city_id", persistenceEntity.getCityId());
         return columns;
     }
 
@@ -121,14 +122,14 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 route_number, is_active, created_at, updated_at, course,
                 current_direction, last_stop_sequence, version,
                 last_garage_id, garage_entry_time, garage_exit_time, is_in_garage,
-                route_source, route_confidence, gps_detection_enabled, gps_provider
+                route_source, route_confidence, gps_detection_enabled, gps_provider, city_id
             ) VALUES (
                 :id, :device_id, :license_plate, :current_latitude, :current_longitude,
                 :speed_kmh, :is_in_motion, :last_position_update, :assigned_route_id,
                 :route_number, :is_active, :created_at, :updated_at, :course,
                 :current_direction, :last_stop_sequence, :version,
                 :last_garage_id, :garage_entry_time, :garage_exit_time, :is_in_garage,
-                :route_source, :route_confidence, :gps_detection_enabled, :gps_provider
+                :route_source, :route_confidence, :gps_detection_enabled, :gps_provider, :city_id
             ) RETURNING %s
             """.formatted(selectColumns());
 
@@ -178,6 +179,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 route_confidence = :route_confidence,
                 gps_detection_enabled = :gps_detection_enabled,
                 gps_provider = :gps_provider,
+                city_id = :city_id,
                 version = :version
             WHERE id = :id AND version = :old_version
             RETURNING %s

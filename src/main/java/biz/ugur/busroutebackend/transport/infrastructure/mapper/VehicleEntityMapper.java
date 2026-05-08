@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.mapper;
 
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.CityId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteSource;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
@@ -40,6 +41,7 @@ public class VehicleEntityMapper {
                 .routeConfidence(domain.getRouteConfidence())
                 .gpsDetectionEnabled(domain.getGpsDetectionEnabled())
                 .gpsProvider(domain.getGpsProvider() != null ? domain.getGpsProvider().getCode() : null)
+                .cityId(domain.getCityId() != null ? domain.getCityId().getValue() : null)
                 .createdAt(domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt())
                 .version(domain.getVersion())
@@ -74,6 +76,7 @@ public class VehicleEntityMapper {
                 entity.getRouteConfidence(),
                 entity.getGpsDetectionEnabled(),
                 entity.getGpsProvider() != null ? GpsProviderType.fromCodeOrDefault(entity.getGpsProvider()) : null,
+                entity.getCityId() != null ? CityId.of(entity.getCityId()) : null,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 entity.getVersion()

@@ -8,6 +8,7 @@ import biz.ugur.busroutebackend.transport.domain.event.VehicleAssignedToRouteEve
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.event.VehicleRegisteredEvent;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
+import biz.ugur.busroutebackend.transport.domain.valueobject.CityId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteSource;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
@@ -56,16 +57,22 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
 
     private final GpsProviderType gpsProvider;
 
+    private final CityId cityId;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long version;
 
 
     public static Vehicle create(String deviceId, String licensePlate) {
-        return create(deviceId, licensePlate, GpsProviderType.defaultProvider());
+        return create(deviceId, licensePlate, GpsProviderType.defaultProvider(), null);
     }
 
     public static Vehicle create(String deviceId, String licensePlate, GpsProviderType gpsProvider) {
+        return create(deviceId, licensePlate, gpsProvider, null);
+    }
+
+    public static Vehicle create(String deviceId, String licensePlate, GpsProviderType gpsProvider, CityId cityId) {
         String validatedDeviceId = VehicleValidationService.validateDeviceId(deviceId);
         String validatedLicensePlate = VehicleValidationService.validateLicensePlate(licensePlate);
 
@@ -88,6 +95,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .routeConfidence(0)
                 .gpsDetectionEnabled(true)
                 .gpsProvider(gpsProvider != null ? gpsProvider : GpsProviderType.defaultProvider())
+                .cityId(cityId)
                 .version(0L)
                 .build();
 
@@ -123,6 +131,7 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
             Integer routeConfidence,
             Boolean gpsDetectionEnabled,
             GpsProviderType gpsProvider,
+            CityId cityId,
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
             Long version) {
@@ -150,10 +159,18 @@ public class Vehicle extends AggregateRoot<Vehicle, VehicleId> {
                 .routeConfidence(routeConfidence != null ? routeConfidence : 0)
                 .gpsDetectionEnabled(gpsDetectionEnabled != null ? gpsDetectionEnabled : true)
                 .gpsProvider(gpsProvider != null ? gpsProvider : GpsProviderType.defaultProvider())
+                .cityId(cityId)
                 .createdAt(createdAt)
                 .updatedAt(updatedAt)
                 .version(version != null ? version : 0L)
                 .build();
+    }
+
+    public Vehicle updateCity(CityId newCityId) {
+        if (this.cityId != null && this.cityId.equals(newCityId)) {
+            return this;
+        }
+        return this.toBuilder().cityId(newCityId).build();
     }
 
 

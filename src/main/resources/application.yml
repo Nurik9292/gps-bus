@@ -217,12 +217,19 @@ external:
     gps-tugdk:
       enabled: ${GPS_TUGDK_ENABLED:true}
       base-url: ${GPS_TUGDK_BASE_URL:https://gps.tugdk.gov.tm}
-      token: ${GPS_TUGDK_TOKEN}
       timeout: ${GPS_TUGDK_TIMEOUT:30s}
       connect-timeout: ${GPS_TUGDK_CONNECT_TIMEOUT:10s}
       read-timeout: ${GPS_TUGDK_READ_TIMEOUT:60s}
       write-timeout: ${GPS_TUGDK_WRITE_TIMEOUT:10s}
       cache-timeout: ${GPS_TUGDK_CACHE_TIMEOUT:3s}
+      tenant-cache-refresh-ms: ${GPS_TUGDK_TENANT_CACHE_REFRESH_MS:60000}
+      default-tenant-id: ${GPS_TUGDK_DEFAULT_TENANT_ID:ASHGABAT}
+      token: ${GPS_TUGDK_TOKEN:${GPS_API_TOKEN:}}
+      tenants:
+        - id: ASHGABAT
+          token: ${GPS_API_TOKEN_ASHGABAT:${GPS_TUGDK_TOKEN:${GPS_API_TOKEN:}}}
+        - id: BALKAN
+          token: ${GPS_API_TOKEN_BALKAN:}
       retry:
         max-attempts: 3
         initial-interval: 1s
