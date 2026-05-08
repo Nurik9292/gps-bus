@@ -85,16 +85,24 @@ public class OppositeFallbackStrategy {
                         vehicleId, "OPPOSITE_FALLBACK", existing, oppositeSnap, oppositeSnap.fraction());
 
         if (oppositePlausible) {
-            log.debug("[GPS_PIPELINE] SNAP_OPPOSITE vehicle={} route={} dir={}→{} dist={}m (primary={}m)",
+            boolean hardMismatch =
+                    primaryFailed.distanceMeters() > properties.getOppositeSnapHardPrimaryDistanceMeters()
+                            && oppositeSnap.distanceMeters() < properties.getOppositeSnapHardOppositeDistanceMeters();
+            int requiredSnaps = hardMismatch
+                    ? properties.getOppositeSnapHardThreshold()
+                    : properties.getOppositeSnapThreshold();
+
+            log.debug("[GPS_PIPELINE] SNAP_OPPOSITE vehicle={} route={} dir={}→{} dist={}m (primary={}m) hardMismatch={} required={}",
                     vehicleId, routeNumber, currentDirection, oppositeDir,
                     String.format("%.1f", oppositeSnap.distanceMeters()),
-                    String.format("%.1f", primaryFailed.distanceMeters()));
+                    String.format("%.1f", primaryFailed.distanceMeters()),
+                    hardMismatch, requiredSnaps);
 
             int snapCount = oppositeCounter.incrementAndGet(vehicleId);
-            if (snapCount >= properties.getOppositeSnapThreshold()) {
+            if (snapCount >= requiredSnaps) {
                 oppositeCounter.queueDirectionFix(vehicleId, oppositeDir);
-                log.info("[GPS_PIPELINE] DIR_AUTO_FIX vehicle={} route={} dir={}→{} ({}x consecutive opposite snap)",
-                        vehicleId, routeNumber, currentDirection, oppositeDir, snapCount);
+                log.info("[GPS_PIPELINE] DIR_AUTO_FIX vehicle={} route={} dir={}→{} ({}x consecutive opposite snap, hardMismatch={})",
+                        vehicleId, routeNumber, currentDirection, oppositeDir, snapCount, hardMismatch);
                 oppositeCounter.reset(vehicleId);
             }
 
