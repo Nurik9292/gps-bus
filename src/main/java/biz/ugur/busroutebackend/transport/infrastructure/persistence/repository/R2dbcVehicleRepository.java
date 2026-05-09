@@ -179,7 +179,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 route_confidence = :route_confidence,
                 gps_detection_enabled = :gps_detection_enabled,
                 gps_provider = :gps_provider,
-                city_id = :city_id,
+                city_id = COALESCE(:city_id, city_id),
                 version = :version
             WHERE id = :id AND version = :old_version
             RETURNING %s
