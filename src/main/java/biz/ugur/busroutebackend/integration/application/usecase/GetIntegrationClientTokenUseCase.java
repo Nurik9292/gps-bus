@@ -84,25 +84,48 @@ public class GetIntegrationClientTokenUseCase {
 
     private Mono<IntegrationClientTokenResponse> generateTokens(Client client,
                                                                  ExternalService service) {
-        String clientId = client.getId().getValue();
+        return existingValidTokenPair(client)
+                .doOnNext(reused -> log.debug("Reusing existing valid tokens for client {}",
+                        client.getId().getValue()))
+                .switchIfEmpty(Mono.defer(() -> rotateAndPersist(client)))
+                .flatMap(tokens -> externalServiceRepository.save(service.recordUsage())
+                        .thenReturn(buildResponse(client, tokens)));
+    }
 
+    private Mono<TokenPair> existingValidTokenPair(Client client) {
+        String access = client.getAccessToken();
+        String refresh = client.getRefreshToken();
+        if (access == null || access.isBlank() || refresh == null || refresh.isBlank()) {
+            return Mono.empty();
+        }
+        return clientJwtTokenService.isTokenExpired(access)
+                .flatMap(expired -> expired
+                        ? Mono.empty()
+                        : Mono.just(new TokenPair(access, refresh)));
+    }
+
+    private Mono<TokenPair> rotateAndPersist(Client client) {
+        String clientId = client.getId().getValue();
         return Mono.zip(
                 clientJwtTokenService.generateAccessToken(clientId),
                 clientJwtTokenService.generateRefreshToken(clientId)
-        ).flatMap(tokens -> {
-            client.authenticate(tokens.getT1(), tokens.getT2());
-
-            return Mono.zip(
-                    clientRepository.save(client),
-                    externalServiceRepository.save(service.recordUsage())
-            ).map(saved -> IntegrationClientTokenResponse.builder()
-                    .clientId(clientId)
-                    .externalUserId(client.getExternalUserId())
-                    .accessToken(tokens.getT1())
-                    .refreshToken(tokens.getT2())
-                    .expiresIn(ACCESS_TOKEN_EXPIRATION_SECONDS)
-                    .tokenType("Bearer")
-                    .build());
+        ).flatMap(generated -> {
+            client.authenticate(generated.getT1(), generated.getT2());
+            return clientRepository.save(client)
+                    .thenReturn(new TokenPair(generated.getT1(), generated.getT2()));
         });
     }
+
+    private IntegrationClientTokenResponse buildResponse(Client client, TokenPair tokens) {
+        return IntegrationClientTokenResponse.builder()
+                .clientId(client.getId().getValue())
+                .externalUserId(client.getExternalUserId())
+                .accessToken(tokens.access())
+                .refreshToken(tokens.refresh())
+                .expiresIn(ACCESS_TOKEN_EXPIRATION_SECONDS)
+                .tokenType("Bearer")
+                .build();
+    }
+
+    private record TokenPair(String access, String refresh) {}
 }
