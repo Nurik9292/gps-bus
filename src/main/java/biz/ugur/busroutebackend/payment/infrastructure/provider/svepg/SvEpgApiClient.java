@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.payment.domain.exceptions.PaymentProviderExcepti
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -23,8 +24,9 @@ public class SvEpgApiClient {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
-    public SvEpgApiClient(WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
-        this.webClient = webClientBuilder.build();
+    public SvEpgApiClient(@Qualifier("svepgWebClient") WebClient webClient,
+                           ObjectMapper objectMapper) {
+        this.webClient = webClient;
         this.objectMapper = objectMapper;
     }
 
