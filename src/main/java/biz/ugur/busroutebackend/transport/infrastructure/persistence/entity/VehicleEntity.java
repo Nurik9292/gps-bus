@@ -93,4 +93,7 @@ public class VehicleEntity {
 
     @Column("gps_provider")
     private String gpsProvider;
+
+    @Column("city_id")
+    private String cityId;
 }

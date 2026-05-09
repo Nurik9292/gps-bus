@@ -379,6 +379,7 @@ class VehicleTest {
                     null, null, null, false,
                     RouteSource.GPS_DETECTED, 80, true,
                     GpsProviderType.TUGDK,
+                    null,
                     LocalDateTime.now().minusDays(1), LocalDateTime.now(),
                     3L
             );
@@ -399,6 +400,7 @@ class VehicleTest {
                     null, null, null, null,
                     null, null, null, null,
                     null, null, null,
+                    null,
                     null,
                     null, null, null
             );

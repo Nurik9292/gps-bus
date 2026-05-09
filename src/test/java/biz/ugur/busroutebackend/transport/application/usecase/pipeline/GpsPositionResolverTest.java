@@ -49,6 +49,7 @@ class GpsPositionResolverTest {
                 0.0, null, null, null, null, null, false,
                 null, 0, true,
                 provider,
+                null,
                 LocalDateTime.now(), LocalDateTime.now(), 0L
         );
     }
