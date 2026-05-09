@@ -6,4 +6,7 @@
 src/test/resources/fixtures/**/*.jsonl text eol=lf
 src/test/resources/fixtures/**/*.json  text eol=lf
 
+# Shell scripts must keep LF — CRLF in shebang breaks /usr/bin/env bash
+*.sh text eol=lf
+
 
