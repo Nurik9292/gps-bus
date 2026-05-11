@@ -594,6 +594,11 @@ routing:
     timetable-generation:
       enabled: ${RAPTOR_TIMETABLE_GENERATION_ENABLED:false}
 
+  shadow-mode:
+    enabled: ${ROUTING_SHADOW_MODE_ENABLED:false}
+    sample-rate: ${ROUTING_SHADOW_SAMPLE_RATE:0.1}
+    eta-diff-threshold-seconds: ${ROUTING_SHADOW_ETA_DIFF_THRESHOLD_SECONDS:300}
+
 
 springdoc:
   api-docs:
