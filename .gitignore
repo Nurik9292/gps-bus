@@ -11,7 +11,8 @@ target/
 .settings
 .springBeans
 .sts4-cache
-
+.claude
+scripts/
 .idea
 *.iws
 *.iml
