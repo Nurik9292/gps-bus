@@ -86,12 +86,18 @@ public final class RaptorRoute {
 
     public RaptorTrip earliestTripAt(int sequenceIndex, int earliestBoardingSec) {
         int boardOffset = stopTimes.get(sequenceIndex).departureOffsetSec();
-        for (RaptorTrip trip : trips) {
-            if (trip.startTimeSec() + boardOffset >= earliestBoardingSec) {
-                return trip;
+        int targetStartSec = earliestBoardingSec - boardOffset;
+        int lo = 0;
+        int hi = trips.size();
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1;
+            if (trips.get(mid).startTimeSec() < targetStartSec) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
             }
         }
-        return null;
+        return lo < trips.size() ? trips.get(lo) : null;
     }
 
     public List<BusStopId> stopIds() {

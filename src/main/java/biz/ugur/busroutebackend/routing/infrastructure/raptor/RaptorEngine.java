@@ -32,6 +32,7 @@ public class RaptorEngine {
         if (fromStop.equals(toStop)) {
             return List.of();
         }
+        long startNanos = System.nanoTime();
 
         List<Map<BusStopId, Integer>> tau = new ArrayList<>(maxRounds + 1);
         List<Map<BusStopId, JourneyStep>> parents = new ArrayList<>(maxRounds + 1);
@@ -48,13 +49,22 @@ public class RaptorEngine {
         marked.add(fromStop);
         marked.addAll(tau.get(0).keySet());
 
+        int bestTargetArrival = tau.get(0).getOrDefault(toStop, INF);
+
         for (int k = 1; k <= maxRounds; k++) {
             seedRoundFromPrevious(tau.get(k - 1), tau.get(k));
 
             Map<RaptorRoute, RouteEntryPoint> queue = collectQueue(timetable, marked);
             Set<BusStopId> markedNext = new HashSet<>();
-            scanRoutes(queue, tau.get(k - 1), tau.get(k), parents.get(k), markedNext);
-            applyTransfersPhase(timetable, tau.get(k), parents.get(k), markedNext);
+            scanRoutes(queue, tau.get(k - 1), tau.get(k), parents.get(k), markedNext,
+                    toStop, bestTargetArrival);
+            applyTransfersPhase(timetable, tau.get(k), parents.get(k), markedNext,
+                    toStop, bestTargetArrival);
+
+            Integer curr = tau.get(k).get(toStop);
+            if (curr != null && curr < bestTargetArrival) {
+                bestTargetArrival = curr;
+            }
 
             if (markedNext.isEmpty()) {
                 break;
@@ -62,13 +72,20 @@ public class RaptorEngine {
             marked = markedNext;
 
             Integer prev = tau.get(k - 1).get(toStop);
-            Integer curr = tau.get(k).get(toStop);
             if (curr != null && curr.equals(prev)) {
                 break;
             }
         }
 
-        return collectJourneys(timetable, fromStop, toStop, departureTimeSec, tau, parents, maxRounds);
+        List<RaptorJourney> result = collectJourneys(
+                timetable, fromStop, toStop, departureTimeSec, tau, parents, maxRounds);
+
+        long elapsedMicros = (System.nanoTime() - startNanos) / 1_000;
+        if (elapsedMicros > 50_000) {
+            log.info("[RAPTOR_ENGINE] findJourneys {} -> {} elapsedMs={} journeys={}",
+                    fromStop, toStop, elapsedMicros / 1000, result.size());
+        }
+        return result;
     }
 
     private void seedRoundFromPrevious(Map<BusStopId, Integer> prev, Map<BusStopId, Integer> curr) {
@@ -113,7 +130,9 @@ public class RaptorEngine {
                              Map<BusStopId, Integer> tauPrev,
                              Map<BusStopId, Integer> tauCurr,
                              Map<BusStopId, JourneyStep> parentCurr,
-                             Set<BusStopId> markedNext) {
+                             Set<BusStopId> markedNext,
+                             BusStopId targetStop,
+                             int bestTargetArrival) {
         for (Map.Entry<RaptorRoute, RouteEntryPoint> entry : queue.entrySet()) {
             RaptorRoute route = entry.getKey();
             int startSeq = entry.getValue().sequence();
@@ -128,6 +147,9 @@ public class RaptorEngine {
 
                 if (currentTrip != null) {
                     int arrival = route.arrivalSecAt(currentTrip, seq);
+                    if (arrival >= bestTargetArrival && !stop.equals(targetStop)) {
+                        continue;
+                    }
                     int current = tauCurr.getOrDefault(stop, INF);
                     if (arrival < current) {
                         tauCurr.put(stop, arrival);
@@ -139,7 +161,7 @@ public class RaptorEngine {
                 }
 
                 int earliestBoarding = tauPrev.getOrDefault(stop, INF);
-                if (earliestBoarding != INF) {
+                if (earliestBoarding != INF && earliestBoarding < bestTargetArrival) {
                     RaptorTrip trip = route.earliestTripAt(seq, earliestBoarding);
                     if (trip != null && (currentTrip == null || !trip.id().equals(currentTrip.id()))) {
                         int candidateBoardTime = route.departureSecAt(trip, seq);
@@ -159,13 +181,18 @@ public class RaptorEngine {
     private void applyTransfersPhase(RaptorTimetable timetable,
                                       Map<BusStopId, Integer> tauCurr,
                                       Map<BusStopId, JourneyStep> parentCurr,
-                                      Set<BusStopId> markedNext) {
+                                      Set<BusStopId> markedNext,
+                                      BusStopId targetStop,
+                                      int bestTargetArrival) {
         List<BusStopId> snapshot = new ArrayList<>(markedNext);
         for (BusStopId stop : snapshot) {
             int stopArrival = tauCurr.getOrDefault(stop, INF);
-            if (stopArrival == INF) continue;
+            if (stopArrival == INF || stopArrival >= bestTargetArrival) continue;
             for (RaptorTransfer transfer : timetable.transfersFrom(stop)) {
                 int walkArrival = stopArrival + transfer.walkingSeconds();
+                if (walkArrival >= bestTargetArrival && !transfer.toStopId().equals(targetStop)) {
+                    continue;
+                }
                 int current = tauCurr.getOrDefault(transfer.toStopId(), INF);
                 if (walkArrival < current) {
                     tauCurr.put(transfer.toStopId(), walkArrival);
