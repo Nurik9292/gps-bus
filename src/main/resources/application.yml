@@ -581,6 +581,19 @@ routing:
     max-iterations: 10000
     max-cost-minutes: 120
 
+  raptor:
+    enabled: ${RAPTOR_ENABLED:false}
+    default-headway-seconds: ${RAPTOR_DEFAULT_HEADWAY_SECONDS:600}
+    service-day-start: ${RAPTOR_SERVICE_DAY_START:06:00}
+    service-day-end: ${RAPTOR_SERVICE_DAY_END:23:00}
+    service-id: ${RAPTOR_SERVICE_ID:ALL_DAYS}
+    max-rounds: ${RAPTOR_MAX_ROUNDS:4}
+    cache-ttl-minutes: ${RAPTOR_CACHE_TTL_MINUTES:30}
+    transfer-radius-meters: ${RAPTOR_TRANSFER_RADIUS_METERS:200}
+    transfer-walking-speed-kmh: ${RAPTOR_TRANSFER_WALKING_SPEED_KMH:5.0}
+    timetable-generation:
+      enabled: ${RAPTOR_TIMETABLE_GENERATION_ENABLED:false}
+
 
 springdoc:
   api-docs:
