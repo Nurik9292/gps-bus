@@ -58,6 +58,8 @@ public class ApiVersionConfig {
     public static final String V1_ADMIN_VEHICLES = V1_ADMIN + VEHICLES;
     public static final String V1_ADMIN_ROUTE_ALTERNATIVES = V1_ADMIN + ROUTE_ALTERNATIVES;
     public static final String V1_ADMIN_DASHBOARD = V1_ADMIN + DASHBOARD;
+    public static final String ROUTING_ADMIN = "/routing";
+    public static final String V1_ADMIN_ROUTING = V1_ADMIN + ROUTING_ADMIN;
 
 
     public static final String V1_CLIENT_AUTH = V1_CLIENT + AUTH;
