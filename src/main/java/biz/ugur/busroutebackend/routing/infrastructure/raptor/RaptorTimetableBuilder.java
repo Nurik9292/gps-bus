@@ -12,6 +12,10 @@ import biz.ugur.busroutebackend.routing.domain.repository.RaptorTimetableDataRep
 import biz.ugur.busroutebackend.routing.domain.repository.RaptorTimetableDataRepository.TransferRow;
 import biz.ugur.busroutebackend.routing.domain.repository.RaptorTimetableDataRepository.TripRow;
 import biz.ugur.busroutebackend.transport.domain.enums.RouteDirection;
+import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
+import biz.ugur.busroutebackend.transport.domain.model.BusStop;
+import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
+import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 import lombok.extern.slf4j.Slf4j;
@@ -23,28 +27,43 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
 public class RaptorTimetableBuilder {
 
     private final RaptorTimetableDataRepository dataRepository;
+    private final BusRouteRepository busRouteRepository;
+    private final BusStopRepository busStopRepository;
 
-    public RaptorTimetableBuilder(RaptorTimetableDataRepository dataRepository) {
+    public RaptorTimetableBuilder(RaptorTimetableDataRepository dataRepository,
+                                   BusRouteRepository busRouteRepository,
+                                   BusStopRepository busStopRepository) {
         this.dataRepository = dataRepository;
+        this.busRouteRepository = busRouteRepository;
+        this.busStopRepository = busStopRepository;
     }
 
     public Mono<RaptorTimetable> build() {
         long startNanos = System.nanoTime();
-        return dataRepository.loadAll()
-                .map(this::assemble)
+        Mono<Map<BusRouteId, BusRoute>> busRoutesMono = busRouteRepository.findActiveRoutes()
+                .collect(Collectors.toMap(BusRoute::getId, Function.identity()));
+        Mono<Map<BusStopId, BusStop>> busStopsMono = busStopRepository.findActiveStops()
+                .collect(Collectors.toMap(BusStop::getId, Function.identity()));
+
+        return Mono.zip(dataRepository.loadAll(), busRoutesMono, busStopsMono)
+                .map(tuple -> assemble(tuple.getT1(), tuple.getT2(), tuple.getT3()))
                 .doOnNext(tt -> log.info(
                         "[RAPTOR_CACHE] built timetable: routes={} stops={} transfers={} elapsedMs={}",
                         tt.routeCount(), tt.stopCount(), tt.transferCount(),
                         (System.nanoTime() - startNanos) / 1_000_000));
     }
 
-    private RaptorTimetable assemble(RawTimetableData data) {
+    private RaptorTimetable assemble(RawTimetableData data,
+                                      Map<BusRouteId, BusRoute> busRoutesById,
+                                      Map<BusStopId, BusStop> busStopsById) {
         Map<String, List<StopTimeRow>> stopTimesByTrip = new HashMap<>();
         for (StopTimeRow row : data.stopTimes()) {
             stopTimesByTrip.computeIfAbsent(row.tripId(), k -> new ArrayList<>()).add(row);
@@ -74,7 +93,7 @@ public class RaptorTimetableBuilder {
                     row.distanceMeters()));
         }
 
-        return RaptorTimetable.from(routes, transfers);
+        return RaptorTimetable.from(routes, transfers, busRoutesById, busStopsById);
     }
 
     private RaptorRoute buildRoute(RouteKey key,
