@@ -75,6 +75,30 @@ public final class RaptorTimetable {
         return busStopsById.get(id);
     }
 
+    public List<DirectMatch> directMatches(BusStopId fromStop, BusStopId toStop) {
+        List<RaptorRoute> fromRoutes = routesByStop.getOrDefault(fromStop, List.of());
+        if (fromRoutes.isEmpty()) {
+            return List.of();
+        }
+        List<RaptorRoute> toRoutes = routesByStop.getOrDefault(toStop, List.of());
+        if (toRoutes.isEmpty()) {
+            return List.of();
+        }
+        java.util.Set<RaptorRoute> toSet = new java.util.HashSet<>(toRoutes);
+        List<DirectMatch> matches = new java.util.ArrayList<>();
+        for (RaptorRoute route : fromRoutes) {
+            if (!toSet.contains(route)) continue;
+            int fromSeq = route.firstSequenceOf(fromStop);
+            int toSeq = route.firstSequenceOf(toStop);
+            if (fromSeq < 0 || toSeq < 0 || fromSeq >= toSeq) continue;
+            matches.add(new DirectMatch(route, fromSeq, toSeq));
+        }
+        return matches;
+    }
+
+    public record DirectMatch(RaptorRoute route, int fromSequenceIndex, int toSequenceIndex) {
+    }
+
     public List<RaptorRoute> routesAt(BusStopId stop) {
         return routesByStop.getOrDefault(stop, List.of());
     }

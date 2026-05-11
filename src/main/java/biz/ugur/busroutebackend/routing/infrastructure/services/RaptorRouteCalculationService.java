@@ -3,7 +3,9 @@ package biz.ugur.busroutebackend.routing.infrastructure.services;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.routing.domain.model.raptor.RaptorJourney;
 import biz.ugur.busroutebackend.routing.domain.model.raptor.RaptorLeg;
+import biz.ugur.busroutebackend.routing.domain.model.raptor.RaptorRoute;
 import biz.ugur.busroutebackend.routing.domain.model.raptor.RaptorTimetable;
+import biz.ugur.busroutebackend.routing.domain.model.raptor.RaptorTrip;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
 import biz.ugur.busroutebackend.routing.infrastructure.raptor.RaptorEngine;
 import biz.ugur.busroutebackend.routing.infrastructure.raptor.RaptorTimetableCache;
@@ -63,11 +65,57 @@ public class RaptorRouteCalculationService implements RouteCalculationService {
 
     @Override
     public Flux<DirectRouteResult> findDirectRoutes(List<BusStop> fromStops, List<BusStop> toStops) {
-        return runForPairs(fromStops, toStops, "direct")
-                .flatMap(ctx -> Flux.fromIterable(ctx.journeys())
-                        .map(j -> mapper.toDirect(j, ctx.timetable()))
-                        .flatMap(Mono::justOrEmpty))
-                .distinct(key -> directKey((DirectRouteResult) key));
+        if (fromStops.isEmpty() || toStops.isEmpty()) {
+            return Flux.empty();
+        }
+        List<BusStop> limitedFrom = fromStops.subList(0, Math.min(DIRECT_STOP_LIMIT, fromStops.size()));
+        List<BusStop> limitedTo = toStops.subList(0, Math.min(DIRECT_STOP_LIMIT, toStops.size()));
+        log.info("[RAPTOR] direct enumerate: {}x{} pairs", limitedFrom.size(), limitedTo.size());
+
+        return cache.getTimetable().flatMapMany(tt -> {
+            List<DirectRouteResult> results = new ArrayList<>();
+            for (BusStop from : limitedFrom) {
+                for (BusStop to : limitedTo) {
+                    if (from.getId().equals(to.getId())) continue;
+                    for (RaptorTimetable.DirectMatch m : tt.directMatches(from.getId(), to.getId())) {
+                        DirectRouteResult r = buildDirectResult(tt, from, to, m);
+                        if (r != null) results.add(r);
+                    }
+                }
+            }
+            return Flux.fromIterable(results);
+        }).distinct(r -> directKey((DirectRouteResult) r));
+    }
+
+    private DirectRouteResult buildDirectResult(RaptorTimetable timetable,
+                                                  BusStop fromStop,
+                                                  BusStop toStop,
+                                                  RaptorTimetable.DirectMatch match) {
+        RaptorRoute route = match.route();
+        BusRoute busRoute = timetable.busRouteOf(route.routeId());
+        if (busRoute == null) {
+            return null;
+        }
+        int travelMinutes = computeTravelMinutes(route, match.fromSequenceIndex(), match.toSequenceIndex());
+        return new DirectRouteResult(
+                busRoute,
+                fromStop,
+                toStop,
+                Math.max(1, travelMinutes),
+                0.0,
+                0.0,
+                route.direction().getValue());
+    }
+
+    private int computeTravelMinutes(RaptorRoute route, int fromSeq, int toSeq) {
+        if (route.trips().isEmpty()) {
+            return 1;
+        }
+        RaptorTrip sample = route.trips().get(0);
+        int arrivalAtTo = route.arrivalSecAt(sample, toSeq);
+        int departureAtFrom = route.departureSecAt(sample, fromSeq);
+        int seconds = Math.max(0, arrivalAtTo - departureAtFrom);
+        return Math.max(1, (int) Math.round(seconds / 60.0));
     }
 
     @Override
