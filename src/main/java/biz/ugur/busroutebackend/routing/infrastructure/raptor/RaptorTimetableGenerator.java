@@ -167,9 +167,15 @@ public class RaptorTimetableGenerator {
         for (int i = 0; i < group.size(); i++) {
             RouteDirectionRow r = group.get(i);
             int offsetSec = (int) Math.round(i * secondsPerHop);
+            int raptorSequence = i + 1;
+            if (!r.stopSequence().equals(raptorSequence)) {
+                log.debug("[RAPTOR_GEN] route={} dir={} renumber raw_seq={} -> {} (stop={})",
+                        head.routeNumber(), head.direction(),
+                        r.stopSequence(), raptorSequence, r.stopId());
+            }
             stopTimesOut.add(StopTime.instantTransit(
                     trip.getId(),
-                    r.stopSequence(),
+                    raptorSequence,
                     BusStopId.of(r.stopId()),
                     offsetSec));
         }
