@@ -8,7 +8,7 @@ import biz.ugur.busroutebackend.transport.domain.event.RouteGeometryUpdatedEvent
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
 
@@ -16,7 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
-@ConditionalOnProperty(name = "routing.raptor.enabled", havingValue = "true")
+@ConditionalOnExpression(
+        "${routing.raptor.enabled:false} or ${routing.shadow-mode.enabled:false}")
 @Slf4j
 public class RaptorTimetableEventHandler {
 
