@@ -129,7 +129,7 @@ public class VehicleGpsHistoryService {
 
         @SuppressWarnings({"unchecked", "rawtypes"})
         Mono<List> rawResult = redisTemplate
-                .execute(getHistoryBatchScript, keys, List.<Object>of(String.valueOf(effectiveLimit)))
+                .execute(getHistoryBatchScript, keys, List.<Object>of(effectiveLimit))
                 .next()
                 .defaultIfEmpty(Collections.emptyList());
 
@@ -140,8 +140,8 @@ public class VehicleGpsHistoryService {
                 .defaultIfEmpty(Collections.emptyList())
                 .map(raw -> mapBatchResults(vehicleIds, raw))
                 .onErrorResume(err -> {
-                    log.warn("[GPS_PIPELINE] history batch fetch failed for {} vehicles: {}",
-                            vehicleIds.size(), err.getMessage());
+                    log.warn("[GPS_PIPELINE] history batch fetch failed for {} vehicles",
+                            vehicleIds.size(), err);
                     return Mono.just(emptyBatch(vehicleIds));
                 });
     }
