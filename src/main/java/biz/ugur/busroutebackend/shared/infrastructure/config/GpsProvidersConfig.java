@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.shared.infrastructure.external.gps.TugdkTenantCl
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.config.GpsProviderProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.config.TugdkTenantsProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.mapper.TugdkGpsPositionMapper;
+import biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.GpsProviderHealthMonitor;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
@@ -18,6 +19,7 @@ import reactor.netty.http.client.HttpClient;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -28,7 +30,8 @@ public class GpsProvidersConfig {
     @ConditionalOnProperty(prefix = "external.api.gps-tugdk", name = "enabled", havingValue = "true")
     public Map<String, TugdkTenantClient> tugdkTenantClients(TugdkTenantsProperties tenantsProperties,
                                                               GpsProviderProperties commonProperties,
-                                                              TugdkGpsPositionMapper mapper) {
+                                                              TugdkGpsPositionMapper mapper,
+                                                              Optional<GpsProviderHealthMonitor> healthMonitor) {
         List<TugdkTenantsProperties.TenantConfig> effective = tenantsProperties.resolveEffectiveTenants();
         if (effective.isEmpty()) {
             log.warn("TUGDK GPS API enabled but no usable tenants configured (no tenants[] and no fallback token). Provider will be inactive.");
@@ -44,7 +47,8 @@ public class GpsProvidersConfig {
                     tenant.getToken(),
                     mapper,
                     commonProperties,
-                    tenantsProperties.getCacheTimeout()
+                    tenantsProperties.getCacheTimeout(),
+                    healthMonitor
             );
             clients.put(tenant.getId(), client);
             log.info("Registered TUGDK tenant client: id={} baseUrl={} cacheTimeout={}s",
