@@ -137,4 +137,22 @@ class GpsProviderHealthMonitorTest {
         monitor.recordFetch("TUGDK:ASHGABAT", new FetchOutcome.Success(100, 100, T0));
         verify(emailService, never()).sendGpsAlert(any(), any(), any(), any(), any());
     }
+
+    @Test
+    void recoveryAfterThreeCleanFetches() {
+        monitor.recordError("TUGDK:BALKAN", new RuntimeException("x"));
+        monitor.recordError("TUGDK:BALKAN", new RuntimeException("x"));
+        monitor.recordError("TUGDK:BALKAN", new RuntimeException("x"));
+        verify(emailService, times(1)).sendGpsAlert(any(), any(), any(), any(), any());
+
+        monitor.recordFetch("TUGDK:BALKAN", new FetchOutcome.Success(50, 50, T0));
+        monitor.recordFetch("TUGDK:BALKAN", new FetchOutcome.Success(50, 50, T0));
+        verify(emailService, times(1)).sendGpsAlert(any(), any(), any(), any(), any());
+
+        monitor.recordFetch("TUGDK:BALKAN", new FetchOutcome.Success(50, 50, T0));
+
+        ArgumentCaptor<AlertKind> kindCap = ArgumentCaptor.forClass(AlertKind.class);
+        verify(emailService, times(2)).sendGpsAlert(any(), any(), kindCap.capture(), any(), any());
+        org.junit.jupiter.api.Assertions.assertEquals(AlertKind.RECOVERY, kindCap.getAllValues().get(1));
+    }
 }

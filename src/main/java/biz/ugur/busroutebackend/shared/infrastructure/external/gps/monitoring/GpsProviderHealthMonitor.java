@@ -51,8 +51,8 @@ public class GpsProviderHealthMonitor {
     }
 
     private ProviderStatus evaluateTransition(String tenant, ProviderStatus s, Instant now) {
-        if (s.state() != ProviderStatus.State.OK) {
-            return s;
+        if (s.state() == ProviderStatus.State.DEGRADED) {
+            return evaluateRecovery(tenant, s, now);
         }
         if (s.consecutiveFailures() >= properties.getHttpError().getConsecutiveFailures()) {
             ProviderStatus degraded = s.markDegraded(AlertKind.HTTP_ERROR, now);
@@ -117,5 +117,64 @@ public class GpsProviderHealthMonitor {
             case STALE -> "данные устарели";
             case RECOVERY -> "восстановлен";
         };
+    }
+
+    private ProviderStatus evaluateRecovery(String tenant, ProviderStatus s, Instant now) {
+        boolean cleanFetch = s.consecutiveFailures() == 0
+                && s.consecutiveEmpty() == 0
+                && s.lastDeviceCount() > 0
+                && isFreshAndNotDropped(s);
+        if (!cleanFetch) {
+            return s;
+        }
+        ProviderStatus withClear = s.incrementClear();
+        if (withClear.consecutiveClear() >= properties.getRecovery().getClearFetches()) {
+            Duration downtime = Duration.between(s.degradedSince(), now);
+            AlertKind previous = s.degradedReason();
+            ProviderStatus recovered = withClear.markRecovered();
+            dispatchRecovery(tenant, previous, s.degradedSince(), now, downtime, withClear);
+            return recovered;
+        }
+        return withClear;
+    }
+
+    private boolean isFreshAndNotDropped(ProviderStatus s) {
+        if (s.baselineDeviceCount() >= properties.getDrop().getMinBaseline()) {
+            int percent = (int) Math.round(100.0 * s.lastDeviceCount() / s.baselineDeviceCount());
+            if (percent < properties.getDrop().getThresholdPercent()) return false;
+        }
+        int staleCount = s.lastDeviceCount() - s.lastFreshCount();
+        int stalePercent = (int) Math.round(100.0 * staleCount / s.lastDeviceCount());
+        return stalePercent < properties.getStale().getDegradedPercent();
+    }
+
+    private void dispatchRecovery(String tenant, AlertKind previous, Instant since,
+                                   Instant recoveredAt, Duration downtime, ProviderStatus s) {
+        String subject = "[GPS RECOVERY] " + tenant + " — восстановлен (downtime "
+                + humanDuration(downtime) + ")";
+        String body = "GPS provider " + tenant + " recovered.\n"
+                + "Previous reason: " + previous + "\n"
+                + "Downtime: " + humanDuration(downtime) + "\n"
+                + "Now: " + s.lastDeviceCount() + " devices\n";
+        log.info("[GPS_ALERT] {} transition DEGRADED->OK previous={} downtime={}",
+                tenant, previous, humanDuration(downtime));
+        emailService.sendGpsAlert(properties.recipientList(), tenant, AlertKind.RECOVERY, subject, body)
+                .onErrorResume(err -> {
+                    log.error("[GPS_ALERT] recovery dispatch failed for {}: {}", tenant, err.toString());
+                    return reactor.core.publisher.Mono.empty();
+                })
+                .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+                .subscribe();
+    }
+
+    private String humanDuration(Duration d) {
+        long h = d.toHours();
+        long m = d.toMinutesPart();
+        long sec = d.toSecondsPart();
+        StringBuilder sb = new StringBuilder();
+        if (h > 0) sb.append(h).append("ч ");
+        if (m > 0) sb.append(m).append("м ");
+        sb.append(sec).append("с");
+        return sb.toString();
     }
 }
