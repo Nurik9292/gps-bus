@@ -22,6 +22,7 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
 
     private static final String SELECT_COLUMNS = String.join(", ",
             "id", "name", "name_tm", "is_active", "display_order",
+            "latitude", "longitude",
             "version", "created_at", "updated_at"
     );
 
@@ -53,6 +54,8 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
         columns.put("name_tm", entity.getNameTm());
         columns.put("is_active", entity.getIsActive());
         columns.put("display_order", entity.getDisplayOrder());
+        columns.put("latitude", entity.getLatitude());
+        columns.put("longitude", entity.getLongitude());
         columns.put("version", entity.getVersion());
         columns.put("created_at", entity.getCreatedAt());
         columns.put("updated_at", entity.getUpdatedAt());
@@ -66,6 +69,8 @@ public abstract class CityBaseRepository extends BaseR2dbcRepository<City, CityI
                 .nameTm(row.get("name_tm", String.class))
                 .isActive(row.get("is_active", Boolean.class))
                 .displayOrder(row.get("display_order", Integer.class))
+                .latitude(row.get("latitude", Double.class))
+                .longitude(row.get("longitude", Double.class))
                 .createdAt(row.get("created_at", LocalDateTime.class))
                 .updatedAt(row.get("updated_at", LocalDateTime.class))
                 .version(row.get("version", Long.class))

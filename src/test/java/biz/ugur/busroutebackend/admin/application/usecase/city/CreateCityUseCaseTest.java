@@ -39,7 +39,7 @@ class CreateCityUseCaseTest {
 
     @Test
     void createsCityWhenNameIsUnique() {
-        CreateCity create = new CreateCity("Balkanabat", "Balkanabat", true, 3);
+        CreateCity create = new CreateCity("Balkanabat", "Balkanabat", true, 3, null, null);
 
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
@@ -61,7 +61,7 @@ class CreateCityUseCaseTest {
 
     @Test
     void errorsWhenCityAlreadyExists() {
-        CreateCity create = new CreateCity("Ashgabat", "Aşgabat", true, 0);
+        CreateCity create = new CreateCity("Ashgabat", "Aşgabat", true, 0, null, null);
 
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))

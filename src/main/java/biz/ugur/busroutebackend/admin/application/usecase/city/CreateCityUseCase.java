@@ -45,7 +45,13 @@ public class CreateCityUseCase extends BaseUseCase<Mono<CreateCity>, CityResult>
                             return Mono.error(new IllegalArgumentException("City already exists: " + create.name()));
                         }
 
-                        return cityRepository.save(City.create(create.name(), create.nameTm(), create.isActive(), create.displayOrder()));
+                        return cityRepository.save(City.create(
+                                create.name(),
+                                create.nameTm(),
+                                create.isActive(),
+                                create.displayOrder(),
+                                create.latitude(),
+                                create.longitude()));
                     })
                     .map(CityResult::fromDomain)
                     .doOnSuccess(response -> log.info("City created successfully: {}", response.name()))

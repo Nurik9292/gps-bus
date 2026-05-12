@@ -20,16 +20,28 @@ public class City extends AggregateRoot<City, CityId> {
     private final String nameTm;
     private final Boolean isActive;
     private final Integer displayOrder;
+    private final Double latitude;
+    private final Double longitude;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long version;
 
     public static City create(String name, String nameTm, Integer displayOrder) {
-        return create(name, nameTm, true, displayOrder);
+        return create(name, nameTm, true, displayOrder, null, null);
     }
 
     public static City create(String name, String nameTm, Boolean isActive, Integer displayOrder) {
+        return create(name, nameTm, isActive, displayOrder, null, null);
+    }
+
+    public static City create(String name,
+                               String nameTm,
+                               Boolean isActive,
+                               Integer displayOrder,
+                               Double latitude,
+                               Double longitude) {
         String validatedName = validateNameStatic(name);
+        validateCoordinates(latitude, longitude);
 
         return builder()
                 .id(CityId.generate())
@@ -37,15 +49,28 @@ public class City extends AggregateRoot<City, CityId> {
                 .nameTm(nameTm != null ? nameTm.trim() : null)
                 .displayOrder(displayOrder != null ? displayOrder : 0)
                 .isActive(isActive != null ? isActive : true)
+                .latitude(latitude)
+                .longitude(longitude)
                 .build();
     }
 
 
 
     public City updateCity(String name, String nameTm, Integer displayOrder) {
+        return updateCity(name, nameTm, displayOrder, this.latitude, this.longitude, false);
+    }
+
+    public City updateCity(String name,
+                            String nameTm,
+                            Integer displayOrder,
+                            Double latitude,
+                            Double longitude,
+                            boolean coordsProvided) {
         String newName = this.name;
         String newNameTm = this.nameTm;
         Integer newDisplayOrder = this.displayOrder;
+        Double newLatitude = this.latitude;
+        Double newLongitude = this.longitude;
         boolean changed = false;
 
         if (name != null && !name.trim().isEmpty()) {
@@ -60,6 +85,12 @@ public class City extends AggregateRoot<City, CityId> {
             newDisplayOrder = displayOrder;
             changed = true;
         }
+        if (coordsProvided) {
+            validateCoordinates(latitude, longitude);
+            newLatitude = latitude;
+            newLongitude = longitude;
+            changed = true;
+        }
 
         if (!changed) {
             return this;
@@ -69,6 +100,8 @@ public class City extends AggregateRoot<City, CityId> {
                 .name(newName)
                 .nameTm(newNameTm)
                 .displayOrder(newDisplayOrder)
+                .latitude(newLatitude)
+                .longitude(newLongitude)
                 .build();
     }
 
@@ -141,5 +174,23 @@ public class City extends AggregateRoot<City, CityId> {
             throw new IllegalArgumentException("City name cannot be null or empty");
         }
         return name.trim();
+    }
+
+    private static void validateCoordinates(Double latitude, Double longitude) {
+        if (latitude == null && longitude == null) {
+            return;
+        }
+        if (latitude == null || longitude == null) {
+            throw new IllegalArgumentException(
+                    "City latitude and longitude must be provided together");
+        }
+        if (latitude < -90 || latitude > 90) {
+            throw new IllegalArgumentException(
+                    "City latitude out of range [-90, 90]: " + latitude);
+        }
+        if (longitude < -180 || longitude > 180) {
+            throw new IllegalArgumentException(
+                    "City longitude out of range [-180, 180]: " + longitude);
+        }
     }
 }

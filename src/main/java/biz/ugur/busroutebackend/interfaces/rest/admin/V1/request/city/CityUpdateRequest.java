@@ -2,6 +2,8 @@ package biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.city;
 
 import biz.ugur.busroutebackend.admin.application.dto.city.CityUpdate;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -20,12 +22,24 @@ public record CityUpdateRequest(
         Boolean isActive,
 
         @JsonProperty("display_order")
-        Integer displayOrder
+        Integer displayOrder,
+
+        @DecimalMin(value = "-90.0",  message = "latitude must be >= -90")
+        @DecimalMax(value = "90.0",   message = "latitude must be <= 90")
+        @JsonProperty("latitude")
+        Double latitude,
+
+        @DecimalMin(value = "-180.0", message = "longitude must be >= -180")
+        @DecimalMax(value = "180.0",  message = "longitude must be <= 180")
+        @JsonProperty("longitude")
+        Double longitude
 
 ) {
 
     public CityUpdate toCommand(String id) {
-        return new CityUpdate(id, name, nameTm, isActive, displayOrder);
+        boolean coordsProvided = latitude != null || longitude != null;
+        return new CityUpdate(id, name, nameTm, isActive, displayOrder,
+                latitude, longitude, coordsProvided);
     }
 
 }

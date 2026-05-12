@@ -42,7 +42,7 @@ class UpdateCityUseCaseTest {
     @Test
     void updatesNameAndDisplayOrderWhenNameUnique() {
         City existing = City.create("Mary", "Mary", 1);
-        CityUpdate update = new CityUpdate(existing.getId().getValue(), "Dashoguz", "Daşoguz", null, 2);
+        CityUpdate update = new CityUpdate(existing.getId().getValue(), "Dashoguz", "Daşoguz", null, 2, null, null, false);
 
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
@@ -65,7 +65,7 @@ class UpdateCityUseCaseTest {
     @Test
     void errorsWhenRenameCollidesWithExistingCity() {
         City existing = City.create("Mary", "Mary", 1);
-        CityUpdate update = new CityUpdate(existing.getId().getValue(), "Ashgabat", "Aşgabat", null, 0);
+        CityUpdate update = new CityUpdate(existing.getId().getValue(), "Ashgabat", "Aşgabat", null, 0, null, null, false);
 
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
@@ -86,7 +86,7 @@ class UpdateCityUseCaseTest {
     @Test
     void deactivatesCityWhenIsActiveFalse() {
         City existing = City.create("Mary", "Mary", 1);
-        CityUpdate update = new CityUpdate(existing.getId().getValue(), "Mary", "Mary", false, 1);
+        CityUpdate update = new CityUpdate(existing.getId().getValue(), "Mary", "Mary", false, 1, null, null, false);
 
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
@@ -102,7 +102,7 @@ class UpdateCityUseCaseTest {
 
     @Test
     void errorsWhenCityNotFound() {
-        CityUpdate update = new CityUpdate(CityId.generate().getValue(), "X", "X", null, 0);
+        CityUpdate update = new CityUpdate(CityId.generate().getValue(), "X", "X", null, 0, null, null, false);
 
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
