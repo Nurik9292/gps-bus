@@ -91,6 +91,12 @@ app:
     recovery:
       clear-fetches: ${GPS_ALERT_RECOVERY_CLEAR:3}
 
+  off-route-alerts:
+    enabled: ${OFF_ROUTE_ALERT_ENABLED:false}
+    recipients: ${OFF_ROUTE_ALERT_RECIPIENTS:${GPS_ALERT_RECIPIENTS:}}
+    end-of-shift-buffer-minutes: ${OFF_ROUTE_ALERT_END_BUFFER_MIN:15}
+    min-on-route-seconds: ${OFF_ROUTE_ALERT_MIN_ON_ROUTE_SEC:60}
+
   scheduling:
     enabled: true
 
