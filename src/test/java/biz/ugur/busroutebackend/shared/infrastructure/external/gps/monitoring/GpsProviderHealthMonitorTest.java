@@ -76,4 +76,21 @@ class GpsProviderHealthMonitorTest {
         monitor.recordError("TUGDK:BALKAN", new RuntimeException("boom"));
         verify(emailService, never()).sendGpsAlert(any(), any(), any(), any(), any());
     }
+
+    @Test
+    void threeConsecutiveEmptyTriggerEmptyAlert() {
+        monitor.recordFetch("TUGDK:ASHGABAT", new FetchOutcome.Empty());
+        monitor.recordFetch("TUGDK:ASHGABAT", new FetchOutcome.Empty());
+        verify(emailService, never()).sendGpsAlert(any(), any(), any(), any(), any());
+
+        monitor.recordFetch("TUGDK:ASHGABAT", new FetchOutcome.Empty());
+
+        ArgumentCaptor<AlertKind> kindCap = ArgumentCaptor.forClass(AlertKind.class);
+        verify(emailService).sendGpsAlert(
+                eq(List.of("ops@example.com")),
+                eq("TUGDK:ASHGABAT"),
+                kindCap.capture(),
+                anyString(), anyString());
+        org.junit.jupiter.api.Assertions.assertEquals(AlertKind.EMPTY, kindCap.getValue());
+    }
 }

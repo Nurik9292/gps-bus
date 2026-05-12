@@ -51,17 +51,28 @@ public class GpsProviderHealthMonitor {
     }
 
     private ProviderStatus evaluateTransition(String tenant, ProviderStatus s, Instant now) {
-        if (s.state() == ProviderStatus.State.OK
-                && s.consecutiveFailures() >= properties.getHttpError().getConsecutiveFailures()) {
+        if (s.state() != ProviderStatus.State.OK) {
+            return s;
+        }
+        if (s.consecutiveFailures() >= properties.getHttpError().getConsecutiveFailures()) {
             ProviderStatus degraded = s.markDegraded(AlertKind.HTTP_ERROR, now);
-            dispatch(tenant, AlertKind.HTTP_ERROR, "Подряд ошибок: " + s.consecutiveFailures()
-                    + ". Последняя: " + (s.lastError() == null ? "n/a" : s.lastError().toString()), now);
+            dispatch(tenant, AlertKind.HTTP_ERROR,
+                    "Подряд ошибок: " + s.consecutiveFailures()
+                            + ". Последняя: " + (s.lastError() == null ? "n/a" : s.lastError().toString()),
+                    now, null);
+            return degraded;
+        }
+        if (s.consecutiveEmpty() >= properties.getEmpty().getConsecutiveEmpty()) {
+            ProviderStatus degraded = s.markDegraded(AlertKind.EMPTY, now);
+            dispatch(tenant, AlertKind.EMPTY,
+                    "Подряд пустых ответов: " + s.consecutiveEmpty(),
+                    now, null);
             return degraded;
         }
         return s;
     }
 
-    private void dispatch(String tenant, AlertKind kind, String details, Instant since) {
+    private void dispatch(String tenant, AlertKind kind, String details, Instant since, Object unused) {
         String subject = "[GPS ALERT] " + tenant + " — " + kindRu(kind) + " (since " + since.toString().substring(11, 16) + ")";
         String body = "GPS provider " + tenant + " — " + kind + ".\nDetails: " + details + "\n";
         log.warn("[GPS_ALERT] {} transition OK->DEGRADED reason={} since={}", tenant, kind, since);
