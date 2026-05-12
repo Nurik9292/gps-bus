@@ -89,6 +89,15 @@ public class SmtpEmailNotificationService implements EmailNotificationService {
                 "payment-failed");
     }
 
+    @Override
+    public Mono<Void> sendGpsAlert(java.util.List<String> recipients,
+                                    String tenant,
+                                    biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.AlertKind kind,
+                                    String subject,
+                                    String body) {
+        return Mono.empty();
+    }
+
     private Mono<Void> dispatch(String to, String subject, String body, String kind) {
         if (!hasRecipient(to)) {
             log.debug("[email/{}] skipped: no recipient", kind);
