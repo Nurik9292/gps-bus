@@ -93,4 +93,29 @@ class GpsProviderHealthMonitorTest {
                 anyString(), anyString());
         org.junit.jupiter.api.Assertions.assertEquals(AlertKind.EMPTY, kindCap.getValue());
     }
+
+    @Test
+    void dropBelowFiftyPercentTriggersDropAlert() {
+        monitor.recordFetch("CHINA", new FetchOutcome.Success(100, 100, T0));
+        monitor.recordFetch("CHINA", new FetchOutcome.Success(95, 95, T0));
+        monitor.recordFetch("CHINA", new FetchOutcome.Success(98, 98, T0));
+        verify(emailService, never()).sendGpsAlert(any(), any(), any(), any(), any());
+
+        monitor.recordFetch("CHINA", new FetchOutcome.Success(40, 40, T0));
+
+        ArgumentCaptor<AlertKind> kindCap = ArgumentCaptor.forClass(AlertKind.class);
+        verify(emailService).sendGpsAlert(
+                eq(List.of("ops@example.com")),
+                eq("CHINA"),
+                kindCap.capture(),
+                anyString(), anyString());
+        org.junit.jupiter.api.Assertions.assertEquals(AlertKind.DROP, kindCap.getValue());
+    }
+
+    @Test
+    void dropDoesNotTriggerWhenBaselineBelowMin() {
+        monitor.recordFetch("CHINA", new FetchOutcome.Success(5, 5, T0));
+        monitor.recordFetch("CHINA", new FetchOutcome.Success(1, 1, T0));
+        verify(emailService, never()).sendGpsAlert(any(), any(), any(), any(), any());
+    }
 }

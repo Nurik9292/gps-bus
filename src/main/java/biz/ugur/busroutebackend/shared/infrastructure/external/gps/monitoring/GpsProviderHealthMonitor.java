@@ -69,6 +69,18 @@ public class GpsProviderHealthMonitor {
                     now, null);
             return degraded;
         }
+        if (s.lastDeviceCount() > 0
+                && s.baselineDeviceCount() >= properties.getDrop().getMinBaseline()) {
+            int percent = (int) Math.round(100.0 * s.lastDeviceCount() / s.baselineDeviceCount());
+            if (percent < properties.getDrop().getThresholdPercent()) {
+                ProviderStatus degraded = s.markDegraded(AlertKind.DROP, now);
+                dispatch(tenant, AlertKind.DROP,
+                        "Сейчас " + s.lastDeviceCount() + " автобусов, норма " + s.baselineDeviceCount()
+                                + " (" + percent + "% от нормы, порог <" + properties.getDrop().getThresholdPercent() + "%)",
+                        now, null);
+                return degraded;
+            }
+        }
         return s;
     }
 
