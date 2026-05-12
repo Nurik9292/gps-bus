@@ -95,7 +95,14 @@ public class SmtpEmailNotificationService implements EmailNotificationService {
                                     biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.AlertKind kind,
                                     String subject,
                                     String body) {
-        return Mono.empty();
+        if (recipients == null || recipients.isEmpty()) {
+            log.warn("[GPS_ALERT] no recipients configured for {} {}", tenant, kind);
+            return Mono.empty();
+        }
+        String tag = "gps-alert-" + kind.name().toLowerCase();
+        return reactor.core.publisher.Flux.fromIterable(recipients)
+                .concatMap(to -> dispatch(to, subject, body, tag))
+                .then();
     }
 
     private Mono<Void> dispatch(String to, String subject, String body, String kind) {
