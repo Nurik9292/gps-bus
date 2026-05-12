@@ -74,6 +74,23 @@ app:
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
 
+  gps-alerts:
+    enabled: ${GPS_ALERT_ENABLED:false}
+    recipients: ${GPS_ALERT_RECIPIENTS:}
+    http-error:
+      consecutive-failures: ${GPS_ALERT_HTTP_FAILS:3}
+    empty:
+      consecutive-empty: ${GPS_ALERT_EMPTY_FETCHES:3}
+    drop:
+      threshold-percent: ${GPS_ALERT_DROP_THRESHOLD_PCT:50}
+      baseline-window-hours: ${GPS_ALERT_DROP_BASELINE_HOURS:24}
+      min-baseline: ${GPS_ALERT_DROP_MIN_BASELINE:10}
+    stale:
+      max-fix-age-minutes: ${GPS_ALERT_STALE_MAX_AGE_MIN:5}
+      degraded-percent: ${GPS_ALERT_STALE_PERCENT:95}
+    recovery:
+      clear-fetches: ${GPS_ALERT_RECOVERY_CLEAR:3}
+
   scheduling:
     enabled: true
 
