@@ -5,5 +5,6 @@ public enum AlertKind {
     EMPTY,
     DROP,
     STALE,
-    RECOVERY
+    RECOVERY,
+    VEHICLE_OFF_ROUTE
 }
