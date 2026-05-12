@@ -6,7 +6,9 @@ public record MobileCityResult(
         String id,
         String name,
         String nameTm,
-        Integer displayOrder
+        Integer displayOrder,
+        Double latitude,
+        Double longitude
 ) {
 
     public static MobileCityResult fromDomain(City city) {
@@ -14,7 +16,9 @@ public record MobileCityResult(
                 city.getId().getValue(),
                 city.getName(),
                 city.getNameTm(),
-                city.getDisplayOrder()
+                city.getDisplayOrder(),
+                city.getLatitude(),
+                city.getLongitude()
         );
     }
 }

@@ -13,6 +13,8 @@ public class MobileCityResponse {
     private String name;
     private String nameTm;
     private Integer displayOrder;
+    private Double latitude;
+    private Double longitude;
 
     public static MobileCityResponse from(MobileCityResult result) {
         return MobileCityResponse.builder()
@@ -20,6 +22,8 @@ public class MobileCityResponse {
                 .name(result.name())
                 .nameTm(result.nameTm())
                 .displayOrder(result.displayOrder())
+                .latitude(result.latitude())
+                .longitude(result.longitude())
                 .build();
     }
 }
