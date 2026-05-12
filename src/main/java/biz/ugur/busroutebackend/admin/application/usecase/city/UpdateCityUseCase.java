@@ -56,7 +56,13 @@ public class UpdateCityUseCase extends BaseUseCase<Mono<CityUpdate>, CityResult>
                         return Mono.just(city);
                     })
                     .map(city -> {
-                        City updatedCity = city.updateCity(update.name(), update.nameTm(), update.displayOrder());
+                        City updatedCity = city.updateCity(
+                                update.name(),
+                                update.nameTm(),
+                                update.displayOrder(),
+                                update.latitude(),
+                                update.longitude(),
+                                update.coordsProvided());
 
                         if (update.isActive() != null) {
                             if (update.isActive()) {

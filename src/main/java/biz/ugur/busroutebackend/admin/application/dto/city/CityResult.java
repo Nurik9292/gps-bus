@@ -7,7 +7,9 @@ public record CityResult(
         String name,
         String nameTm,
         Boolean isActive,
-        Integer displayOrder
+        Integer displayOrder,
+        Double latitude,
+        Double longitude
 ) {
 
     public static CityResult fromDomain(City city) {
@@ -16,7 +18,9 @@ public record CityResult(
                 city.getName(),
                 city.getNameTm(),
                 city.getIsActive(),
-                city.getDisplayOrder()
+                city.getDisplayOrder(),
+                city.getLatitude(),
+                city.getLongitude()
         );
     }
 }

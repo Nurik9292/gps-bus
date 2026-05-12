@@ -15,6 +15,8 @@ public class CityMapper {
                 .nameTm(entity.getNameTm())
                 .isActive(entity.getIsActive())
                 .displayOrder(entity.getDisplayOrder())
+                .latitude(entity.getLatitude())
+                .longitude(entity.getLongitude())
                 .build();
 
         city.setCreatedAt(entity.getCreatedAt());
@@ -31,6 +33,8 @@ public class CityMapper {
                 .nameTm(city.getNameTm())
                 .isActive(city.getIsActive())
                 .displayOrder(city.getDisplayOrder())
+                .latitude(city.getLatitude())
+                .longitude(city.getLongitude())
                 .createdAt(city.getCreatedAt())
                 .updatedAt(city.getUpdatedAt())
                 .version(city.getVersion())

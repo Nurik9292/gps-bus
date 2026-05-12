@@ -2,6 +2,8 @@ package biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.city;
 
 import biz.ugur.busroutebackend.admin.application.dto.city.CreateCity;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -24,7 +26,18 @@ public class CityCreateRequest {
     @JsonProperty("display_order")
     private Integer displayOrder = 0;
 
+    @DecimalMin(value = "-90.0",  message = "latitude must be >= -90")
+    @DecimalMax(value = "90.0",   message = "latitude must be <= 90")
+    @JsonProperty("latitude")
+    private Double latitude;
+
+    @DecimalMin(value = "-180.0", message = "longitude must be >= -180")
+    @DecimalMax(value = "180.0",  message = "longitude must be <= 180")
+    @JsonProperty("longitude")
+    private Double longitude;
+
     public CreateCity toCommand() {
-        return new CreateCity(this.name, this.nameTm, this.isActive, this.displayOrder);
+        return new CreateCity(this.name, this.nameTm, this.isActive, this.displayOrder,
+                this.latitude, this.longitude);
     }
 }

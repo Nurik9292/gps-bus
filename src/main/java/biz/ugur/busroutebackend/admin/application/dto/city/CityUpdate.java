@@ -5,6 +5,9 @@ public record CityUpdate(
         String name,
         String nameTm,
         Boolean isActive,
-        Integer displayOrder
+        Integer displayOrder,
+        Double latitude,
+        Double longitude,
+        boolean coordsProvided
 ) {
 }

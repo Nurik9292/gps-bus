@@ -36,6 +36,12 @@ public class CityEntity {
     @Column("display_order")
     private Integer displayOrder;
 
+    @Column("latitude")
+    private Double latitude;
+
+    @Column("longitude")
+    private Double longitude;
+
     @CreatedDate
     @Column("created_at")
     private LocalDateTime createdAt;

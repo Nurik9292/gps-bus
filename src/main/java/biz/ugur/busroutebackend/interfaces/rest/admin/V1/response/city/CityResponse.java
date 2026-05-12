@@ -22,12 +22,21 @@ public class CityResponse {
     @JsonProperty("display_order")
     private Integer displayOrder;
 
-    public CityResponse(String id, String name, String nameTm, Boolean isActive, Integer displayOrder) {
+    @JsonProperty("latitude")
+    private Double latitude;
+
+    @JsonProperty("longitude")
+    private Double longitude;
+
+    public CityResponse(String id, String name, String nameTm, Boolean isActive,
+                        Integer displayOrder, Double latitude, Double longitude) {
         this.id = id;
         this.name = name;
         this.nameTm = nameTm;
         this.isActive = isActive;
         this.displayOrder = displayOrder;
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 
     public static CityResponse fromResult(CityResult result) {
@@ -36,8 +45,9 @@ public class CityResponse {
                 result.name(),
                 result.nameTm(),
                 result.isActive(),
-                result.displayOrder()
+                result.displayOrder(),
+                result.latitude(),
+                result.longitude()
         );
     }
 }
-

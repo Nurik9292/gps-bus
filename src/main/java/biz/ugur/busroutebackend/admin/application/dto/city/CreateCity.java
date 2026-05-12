@@ -4,7 +4,9 @@ public record CreateCity(
         String name,
         String nameTm,
         Boolean isActive,
-        Integer displayOrder
+        Integer displayOrder,
+        Double latitude,
+        Double longitude
 ) {
 
 }
