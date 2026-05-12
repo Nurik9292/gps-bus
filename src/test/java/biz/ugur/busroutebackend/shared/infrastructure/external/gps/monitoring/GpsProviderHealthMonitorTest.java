@@ -118,4 +118,23 @@ class GpsProviderHealthMonitorTest {
         monitor.recordFetch("CHINA", new FetchOutcome.Success(1, 1, T0));
         verify(emailService, never()).sendGpsAlert(any(), any(), any(), any(), any());
     }
+
+    @Test
+    void staleDataTriggersStaleAlert() {
+        monitor.recordFetch("TUGDK:ASHGABAT", new FetchOutcome.Success(100, 4, T0.minus(java.time.Duration.ofMinutes(10))));
+
+        ArgumentCaptor<AlertKind> kindCap = ArgumentCaptor.forClass(AlertKind.class);
+        verify(emailService).sendGpsAlert(
+                eq(List.of("ops@example.com")),
+                eq("TUGDK:ASHGABAT"),
+                kindCap.capture(),
+                anyString(), anyString());
+        org.junit.jupiter.api.Assertions.assertEquals(AlertKind.STALE, kindCap.getValue());
+    }
+
+    @Test
+    void freshDataDoesNotTriggerStale() {
+        monitor.recordFetch("TUGDK:ASHGABAT", new FetchOutcome.Success(100, 100, T0));
+        verify(emailService, never()).sendGpsAlert(any(), any(), any(), any(), any());
+    }
 }

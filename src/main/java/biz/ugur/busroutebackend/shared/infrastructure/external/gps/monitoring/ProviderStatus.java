@@ -11,6 +11,7 @@ public record ProviderStatus(
         int consecutiveEmpty,
         int consecutiveClear,
         int lastDeviceCount,
+        int lastFreshCount,
         int baselineDeviceCount,
         Instant baselineSetAt,
         Instant lastSuccessfulFetchAt,
@@ -23,7 +24,7 @@ public record ProviderStatus(
     public static ProviderStatus initial() {
         return new ProviderStatus(State.OK, null, null,
                 0, 0, 0,
-                0, 0, null,
+                0, 0, 0, null,
                 null, null, null);
     }
 
@@ -49,21 +50,21 @@ public record ProviderStatus(
         }
         return new ProviderStatus(state, degradedReason, degradedSince,
                 0, 0, consecutiveClear,
-                deviceCount, newBaseline, newBaselineAt,
+                deviceCount, freshCount, newBaseline, newBaselineAt,
                 fetchAt, latestFix, null);
     }
 
     public ProviderStatus recordEmpty(Instant fetchAt) {
         return new ProviderStatus(state, degradedReason, degradedSince,
                 0, consecutiveEmpty + 1, 0,
-                0, baselineDeviceCount, baselineSetAt,
+                0, 0, baselineDeviceCount, baselineSetAt,
                 lastSuccessfulFetchAt, latestFixTime, null);
     }
 
     public ProviderStatus recordError(Instant fetchAt, Throwable err) {
         return new ProviderStatus(state, degradedReason, degradedSince,
                 consecutiveFailures + 1, 0, 0,
-                lastDeviceCount, baselineDeviceCount, baselineSetAt,
+                lastDeviceCount, lastFreshCount, baselineDeviceCount, baselineSetAt,
                 lastSuccessfulFetchAt, latestFixTime, err);
     }
 
@@ -74,21 +75,21 @@ public record ProviderStatus(
     public ProviderStatus incrementClear() {
         return new ProviderStatus(state, degradedReason, degradedSince,
                 consecutiveFailures, consecutiveEmpty, consecutiveClear + 1,
-                lastDeviceCount, baselineDeviceCount, baselineSetAt,
+                lastDeviceCount, lastFreshCount, baselineDeviceCount, baselineSetAt,
                 lastSuccessfulFetchAt, latestFixTime, lastError);
     }
 
     public ProviderStatus markDegraded(AlertKind reason, Instant since) {
         return new ProviderStatus(State.DEGRADED, reason, since,
                 consecutiveFailures, consecutiveEmpty, 0,
-                lastDeviceCount, baselineDeviceCount, baselineSetAt,
+                lastDeviceCount, lastFreshCount, baselineDeviceCount, baselineSetAt,
                 lastSuccessfulFetchAt, latestFixTime, lastError);
     }
 
     public ProviderStatus markRecovered() {
         return new ProviderStatus(State.OK, null, null,
                 0, 0, 0,
-                lastDeviceCount, baselineDeviceCount, baselineSetAt,
+                lastDeviceCount, lastFreshCount, baselineDeviceCount, baselineSetAt,
                 lastSuccessfulFetchAt, latestFixTime, null);
     }
 }

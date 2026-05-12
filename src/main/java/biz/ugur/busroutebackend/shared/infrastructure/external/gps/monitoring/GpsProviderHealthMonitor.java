@@ -81,6 +81,18 @@ public class GpsProviderHealthMonitor {
                 return degraded;
             }
         }
+        if (s.lastDeviceCount() > 0) {
+            int staleCount = s.lastDeviceCount() - s.lastFreshCount();
+            int stalePercent = (int) Math.round(100.0 * staleCount / s.lastDeviceCount());
+            if (stalePercent >= properties.getStale().getDegradedPercent()) {
+                ProviderStatus degraded = s.markDegraded(AlertKind.STALE, now);
+                dispatch(tenant, AlertKind.STALE,
+                        "Всего " + s.lastDeviceCount() + ", старше " + properties.getStale().getMaxFixAgeMinutes()
+                                + " мин: " + staleCount + " (" + stalePercent + "%)",
+                        now, null);
+                return degraded;
+            }
+        }
         return s;
     }
 
