@@ -82,10 +82,10 @@ public class TugdkTenantClient {
                                 positions.size(), countFresh(positions), latestFixTime(positions)));
                     }
                 }))
-                .doOnError(err -> healthMonitor.ifPresent(m ->
-                        m.recordError("TUGDK:" + tenantId, err)))
                 .timeout(commonProperties.getTimeout().getRequest())
                 .retryWhen(retrySpec())
+                .doOnError(err -> healthMonitor.ifPresent(m ->
+                        m.recordError("TUGDK:" + tenantId, err)))
                 .onErrorResume(this::handleError);
     }
 

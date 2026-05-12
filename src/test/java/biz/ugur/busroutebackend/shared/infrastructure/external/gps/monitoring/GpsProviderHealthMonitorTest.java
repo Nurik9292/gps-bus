@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring;
 
 import biz.ugur.busroutebackend.shared.infrastructure.email.EmailNotificationService;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -153,6 +154,21 @@ class GpsProviderHealthMonitorTest {
 
         ArgumentCaptor<AlertKind> kindCap = ArgumentCaptor.forClass(AlertKind.class);
         verify(emailService, times(2)).sendGpsAlert(any(), any(), kindCap.capture(), any(), any());
-        org.junit.jupiter.api.Assertions.assertEquals(AlertKind.RECOVERY, kindCap.getAllValues().get(1));
+        Assertions.assertEquals(AlertKind.RECOVERY, kindCap.getAllValues().get(1));
+    }
+
+    @Test
+    void httpErrorAlertBodyContainsTenantFromTemplate() {
+        monitor.recordError("X", new RuntimeException("conn refused"));
+        monitor.recordError("X", new RuntimeException("conn refused"));
+        monitor.recordError("X", new RuntimeException("conn refused"));
+
+        ArgumentCaptor<String> bodyCap = ArgumentCaptor.forClass(String.class);
+        verify(emailService, times(1)).sendGpsAlert(
+                anyList(), anyString(), any(), anyString(), bodyCap.capture());
+
+        String body = bodyCap.getValue();
+        Assertions.assertFalse(body.isBlank(), "body must not be blank");
+        Assertions.assertTrue(body.contains("X"), "body must contain substituted tenant value");
     }
 }

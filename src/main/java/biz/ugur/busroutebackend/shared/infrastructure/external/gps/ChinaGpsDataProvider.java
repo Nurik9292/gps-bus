@@ -99,9 +99,9 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
                                 positions.size(), positions.size(), Instant.now()));
                     }
                 }))
-                .doOnError(err -> healthMonitor.ifPresent(m -> m.recordError("CHINA", err)))
                 .timeout(properties.getTimeout().getRequest())
                 .retryWhen(createRetrySpec())
+                .doOnError(err -> healthMonitor.ifPresent(m -> m.recordError("CHINA", err)))
                 .doOnSuccess(positions -> {
                     logSuccess(positions.size(), deviceIds.size());
                     logMissingDevices(requestedDeviceIds, positions);
