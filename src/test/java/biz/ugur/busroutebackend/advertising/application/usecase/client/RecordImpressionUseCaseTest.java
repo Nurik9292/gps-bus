@@ -49,8 +49,8 @@ class RecordImpressionUseCaseTest {
     void setUp() {
         placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Title", "Content", null, "https://example.com",
-                "Click", null, List.of("home"), 0);
+                null, "Title", "Content", null, "https://example.com",
+                "Click", null, List.of("home"), null, 0);
     }
 
     @Test

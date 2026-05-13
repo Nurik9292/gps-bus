@@ -1,13 +1,16 @@
 package biz.ugur.busroutebackend.advertising.domain.model;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
+import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementApprovedEvent;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementCreatedEvent;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementRejectedEvent;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementStatusChangedEvent;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.PlacementStateTransitionException;
+import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementTarget;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementWindow;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.TariffId;
 import biz.ugur.busroutebackend.business.domain.valueobjects.BusinessId;
@@ -26,6 +29,7 @@ class AdPlacementTest {
                 BusinessId.generate(),
                 TariffId.generate(),
                 PlacementType.BANNER,
+                null,
                 "Promo",
                 "content",
                 "https://img",
@@ -33,6 +37,7 @@ class AdPlacementTest {
                 "Click",
                 null,
                 List.of("home"),
+                null,
                 1
         );
     }
@@ -58,7 +63,7 @@ class AdPlacementTest {
         void trimsTitleAndDefaultsWindowToUnscheduled() {
             AdPlacement placement = AdPlacement.create(
                     BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                    "  Promo  ", null, null, null, null, null, null, null);
+                    null, "  Promo  ", null, null, null, null, null, null, null, null);
 
             assertThat(placement.getTitle()).isEqualTo("Promo");
             assertThat(placement.getWindow()).isEqualTo(PlacementWindow.unscheduled());
@@ -69,7 +74,7 @@ class AdPlacementTest {
         void rejectsNullBusinessId() {
             assertThatThrownBy(() -> AdPlacement.create(
                     null, TariffId.generate(), PlacementType.BANNER,
-                    "t", null, null, null, null, null, null, null))
+                    null, "t", null, null, null, null, null, null, null, null))
                     .isInstanceOf(AdvertisingValidationException.class);
         }
 
@@ -77,8 +82,54 @@ class AdPlacementTest {
         void rejectsBlankTitle() {
             assertThatThrownBy(() -> AdPlacement.create(
                     BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                    "   ", null, null, null, null, null, null, null))
+                    null, "   ", null, null, null, null, null, null, null, null))
                     .isInstanceOf(AdvertisingValidationException.class);
+        }
+
+        @Test
+        void kindDefaultsToCommercialWhenNotSpecified() {
+            AdPlacement placement = newDraft();
+            assertThat(placement.getKind()).isEqualTo(PlacementKind.COMMERCIAL);
+        }
+
+        @Test
+        void kindCanBeSetExplicitly() {
+            AdPlacement placement = AdPlacement.create(
+                    BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
+                    PlacementKind.EDITORIAL, "Editorial promo", null, null, null, null,
+                    null, null, null, null);
+            assertThat(placement.getKind()).isEqualTo(PlacementKind.EDITORIAL);
+        }
+
+        @Test
+        void targetsDefaultToEmptyImmutableList() {
+            AdPlacement placement = newDraft();
+            assertThat(placement.getTargets()).isEmpty();
+            assertThatThrownBy(() -> placement.getTargets().add(PlacementTarget.general(TargetType.HOME)))
+                    .isInstanceOf(UnsupportedOperationException.class);
+        }
+
+        @Test
+        void acceptsMixOfGeneralAndSpecificTargets() {
+            AdPlacement placement = AdPlacement.create(
+                    BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
+                    PlacementKind.COMMERCIAL, "Promo", null, null, null, null, null, null,
+                    List.of(
+                            PlacementTarget.general(TargetType.HOME),
+                            PlacementTarget.specific(TargetType.ROUTE, "route-14")
+                    ), null);
+            assertThat(placement.getTargets()).hasSize(2);
+            assertThat(placement.getTargets().get(0).getTargetType()).isEqualTo(TargetType.HOME);
+            assertThat(placement.getTargets().get(1).getTargetId()).isEqualTo("route-14");
+        }
+
+        @Test
+        void createdEventCarriesKind() {
+            AdPlacement placement = AdPlacement.create(
+                    BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
+                    PlacementKind.EDITORIAL, "Editorial", null, null, null, null, null, null, null, null);
+            AdPlacementCreatedEvent event = (AdPlacementCreatedEvent) placement.getDomainEvents().get(0);
+            assertThat(event.getKind()).isEqualTo(PlacementKind.EDITORIAL);
         }
     }
 

@@ -21,6 +21,7 @@ public class AdPlacementEntity {
     @Column("business_id")               private String businessId;
     @Column("tariff_id")                 private String tariffId;
     @Column("placement_type")            private String placementType;
+    @Column("kind")                      private String kind;
     @Column("status")                    private String status;
     @Column("title")                     private String title;
     @Column("content")                   private String content;

@@ -54,7 +54,7 @@ class CreateAdPlacementUseCaseTest {
         CreateAdPlacementCommand cmd = mock(CreateAdPlacementCommand.class);
         AdPlacement placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Title", "content", null, null, null, null, List.of("home"), 0);
+                null, "Title", "content", null, null, null, null, List.of("home"), null, 0);
         AdPlacementResponse response = mock(AdPlacementResponse.class);
         when(response.id()).thenReturn(placement.getId().getValue());
         when(response.businessId()).thenReturn(placement.getBusinessId().getValue());

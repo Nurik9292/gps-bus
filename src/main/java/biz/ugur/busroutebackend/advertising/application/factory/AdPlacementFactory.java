@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.advertising.application.factory;
 
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.processor.AdPlacementImageProcessor;
+import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdTariffNotFoundException;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
@@ -9,6 +10,8 @@ import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdTariffRepository;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementWindow;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.TariffId;
+
+import java.util.List;
 import biz.ugur.busroutebackend.business.domain.exceptions.BusinessNotFoundException;
 import biz.ugur.busroutebackend.business.domain.repository.BusinessRepository;
 import biz.ugur.busroutebackend.business.domain.valueobjects.BusinessId;
@@ -51,11 +54,13 @@ public class AdPlacementFactory {
                             .defaultIfEmpty("")
                             .map(storedImageUrl -> AdPlacement.create(
                                     businessId, tariffId, type,
+                                    PlacementKind.COMMERCIAL,
                                     cmd.title(), cmd.content(),
                                     storedImageUrl.isEmpty() ? null : storedImageUrl,
                                     cmd.targetUrl(), cmd.ctaText(),
                                     PlacementWindow.of(cmd.startsAt(), cmd.endsAt()),
                                     cmd.displayContexts(),
+                                    List.of(),
                                     cmd.displayOrder()));
                 });
     }

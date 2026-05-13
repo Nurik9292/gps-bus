@@ -17,7 +17,7 @@ import java.util.function.BiFunction;
 public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPlacement, PlacementId> {
 
     protected static final String SELECT_COLUMNS = String.join(", ",
-            "id", "business_id", "tariff_id", "placement_type", "status",
+            "id", "business_id", "tariff_id", "placement_type", "kind", "status",
             "title", "content", "image_url", "target_url", "cta_text",
             "starts_at", "ends_at",
             "impressions_count", "clicks_count",
@@ -49,6 +49,7 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
         columns.put("business_id", e.getBusinessId());
         columns.put("tariff_id", e.getTariffId());
         columns.put("placement_type", e.getPlacementType());
+        columns.put("kind", e.getKind());
         columns.put("status", e.getStatus());
         columns.put("title", e.getTitle());
         columns.put("content", e.getContent());
@@ -78,6 +79,7 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
                 .businessId(row.get("business_id", String.class))
                 .tariffId(row.get("tariff_id", String.class))
                 .placementType(row.get("placement_type", String.class))
+                .kind(row.get("kind", String.class))
                 .status(row.get("status", String.class))
                 .title(row.get("title", String.class))
                 .content(row.get("content", String.class))

@@ -20,8 +20,8 @@ class AdPlacementExtendedTest {
     private AdPlacement newDraft() {
         return AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Promo", "content", "https://img", "https://target", "Click",
-                null, List.of("home"), 1);
+                null, "Promo", "content", "https://img", "https://target", "Click",
+                null, List.of("home"), null, 1);
     }
 
     private AdPlacement approvedDraft() {
@@ -161,10 +161,10 @@ class AdPlacementExtendedTest {
         void restoreRebuildsWithDefaultsForNullCounters() {
             AdPlacement restored = AdPlacement.restore(
                     PlacementId.generate(), BusinessId.generate(), TariffId.generate(),
-                    PlacementType.BANNER, PlacementStatus.ACTIVE,
+                    PlacementType.BANNER, null, PlacementStatus.ACTIVE,
                     "Title", "content", null, null, null,
                     PlacementWindow.unscheduled(), null, null,
-                    null, 0, null, null, null, null, null, null, null, null);
+                    null, null, 0, null, null, null, null, null, null, null, null);
             assertEquals(0L, restored.getImpressionsCount());
             assertEquals(0L, restored.getClicksCount());
             assertEquals(0L, restored.getVersion());
@@ -175,10 +175,10 @@ class AdPlacementExtendedTest {
         void restorePreservesVersion() {
             AdPlacement restored = AdPlacement.restore(
                     PlacementId.generate(), BusinessId.generate(), TariffId.generate(),
-                    PlacementType.BANNER, PlacementStatus.ACTIVE,
+                    PlacementType.BANNER, null, PlacementStatus.ACTIVE,
                     "Title", null, null, null, null,
                     PlacementWindow.unscheduled(), 10L, 3L,
-                    null, 0, null, null, null, null, null, null, null, 7L);
+                    null, null, 0, null, null, null, null, null, null, null, 7L);
             assertEquals(7L, restored.getVersion());
             assertEquals(10L, restored.getImpressionsCount());
             assertEquals(3L, restored.getClicksCount());

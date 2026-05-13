@@ -50,7 +50,7 @@ class GetActiveAdsUseCaseTest {
     void returnsAllAdsWhenContextBlank() {
         AdPlacement ad = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Title", "content", null, null, null, null, List.of("home"), 0);
+                null, "Title", "content", null, null, null, null, List.of("home"), null, 0);
         AdPlacementResponse response = mock(AdPlacementResponse.class);
 
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
@@ -82,10 +82,10 @@ class GetActiveAdsUseCaseTest {
     void filtersByContextKeyword() {
         AdPlacement adHome = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Home ad", "", null, null, null, null, List.of("home"), 0);
+                null, "Home ad", "", null, null, null, null, List.of("home"), null, 0);
         AdPlacement adMap = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Map ad", "", null, null, null, null, List.of("map"), 0);
+                null, "Map ad", "", null, null, null, null, List.of("map"), null, 0);
         AdPlacementResponse response = mock(AdPlacementResponse.class);
 
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));

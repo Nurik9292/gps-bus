@@ -51,7 +51,7 @@ class GetAdPlacementsPaginatedUseCaseTest {
     void returnsAllPlacementsWhenNoFilter() {
         AdPlacement placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Title", "content", null, null, null, null, List.of("home"), 0);
+                null, "Title", "content", null, null, null, null, List.of("home"), null, 0);
         AdPlacementResponse response = mock(AdPlacementResponse.class);
         when(response.status()).thenReturn("DRAFT");
 
@@ -74,7 +74,7 @@ class GetAdPlacementsPaginatedUseCaseTest {
     void filtersByBusinessId() {
         AdPlacement placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Title", "content", null, null, null, null, List.of("home"), 0);
+                null, "Title", "content", null, null, null, null, List.of("home"), null, 0);
         AdPlacementResponse response = mock(AdPlacementResponse.class);
         when(response.status()).thenReturn("ACTIVE");
 
@@ -99,7 +99,7 @@ class GetAdPlacementsPaginatedUseCaseTest {
     void filtersByStatus() {
         AdPlacement placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Title", "content", null, null, null, null, List.of("home"), 0);
+                null, "Title", "content", null, null, null, null, List.of("home"), null, 0);
         AdPlacementResponse response = mock(AdPlacementResponse.class);
         when(response.status()).thenReturn("DRAFT");
 

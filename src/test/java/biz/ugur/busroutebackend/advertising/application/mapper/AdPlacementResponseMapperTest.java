@@ -20,8 +20,8 @@ class AdPlacementResponseMapperTest {
     void toResponseCopiesPlacementFields() {
         AdPlacement placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "My Ad", "Body", "/img.jpg", "https://x.tm", "Click",
-                null, List.of("home"), 1);
+                null, "My Ad", "Body", "/img.jpg", "https://x.tm", "Click",
+                null, List.of("home"), null, 1);
 
         StepVerifier.create(mapper.toResponse(placement))
                 .assertNext(response -> {

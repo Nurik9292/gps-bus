@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.advertising.domain.model;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementApprovedEvent;
@@ -9,6 +10,7 @@ import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementStatusChang
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.PlacementStateTransitionException;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
+import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementTarget;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementWindow;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.TariffId;
 import biz.ugur.busroutebackend.business.domain.valueobjects.BusinessId;
@@ -18,6 +20,8 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 
@@ -30,6 +34,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
     private final BusinessId businessId;
     private final TariffId tariffId;
     private final PlacementType placementType;
+    private final PlacementKind kind;
     private final PlacementStatus status;
 
     private final String title;
@@ -44,6 +49,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
     private final Long clicksCount;
 
     private final String displayContexts;
+    private final List<PlacementTarget> targets;
     private final Integer displayOrder;
 
     private final String rejectionReason;
@@ -59,6 +65,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
     public static AdPlacement create(BusinessId businessId,
                                       TariffId tariffId,
                                       PlacementType placementType,
+                                      PlacementKind kind,
                                       String title,
                                       String content,
                                       String imageUrl,
@@ -66,6 +73,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                       String ctaText,
                                       PlacementWindow window,
                                       List<String> displayContexts,
+                                      List<PlacementTarget> targets,
                                       Integer displayOrder) {
         if (businessId == null) throw new AdvertisingValidationException("businessId", "must not be null");
         if (tariffId == null) throw new AdvertisingValidationException("tariffId", "must not be null");
@@ -74,11 +82,15 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
             throw new AdvertisingValidationException("title", "must not be blank");
         }
 
+        PlacementKind resolvedKind = kind != null ? kind : PlacementKind.COMMERCIAL;
+        List<PlacementTarget> resolvedTargets = immutableCopy(targets);
+
         AdPlacement placement = builder()
                 .id(PlacementId.generate())
                 .businessId(businessId)
                 .tariffId(tariffId)
                 .placementType(placementType)
+                .kind(resolvedKind)
                 .status(PlacementStatus.DRAFT)
                 .title(title.trim())
                 .content(trimOrNull(content))
@@ -87,6 +99,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 .ctaText(trimOrNull(ctaText))
                 .window(window != null ? window : PlacementWindow.unscheduled())
                 .displayContexts(serializeContexts(displayContexts))
+                .targets(resolvedTargets)
                 .displayOrder(displayOrder != null ? displayOrder : 0)
                 .impressionsCount(0L)
                 .clicksCount(0L)
@@ -97,7 +110,8 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 placement.id.getValue(),
                 businessId.getValue(),
                 tariffId.getValue(),
-                placementType));
+                placementType,
+                resolvedKind));
 
         return placement;
     }
@@ -106,6 +120,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                        BusinessId businessId,
                                        TariffId tariffId,
                                        PlacementType placementType,
+                                       PlacementKind kind,
                                        PlacementStatus status,
                                        String title,
                                        String content,
@@ -116,6 +131,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                        Long impressionsCount,
                                        Long clicksCount,
                                        String displayContexts,
+                                       List<PlacementTarget> targets,
                                        Integer displayOrder,
                                        String rejectionReason,
                                        LocalDateTime approvedAt,
@@ -127,13 +143,17 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                        Long version) {
         return builder()
                 .id(id).businessId(businessId).tariffId(tariffId)
-                .placementType(placementType).status(status)
+                .placementType(placementType)
+                .kind(kind != null ? kind : PlacementKind.COMMERCIAL)
+                .status(status)
                 .title(title).content(content).imageUrl(imageUrl)
                 .targetUrl(targetUrl).ctaText(ctaText)
                 .window(window)
                 .impressionsCount(impressionsCount != null ? impressionsCount : 0L)
                 .clicksCount(clicksCount != null ? clicksCount : 0L)
-                .displayContexts(displayContexts).displayOrder(displayOrder)
+                .displayContexts(displayContexts)
+                .targets(immutableCopy(targets))
+                .displayOrder(displayOrder)
                 .rejectionReason(rejectionReason)
                 .approvedAt(approvedAt)
                 .approvedByAdminId(approvedByAdminId)
@@ -142,6 +162,10 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 .createdAt(createdAt).updatedAt(updatedAt)
                 .version(version != null ? version : 0L)
                 .build();
+    }
+
+    public AdPlacement withTargets(List<PlacementTarget> targets) {
+        return this.toBuilder().targets(immutableCopy(targets)).build();
     }
 
     public AdPlacement markAsPendingPayment() { return transition(PlacementStatus.PENDING_PAYMENT); }
@@ -230,6 +254,13 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
         if (value == null) return null;
         String t = value.trim();
         return t.isEmpty() ? null : t;
+    }
+
+    private static List<PlacementTarget> immutableCopy(List<PlacementTarget> targets) {
+        if (targets == null || targets.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return Collections.unmodifiableList(new ArrayList<>(targets));
     }
 
     @Override public PlacementId getId() { return id; }
