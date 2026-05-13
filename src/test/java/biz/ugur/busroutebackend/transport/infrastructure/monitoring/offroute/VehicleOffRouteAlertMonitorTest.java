@@ -224,6 +224,41 @@ class VehicleOffRouteAlertMonitorTest {
     }
 
     @Test
+    void cleanupRemovesRecordsOlderThanOneDay() {
+        OffRouteAlertKey oldKey = new OffRouteAlertKey("V-OLD",
+                java.time.LocalDate.ofInstant(T0, ZoneOffset.UTC).minusDays(3), ShiftType.FIRST);
+        OffRouteAlertKey freshKey = new OffRouteAlertKey("V-NEW",
+                java.time.LocalDate.ofInstant(T0, ZoneOffset.UTC), ShiftType.FIRST);
+
+        java.lang.reflect.Field f;
+        try {
+            f = VehicleOffRouteAlertMonitor.class.getDeclaredField("alerted");
+            f.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            java.util.Map<OffRouteAlertKey, Instant> map =
+                    (java.util.Map<OffRouteAlertKey, Instant>) f.get(monitor);
+            map.put(oldKey, T0.minus(Duration.ofDays(3)));
+            map.put(freshKey, T0);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        monitor.cleanupOldEntries();
+
+        try {
+            f = VehicleOffRouteAlertMonitor.class.getDeclaredField("alerted");
+            f.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            java.util.Map<OffRouteAlertKey, Instant> map =
+                    (java.util.Map<OffRouteAlertKey, Instant>) f.get(monitor);
+            org.junit.jupiter.api.Assertions.assertFalse(map.containsKey(oldKey));
+            org.junit.jupiter.api.Assertions.assertTrue(map.containsKey(freshKey));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
     void skipsSecondAlertForSameVehicleInSameShift() throws InterruptedException {
         RouteAssignment assignment = mockAssignmentForFirstShift();
         when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))

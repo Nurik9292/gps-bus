@@ -205,4 +205,21 @@ public class VehicleOffRouteAlertMonitor {
         sb.append(sec).append("с");
         return sb.toString();
     }
+
+    @org.springframework.scheduling.annotation.Scheduled(cron = "0 5 0 * * *", zone = "UTC")
+    public void cleanupOldEntries() {
+        LocalDate cutoff = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC).minusDays(1);
+        int removed = 0;
+        var it = alerted.entrySet().iterator();
+        while (it.hasNext()) {
+            var entry = it.next();
+            if (entry.getKey().date().isBefore(cutoff)) {
+                it.remove();
+                removed++;
+            }
+        }
+        if (removed > 0) {
+            log.info("[OFF_ROUTE] cleaned {} old alert records (cutoff {})", removed, cutoff);
+        }
+    }
 }
