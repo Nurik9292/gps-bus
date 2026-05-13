@@ -52,8 +52,8 @@ public class GetActiveAdsUseCase extends BaseUseCase<GetActiveAdsUseCase.Query, 
         }
 
         return ads
-                .concatMap(responseMapper::toResponse)
-                .collectList();
+                .collectList()
+                .flatMap(list -> responseMapper.toResponses(list).collectList());
     }
 
     @Override

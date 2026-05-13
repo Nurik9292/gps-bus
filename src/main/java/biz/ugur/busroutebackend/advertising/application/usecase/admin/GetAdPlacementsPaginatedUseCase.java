@@ -56,8 +56,8 @@ public class GetAdPlacementsPaginatedUseCase
         }
 
         return items
-                .concatMap(responseMapper::toResponse)
                 .collectList()
+                .flatMap(placements -> responseMapper.toResponses(placements).collectList())
                 .zipWith(total)
                 .map(tuple -> {
                     long activeCount = tuple.getT1().stream()

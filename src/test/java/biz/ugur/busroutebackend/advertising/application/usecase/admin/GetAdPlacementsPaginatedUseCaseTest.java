@@ -60,7 +60,7 @@ class GetAdPlacementsPaginatedUseCaseTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         when(placementRepository.findAll(any(Pageable.class))).thenReturn(Flux.just(placement));
         when(placementRepository.count()).thenReturn(Mono.just(1L));
-        when(responseMapper.toResponse(placement)).thenReturn(Mono.just(response));
+        when(responseMapper.toResponses(List.of(placement))).thenReturn(Flux.just(response));
 
         StepVerifier.create(useCase.execute(new GetAdPlacementsPaginatedUseCase.Query(1, 10, null, null)))
                 .assertNext(list -> {
@@ -84,7 +84,7 @@ class GetAdPlacementsPaginatedUseCaseTest {
         when(placementRepository.findByBusinessId(any(BusinessId.class), any(Pageable.class)))
                 .thenReturn(Flux.just(placement));
         when(placementRepository.countByBusinessId(any(BusinessId.class))).thenReturn(Mono.just(1L));
-        when(responseMapper.toResponse(placement)).thenReturn(Mono.just(response));
+        when(responseMapper.toResponses(List.of(placement))).thenReturn(Flux.just(response));
 
         StepVerifier.create(useCase.execute(new GetAdPlacementsPaginatedUseCase.Query(
                 1, 10, null, BusinessId.generate().getValue())))
@@ -109,7 +109,7 @@ class GetAdPlacementsPaginatedUseCaseTest {
         when(placementRepository.findByStatus(any(PlacementStatus.class), any(Pageable.class)))
                 .thenReturn(Flux.just(placement));
         when(placementRepository.count()).thenReturn(Mono.just(1L));
-        when(responseMapper.toResponse(placement)).thenReturn(Mono.just(response));
+        when(responseMapper.toResponses(List.of(placement))).thenReturn(Flux.just(response));
 
         StepVerifier.create(useCase.execute(new GetAdPlacementsPaginatedUseCase.Query(
                 1, 10, "draft", null)))

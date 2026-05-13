@@ -5,12 +5,14 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record AdPlacementResponse(
         @JsonProperty("id")                   String id,
         @JsonProperty("business_id")          String businessId,
         @JsonProperty("tariff_id")            String tariffId,
         @JsonProperty("placement_type")       String placementType,
+        @JsonProperty("kind")                 String kind,
         @JsonProperty("status")               String status,
         @JsonProperty("title")                String title,
         @JsonProperty("content")              String content,
@@ -29,6 +31,7 @@ public record AdPlacementResponse(
         @JsonProperty("impressions_count")    long impressionsCount,
         @JsonProperty("clicks_count")         long clicksCount,
         @JsonProperty("display_contexts")     String displayContexts,
+        @JsonProperty("targets")              List<PlacementTargetView> targets,
         @JsonProperty("display_order")        Integer displayOrder,
 
         @JsonProperty("rejection_reason")     String rejectionReason,
@@ -55,11 +58,15 @@ public record AdPlacementResponse(
 ) {
 
     public static AdPlacementResponse fromDomain(AdPlacement p) {
+        List<PlacementTargetView> targetViews = p.getTargets() == null
+                ? List.of()
+                : p.getTargets().stream().map(PlacementTargetView::fromDomain).toList();
         return new AdPlacementResponse(
                 p.getId().getValue(),
                 p.getBusinessId().getValue(),
                 p.getTariffId().getValue(),
                 p.getPlacementType().name(),
+                p.getKind() != null ? p.getKind().name() : null,
                 p.getStatus().name(),
                 p.getTitle(),
                 p.getContent(),
@@ -71,6 +78,7 @@ public record AdPlacementResponse(
                 p.getImpressionsCount() != null ? p.getImpressionsCount() : 0L,
                 p.getClicksCount() != null ? p.getClicksCount() : 0L,
                 p.getDisplayContexts(),
+                targetViews,
                 p.getDisplayOrder(),
                 p.getRejectionReason(),
                 p.getApprovedAt(),

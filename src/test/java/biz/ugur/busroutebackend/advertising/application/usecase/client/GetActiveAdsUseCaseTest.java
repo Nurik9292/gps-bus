@@ -58,7 +58,7 @@ class GetActiveAdsUseCaseTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         when(placementRepository.findActiveByTypeAt(any(PlacementType.class), any(LocalDateTime.class)))
                 .thenReturn(Flux.just(ad));
-        when(responseMapper.toResponse(ad)).thenReturn(Mono.just(response));
+        when(responseMapper.toResponses(List.of(ad))).thenReturn(Flux.just(response));
 
         StepVerifier.create(useCase.execute(new GetActiveAdsUseCase.Query(PlacementType.BANNER, "")))
                 .assertNext(list -> assertEquals(1, list.size()))
@@ -93,7 +93,7 @@ class GetActiveAdsUseCaseTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         when(placementRepository.findActiveByTypeAt(any(PlacementType.class), any(LocalDateTime.class)))
                 .thenReturn(Flux.just(adHome, adMap));
-        when(responseMapper.toResponse(adHome)).thenReturn(Mono.just(response));
+        when(responseMapper.toResponses(List.of(adHome))).thenReturn(Flux.just(response));
 
         StepVerifier.create(useCase.execute(new GetActiveAdsUseCase.Query(PlacementType.BANNER, "home")))
                 .assertNext(list -> assertEquals(1, list.size()))

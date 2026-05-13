@@ -1,13 +1,16 @@
 package biz.ugur.busroutebackend.advertising.application.factory;
 
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementCommand;
+import biz.ugur.busroutebackend.advertising.application.dto.PlacementTargetSpec;
 import biz.ugur.busroutebackend.advertising.application.processor.AdPlacementImageProcessor;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
+import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdTariffNotFoundException;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdTariffRepository;
+import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementTarget;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementWindow;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.TariffId;
 
@@ -37,6 +40,8 @@ public class AdPlacementFactory {
         BusinessId businessId = BusinessId.of(cmd.businessId());
         TariffId tariffId = TariffId.of(cmd.tariffId());
         PlacementType type = PlacementType.from(cmd.placementType());
+        PlacementKind kind = PlacementKind.from(cmd.kind());
+        List<PlacementTarget> targets = resolveTargets(cmd.targets());
 
         return businessRepository.existsById(businessId)
                 .flatMap(exists -> Boolean.TRUE.equals(exists)
@@ -54,14 +59,31 @@ public class AdPlacementFactory {
                             .defaultIfEmpty("")
                             .map(storedImageUrl -> AdPlacement.create(
                                     businessId, tariffId, type,
-                                    PlacementKind.COMMERCIAL,
+                                    kind,
                                     cmd.title(), cmd.content(),
                                     storedImageUrl.isEmpty() ? null : storedImageUrl,
                                     cmd.targetUrl(), cmd.ctaText(),
                                     PlacementWindow.of(cmd.startsAt(), cmd.endsAt()),
                                     cmd.displayContexts(),
-                                    List.of(),
+                                    targets,
                                     cmd.displayOrder()));
                 });
+    }
+
+    private static List<PlacementTarget> resolveTargets(List<PlacementTargetSpec> specs) {
+        if (specs == null || specs.isEmpty()) {
+            return List.of();
+        }
+        return specs.stream()
+                .map(AdPlacementFactory::toDomainTarget)
+                .toList();
+    }
+
+    private static PlacementTarget toDomainTarget(PlacementTargetSpec spec) {
+        if (spec == null) {
+            throw new AdvertisingValidationException("targets", "must not contain null entries");
+        }
+        TargetType type = TargetType.from(spec.targetType());
+        return PlacementTarget.of(type, spec.targetId());
     }
 }
