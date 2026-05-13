@@ -1,21 +1,17 @@
-Автобус {licensePlate} (route {routeNumber}) ушёл с маршрута во время смены.
+Автобус {licensePlate} (маршрут {routeNumber}) уехал с маршрута во время смены.
 
-Когда обнаружено:      {detectedAt}
-Смена:                 {shiftName} ({shiftStart}–{shiftEnd})
-До конца смены:        {minutesUntilShiftEnd} мин
-Позиция:               {latitude}, {longitude}
-Расстояние от маршрута: {distanceFromRouteMeters} м
-Был на маршруте с:     {firstOnRouteAt} (продолжительность: {onRouteDurationHuman})
-Последний раз на маршруте: {lastOnRouteAt} ({lastOnRouteAgo} назад)
+Когда обнаружено:            {detectedAt}
+Смена:                       {shiftName} ({shiftStart}–{shiftEnd})
+До конца смены:              {minutesUntilShiftEnd} мин
+Позиция:                     {latitude}, {longitude}
+Расстояние от маршрута:      {distanceFromRouteMeters} м
+На маршруте с:               {firstOnRouteAt} (всего {onRouteDurationHuman})
+В последний раз на маршруте: {lastOnRouteAt} ({lastOnRouteAgo} назад)
 
 Что это значит:
-Автобус долгое время находится дальше {thresholdMeters} м от назначенного маршрута,
-смена ещё не закончилась. Это не похоже на возврат в парк.
-
-Что проверить:
-  - Поломка/авария?
-  - Водитель не следует маршруту?
-  - GPS-устройство передаёт мусор (если позиция явно невозможная)?
+Автобус уже больше {thresholdMeters} метров от своего маршрута,
+а смена ещё не закончилась. Это не похоже на возврат в парк
+в конце смены — что-то идёт не по плану.
 
 Это первое и единственное письмо по этому автобусу в текущей смене.
 Если автобус вернётся на маршрут или уедет снова — новое письмо не придёт.
