@@ -11,6 +11,7 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePredictionState;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -73,18 +74,22 @@ public class VehicleOffRouteAlertMonitor {
         LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);
         OffRouteAlertKey key = new OffRouteAlertKey(vehicleId, today, shift);
 
-        if (alerted.containsKey(key)) {
+        if (alerted.putIfAbsent(key, now) != null) {
             return;
         }
 
         routeAssignmentRepository
                 .findActiveByVehicleAndDateAndShift(VehicleId.of(vehicleId), today, shift)
+                .switchIfEmpty(Mono.defer(() -> routeAssignmentRepository
+                        .findActiveByVehicleAndDateAndShift(VehicleId.of(vehicleId), today, ShiftType.FULL_DAY)))
                 .filter(a -> a.shouldBeActiveAt(LocalTime.ofInstant(now, ZoneOffset.UTC)))
                 .filter(a -> minutesUntilShiftEnd(shift, now) >= properties.getEndOfShiftBufferMinutes())
                 .filter(a -> hasBeenOnRouteLongEnough(state, now))
+                .switchIfEmpty(Mono.fromRunnable(() -> alerted.remove(key)).then(Mono.empty()))
                 .flatMap(a -> dispatch(vehicleId, state, latitude, longitude,
-                        distanceFromRouteMeters, shift, now, a, key))
+                        distanceFromRouteMeters, shift, now, a))
                 .onErrorResume(err -> {
+                    alerted.remove(key);
                     log.error("[OFF_ROUTE] dispatch failed for {}: {}", vehicleId, err.toString());
                     return Mono.empty();
                 })
@@ -94,9 +99,7 @@ public class VehicleOffRouteAlertMonitor {
 
     private Mono<Void> dispatch(String vehicleId, VehiclePredictionState state,
                                 double latitude, double longitude, double distanceFromRouteMeters,
-                                ShiftType shift, Instant now, RouteAssignment assignment,
-                                OffRouteAlertKey key) {
-        alerted.put(key, now);
+                                ShiftType shift, Instant now, RouteAssignment assignment) {
         return Mono.zip(
                 vehicleRepository.findById(assignment.getVehicleId())
                         .map(v -> v.getLicensePlate())
@@ -134,7 +137,9 @@ public class VehicleOffRouteAlertMonitor {
         vars.put("minutesUntilShiftEnd", String.valueOf(minutesUntilShiftEnd(shift, now)));
         vars.put("latitude", String.valueOf(latitude));
         vars.put("longitude", String.valueOf(longitude));
-        vars.put("distanceFromRouteMeters", String.valueOf((int) Math.round(distanceFromRouteMeters)));
+        vars.put("distanceFromRouteMeters",
+                Double.isNaN(distanceFromRouteMeters) ? "-"
+                        : String.valueOf((int) Math.round(distanceFromRouteMeters)));
         vars.put("firstOnRouteAt", state.getFirstOnRouteAtCurrentShift() != null
                 ? formatInstant(state.getFirstOnRouteAtCurrentShift()) : "-");
         vars.put("onRouteDurationHuman", state.getFirstOnRouteAtCurrentShift() != null
@@ -206,7 +211,7 @@ public class VehicleOffRouteAlertMonitor {
         return sb.toString();
     }
 
-    @org.springframework.scheduling.annotation.Scheduled(cron = "0 5 0 * * *", zone = "UTC")
+    @Scheduled(cron = "0 5 0 * * *", zone = "UTC")
     public void cleanupOldEntries() {
         LocalDate cutoff = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC).minusDays(1);
         int removed = 0;

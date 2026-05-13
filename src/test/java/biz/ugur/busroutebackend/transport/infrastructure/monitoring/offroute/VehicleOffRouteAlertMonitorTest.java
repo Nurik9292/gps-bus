@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -272,6 +273,46 @@ class VehicleOffRouteAlertMonitorTest {
         monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
         awaitAsyncDispatch();
 
+        verify(emailService, times(1)).sendGpsAlert(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void fallsBackToFullDayShiftWhenPrimaryShiftAssignmentMissing() throws InterruptedException {
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+                .thenReturn(Mono.empty());
+        RouteAssignment fullDayAssignment = mockAssignmentForFirstShift();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FULL_DAY)))
+                .thenReturn(Mono.just(fullDayAssignment));
+
+        VehiclePredictionState state = stateOnRouteFor(Duration.ofMinutes(30));
+        monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
+
+        verify(emailService, times(1)).sendGpsAlert(
+                eq(java.util.List.of("ops@example.com")),
+                eq(VEHICLE_ID),
+                eq(AlertKind.VEHICLE_OFF_ROUTE),
+                anyString(),
+                anyString());
+    }
+
+    @Test
+    void allowsRetryAfterFilterRejectionInSameShift() throws InterruptedException {
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), any()))
+                .thenReturn(Mono.empty());
+
+        VehiclePredictionState state = stateOnRouteFor(Duration.ofMinutes(30));
+        monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
+        verify(emailService, never()).sendGpsAlert(any(), any(), any(), any(), any());
+
+        org.mockito.Mockito.reset(routeAssignmentRepository);
+        RouteAssignment retryAssignment = mockAssignmentForFirstShift();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+                .thenReturn(Mono.just(retryAssignment));
+
+        monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
         verify(emailService, times(1)).sendGpsAlert(any(), any(), any(), any(), any());
     }
 }
