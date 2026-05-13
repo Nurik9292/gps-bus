@@ -3,6 +3,8 @@ package biz.ugur.busroutebackend.shared.infrastructure.external.gps;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.config.GpsProviderProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.dto.TugdkGpsResponseDTO;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.mapper.TugdkGpsPositionMapper;
+import biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.FetchOutcome;
+import biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.GpsProviderHealthMonitor;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
@@ -14,13 +16,17 @@ import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 public class TugdkTenantClient {
 
     private static final Duration MAX_FALLBACK_CACHE_AGE = Duration.ofMinutes(2);
+    private static final long FRESH_THRESHOLD_SEC = 5 * 60;
 
     private final String tenantId;
     private final WebClient webClient;
@@ -28,6 +34,7 @@ public class TugdkTenantClient {
     private final TugdkGpsPositionMapper mapper;
     private final GpsProviderProperties commonProperties;
     private final Duration cacheTimeout;
+    private final Optional<GpsProviderHealthMonitor> healthMonitor;
 
     private final AtomicReference<CachedPositions> cache = new AtomicReference<>(CachedPositions.empty());
 
@@ -36,13 +43,15 @@ public class TugdkTenantClient {
                               String token,
                               TugdkGpsPositionMapper mapper,
                               GpsProviderProperties commonProperties,
-                              Duration cacheTimeout) {
+                              Duration cacheTimeout,
+                              Optional<GpsProviderHealthMonitor> healthMonitor) {
         this.tenantId = tenantId;
         this.webClient = webClient;
         this.token = token;
         this.mapper = mapper;
         this.commonProperties = commonProperties;
         this.cacheTimeout = cacheTimeout;
+        this.healthMonitor = healthMonitor;
     }
 
     public String tenantId() {
@@ -64,8 +73,19 @@ public class TugdkTenantClient {
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<List<TugdkGpsResponseDTO>>() {})
                 .map(this::cacheAndMap)
+                .doOnNext(positions -> healthMonitor.ifPresent(m -> {
+                    String key = "TUGDK:" + tenantId;
+                    if (positions.isEmpty()) {
+                        m.recordFetch(key, new FetchOutcome.Empty());
+                    } else {
+                        m.recordFetch(key, new FetchOutcome.Success(
+                                positions.size(), countFresh(positions), latestFixTime(positions)));
+                    }
+                }))
                 .timeout(commonProperties.getTimeout().getRequest())
                 .retryWhen(retrySpec())
+                .doOnError(err -> healthMonitor.ifPresent(m ->
+                        m.recordError("TUGDK:" + tenantId, err)))
                 .onErrorResume(this::handleError);
     }
 
@@ -143,6 +163,28 @@ public class TugdkTenantClient {
             return !ex.getStatusCode().is4xxClientError();
         }
         return true;
+    }
+
+    private int countFresh(List<GpsPositionDTO> positions) {
+        Instant cutoff = Instant.now().minusSeconds(FRESH_THRESHOLD_SEC);
+        int fresh = 0;
+        for (var p : positions) {
+            if (p.getFixTime() != null
+                    && p.getFixTime().toInstant(ZoneOffset.UTC).isAfter(cutoff)) {
+                fresh++;
+            }
+        }
+        return fresh;
+    }
+
+    private Instant latestFixTime(List<GpsPositionDTO> positions) {
+        Instant latest = null;
+        for (var p : positions) {
+            if (p.getFixTime() == null) continue;
+            Instant t = p.getFixTime().toInstant(ZoneOffset.UTC);
+            if (latest == null || t.isAfter(latest)) latest = t;
+        }
+        return latest;
     }
 
     private Mono<List<GpsPositionDTO>> handleError(Throwable error) {

@@ -1,0 +1,9 @@
+GPS-провайдер {tenant} снова работает.
+
+Восстановлен:          {recoveredAt}
+Был недоступен с:      {degradedSince}
+Downtime:              {downtimeHuman}
+Причина была:          {previousReason}
+Сейчас отдаёт:         {currentDeviceCount} автобусов, последний fixTime {latestFixTime}
+
+Чтобы получить новое письмо, нужно чтобы провайдер опять упал.

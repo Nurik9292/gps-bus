@@ -1,0 +1,15 @@
+GPS-провайдер {tenant} — данные устарели.
+
+Когда обнаружено:      {detectedAt}
+Всего позиций:         {totalCount}
+С fixTime старше {maxFixAgeMin} мин: {staleCount} ({stalePercent}%)
+Самый свежий fixTime:  {latestFixTime} ({latestFixTimeAgo} назад)
+
+Что это значит:
+API возвращает позиции, но не обновляет их. Скорее всего
+тормозит upstream — устройства отправляют, а API кэширует
+старый снимок.
+
+Что проверить:
+  - Лаг доходит через VPN/internet до провайдера?
+  - Не зависла ли upstream-система?

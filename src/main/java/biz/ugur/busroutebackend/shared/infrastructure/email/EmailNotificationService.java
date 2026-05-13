@@ -32,4 +32,10 @@ public interface EmailNotificationService {
                                               String businessName,
                                               String reason,
                                               String orderNumber);
+
+    Mono<Void> sendGpsAlert(java.util.List<String> recipients,
+                             String tenant,
+                             biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.AlertKind kind,
+                             String subject,
+                             String body);
 }

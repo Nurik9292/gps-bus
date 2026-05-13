@@ -2,6 +2,8 @@ package biz.ugur.busroutebackend.shared.infrastructure.external.gps;
 
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.config.GpsProviderProperties;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.dto.ChinaGpsRequestDTO;
+import biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.FetchOutcome;
+import biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.GpsProviderHealthMonitor;
 import biz.ugur.busroutebackend.transport.application.dto.GpsApiResponseDTO;
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -36,14 +39,17 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
     private static final DateTimeFormatter ISO_OFFSET_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
     private final String token;
+    private final Optional<GpsProviderHealthMonitor> healthMonitor;
 
     public ChinaGpsDataProvider(
             @Qualifier("gpsApiClient") WebClient webClient,
             GpsProviderProperties properties,
             @Value("${external.api.gps.token}") String token,
-            @Value("${external.api.gps.enabled:true}") boolean enabled) {
+            @Value("${external.api.gps.enabled:true}") boolean enabled,
+            Optional<GpsProviderHealthMonitor> healthMonitor) {
         super(webClient, properties, enabled);
         this.token = token;
+        this.healthMonitor = healthMonitor;
 
         log.info("ChinaGpsDataProvider initialized: enabled={}", enabled);
     }
@@ -85,8 +91,17 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
                 .retrieve()
                 .bodyToMono(GpsApiResponseDTO.class)
                 .map(response -> processResponse(response, deviceIds.size()))
+                .doOnNext(positions -> healthMonitor.ifPresent(m -> {
+                    if (positions.isEmpty()) {
+                        m.recordFetch("CHINA", new FetchOutcome.Empty());
+                    } else {
+                        m.recordFetch("CHINA", new FetchOutcome.Success(
+                                positions.size(), positions.size(), Instant.now()));
+                    }
+                }))
                 .timeout(properties.getTimeout().getRequest())
                 .retryWhen(createRetrySpec())
+                .doOnError(err -> healthMonitor.ifPresent(m -> m.recordError("CHINA", err)))
                 .doOnSuccess(positions -> {
                     logSuccess(positions.size(), deviceIds.size());
                     logMissingDevices(requestedDeviceIds, positions);

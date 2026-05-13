@@ -58,4 +58,13 @@ public class NoOpEmailNotificationService implements EmailNotificationService {
         log.debug("[email/off] payment-failed — {} → {}", orderNumber, recipientEmail);
         return Mono.empty();
     }
+
+    @Override
+    public Mono<Void> sendGpsAlert(java.util.List<String> recipients,
+                                    String tenant,
+                                    biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.AlertKind kind,
+                                    String subject,
+                                    String body) {
+        return Mono.empty();
+    }
 }
