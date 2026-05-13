@@ -1,7 +1,9 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
+import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
 import biz.ugur.busroutebackend.transport.infrastructure.debug.GpsRecorder;
+import biz.ugur.busroutebackend.transport.infrastructure.monitoring.offroute.VehicleOffRouteAlertMonitor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -11,11 +13,15 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 
@@ -117,6 +123,8 @@ public class VehiclePositionPredictionService {
     private final GpsOutlierFilter outlierFilter;
     private final SnapCorrector snapCorrector;
     private final VehiclePositionPredictor predictor;
+    private final Optional<VehicleOffRouteAlertMonitor> offRouteMonitor;
+    private final Clock clock;
 
     public VehiclePositionPredictionService(PredictionProperties properties,
                                              PredictionBroadcaster broadcaster,
@@ -125,7 +133,9 @@ public class VehiclePositionPredictionService {
                                              ObjectProvider<GpsRecorder> gpsRecorderProvider,
                                              GpsOutlierFilter outlierFilter,
                                              SnapCorrector snapCorrector,
-                                             VehiclePositionPredictor predictor) {
+                                             VehiclePositionPredictor predictor,
+                                             Optional<VehicleOffRouteAlertMonitor> offRouteMonitor,
+                                             Clock clock) {
         this.properties = properties;
         this.broadcaster = broadcaster;
         this.routeGeometryCache = routeGeometryCache;
@@ -134,6 +144,8 @@ public class VehiclePositionPredictionService {
         this.outlierFilter = outlierFilter;
         this.snapCorrector = snapCorrector;
         this.predictor = predictor;
+        this.offRouteMonitor = offRouteMonitor;
+        this.clock = clock;
     }
 
     private static final Duration RESTORE_TIMEOUT = Duration.ofSeconds(30);
@@ -469,8 +481,9 @@ public class VehiclePositionPredictionService {
             log.info("[GPS_PIPELINE] ROUTE_CHANGED vehicle={} plate={} from={} to={} — resetting off-route state",
                     vehicleId, licensePlate, existing.getRouteNumber(), routeNumber);
         }
+        boolean wasOffRoute = existing != null && !routeChanged && existing.isOffRoute();
         int newOffRouteCount = (existing != null && !routeChanged) ? existing.getConsecutiveOffRouteCount() : 0;
-        boolean newOffRoute = existing != null && !routeChanged && existing.isOffRoute();
+        boolean newOffRoute = wasOffRoute;
         double rawToSnapDist = snapResult.rawSnapMinDistance();
         boolean snapAttempted = rawToSnapDist < Double.MAX_VALUE;
         if (snapAttempted) {
@@ -490,6 +503,24 @@ public class VehiclePositionPredictionService {
                 newOffRouteCount = 0;
                 newOffRoute = false;
             }
+        }
+
+        Instant tickNow = clock.instant();
+        Instant existingFirstOnRoute = (existing != null && !routeChanged) ? existing.getFirstOnRouteAtCurrentShift() : null;
+        if (existingFirstOnRoute != null) {
+            ShiftType currentShift = currentShiftAt(tickNow);
+            ShiftType shiftAtFirst = currentShiftAt(existingFirstOnRoute);
+            if (currentShift == null || shiftAtFirst == null || currentShift != shiftAtFirst) {
+                existingFirstOnRoute = null;
+            }
+        }
+        Instant newFirstOnRouteAtCurrentShift = existingFirstOnRoute;
+        Instant newLastOnRouteAt = (existing != null && !routeChanged) ? existing.getLastOnRouteAt() : null;
+        if (!newOffRoute) {
+            if (newFirstOnRouteAtCurrentShift == null) {
+                newFirstOnRouteAtCurrentShift = tickNow;
+            }
+            newLastOnRouteAt = tickNow;
         }
 
         double newLongTermAvg = PredictionMath.updateLongTermAvgSpeed(
@@ -531,6 +562,8 @@ public class VehiclePositionPredictionService {
                 .consecutiveOffRouteCount(newOffRouteCount)
                 .offRoute(newOffRoute)
                 .lastRawToSnapDistanceMeters(snapAttempted ? rawToSnapDist : Double.NaN)
+                .firstOnRouteAtCurrentShift(newFirstOnRouteAtCurrentShift)
+                .lastOnRouteAt(newLastOnRouteAt)
                 .inGarage(false)
                 .direction(direction)
                 .directionConfirmed(directionConfirmed
@@ -553,6 +586,12 @@ public class VehiclePositionPredictionService {
                 : (triggerColdStart ? (snapResult.resetTriggered() ? "onGpsUpdate-snap-reset" : "onGpsUpdate-pos-teleport")
                         : "onGpsUpdate-accept");
         replaceState(vehicleId, builtState, writeReason);
+        if (!wasOffRoute && newOffRoute) {
+            double offRouteLat = builtState.getGpsLatitude();
+            double offRouteLon = builtState.getGpsLongitude();
+            offRouteMonitor.ifPresent(m -> m.onWentOffRoute(
+                    vehicleId, builtState, offRouteLat, offRouteLon, builtState.getLastRawToSnapDistanceMeters()));
+        }
         if (teleportRejected) {
             lastDecisions.put(vehicleId, GatekeeperDecision.PENDING_TELEPORT);
         } else if (triggerColdStart) {
@@ -911,5 +950,12 @@ public class VehiclePositionPredictionService {
         return snapCorrector.drainPendingDirectionFixes();
     }
 
+    private ShiftType currentShiftAt(Instant t) {
+        LocalTime time = LocalTime.ofInstant(t, ZoneOffset.UTC);
+        for (ShiftType s : ShiftType.values()) {
+            if (s.isActiveAt(time)) return s;
+        }
+        return null;
+    }
 
 }

@@ -75,6 +75,10 @@ public class VehiclePredictionState {
     @Builder.Default
     private boolean offRoute = false;
 
+    private Instant firstOnRouteAtCurrentShift;
+
+    private Instant lastOnRouteAt;
+
     @Builder.Default
     private double lastRawToSnapDistanceMeters = Double.NaN;
 

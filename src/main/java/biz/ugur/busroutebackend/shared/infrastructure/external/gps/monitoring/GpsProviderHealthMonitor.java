@@ -162,6 +162,7 @@ public class GpsProviderHealthMonitor {
             case DROP -> "резкое падение количества автобусов";
             case STALE -> "данные устарели";
             case RECOVERY -> "восстановлен";
+            case VEHICLE_OFF_ROUTE -> "автобус уехал с маршрута";
         };
     }
 
