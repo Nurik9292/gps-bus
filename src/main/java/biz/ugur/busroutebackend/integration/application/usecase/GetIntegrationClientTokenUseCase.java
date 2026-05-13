@@ -43,7 +43,15 @@ public class GetIntegrationClientTokenUseCase {
                 })
                 .doOnSuccess(response -> log.info("Successfully generated token for client: {}",
                         response.clientId()))
-                .doOnError(error -> log.error("Error generating token for service: {}", serviceId, error));
+                .doOnError(error -> {
+                    if (error instanceof IntegrationClientNotFoundException
+                            || error instanceof ClientNotBelongsToServiceException) {
+                        log.warn("[INTEGRATION] token request failed for service={}: {}",
+                                serviceId, error.getMessage());
+                    } else {
+                        log.error("Error generating token for service: {}", serviceId, error);
+                    }
+                });
     }
 
     private Mono<Client> findAndValidateClient(ExternalService service,
