@@ -59,9 +59,7 @@ public class GetIntegrationClientTokenUseCase {
                     ));
         } else if (request.externalUserId() != null && !request.externalUserId().isBlank()) {
             clientMono = clientRepository.findByServiceAndExternalUserId(serviceId, request.externalUserId())
-                    .switchIfEmpty(Mono.error(
-                            IntegrationClientNotFoundException.byExternalUserId(serviceId, request.externalUserId())
-                    ));
+                    .switchIfEmpty(Mono.defer(() -> autoCreate(service, request.externalUserId())));
         } else {
             return Mono.error(new IllegalArgumentException(
                     "Either clientId or externalUserId must be provided"
@@ -80,6 +78,18 @@ public class GetIntegrationClientTokenUseCase {
             }
             return Mono.just(client);
         });
+    }
+
+    private Mono<Client> autoCreate(ExternalService service, String externalUserId) {
+        String serviceId = service.getId().getValue();
+        Client newClient = Client.createViaExternalService(
+                "User " + externalUserId,
+                serviceId,
+                externalUserId);
+        return clientRepository.save(newClient)
+                .doOnSuccess(saved -> log.info(
+                        "[INTEGRATION] auto-registered client for service={} externalUserId={} clientId={}",
+                        serviceId, externalUserId, saved.getId().getValue()));
     }
 
     private Mono<IntegrationClientTokenResponse> generateTokens(Client client,

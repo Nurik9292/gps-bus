@@ -8,12 +8,15 @@ import biz.ugur.busroutebackend.client.domain.repository.ClientRepository;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
 import biz.ugur.busroutebackend.client.infrastructure.security.ClientJwtTokenService;
 import biz.ugur.busroutebackend.integration.application.dto.IntegrationClientTokenRequest;
+import biz.ugur.busroutebackend.integration.domain.exceptions.ClientManagementNotAllowedException;
 import biz.ugur.busroutebackend.integration.domain.model.ExternalService;
 import biz.ugur.busroutebackend.integration.domain.repository.ExternalServiceRepository;
 import biz.ugur.busroutebackend.integration.domain.valueobjects.ExternalServiceId;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
@@ -160,5 +163,75 @@ class GetIntegrationClientTokenUseCaseTest {
 
         verify(clientJwtTokenService, never()).isTokenExpired(any());
         verify(clientRepository, times(1)).save(any(Client.class));
+    }
+
+    @Test
+    void autoCreatesClientWhenNotFoundByExternalUserId() {
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(service.getId().getValue(), EXTERNAL_USER_ID))
+                .thenReturn(Mono.empty());
+        when(clientRepository.save(any(Client.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(clientJwtTokenService.generateAccessToken(any())).thenReturn(Mono.just(NEW_ACCESS_TOKEN));
+        when(clientJwtTokenService.generateRefreshToken(any())).thenReturn(Mono.just(NEW_REFRESH_TOKEN));
+        when(externalServiceRepository.save(any(ExternalService.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(service.getId().getValue(), byExternalUser()))
+                .assertNext(response -> {
+                    assertEquals(NEW_ACCESS_TOKEN, response.accessToken());
+                    assertEquals(NEW_REFRESH_TOKEN, response.refreshToken());
+                    assertEquals(EXTERNAL_USER_ID, response.externalUserId());
+                })
+                .verifyComplete();
+
+        ArgumentCaptor<Client> savedClient = ArgumentCaptor.forClass(Client.class);
+        verify(clientRepository, org.mockito.Mockito.atLeastOnce()).save(savedClient.capture());
+        Client created = savedClient.getAllValues().get(0);
+        Assertions.assertEquals("User " + EXTERNAL_USER_ID, created.getName());
+        Assertions.assertEquals(EXTERNAL_USER_ID, created.getExternalUserId());
+        Assertions.assertEquals(Platform.API, created.getPlatform());
+    }
+
+    @Test
+    void failsWithClientManagementNotAllowedWhenServiceCannotManageClients() {
+        ExternalService restrictedService = ExternalService.create(
+                "Restricted",
+                "no client mgmt",
+                AdminId.generate(),
+                List.of("/api/v1/integration/**"),
+                60,
+                false
+        );
+
+        when(externalServiceRepository.findById(restrictedService.getId()))
+                .thenReturn(Mono.just(restrictedService));
+
+        StepVerifier.create(useCase.execute(restrictedService.getId().getValue(), byExternalUser()))
+                .expectErrorSatisfies(err ->
+                        Assertions.assertInstanceOf(ClientManagementNotAllowedException.class, err))
+                .verify();
+
+        verify(clientRepository, never()).save(any(Client.class));
+        verify(clientRepository, never())
+                .findByServiceAndExternalUserId(any(), any());
+    }
+
+    @Test
+    void clientIdPathDoesNotAutoCreateWhenNotFound() {
+        String missingClientId = ClientId.generate().getValue();
+        IntegrationClientTokenRequest byClientId = new IntegrationClientTokenRequest(missingClientId, null);
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findById(ClientId.of(missingClientId)))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(useCase.execute(service.getId().getValue(), byClientId))
+                .expectErrorSatisfies(err -> Assertions.assertInstanceOf(
+                        biz.ugur.busroutebackend.integration.domain.exceptions.IntegrationClientNotFoundException.class,
+                        err))
+                .verify();
+
+        verify(clientRepository, never()).save(any(Client.class));
     }
 }
