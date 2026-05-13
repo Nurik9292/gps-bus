@@ -137,4 +137,106 @@ class VehicleOffRouteAlertMonitorTest {
         when(r.getRouteNumber()).thenReturn(ROUTE_NUMBER);
         return r;
     }
+
+    @Test
+    void skipsWhenNoAssignmentForCurrentShift() throws InterruptedException {
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), any()))
+                .thenReturn(Mono.empty());
+
+        VehiclePredictionState state = stateOnRouteFor(Duration.ofMinutes(30));
+        monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
+
+        verify(emailService, org.mockito.Mockito.never()).sendGpsAlert(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void skipsWhenAssignmentNotActiveAtNow() throws InterruptedException {
+        RouteAssignment assignment = mockAssignmentForFirstShift();
+        when(assignment.shouldBeActiveAt(any(LocalTime.class))).thenReturn(false);
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+                .thenReturn(Mono.just(assignment));
+
+        VehiclePredictionState state = stateOnRouteFor(Duration.ofMinutes(30));
+        monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
+
+        verify(emailService, org.mockito.Mockito.never()).sendGpsAlert(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void skipsWhenWithinEndOfShiftBuffer() throws InterruptedException {
+        clock = Clock.fixed(Instant.parse("2026-05-12T13:50:00Z"), ZoneOffset.UTC);
+        monitor = new VehicleOffRouteAlertMonitor(
+                emailService, properties, clock,
+                routeAssignmentRepository, vehicleRepository, busRouteRepository);
+        when(emailService.sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString()))
+                .thenReturn(Mono.empty());
+
+        RouteAssignment assignment = mockAssignmentForFirstShift();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+                .thenReturn(Mono.just(assignment));
+
+        VehiclePredictionState state = VehiclePredictionState.builder()
+                .vehicleId(VEHICLE_ID)
+                .licensePlate(LICENSE)
+                .routeNumber(ROUTE_NUMBER)
+                .offRoute(true)
+                .firstOnRouteAtCurrentShift(Instant.parse("2026-05-12T11:50:00Z"))
+                .lastOnRouteAt(Instant.parse("2026-05-12T13:40:00Z"))
+                .lastRawToSnapDistanceMeters(250.0)
+                .build();
+        monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
+
+        verify(emailService, org.mockito.Mockito.never()).sendGpsAlert(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void skipsWhenVehicleNeverWasOnRoute() throws InterruptedException {
+        RouteAssignment assignment = mockAssignmentForFirstShift();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+                .thenReturn(Mono.just(assignment));
+
+        VehiclePredictionState state = VehiclePredictionState.builder()
+                .vehicleId(VEHICLE_ID)
+                .licensePlate(LICENSE)
+                .offRoute(true)
+                .firstOnRouteAtCurrentShift(null)
+                .build();
+        monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
+
+        verify(emailService, org.mockito.Mockito.never()).sendGpsAlert(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void skipsWhenOnRouteLessThanMinSeconds() throws InterruptedException {
+        RouteAssignment assignment = mockAssignmentForFirstShift();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+                .thenReturn(Mono.just(assignment));
+
+        VehiclePredictionState state = stateOnRouteFor(Duration.ofSeconds(30));
+        monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
+
+        verify(emailService, org.mockito.Mockito.never()).sendGpsAlert(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void skipsSecondAlertForSameVehicleInSameShift() throws InterruptedException {
+        RouteAssignment assignment = mockAssignmentForFirstShift();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+                .thenReturn(Mono.just(assignment));
+
+        VehiclePredictionState state = stateOnRouteFor(Duration.ofMinutes(30));
+        monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
+        monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
+        monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
+
+        verify(emailService, times(1)).sendGpsAlert(any(), any(), any(), any(), any());
+    }
 }
