@@ -37,6 +37,7 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
     private static final DateTimeFormatter REPORT_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter ISO_OFFSET_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+    private static final long FRESH_THRESHOLD_SEC = 5 * 60;
 
     private final String token;
     private final Optional<GpsProviderHealthMonitor> healthMonitor;
@@ -95,8 +96,10 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
                     if (positions.isEmpty()) {
                         m.recordFetch("CHINA", new FetchOutcome.Empty());
                     } else {
+                        int fresh = countFresh(positions);
+                        Instant latestFix = latestFixTime(positions);
                         m.recordFetch("CHINA", new FetchOutcome.Success(
-                                positions.size(), positions.size(), Instant.now()));
+                                positions.size(), fresh, latestFix));
                     }
                 }))
                 .timeout(properties.getTimeout().getRequest())
@@ -256,5 +259,27 @@ public class ChinaGpsDataProvider extends AbstractGpsDataProvider {
                 return null;
             }
         }
+    }
+
+    private int countFresh(List<GpsPositionDTO> positions) {
+        Instant cutoff = Instant.now().minusSeconds(FRESH_THRESHOLD_SEC);
+        int fresh = 0;
+        for (GpsPositionDTO p : positions) {
+            if (p.getFixTime() != null
+                    && p.getFixTime().toInstant(ZoneOffset.UTC).isAfter(cutoff)) {
+                fresh++;
+            }
+        }
+        return fresh;
+    }
+
+    private Instant latestFixTime(List<GpsPositionDTO> positions) {
+        Instant latest = null;
+        for (GpsPositionDTO p : positions) {
+            if (p.getFixTime() == null) continue;
+            Instant t = p.getFixTime().toInstant(ZoneOffset.UTC);
+            if (latest == null || t.isAfter(latest)) latest = t;
+        }
+        return latest;
     }
 }
