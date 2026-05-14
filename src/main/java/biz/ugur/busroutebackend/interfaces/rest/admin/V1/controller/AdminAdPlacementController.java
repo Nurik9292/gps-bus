@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
+import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementAnalyticsResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementList;
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementStatusCounts;
@@ -8,10 +9,12 @@ import biz.ugur.busroutebackend.advertising.application.dto.RejectAdPlacementCom
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.ApproveAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.CancelAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.CreateAdPlacementUseCase;
+import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementAnalyticsUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementByIdUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementStatusCountsUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementsPaginatedUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.RejectAdPlacementUseCase;
+import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
@@ -27,6 +30,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
+
 import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN_AD_PLACEMENTS;
 
 @RestController
@@ -40,6 +45,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
     private final ApproveAdPlacementUseCase approveAdPlacementUseCase;
     private final RejectAdPlacementUseCase rejectAdPlacementUseCase;
     private final GetAdPlacementStatusCountsUseCase getAdPlacementStatusCountsUseCase;
+    private final GetAdPlacementAnalyticsUseCase getAdPlacementAnalyticsUseCase;
 
     public AdminAdPlacementController(CreateAdPlacementUseCase createAdPlacementUseCase,
                                        GetAdPlacementByIdUseCase getAdPlacementByIdUseCase,
@@ -48,6 +54,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
                                        ApproveAdPlacementUseCase approveAdPlacementUseCase,
                                        RejectAdPlacementUseCase rejectAdPlacementUseCase,
                                        GetAdPlacementStatusCountsUseCase getAdPlacementStatusCountsUseCase,
+                                       GetAdPlacementAnalyticsUseCase getAdPlacementAnalyticsUseCase,
                                        MessageSource messageSource) {
         super(messageSource);
         this.createAdPlacementUseCase = createAdPlacementUseCase;
@@ -57,6 +64,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
         this.approveAdPlacementUseCase = approveAdPlacementUseCase;
         this.rejectAdPlacementUseCase = rejectAdPlacementUseCase;
         this.getAdPlacementStatusCountsUseCase = getAdPlacementStatusCountsUseCase;
+        this.getAdPlacementAnalyticsUseCase = getAdPlacementAnalyticsUseCase;
     }
 
     @Override
@@ -113,5 +121,15 @@ public class AdminAdPlacementController extends BasePaginatedController {
     @PostMapping("/{placementId}/cancel")
     public Mono<ResponseEntity<ApiResponse<AdPlacementResponse>>> cancel(@PathVariable String placementId) {
         return ok(cancelAdPlacementUseCase.execute(placementId));
+    }
+
+    @GetMapping("/{placementId}/analytics")
+    public Mono<ResponseEntity<ApiResponse<AdPlacementAnalyticsResponse>>> getAnalytics(
+            @PathVariable String placementId,
+            @RequestParam(value = "from", required = false) Instant from,
+            @RequestParam(value = "to",   required = false) Instant to) {
+        return ok(getAdPlacementAnalyticsUseCase.execute(
+                new GetAdPlacementAnalyticsUseCase.Query(PlacementId.of(placementId), from, to)
+        ));
     }
 }
