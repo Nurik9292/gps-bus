@@ -10,6 +10,8 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 
 @Repository
@@ -52,6 +54,42 @@ public class R2dbcAdClickEventRepository implements AdClickEventRepository {
                 .bind("placement_id", UUID.fromString(placementId.getValue()))
                 .bind("from",         from)
                 .bind("to",           to)
+                .map(row -> row.get("cnt", Long.class))
+                .one();
+    }
+
+    @Override
+    public Mono<Map<LocalDate, Long>> countByDayBetween(PlacementId placementId, Instant from, Instant to) {
+        return db.sql("""
+                        SELECT DATE_TRUNC('day', occurred_at AT TIME ZONE 'UTC')::DATE AS day,
+                               COUNT(*)::BIGINT                                        AS cnt
+                        FROM ad_click_events
+                        WHERE placement_id = :placement_id
+                          AND occurred_at >= :from
+                          AND occurred_at <  :to
+                        GROUP BY day
+                        ORDER BY day
+                        """)
+                .bind("placement_id", UUID.fromString(placementId.getValue()))
+                .bind("from",         from)
+                .bind("to",           to)
+                .map(row -> Map.entry(
+                        row.get("day", LocalDate.class),
+                        row.get("cnt", Long.class)))
+                .all()
+                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
+    }
+
+    @Override
+    public Mono<Long> countByOccurredAtBetween(Instant from, Instant to) {
+        return db.sql("""
+                        SELECT COUNT(*)::BIGINT AS cnt
+                        FROM ad_click_events
+                        WHERE occurred_at >= :from
+                          AND occurred_at <  :to
+                        """)
+                .bind("from", from)
+                .bind("to",   to)
                 .map(row -> row.get("cnt", Long.class))
                 .one();
     }
