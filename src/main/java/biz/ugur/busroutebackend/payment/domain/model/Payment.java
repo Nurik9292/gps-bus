@@ -221,6 +221,16 @@ public class Payment extends AggregateRoot<Payment, PaymentId> {
         return confirmed;
     }
 
+    public Payment cancel(String reason) {
+        guardTransition(PaymentStatus.CANCELLED);
+        return this.toBuilder()
+                .status(PaymentStatus.CANCELLED)
+                .failureCode("CANCELLED")
+                .failureMessage(reason)
+                .failedAt(LocalDateTime.now())
+                .build();
+    }
+
     public Payment markReversed() {
         guardTransition(PaymentStatus.REVERSED);
         return this.toBuilder()

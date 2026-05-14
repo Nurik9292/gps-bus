@@ -84,4 +84,17 @@ class PaymentConfirmCashTest {
                 () -> p.confirmCash("admin_user", LocalDateTime.now()));
     }
 
+    @Test
+    void cancel_movesRegisteredToCancelled() {
+        Payment p = newCashPayment();
+        Payment cancelled = p.cancel("placement cancelled");
+        assertEquals(PaymentStatus.CANCELLED, cancelled.getStatus());
+    }
+
+    @Test
+    void cancel_throwsIfTerminalStatus() {
+        Payment p = newCashPayment().confirmCash("admin_user", LocalDateTime.now());
+
+        assertThrows(PaymentStateTransitionException.class, () -> p.cancel("oops"));
+    }
 }
