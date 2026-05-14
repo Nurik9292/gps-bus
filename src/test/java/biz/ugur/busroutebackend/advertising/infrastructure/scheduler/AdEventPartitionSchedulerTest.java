@@ -14,7 +14,6 @@ import java.util.Map;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -37,7 +36,7 @@ class AdEventPartitionSchedulerTest {
     void setUp() {
         properties = new AdEventPartitionAlertProperties();
         properties.setLookaheadMonths(2);
-        scheduler = new AdEventPartitionScheduler(db, clock, properties, Optional.empty());
+        scheduler = new AdEventPartitionScheduler(db, clock, properties);
     }
 
     @SuppressWarnings("unchecked")

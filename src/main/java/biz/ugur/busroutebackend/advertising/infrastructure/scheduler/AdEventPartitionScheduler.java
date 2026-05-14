@@ -1,6 +1,5 @@
 package biz.ugur.busroutebackend.advertising.infrastructure.scheduler;
 
-import biz.ugur.busroutebackend.shared.infrastructure.email.EmailNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -15,7 +14,6 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
 
 @Slf4j
 @Component
@@ -32,7 +30,6 @@ public class AdEventPartitionScheduler {
     private final DatabaseClient db;
     private final Clock clock;
     private final AdEventPartitionAlertProperties properties;
-    private final Optional<EmailNotificationService> emailService;
 
     @Scheduled(cron = "${advertising.events.partition.cron:0 0 3 * * *}",
                zone = "${advertising.events.partition.zone:UTC}")
@@ -85,9 +82,6 @@ public class AdEventPartitionScheduler {
     }
 
     private void sendAlert(Throwable err) {
-        if (!properties.getAlert().isEnabled() || properties.getAlert().getRecipients().isEmpty()) {
-            return;
-        }
-        log.warn("Partition alert dispatch — recipients={}", properties.getAlert().getRecipients());
+        log.warn("Partition maintenance alert triggered", err);
     }
 }

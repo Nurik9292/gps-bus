@@ -17,7 +17,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -72,7 +71,7 @@ class AdEventPartitionSchedulerIntegrationTest {
                 """).then().block();
 
         properties.setLookaheadMonths(2);
-        scheduler = new AdEventPartitionScheduler(db, clock, properties, Optional.empty());
+        scheduler = new AdEventPartitionScheduler(db, clock, properties);
     }
 
     @AfterEach

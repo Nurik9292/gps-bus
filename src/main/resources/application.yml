@@ -704,7 +704,4 @@ advertising:
       lookahead-months: 2
       cron: "0 0 3 * * *"
       zone: "UTC"
-      alert:
-        enabled: ${AD_EVENT_PARTITION_ALERT_ENABLED:false}
-        recipients: ${AD_EVENT_PARTITION_ALERT_RECIPIENTS:}
 
