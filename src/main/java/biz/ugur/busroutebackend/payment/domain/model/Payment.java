@@ -120,6 +120,7 @@ public class Payment extends AggregateRoot<Payment, PaymentId> {
                                     LocalDateTime completedAt,
                                     LocalDateTime failedAt,
                                     LocalDateTime expiresAt,
+                                    String completedBy,
                                     String failureCode,
                                     String failureMessage,
                                     String cardPanMasked,
@@ -144,6 +145,7 @@ public class Payment extends AggregateRoot<Payment, PaymentId> {
                 .completedAt(completedAt)
                 .failedAt(failedAt)
                 .expiresAt(expiresAt)
+                .completedBy(completedBy)
                 .failureCode(failureCode)
                 .failureMessage(failureMessage)
                 .cardPanMasked(cardPanMasked)

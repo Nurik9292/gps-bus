@@ -37,6 +37,7 @@ public class PaymentEntity {
     @Column("completed_at")               private LocalDateTime completedAt;
     @Column("failed_at")                  private LocalDateTime failedAt;
     @Column("expires_at")                 private LocalDateTime expiresAt;
+    @Column("completed_by")               private String completedBy;
 
     @Column("failure_code")               private String failureCode;
     @Column("failure_message")            private String failureMessage;
