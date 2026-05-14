@@ -57,7 +57,8 @@ public class ApiVersionConfig {
     public static final String V1_ADMIN_ROUTE_ASSIGNMENTS = V1_ADMIN + ROUTES + "/assignments";
     public static final String V1_ADMIN_VEHICLES = V1_ADMIN + VEHICLES;
     public static final String V1_ADMIN_ROUTE_ALTERNATIVES = V1_ADMIN + ROUTE_ALTERNATIVES;
-    public static final String V1_ADMIN_DASHBOARD = V1_ADMIN + DASHBOARD;
+    public static final String V1_ADMIN_DASHBOARD             = V1_ADMIN + DASHBOARD;
+    public static final String V1_ADMIN_DASHBOARD_ADVERTISING = V1_ADMIN_DASHBOARD + "/advertising-overview";
     public static final String ROUTING_ADMIN = "/routing";
     public static final String V1_ADMIN_ROUTING = V1_ADMIN + ROUTING_ADMIN;
 
