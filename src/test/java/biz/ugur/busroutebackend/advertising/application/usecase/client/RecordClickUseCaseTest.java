@@ -44,6 +44,19 @@ class RecordClickUseCaseTest {
     }
 
     @Test
+    void process_propagatesRepositoryError() {
+        UUID placementId = UUID.randomUUID();
+        RuntimeException dbFailure = new RuntimeException("db failure");
+        when(repository.save(any(AdClickEvent.class))).thenReturn(Mono.error(dbFailure));
+
+        StepVerifier.create(useCase.execute(new RecordClickCommand(
+                placementId.toString(), null, null
+        ))).expectErrorSatisfies(err ->
+                org.assertj.core.api.Assertions.assertThat(err).isSameAs(dbFailure))
+          .verify();
+    }
+
+    @Test
     void process_savesEventThroughRepository() {
         UUID placementId = UUID.randomUUID();
         when(repository.save(any(AdClickEvent.class))).thenReturn(Mono.empty());
