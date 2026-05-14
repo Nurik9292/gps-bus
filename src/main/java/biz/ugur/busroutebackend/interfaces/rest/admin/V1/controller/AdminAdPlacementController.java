@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementList;
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementStatusCounts;
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementCommand;
+import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.RejectAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.ApproveAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.CancelAdPlacementUseCase;
@@ -94,7 +95,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
     }
 
     @PostMapping
-    public Mono<ResponseEntity<ApiResponse<AdPlacementResponse>>> create(
+    public Mono<ResponseEntity<ApiResponse<CreateAdPlacementResponse>>> create(
             @Valid @RequestBody CreateAdPlacementCommand request) {
         return created(createAdPlacementUseCase.execute(Mono.just(request)));
     }
