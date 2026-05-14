@@ -697,3 +697,14 @@ payment:
         user-name: ${PAYMENT_HALK_USER:}
         password: ${PAYMENT_HALK_PASS:}
 
+advertising:
+  events:
+    partition:
+      enabled: ${AD_EVENT_PARTITION_ENABLED:true}
+      lookahead-months: 2
+      cron: "0 0 3 * * *"
+      zone: "UTC"
+      alert:
+        enabled: ${AD_EVENT_PARTITION_ALERT_ENABLED:false}
+        recipients: ${AD_EVENT_PARTITION_ALERT_RECIPIENTS:}
+
