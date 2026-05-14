@@ -8,6 +8,10 @@ import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementTarget;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.TariffId;
 import biz.ugur.busroutebackend.business.domain.valueobjects.BusinessId;
+import biz.ugur.busroutebackend.payment.domain.enums.PaymentProvider;
+import biz.ugur.busroutebackend.payment.domain.enums.PaymentStatus;
+import biz.ugur.busroutebackend.payment.domain.enums.PaymentSubjectType;
+import biz.ugur.busroutebackend.payment.domain.repository.PaymentRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import reactor.core.publisher.Flux;
@@ -19,7 +23,9 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 class AdPlacementResponseMapperTest {
@@ -27,8 +33,11 @@ class AdPlacementResponseMapperTest {
     private final AdPlacementTargetRepository targetRepository =
             Mockito.mock(AdPlacementTargetRepository.class);
 
+    private final PaymentRepository paymentRepository =
+            Mockito.mock(PaymentRepository.class);
+
     private final AdPlacementResponseMapper mapper =
-            new AdPlacementResponseMapper(targetRepository);
+            new AdPlacementResponseMapper(targetRepository, paymentRepository);
 
     @Test
     void toResponseCopiesPlacementFieldsAndIncludesTargetsAlreadyOnAggregate() {
@@ -37,6 +46,13 @@ class AdPlacementResponseMapperTest {
                 null, "My Ad", "Body", "/img.jpg", "https://x.tm", "Click",
                 null,
                 List.of(PlacementTarget.general(TargetType.HOME)), 1);
+
+        when(paymentRepository.findFirstBySubjectAndProviderAndStatus(
+                eq(PaymentSubjectType.AD_PLACEMENT),
+                eq(placement.getId().getValue()),
+                eq(PaymentProvider.CASH),
+                eq(PaymentStatus.REGISTERED)))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(mapper.toResponse(placement))
                 .assertNext(response -> {
@@ -48,6 +64,7 @@ class AdPlacementResponseMapperTest {
                     assertNotNull(response.status());
                     assertEquals(1, response.targets().size());
                     assertEquals("HOME", response.targets().get(0).targetType());
+                    assertNull(response.pendingCashPayment());
                 })
                 .verifyComplete();
     }
@@ -64,15 +81,23 @@ class AdPlacementResponseMapperTest {
                         PlacementTarget.specific(TargetType.ROUTE, "route-14"),
                         PlacementTarget.general(TargetType.HOME)));
 
+        when(paymentRepository.findFirstBySubjectAndProviderAndStatus(
+                eq(PaymentSubjectType.AD_PLACEMENT),
+                eq(placement.getId().getValue()),
+                eq(PaymentProvider.CASH),
+                eq(PaymentStatus.REGISTERED)))
+                .thenReturn(Mono.empty());
+
         StepVerifier.create(mapper.toResponse(placement))
                 .assertNext(response -> {
                     assertEquals(2, response.targets().size());
+                    assertNull(response.pendingCashPayment());
                 })
                 .verifyComplete();
     }
 
     @Test
-    void toResponsesBatchLoadsTargetsForList() {
+    void toResponsesReturnsNullPendingCashPaymentForBatchWithoutLookup() {
         AdPlacement p1 = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
                 null, "A", null, null, null, null, null, null, 0);
@@ -92,6 +117,8 @@ class AdPlacementResponseMapperTest {
                     assertEquals(2, list.size());
                     assertEquals(1, list.get(0).targets().size());
                     assertEquals(2, list.get(1).targets().size());
+                    assertNull(list.get(0).pendingCashPayment());
+                    assertNull(list.get(1).pendingCashPayment());
                 })
                 .verifyComplete();
     }

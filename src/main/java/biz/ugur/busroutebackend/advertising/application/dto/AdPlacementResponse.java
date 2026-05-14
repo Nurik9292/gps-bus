@@ -51,7 +51,9 @@ public record AdPlacementResponse(
 
         @JsonProperty("updated_at")
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+
+        @JsonProperty("pending_cash_payment") PaymentInfo pendingCashPayment
 ) {
 
     public static AdPlacementResponse fromDomain(AdPlacement p) {
@@ -80,7 +82,8 @@ public record AdPlacementResponse(
                 p.getRejectedAt(),
                 p.getRejectedByAdminId(),
                 p.getCreatedAt(),
-                p.getUpdatedAt()
+                p.getUpdatedAt(),
+                null
         );
     }
 }
