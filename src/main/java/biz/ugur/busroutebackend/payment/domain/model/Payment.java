@@ -45,6 +45,8 @@ public class Payment extends AggregateRoot<Payment, PaymentId> {
     private final LocalDateTime failedAt;
     private final LocalDateTime expiresAt;
 
+    private final String completedBy;
+
     private final String failureCode;
     private final String failureMessage;
 
@@ -198,6 +200,25 @@ public class Payment extends AggregateRoot<Payment, PaymentId> {
 
     public Payment markCancelled() {
         return transitionToFailure(PaymentStatus.CANCELLED, "CANCELLED", "Payment cancelled by admin");
+    }
+
+    public Payment confirmCash(String confirmedBy, LocalDateTime now) {
+        if (this.provider != PaymentProvider.CASH) {
+            throw new PaymentValidationException("provider", "not a cash payment");
+        }
+        guardTransition(PaymentStatus.COMPLETED);
+        Payment confirmed = this.toBuilder()
+                .status(PaymentStatus.COMPLETED)
+                .completedAt(now)
+                .completedBy(confirmedBy)
+                .build();
+        confirmed.registerEvent(new PaymentCompletedEvent(
+                this.id.getValue(),
+                this.subjectType,
+                this.subjectId,
+                this.money.getAmountMinor(),
+                this.money.getCurrency()));
+        return confirmed;
     }
 
     public Payment markReversed() {
