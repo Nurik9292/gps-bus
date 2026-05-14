@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.payment.domain.repository;
 
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentProvider;
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentStatus;
+import biz.ugur.busroutebackend.payment.domain.enums.PaymentSubjectType;
 import biz.ugur.busroutebackend.payment.domain.model.Payment;
 import biz.ugur.busroutebackend.payment.domain.valueobjects.PaymentId;
 import biz.ugur.busroutebackend.shared.base.BaseRepository;
@@ -20,4 +21,11 @@ public interface PaymentRepository extends BaseRepository<Payment, PaymentId> {
     Mono<Long> countByStatus(PaymentStatus status);
 
     Flux<Payment> findPendingStale(long staleAfterSeconds, Pageable pageable);
+
+    Mono<Payment> findFirstBySubjectAndProviderAndStatus(
+            PaymentSubjectType subjectType,
+            String subjectId,
+            PaymentProvider provider,
+            PaymentStatus status
+    );
 }

@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.payment.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentProvider;
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentStatus;
+import biz.ugur.busroutebackend.payment.domain.enums.PaymentSubjectType;
 import biz.ugur.busroutebackend.payment.domain.model.Payment;
 import biz.ugur.busroutebackend.payment.domain.repository.PaymentRepository;
 import org.springframework.data.domain.Pageable;
@@ -83,5 +84,29 @@ public class R2dbcPaymentRepository extends PaymentBaseRepository implements Pay
                 .bind("offset", pageable.getOffset())
                 .map(getRowMapper())
                 .all();
+    }
+
+    @Override
+    public Mono<Payment> findFirstBySubjectAndProviderAndStatus(
+            PaymentSubjectType subjectType,
+            String subjectId,
+            PaymentProvider provider,
+            PaymentStatus status) {
+        String sql = String.format("""
+                SELECT %s FROM payments
+                WHERE subject_type = :subjectType
+                  AND subject_id   = :subjectId
+                  AND provider     = :provider
+                  AND status       = :status
+                ORDER BY created_at DESC
+                LIMIT 1
+                """, selectColumns());
+        return databaseClient.sql(sql)
+                .bind("subjectType", subjectType.name())
+                .bind("subjectId", subjectId)
+                .bind("provider", provider.name())
+                .bind("status", status.name())
+                .map(getRowMapper())
+                .one();
     }
 }
