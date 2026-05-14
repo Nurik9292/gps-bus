@@ -4,11 +4,13 @@ import biz.ugur.busroutebackend.payment.application.dto.InitiatePaymentCommand;
 import biz.ugur.busroutebackend.payment.application.dto.InitiatePaymentResponse;
 import biz.ugur.busroutebackend.payment.application.dto.PaymentList;
 import biz.ugur.busroutebackend.payment.application.dto.PaymentResponse;
+import biz.ugur.busroutebackend.payment.application.usecase.admin.ConfirmCashPaymentUseCase;
 import biz.ugur.busroutebackend.payment.application.usecase.admin.GetPaymentByIdUseCase;
 import biz.ugur.busroutebackend.payment.application.usecase.admin.GetPaymentsPaginatedUseCase;
 import biz.ugur.busroutebackend.payment.application.usecase.admin.InitiatePaymentUseCase;
 import biz.ugur.busroutebackend.payment.application.usecase.admin.RefundPaymentUseCase;
 import biz.ugur.busroutebackend.payment.application.usecase.admin.SyncPaymentStatusUseCase;
+import biz.ugur.busroutebackend.shared.application.SecurityContextService;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
@@ -33,12 +35,16 @@ public class AdminPaymentController extends BasePaginatedController {
     private final GetPaymentsPaginatedUseCase getPaymentsPaginatedUseCase;
     private final SyncPaymentStatusUseCase syncPaymentStatusUseCase;
     private final RefundPaymentUseCase refundPaymentUseCase;
+    private final ConfirmCashPaymentUseCase confirmCashPaymentUseCase;
+    private final SecurityContextService securityContextService;
 
     public AdminPaymentController(InitiatePaymentUseCase initiatePaymentUseCase,
                                    GetPaymentByIdUseCase getPaymentByIdUseCase,
                                    GetPaymentsPaginatedUseCase getPaymentsPaginatedUseCase,
                                    SyncPaymentStatusUseCase syncPaymentStatusUseCase,
                                    RefundPaymentUseCase refundPaymentUseCase,
+                                   ConfirmCashPaymentUseCase confirmCashPaymentUseCase,
+                                   SecurityContextService securityContextService,
                                    MessageSource messageSource) {
         super(messageSource);
         this.initiatePaymentUseCase = initiatePaymentUseCase;
@@ -46,6 +52,8 @@ public class AdminPaymentController extends BasePaginatedController {
         this.getPaymentsPaginatedUseCase = getPaymentsPaginatedUseCase;
         this.syncPaymentStatusUseCase = syncPaymentStatusUseCase;
         this.refundPaymentUseCase = refundPaymentUseCase;
+        this.confirmCashPaymentUseCase = confirmCashPaymentUseCase;
+        this.securityContextService = securityContextService;
     }
 
     @Override
@@ -82,5 +90,12 @@ public class AdminPaymentController extends BasePaginatedController {
     @PostMapping("/{paymentId}/refund")
     public Mono<ResponseEntity<ApiResponse<PaymentResponse>>> refund(@PathVariable String paymentId) {
         return ok(refundPaymentUseCase.execute(paymentId));
+    }
+
+    @PostMapping("/{paymentId}/confirm-cash")
+    public Mono<ResponseEntity<ApiResponse<PaymentResponse>>> confirmCash(@PathVariable String paymentId) {
+        return ok(securityContextService.getCurrentUsername()
+                .flatMap(username -> confirmCashPaymentUseCase.execute(
+                        new ConfirmCashPaymentUseCase.Command(paymentId, username))));
     }
 }
