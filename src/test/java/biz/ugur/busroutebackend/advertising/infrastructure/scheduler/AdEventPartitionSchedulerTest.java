@@ -50,6 +50,9 @@ class AdEventPartitionSchedulerTest {
 
         scheduler.ensurePartitions();
 
-        verify(db, times(9)).sql(anyString());
+        int statementsPerPartition = 3;
+        int tables = 3;
+        int months = properties.getLookaheadMonths() + 1;
+        verify(db, times(months * tables * statementsPerPartition)).sql(anyString());
     }
 }

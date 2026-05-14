@@ -41,7 +41,7 @@ public class AdEventPartitionScheduler {
         int lookahead = properties.getLookaheadMonths();
 
         Flux.fromIterable(TABLES)
-                .flatMap(table -> ensureTablePartitions(table, now, lookahead))
+                .flatMap(table -> ensureTablePartitions(table, now, lookahead), 1)
                 .subscribe(
                         v -> {},
                         err -> {
@@ -54,7 +54,7 @@ public class AdEventPartitionScheduler {
     private Mono<Void> ensureTablePartitions(String table, YearMonth now, int lookahead) {
         return Flux.range(0, lookahead + 1)
                 .map(now::plusMonths)
-                .flatMap(ym -> createPartitionIfMissing(table, ym))
+                .flatMap(ym -> createPartitionIfMissing(table, ym), 1)
                 .then();
     }
 
@@ -64,16 +64,24 @@ public class AdEventPartitionScheduler {
         String from      = "%04d-%02d-01 00:00:00+00".formatted(ym.getYear(), ym.getMonthValue());
         String to        = "%04d-%02d-01 00:00:00+00".formatted(next.getYear(), next.getMonthValue());
 
-        String ddl = """
+        String createTable = """
                 CREATE TABLE IF NOT EXISTS %s PARTITION OF %s
-                  FOR VALUES FROM ('%s') TO ('%s');
-                CREATE INDEX IF NOT EXISTS ix_%s_placement
-                  ON %s (placement_id, occurred_at DESC);
-                CREATE INDEX IF NOT EXISTS ix_%s_target
-                  ON %s (target_type, occurred_at DESC) WHERE target_type IS NOT NULL;
-                """.formatted(partition, table, from, to, partition, partition, partition, partition);
+                  FOR VALUES FROM ('%s') TO ('%s')
+                """.formatted(partition, table, from, to);
 
-        return db.sql(ddl).fetch().rowsUpdated().then();
+        String createPlacementIndex = """
+                CREATE INDEX IF NOT EXISTS ix_%s_placement
+                  ON %s (placement_id, occurred_at DESC)
+                """.formatted(partition, partition);
+
+        String createTargetIndex = """
+                CREATE INDEX IF NOT EXISTS ix_%s_target
+                  ON %s (target_type, occurred_at DESC) WHERE target_type IS NOT NULL
+                """.formatted(partition, partition);
+
+        return db.sql(createTable).fetch().rowsUpdated().then()
+                .then(db.sql(createPlacementIndex).fetch().rowsUpdated().then())
+                .then(db.sql(createTargetIndex).fetch().rowsUpdated().then());
     }
 
     private void sendAlert(Throwable err) {
