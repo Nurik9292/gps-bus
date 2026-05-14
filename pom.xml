@@ -266,6 +266,9 @@
                     <locations>
                         <location>classpath:db/migration</location>
                     </locations>
+                    <ignoreMigrationPatterns>
+                        <ignoreMigrationPattern>*:ignored</ignoreMigrationPattern>
+                    </ignoreMigrationPatterns>
                 </configuration>
                 <dependencies>
                     <dependency>

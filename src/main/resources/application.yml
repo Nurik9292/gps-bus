@@ -48,6 +48,7 @@ spring:
     validate-on-migrate: true
     clean-disabled: true
     schemas: public
+    ignore-migration-patterns: "*:ignored"
 
   webflux:
     multipart:
