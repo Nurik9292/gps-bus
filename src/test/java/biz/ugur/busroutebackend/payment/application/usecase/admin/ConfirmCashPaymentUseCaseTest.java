@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
@@ -74,7 +75,11 @@ class ConfirmCashPaymentUseCaseTest {
 
         StepVerifier.create(useCase.execute(
                         new ConfirmCashPaymentUseCase.Command(cashPayment.getId().getValue(), "admin_user")))
-                .assertNext(resp -> assertEquals(cashPayment.getId().getValue(), resp.id()))
+                .assertNext(resp -> {
+                    assertThat(resp.id()).isEqualTo(cashPayment.getId().getValue());
+                    assertThat(resp.status()).isEqualTo("COMPLETED");
+                    assertThat(resp.completedBy()).isEqualTo("admin_user");
+                })
                 .verifyComplete();
     }
 
