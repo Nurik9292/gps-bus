@@ -1,21 +1,27 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementAnalyticsResponse;
+import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementAnalyticsTrendResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementList;
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementStatusCounts;
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.RejectAdPlacementCommand;
+import biz.ugur.busroutebackend.advertising.application.dto.SalesReportResponse;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.ApproveAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.CancelAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.CreateAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementAnalyticsUseCase;
+import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementAnalyticsTrendUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementByIdUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementStatusCountsUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementsPaginatedUseCase;
+import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetSalesReportUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.RejectAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
+import biz.ugur.busroutebackend.payment.domain.enums.PaymentProvider;
+import biz.ugur.busroutebackend.payment.domain.enums.PaymentStatus;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
@@ -31,6 +37,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN_AD_PLACEMENTS;
@@ -47,6 +54,8 @@ public class AdminAdPlacementController extends BasePaginatedController {
     private final RejectAdPlacementUseCase rejectAdPlacementUseCase;
     private final GetAdPlacementStatusCountsUseCase getAdPlacementStatusCountsUseCase;
     private final GetAdPlacementAnalyticsUseCase getAdPlacementAnalyticsUseCase;
+    private final GetAdPlacementAnalyticsTrendUseCase getAdPlacementAnalyticsTrendUseCase;
+    private final GetSalesReportUseCase getSalesReportUseCase;
 
     public AdminAdPlacementController(CreateAdPlacementUseCase createAdPlacementUseCase,
                                        GetAdPlacementByIdUseCase getAdPlacementByIdUseCase,
@@ -56,6 +65,8 @@ public class AdminAdPlacementController extends BasePaginatedController {
                                        RejectAdPlacementUseCase rejectAdPlacementUseCase,
                                        GetAdPlacementStatusCountsUseCase getAdPlacementStatusCountsUseCase,
                                        GetAdPlacementAnalyticsUseCase getAdPlacementAnalyticsUseCase,
+                                       GetAdPlacementAnalyticsTrendUseCase getAdPlacementAnalyticsTrendUseCase,
+                                       GetSalesReportUseCase getSalesReportUseCase,
                                        MessageSource messageSource) {
         super(messageSource);
         this.createAdPlacementUseCase = createAdPlacementUseCase;
@@ -66,6 +77,8 @@ public class AdminAdPlacementController extends BasePaginatedController {
         this.rejectAdPlacementUseCase = rejectAdPlacementUseCase;
         this.getAdPlacementStatusCountsUseCase = getAdPlacementStatusCountsUseCase;
         this.getAdPlacementAnalyticsUseCase = getAdPlacementAnalyticsUseCase;
+        this.getAdPlacementAnalyticsTrendUseCase = getAdPlacementAnalyticsTrendUseCase;
+        this.getSalesReportUseCase = getSalesReportUseCase;
     }
 
     @Override
@@ -131,6 +144,31 @@ public class AdminAdPlacementController extends BasePaginatedController {
             @RequestParam(value = "to",   required = false) Instant to) {
         return ok(getAdPlacementAnalyticsUseCase.execute(
                 new GetAdPlacementAnalyticsUseCase.Query(PlacementId.of(placementId), from, to)
+        ));
+    }
+
+    @GetMapping("/{placementId}/analytics/trend")
+    public Mono<ResponseEntity<ApiResponse<AdPlacementAnalyticsTrendResponse>>> getAnalyticsTrend(
+            @PathVariable String placementId,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to) {
+        return ok(getAdPlacementAnalyticsTrendUseCase.execute(
+                new GetAdPlacementAnalyticsTrendUseCase.Query(PlacementId.of(placementId), from, to)
+        ));
+    }
+
+    @GetMapping("/sales-report")
+    public Mono<ResponseEntity<ApiResponse<SalesReportResponse>>> getSalesReport(
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(name = "payment_status", required = false) PaymentStatus paymentStatus,
+            @RequestParam(required = false) PaymentProvider provider) {
+        Instant fromOrDefault = from != null ? from : Instant.now().minus(Duration.ofDays(30));
+        Instant toOrDefault   = to   != null ? to   : Instant.now();
+        return ok(getSalesReportUseCase.execute(
+                new GetSalesReportUseCase.Query(fromOrDefault, toOrDefault, page, size, paymentStatus, provider)
         ));
     }
 }
