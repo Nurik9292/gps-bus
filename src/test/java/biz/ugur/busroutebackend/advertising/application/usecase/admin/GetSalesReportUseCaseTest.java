@@ -1,8 +1,8 @@
 package biz.ugur.busroutebackend.advertising.application.usecase.admin;
 
-import biz.ugur.busroutebackend.advertising.application.dto.SalesReportItem;
-import biz.ugur.busroutebackend.advertising.application.dto.SalesReportTotals;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
+import biz.ugur.busroutebackend.advertising.domain.repository.SalesReportRow;
+import biz.ugur.busroutebackend.advertising.domain.repository.SalesReportRowTotals;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,7 +20,6 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,9 +45,14 @@ class GetSalesReportUseCaseTest {
                 Instant.parse("2026-05-14T00:00:00Z"),
                 1, 20, null, null);
 
-        SalesReportItem item = mock(SalesReportItem.class);
-        SalesReportTotals totals = new SalesReportTotals(23, 11500, "TMT", new BigDecimal("3.89"));
-        when(placementRepository.findForSalesReport(any())).thenReturn(Flux.just(item));
+        SalesReportRow row = new SalesReportRow(
+                "pid", "Title", "ACTIVE", "COMMERCIAL",
+                "bid", "BizName", "tid", "TariffName",
+                new SalesReportRow.Period(null, null),
+                null,
+                new SalesReportRow.Metrics(1000L, 39L, new BigDecimal("3.90")));
+        SalesReportRowTotals totals = new SalesReportRowTotals(23, 11500, "TMT", new BigDecimal("3.89"));
+        when(placementRepository.findForSalesReport(any())).thenReturn(Flux.just(row));
         when(placementRepository.countForSalesReport(any())).thenReturn(Mono.just(23L));
         when(placementRepository.totalsForSalesReport(any())).thenReturn(Mono.just(totals));
 

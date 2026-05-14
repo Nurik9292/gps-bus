@@ -1,7 +1,5 @@
 package biz.ugur.busroutebackend.advertising.domain.repository;
 
-import biz.ugur.busroutebackend.advertising.application.dto.SalesReportItem;
-import biz.ugur.busroutebackend.advertising.application.dto.SalesReportTotals;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
@@ -33,9 +31,9 @@ public interface AdPlacementRepository extends BaseRepository<AdPlacement, Place
 
     Flux<AdPlacement> findDueToExpire(LocalDateTime moment);
 
-    Flux<SalesReportItem> findForSalesReport(SalesReportFilter filter);
+    Flux<SalesReportRow> findForSalesReport(SalesReportFilter filter);
 
     Mono<Long> countForSalesReport(SalesReportFilter filter);
 
-    Mono<SalesReportTotals> totalsForSalesReport(SalesReportFilter filter);
+    Mono<SalesReportRowTotals> totalsForSalesReport(SalesReportFilter filter);
 }

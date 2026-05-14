@@ -1,6 +1,8 @@
 package biz.ugur.busroutebackend.advertising.application.usecase.admin;
 
+import biz.ugur.busroutebackend.advertising.application.dto.SalesReportItem;
 import biz.ugur.busroutebackend.advertising.application.dto.SalesReportResponse;
+import biz.ugur.busroutebackend.advertising.application.dto.SalesReportTotals;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
 import biz.ugur.busroutebackend.advertising.domain.repository.SalesReportFilter;
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentProvider;
@@ -50,9 +52,12 @@ public class GetSalesReportUseCase
                 q.paymentStatus(), q.provider());
 
         return Mono.zip(
-                placementRepository.findForSalesReport(filter).collectList(),
+                placementRepository.findForSalesReport(filter)
+                        .map(SalesReportItem::fromDomain)
+                        .collectList(),
                 placementRepository.countForSalesReport(filter),
                 placementRepository.totalsForSalesReport(filter)
+                        .map(SalesReportTotals::fromDomain)
         ).map(t -> SalesReportResponse.of(t.getT1(), t.getT2(), t.getT3(), q.page(), q.size()));
     }
 

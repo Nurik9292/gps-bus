@@ -1,12 +1,12 @@
 package biz.ugur.busroutebackend.advertising.infrastructure.persistence.repository;
 
-import biz.ugur.busroutebackend.advertising.application.dto.SalesReportItem;
-import biz.ugur.busroutebackend.advertising.application.dto.SalesReportTotals;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
 import biz.ugur.busroutebackend.advertising.domain.repository.SalesReportFilter;
+import biz.ugur.busroutebackend.advertising.domain.repository.SalesReportRow;
+import biz.ugur.busroutebackend.advertising.domain.repository.SalesReportRowTotals;
 import biz.ugur.busroutebackend.advertising.infrastructure.mapper.SalesReportRowMapper;
 import biz.ugur.busroutebackend.business.domain.valueobjects.BusinessId;
 import org.springframework.data.domain.Pageable;
@@ -136,7 +136,7 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
     }
 
     @Override
-    public Flux<SalesReportItem> findForSalesReport(SalesReportFilter f) {
+    public Flux<SalesReportRow> findForSalesReport(SalesReportFilter f) {
         StringBuilder sql = new StringBuilder("""
                 SELECT p.id, p.title, p.status AS placement_status, p.kind,
                        p.starts_at, p.ends_at,
@@ -194,7 +194,7 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
     }
 
     @Override
-    public Mono<SalesReportTotals> totalsForSalesReport(SalesReportFilter f) {
+    public Mono<SalesReportRowTotals> totalsForSalesReport(SalesReportFilter f) {
         StringBuilder sql = new StringBuilder("""
                 SELECT COUNT(*)::BIGINT                                                              AS orders,
                        COALESCE(SUM(pay.amount_minor), 0)::BIGINT                                   AS revenue,
@@ -227,7 +227,7 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
                     : BigDecimal.valueOf(clicks)
                             .multiply(BigDecimal.valueOf(100))
                             .divide(BigDecimal.valueOf(impressions), 2, RoundingMode.HALF_UP);
-            return new SalesReportTotals(orders, revenue, currency, avgCtr);
+            return new SalesReportRowTotals(orders, revenue, currency, avgCtr);
         }).one();
     }
 }
