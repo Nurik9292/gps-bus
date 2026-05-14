@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.advertising.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.advertising.domain.model.AdDetailViewEvent;
+import biz.ugur.busroutebackend.advertising.domain.repository.DetailViewSummary;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,8 +19,10 @@ import reactor.test.StepVerifier;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -122,5 +125,27 @@ class R2dbcAdDetailViewEventRepositoryIntegrationTest {
                     assertThat(s.avgDurationMs()).isNull();
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void summarizeByDayBetween_groupsByDayWithAvgDuration() {
+        PlacementId pid = PlacementId.of(UUID.randomUUID().toString());
+        Clock day1 = Clock.fixed(Instant.parse("2026-05-10T12:00:00Z"), ZoneOffset.UTC);
+        Clock day2 = Clock.fixed(Instant.parse("2026-05-11T08:00:00Z"), ZoneOffset.UTC);
+
+        repository.save(AdDetailViewEvent.newRecord(pid, 5000, null, null, day1)).block();
+        repository.save(AdDetailViewEvent.newRecord(pid, 7000, null, null, day1)).block();
+        repository.save(AdDetailViewEvent.newRecord(pid, 3000, null, null, day2)).block();
+
+        Map<LocalDate, DetailViewSummary> result = repository.summarizeByDayBetween(
+                pid,
+                Instant.parse("2026-05-10T00:00:00Z"),
+                Instant.parse("2026-05-12T00:00:00Z")
+        ).block();
+
+        assertThat(result.get(LocalDate.parse("2026-05-10")).count()).isEqualTo(2L);
+        assertThat(result.get(LocalDate.parse("2026-05-10")).avgDurationMs()).isEqualTo(6000L);
+        assertThat(result.get(LocalDate.parse("2026-05-11")).count()).isEqualTo(1L);
+        assertThat(result.get(LocalDate.parse("2026-05-11")).avgDurationMs()).isEqualTo(3000L);
     }
 }

@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 
 @Repository
@@ -60,5 +62,31 @@ public class R2dbcAdDetailViewEventRepository implements AdDetailViewEventReposi
                         row.get("avg_ms", Long.class)
                 ))
                 .one();
+    }
+
+    @Override
+    public Mono<Map<LocalDate, DetailViewSummary>> summarizeByDayBetween(
+            PlacementId placementId, Instant from, Instant to) {
+        return db.sql("""
+                        SELECT DATE_TRUNC('day', occurred_at AT TIME ZONE 'UTC')::DATE AS day,
+                               COUNT(*)::BIGINT                                        AS cnt,
+                               AVG(duration_ms)::BIGINT                               AS avg_ms
+                        FROM ad_detail_view_events
+                        WHERE placement_id = :placement_id
+                          AND occurred_at >= :from
+                          AND occurred_at <  :to
+                        GROUP BY day
+                        ORDER BY day
+                        """)
+                .bind("placement_id", UUID.fromString(placementId.getValue()))
+                .bind("from",         from)
+                .bind("to",           to)
+                .map(row -> Map.entry(
+                        row.get("day", LocalDate.class),
+                        new DetailViewSummary(
+                                row.get("cnt", Long.class),
+                                row.get("avg_ms", Long.class))))
+                .all()
+                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
     }
 }
