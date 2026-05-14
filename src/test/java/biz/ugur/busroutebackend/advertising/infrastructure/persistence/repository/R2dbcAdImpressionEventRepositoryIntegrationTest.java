@@ -19,8 +19,10 @@ import reactor.test.StepVerifier;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -130,5 +132,44 @@ class R2dbcAdImpressionEventRepositoryIntegrationTest {
         StepVerifier.create(repository.countByPlacementIdAndOccurredAtBetween(placementId, from, to))
                 .expectNext(0L)
                 .verifyComplete();
+    }
+
+    @Test
+    void countByDayBetween_groupsByDay() {
+        PlacementId pid = PlacementId.of(UUID.randomUUID().toString());
+        Clock day1 = Clock.fixed(Instant.parse("2026-05-10T12:00:00Z"), ZoneOffset.UTC);
+        Clock day2 = Clock.fixed(Instant.parse("2026-05-11T08:00:00Z"), ZoneOffset.UTC);
+        Clock day3 = Clock.fixed(Instant.parse("2026-05-11T20:00:00Z"), ZoneOffset.UTC);
+
+        repository.save(AdImpressionEvent.newRecord(pid, null, null, day1)).block();
+        repository.save(AdImpressionEvent.newRecord(pid, null, null, day2)).block();
+        repository.save(AdImpressionEvent.newRecord(pid, null, null, day3)).block();
+
+        Map<LocalDate, Long> result = repository.countByDayBetween(
+                pid,
+                Instant.parse("2026-05-10T00:00:00Z"),
+                Instant.parse("2026-05-12T00:00:00Z")
+        ).block();
+
+        assertThat(result)
+                .containsEntry(LocalDate.parse("2026-05-10"), 1L)
+                .containsEntry(LocalDate.parse("2026-05-11"), 2L);
+    }
+
+    @Test
+    void countByOccurredAtBetween_acrossAllPlacements() {
+        PlacementId p1 = PlacementId.of(UUID.randomUUID().toString());
+        PlacementId p2 = PlacementId.of(UUID.randomUUID().toString());
+        Clock c = Clock.fixed(Instant.parse("2026-05-10T12:00:00Z"), ZoneOffset.UTC);
+
+        repository.save(AdImpressionEvent.newRecord(p1, null, null, c)).block();
+        repository.save(AdImpressionEvent.newRecord(p1, null, null, c)).block();
+        repository.save(AdImpressionEvent.newRecord(p2, null, null, c)).block();
+
+        Long total = repository.countByOccurredAtBetween(
+                Instant.parse("2026-05-09T00:00:00Z"),
+                Instant.parse("2026-05-11T00:00:00Z")
+        ).block();
+        assertThat(total).isEqualTo(3L);
     }
 }
