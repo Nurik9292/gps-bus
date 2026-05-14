@@ -25,6 +25,9 @@ public class PaymentOrchestrator {
     }
 
     public Mono<PaymentProviderGateway.RegisterResult> register(Payment payment) {
+        if (payment.getProvider() == PaymentProvider.CASH) {
+            return Mono.just(new PaymentProviderGateway.RegisterResult(null, null));
+        }
         return resolve(payment.getProvider()).register(payment);
     }
 
