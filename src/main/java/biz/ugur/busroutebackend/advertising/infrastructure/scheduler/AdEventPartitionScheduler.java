@@ -1,0 +1,85 @@
+package biz.ugur.busroutebackend.advertising.infrastructure.scheduler;
+
+import biz.ugur.busroutebackend.shared.infrastructure.email.EmailNotificationService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.r2dbc.core.DatabaseClient;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "advertising.events.partition", name = "enabled", havingValue = "true", matchIfMissing = true)
+public class AdEventPartitionScheduler {
+
+    private static final List<String> TABLES = List.of(
+            "ad_impression_events",
+            "ad_click_events",
+            "ad_detail_view_events"
+    );
+
+    private final DatabaseClient db;
+    private final Clock clock;
+    private final AdEventPartitionAlertProperties properties;
+    private final Optional<EmailNotificationService> emailService;
+
+    @Scheduled(cron = "${advertising.events.partition.cron:0 0 3 * * *}",
+               zone = "${advertising.events.partition.zone:UTC}")
+    public void ensurePartitions() {
+        YearMonth now = YearMonth.from(LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC));
+        int lookahead = properties.getLookaheadMonths();
+
+        Flux.fromIterable(TABLES)
+                .flatMap(table -> ensureTablePartitions(table, now, lookahead))
+                .subscribe(
+                        v -> {},
+                        err -> {
+                            log.error("Partition maintenance failed", err);
+                            sendAlert(err);
+                        }
+                );
+    }
+
+    private Mono<Void> ensureTablePartitions(String table, YearMonth now, int lookahead) {
+        return Flux.range(0, lookahead + 1)
+                .map(now::plusMonths)
+                .flatMap(ym -> createPartitionIfMissing(table, ym))
+                .then();
+    }
+
+    private Mono<Void> createPartitionIfMissing(String table, YearMonth ym) {
+        String partition = "%s_%04d_%02d".formatted(table, ym.getYear(), ym.getMonthValue());
+        YearMonth next   = ym.plusMonths(1);
+        String from      = "%04d-%02d-01 00:00:00+00".formatted(ym.getYear(), ym.getMonthValue());
+        String to        = "%04d-%02d-01 00:00:00+00".formatted(next.getYear(), next.getMonthValue());
+
+        String ddl = """
+                CREATE TABLE IF NOT EXISTS %s PARTITION OF %s
+                  FOR VALUES FROM ('%s') TO ('%s');
+                CREATE INDEX IF NOT EXISTS ix_%s_placement
+                  ON %s (placement_id, occurred_at DESC);
+                CREATE INDEX IF NOT EXISTS ix_%s_target
+                  ON %s (target_type, occurred_at DESC) WHERE target_type IS NOT NULL;
+                """.formatted(partition, table, from, to, partition, partition, partition, partition);
+
+        return db.sql(ddl).fetch().rowsUpdated().then();
+    }
+
+    private void sendAlert(Throwable err) {
+        if (!properties.getAlert().isEnabled() || properties.getAlert().getRecipients().isEmpty()) {
+            return;
+        }
+        log.warn("Partition alert dispatch — recipients={}", properties.getAlert().getRecipients());
+    }
+}
