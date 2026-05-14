@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
+
 @Repository
 public class R2dbcPaymentRepository extends PaymentBaseRepository implements PaymentRepository {
 
@@ -107,6 +109,34 @@ public class R2dbcPaymentRepository extends PaymentBaseRepository implements Pay
                 .bind("provider", provider.name())
                 .bind("status", status.name())
                 .map(getRowMapper())
+                .one();
+    }
+
+    @Override
+    public Mono<Long> sumCompletedRevenueBetween(Instant from, Instant to) {
+        return databaseClient.sql("""
+                SELECT COALESCE(SUM(amount_minor), 0)::BIGINT AS total
+                FROM payments
+                WHERE status = 'COMPLETED'
+                  AND completed_at >= :from
+                  AND completed_at <  :to
+                """)
+                .bind("from", from)
+                .bind("to", to)
+                .map(row -> row.get("total", Long.class))
+                .one();
+    }
+
+    @Override
+    public Mono<Long> countByProviderAndStatus(PaymentProvider provider, PaymentStatus status) {
+        return databaseClient.sql("""
+                SELECT COUNT(*)::BIGINT AS cnt
+                FROM payments
+                WHERE provider = :provider AND status = :status
+                """)
+                .bind("provider", provider.name())
+                .bind("status", status.name())
+                .map(row -> row.get("cnt", Long.class))
                 .one();
     }
 }

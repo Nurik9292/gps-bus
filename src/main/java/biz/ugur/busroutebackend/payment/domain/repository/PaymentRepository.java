@@ -10,6 +10,8 @@ import org.springframework.data.domain.Pageable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
+
 public interface PaymentRepository extends BaseRepository<Payment, PaymentId> {
 
     Mono<Payment> findByOrderNumber(String orderNumber);
@@ -28,4 +30,8 @@ public interface PaymentRepository extends BaseRepository<Payment, PaymentId> {
             PaymentProvider provider,
             PaymentStatus status
     );
+
+    Mono<Long> sumCompletedRevenueBetween(Instant from, Instant to);
+
+    Mono<Long> countByProviderAndStatus(PaymentProvider provider, PaymentStatus status);
 }
