@@ -9,6 +9,11 @@ import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementReposit
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.TariffId;
 import biz.ugur.busroutebackend.business.domain.valueobjects.BusinessId;
+import biz.ugur.busroutebackend.payment.domain.enums.PaymentProvider;
+import biz.ugur.busroutebackend.payment.domain.enums.PaymentStatus;
+import biz.ugur.busroutebackend.payment.domain.enums.PaymentSubjectType;
+import biz.ugur.busroutebackend.payment.domain.model.Payment;
+import biz.ugur.busroutebackend.payment.domain.repository.PaymentRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
@@ -25,7 +30,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -37,6 +44,9 @@ class CancelAdPlacementUseCaseTest {
 
     @Mock
     private AdPlacementRepository placementRepository;
+
+    @Mock
+    private PaymentRepository paymentRepository;
 
     @Mock
     private AdPlacementResponseMapper responseMapper;
@@ -67,6 +77,8 @@ class CancelAdPlacementUseCaseTest {
         when(placementRepository.findById(placement.getId())).thenReturn(Mono.just(placement));
         when(placementRepository.save(any(AdPlacement.class)))
                 .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(paymentRepository.findFirstBySubjectAndProviderAndStatus(any(), any(), any(), any()))
+                .thenReturn(Mono.empty());
         when(responseMapper.toResponse(any(AdPlacement.class))).thenReturn(Mono.just(response));
 
         StepVerifier.create(useCase.execute(placement.getId().getValue()))
@@ -74,6 +86,59 @@ class CancelAdPlacementUseCaseTest {
                 .verifyComplete();
 
         verify(placementRepository).save(any(AdPlacement.class));
+    }
+
+    @Test
+    void cancelsPendingCashPaymentAlongsidePlacement() {
+        AdPlacementResponse response = mock(AdPlacementResponse.class);
+        when(response.id()).thenReturn(placement.getId().getValue());
+
+        Payment pendingCash = mock(Payment.class);
+        Payment cancelledPayment = mock(Payment.class);
+        when(pendingCash.cancel(anyString())).thenReturn(cancelledPayment);
+
+        when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
+        when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(placementRepository.findById(placement.getId())).thenReturn(Mono.just(placement));
+        when(placementRepository.save(any(AdPlacement.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(paymentRepository.findFirstBySubjectAndProviderAndStatus(
+                eq(PaymentSubjectType.AD_PLACEMENT),
+                eq(placement.getId().getValue()),
+                eq(PaymentProvider.CASH),
+                eq(PaymentStatus.REGISTERED)))
+                .thenReturn(Mono.just(pendingCash));
+        when(paymentRepository.save(cancelledPayment)).thenReturn(Mono.just(cancelledPayment));
+        when(responseMapper.toResponse(any(AdPlacement.class))).thenReturn(Mono.just(response));
+
+        StepVerifier.create(useCase.execute(placement.getId().getValue()))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        verify(paymentRepository).save(cancelledPayment);
+    }
+
+    @Test
+    void noPendingCashPayment_completesNormally() {
+        AdPlacementResponse response = mock(AdPlacementResponse.class);
+        when(response.id()).thenReturn(placement.getId().getValue());
+
+        when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
+        when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(placementRepository.findById(placement.getId())).thenReturn(Mono.just(placement));
+        when(placementRepository.save(any(AdPlacement.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(paymentRepository.findFirstBySubjectAndProviderAndStatus(any(), any(), any(), any()))
+                .thenReturn(Mono.empty());
+        when(responseMapper.toResponse(any(AdPlacement.class))).thenReturn(Mono.just(response));
+
+        StepVerifier.create(useCase.execute(placement.getId().getValue()))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        verify(paymentRepository, never()).save(any());
     }
 
     @Test
