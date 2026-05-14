@@ -94,6 +94,7 @@ public class ApiVersionConfig {
     public static final String V1_ADMIN_BUSINESSES     = V1_ADMIN + BUSINESSES;
     public static final String V1_ADMIN_AD_TARIFFS     = V1_ADMIN + AD_TARIFFS;
     public static final String V1_ADMIN_AD_PLACEMENTS  = V1_ADMIN + AD_PLACEMENTS;
+    public static final String V1_ADMIN_AD_PLACEMENT_PAYMENT_CALLBACK = V1_ADMIN_AD_PLACEMENTS + "/{placementId}/payment-callback";
 
     public static final String V1_MOBILE_ADS              = V1_MOBILE + ADS;
     public static final String V1_MOBILE_AD_DETAIL_VIEW   = V1_MOBILE_ADS + "/{placementId}/detail-view";

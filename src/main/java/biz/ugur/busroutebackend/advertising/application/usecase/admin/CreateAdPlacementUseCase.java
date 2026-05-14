@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.advertising.application.usecase.admin;
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.PaymentMethod;
+import biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig;
 import biz.ugur.busroutebackend.advertising.application.factory.AdPlacementFactory;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
@@ -25,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -33,8 +35,8 @@ import java.util.Optional;
 public class CreateAdPlacementUseCase
         extends BaseUseCase<Mono<CreateAdPlacementCommand>, CreateAdPlacementResponse> {
 
-    private static final int BANK_PAYMENT_EXPIRY_MINUTES = 30;
-    private static final int CASH_PAYMENT_EXPIRY_MINUTES = 1;
+    private static final Duration BANK_PAYMENT_EXPIRY = Duration.ofMinutes(30);
+    private static final Duration CASH_PAYMENT_EXPIRY = Duration.ofDays(7);
     private static final String CASH_RETURN_URL = "cash://no-redirect";
 
     private final AdPlacementRepository placementRepository;
@@ -102,9 +104,9 @@ public class CreateAdPlacementUseCase
                     String returnUrl = provider == PaymentProvider.CASH
                             ? CASH_RETURN_URL
                             : buildReturnUrl(placement);
-                    int expiryMinutes = provider == PaymentProvider.CASH
-                            ? CASH_PAYMENT_EXPIRY_MINUTES
-                            : BANK_PAYMENT_EXPIRY_MINUTES;
+                    Duration expiry = provider == PaymentProvider.CASH
+                            ? CASH_PAYMENT_EXPIRY
+                            : BANK_PAYMENT_EXPIRY;
                     Payment draft = Payment.register(
                             provider,
                             PaymentSubjectType.AD_PLACEMENT,
@@ -112,7 +114,7 @@ public class CreateAdPlacementUseCase
                             placement.getBusinessId().getValue(),
                             money,
                             returnUrl,
-                            LocalDateTime.now().plusMinutes(expiryMinutes));
+                            LocalDateTime.now().plus(expiry));
                     return paymentRepository.save(draft);
                 })
                 .flatMap(saved -> paymentOrchestrator.register(saved)
@@ -135,7 +137,8 @@ public class CreateAdPlacementUseCase
     }
 
     private String buildReturnUrl(AdPlacement placement) {
-        return "/api/v1/admin/advertising/placements/" + placement.getId().getValue() + "/payment-callback";
+        return ApiVersionConfig.V1_ADMIN_AD_PLACEMENT_PAYMENT_CALLBACK
+                .replace("{placementId}", placement.getId().getValue());
     }
 
     @Override
