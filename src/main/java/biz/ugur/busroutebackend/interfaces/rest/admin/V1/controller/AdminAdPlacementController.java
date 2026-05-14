@@ -22,12 +22,11 @@ import biz.ugur.busroutebackend.advertising.application.usecase.admin.RejectAdPl
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentProvider;
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentStatus;
+import biz.ugur.busroutebackend.shared.application.SecurityContextService;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -56,6 +55,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
     private final GetAdPlacementAnalyticsUseCase getAdPlacementAnalyticsUseCase;
     private final GetAdPlacementAnalyticsTrendUseCase getAdPlacementAnalyticsTrendUseCase;
     private final GetSalesReportUseCase getSalesReportUseCase;
+    private final SecurityContextService securityContextService;
 
     public AdminAdPlacementController(CreateAdPlacementUseCase createAdPlacementUseCase,
                                        GetAdPlacementByIdUseCase getAdPlacementByIdUseCase,
@@ -67,6 +67,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
                                        GetAdPlacementAnalyticsUseCase getAdPlacementAnalyticsUseCase,
                                        GetAdPlacementAnalyticsTrendUseCase getAdPlacementAnalyticsTrendUseCase,
                                        GetSalesReportUseCase getSalesReportUseCase,
+                                       SecurityContextService securityContextService,
                                        MessageSource messageSource) {
         super(messageSource);
         this.createAdPlacementUseCase = createAdPlacementUseCase;
@@ -79,6 +80,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
         this.getAdPlacementAnalyticsUseCase = getAdPlacementAnalyticsUseCase;
         this.getAdPlacementAnalyticsTrendUseCase = getAdPlacementAnalyticsTrendUseCase;
         this.getSalesReportUseCase = getSalesReportUseCase;
+        this.securityContextService = securityContextService;
     }
 
     @Override
@@ -115,21 +117,19 @@ public class AdminAdPlacementController extends BasePaginatedController {
 
     @PostMapping("/{placementId}/approve")
     public Mono<ResponseEntity<ApiResponse<AdPlacementResponse>>> approve(
-            @PathVariable String placementId,
-            @AuthenticationPrincipal UserDetails admin) {
-        String adminId = admin != null ? admin.getUsername() : "system";
-        return ok(approveAdPlacementUseCase.execute(
-                new ApproveAdPlacementUseCase.Request(placementId, adminId)));
+            @PathVariable String placementId) {
+        return ok(securityContextService.getCurrentUsername()
+                .flatMap(adminId -> approveAdPlacementUseCase.execute(
+                        new ApproveAdPlacementUseCase.Request(placementId, adminId))));
     }
 
     @PostMapping("/{placementId}/reject")
     public Mono<ResponseEntity<ApiResponse<AdPlacementResponse>>> reject(
             @PathVariable String placementId,
-            @Valid @RequestBody RejectAdPlacementCommand request,
-            @AuthenticationPrincipal UserDetails admin) {
-        String adminId = admin != null ? admin.getUsername() : "system";
-        return ok(rejectAdPlacementUseCase.execute(
-                new RejectAdPlacementUseCase.Request(placementId, adminId, request)));
+            @Valid @RequestBody RejectAdPlacementCommand request) {
+        return ok(securityContextService.getCurrentUsername()
+                .flatMap(adminId -> rejectAdPlacementUseCase.execute(
+                        new RejectAdPlacementUseCase.Request(placementId, adminId, request))));
     }
 
     @PostMapping("/{placementId}/cancel")
