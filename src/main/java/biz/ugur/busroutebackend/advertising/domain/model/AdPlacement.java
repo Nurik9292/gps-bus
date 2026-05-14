@@ -45,9 +45,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
 
     private final PlacementWindow window;
 
-    private final Long impressionsCount;
-    private final Long clicksCount;
-
     private final String displayContexts;
     private final List<PlacementTarget> targets;
     private final Integer displayOrder;
@@ -101,8 +98,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 .displayContexts(serializeContexts(displayContexts))
                 .targets(resolvedTargets)
                 .displayOrder(displayOrder != null ? displayOrder : 0)
-                .impressionsCount(0L)
-                .clicksCount(0L)
                 .version(0L)
                 .build();
 
@@ -128,8 +123,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                        String targetUrl,
                                        String ctaText,
                                        PlacementWindow window,
-                                       Long impressionsCount,
-                                       Long clicksCount,
                                        String displayContexts,
                                        List<PlacementTarget> targets,
                                        Integer displayOrder,
@@ -149,8 +142,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 .title(title).content(content).imageUrl(imageUrl)
                 .targetUrl(targetUrl).ctaText(ctaText)
                 .window(window)
-                .impressionsCount(impressionsCount != null ? impressionsCount : 0L)
-                .clicksCount(clicksCount != null ? clicksCount : 0L)
                 .displayContexts(displayContexts)
                 .targets(immutableCopy(targets))
                 .displayOrder(displayOrder)
@@ -217,18 +208,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
         next.registerEvent(new AdPlacementRejectedEvent(
                 this.id.getValue(), adminId, trimmedReason));
         return next;
-    }
-
-    public AdPlacement recordImpression() {
-        return this.toBuilder()
-                .impressionsCount(this.impressionsCount + 1)
-                .build();
-    }
-
-    public AdPlacement recordClick() {
-        return this.toBuilder()
-                .clicksCount(this.clicksCount + 1)
-                .build();
     }
 
     private AdPlacement transition(PlacementStatus target) {

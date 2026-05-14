@@ -35,8 +35,6 @@ public final class AdPlacementMapper {
                 e.getTargetUrl(),
                 e.getCtaText(),
                 PlacementWindow.of(e.getStartsAt(), e.getEndsAt()),
-                e.getImpressionsCount(),
-                e.getClicksCount(),
                 e.getDisplayContexts(),
                 targets,
                 e.getDisplayOrder(),
@@ -67,8 +65,6 @@ public final class AdPlacementMapper {
                 .ctaText(p.getCtaText())
                 .startsAt(window != null ? window.getStartsAt() : null)
                 .endsAt(window != null ? window.getEndsAt() : null)
-                .impressionsCount(p.getImpressionsCount())
-                .clicksCount(p.getClicksCount())
                 .displayContexts(p.getDisplayContexts())
                 .displayOrder(p.getDisplayOrder())
                 .rejectionReason(p.getRejectionReason())

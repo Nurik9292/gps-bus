@@ -46,12 +46,10 @@ class AdPlacementTest {
     class Create {
 
         @Test
-        void createsDraftWithZeroCountersAndRaisesCreatedEvent() {
+        void createsDraftWithZeroVersionAndRaisesCreatedEvent() {
             AdPlacement placement = newDraft();
 
             assertThat(placement.getStatus()).isEqualTo(PlacementStatus.DRAFT);
-            assertThat(placement.getImpressionsCount()).isZero();
-            assertThat(placement.getClicksCount()).isZero();
             assertThat(placement.getVersion()).isZero();
             assertThat(placement.getDomainEvents())
                     .hasSize(1)
@@ -192,21 +190,4 @@ class AdPlacementTest {
         }
     }
 
-    @Nested
-    class Counters {
-
-        @Test
-        void recordImpressionIncrementsCounter() {
-            AdPlacement placement = newDraft();
-            AdPlacement bumped = placement.recordImpression().recordImpression();
-            assertThat(bumped.getImpressionsCount()).isEqualTo(2L);
-        }
-
-        @Test
-        void recordClickIncrementsCounter() {
-            AdPlacement placement = newDraft();
-            AdPlacement bumped = placement.recordClick();
-            assertThat(bumped.getClicksCount()).isEqualTo(1L);
-        }
-    }
 }

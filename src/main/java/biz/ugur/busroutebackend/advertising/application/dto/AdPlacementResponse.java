@@ -28,8 +28,6 @@ public record AdPlacementResponse(
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
         LocalDateTime endsAt,
 
-        @JsonProperty("impressions_count")    long impressionsCount,
-        @JsonProperty("clicks_count")         long clicksCount,
         @JsonProperty("display_contexts")     String displayContexts,
         @JsonProperty("targets")              List<PlacementTargetView> targets,
         @JsonProperty("display_order")        Integer displayOrder,
@@ -75,8 +73,6 @@ public record AdPlacementResponse(
                 p.getCtaText(),
                 p.getWindow() != null ? p.getWindow().getStartsAt() : null,
                 p.getWindow() != null ? p.getWindow().getEndsAt() : null,
-                p.getImpressionsCount() != null ? p.getImpressionsCount() : 0L,
-                p.getClicksCount() != null ? p.getClicksCount() : 0L,
                 p.getDisplayContexts(),
                 targetViews,
                 p.getDisplayOrder(),
