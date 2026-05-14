@@ -2,6 +2,8 @@ package biz.ugur.busroutebackend.interfaces.rest.mobile.V1.controller;
 
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.AdTariffResponse;
+import biz.ugur.busroutebackend.advertising.application.dto.RecordClickCommand;
+import biz.ugur.busroutebackend.advertising.application.dto.RecordImpressionCommand;
 import biz.ugur.busroutebackend.advertising.application.usecase.client.GetActiveAdsUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.client.GetActiveTariffsUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.client.RecordClickUseCase;
@@ -75,11 +77,11 @@ public class MobileAdController extends BaseController {
 
     @PostMapping("/{placementId}/impression")
     public Mono<ResponseEntity<Void>> recordImpression(@PathVariable String placementId) {
-        return recordImpressionUseCase.execute(placementId).then(noContent());
+        return recordImpressionUseCase.execute(new RecordImpressionCommand(placementId, null, null)).then(noContent());
     }
 
     @PostMapping("/{placementId}/click")
     public Mono<ResponseEntity<Void>> recordClick(@PathVariable String placementId) {
-        return recordClickUseCase.execute(placementId).then(noContent());
+        return recordClickUseCase.execute(new RecordClickCommand(placementId, null, null)).then(noContent());
     }
 }
