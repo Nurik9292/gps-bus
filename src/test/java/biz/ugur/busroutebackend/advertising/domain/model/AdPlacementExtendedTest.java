@@ -21,7 +21,7 @@ class AdPlacementExtendedTest {
         return AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
                 null, "Promo", "content", "https://img", "https://target", "Click",
-                null, List.of("home"), null, 1);
+                null, null, 1);
     }
 
     private AdPlacement approvedDraft() {
@@ -164,7 +164,7 @@ class AdPlacementExtendedTest {
                     PlacementType.BANNER, null, PlacementStatus.ACTIVE,
                     "Title", "content", null, null, null,
                     PlacementWindow.unscheduled(),
-                    null, null, 0, null, null, null, null, null, null, null, null);
+                    null, 0, null, null, null, null, null, null, null, null);
             assertEquals(0L, restored.getVersion());
             assertEquals(0, restored.getDomainEvents().size());
         }
@@ -176,7 +176,7 @@ class AdPlacementExtendedTest {
                     PlacementType.BANNER, null, PlacementStatus.ACTIVE,
                     "Title", null, null, null, null,
                     PlacementWindow.unscheduled(),
-                    null, null, 0, null, null, null, null, null, null, null, 7L);
+                    null, 0, null, null, null, null, null, null, null, 7L);
             assertEquals(7L, restored.getVersion());
         }
     }

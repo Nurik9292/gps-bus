@@ -36,7 +36,6 @@ class AdPlacementTest {
                 "https://target",
                 "Click",
                 null,
-                List.of("home"),
                 null,
                 1
         );
@@ -61,7 +60,7 @@ class AdPlacementTest {
         void trimsTitleAndDefaultsWindowToUnscheduled() {
             AdPlacement placement = AdPlacement.create(
                     BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                    null, "  Promo  ", null, null, null, null, null, null, null, null);
+                    null, "  Promo  ", null, null, null, null, null, null, null);
 
             assertThat(placement.getTitle()).isEqualTo("Promo");
             assertThat(placement.getWindow()).isEqualTo(PlacementWindow.unscheduled());
@@ -72,7 +71,7 @@ class AdPlacementTest {
         void rejectsNullBusinessId() {
             assertThatThrownBy(() -> AdPlacement.create(
                     null, TariffId.generate(), PlacementType.BANNER,
-                    null, "t", null, null, null, null, null, null, null, null))
+                    null, "t", null, null, null, null, null, null, null))
                     .isInstanceOf(AdvertisingValidationException.class);
         }
 
@@ -80,7 +79,7 @@ class AdPlacementTest {
         void rejectsBlankTitle() {
             assertThatThrownBy(() -> AdPlacement.create(
                     BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                    null, "   ", null, null, null, null, null, null, null, null))
+                    null, "   ", null, null, null, null, null, null, null))
                     .isInstanceOf(AdvertisingValidationException.class);
         }
 
@@ -95,7 +94,7 @@ class AdPlacementTest {
             AdPlacement placement = AdPlacement.create(
                     BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
                     PlacementKind.EDITORIAL, "Editorial promo", null, null, null, null,
-                    null, null, null, null);
+                    null, null, null);
             assertThat(placement.getKind()).isEqualTo(PlacementKind.EDITORIAL);
         }
 
@@ -111,7 +110,7 @@ class AdPlacementTest {
         void acceptsMixOfGeneralAndSpecificTargets() {
             AdPlacement placement = AdPlacement.create(
                     BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                    PlacementKind.COMMERCIAL, "Promo", null, null, null, null, null, null,
+                    PlacementKind.COMMERCIAL, "Promo", null, null, null, null, null,
                     List.of(
                             PlacementTarget.general(TargetType.HOME),
                             PlacementTarget.specific(TargetType.ROUTE, "route-14")
@@ -125,7 +124,7 @@ class AdPlacementTest {
         void createdEventCarriesKind() {
             AdPlacement placement = AdPlacement.create(
                     BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                    PlacementKind.EDITORIAL, "Editorial", null, null, null, null, null, null, null, null);
+                    PlacementKind.EDITORIAL, "Editorial", null, null, null, null, null, null, null);
             AdPlacementCreatedEvent event = (AdPlacementCreatedEvent) placement.getDomainEvents().get(0);
             assertThat(event.getKind()).isEqualTo(PlacementKind.EDITORIAL);
         }

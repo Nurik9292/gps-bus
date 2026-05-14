@@ -30,7 +30,6 @@ public class AdPlacementEntity {
     @Column("cta_text")                  private String ctaText;
     @Column("starts_at")                 private LocalDateTime startsAt;
     @Column("ends_at")                   private LocalDateTime endsAt;
-    @Column("display_contexts")          private String displayContexts;
     @Column("display_order")             private Integer displayOrder;
     @Column("rejection_reason")          private String rejectionReason;
     @Column("approved_at")               private LocalDateTime approvedAt;

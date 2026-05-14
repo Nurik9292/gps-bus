@@ -45,7 +45,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
 
     private final PlacementWindow window;
 
-    private final String displayContexts;
     private final List<PlacementTarget> targets;
     private final Integer displayOrder;
 
@@ -69,7 +68,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                       String targetUrl,
                                       String ctaText,
                                       PlacementWindow window,
-                                      List<String> displayContexts,
                                       List<PlacementTarget> targets,
                                       Integer displayOrder) {
         if (businessId == null) throw new AdvertisingValidationException("businessId", "must not be null");
@@ -95,7 +93,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 .targetUrl(trimOrNull(targetUrl))
                 .ctaText(trimOrNull(ctaText))
                 .window(window != null ? window : PlacementWindow.unscheduled())
-                .displayContexts(serializeContexts(displayContexts))
                 .targets(resolvedTargets)
                 .displayOrder(displayOrder != null ? displayOrder : 0)
                 .version(0L)
@@ -123,7 +120,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                        String targetUrl,
                                        String ctaText,
                                        PlacementWindow window,
-                                       String displayContexts,
                                        List<PlacementTarget> targets,
                                        Integer displayOrder,
                                        String rejectionReason,
@@ -142,7 +138,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 .title(title).content(content).imageUrl(imageUrl)
                 .targetUrl(targetUrl).ctaText(ctaText)
                 .window(window)
-                .displayContexts(displayContexts)
                 .targets(immutableCopy(targets))
                 .displayOrder(displayOrder)
                 .rejectionReason(rejectionReason)
@@ -218,15 +213,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
         next.registerEvent(new AdPlacementStatusChangedEvent(
                 this.id.getValue(), this.status, target));
         return next;
-    }
-
-    private static String serializeContexts(List<String> contexts) {
-        if (contexts == null || contexts.isEmpty()) return null;
-        return String.join(",", contexts.stream()
-                .filter(c -> c != null && !c.isBlank())
-                .map(c -> c.trim().toLowerCase())
-                .filter(c -> !"map.html".equals(c))
-                .toList());
     }
 
     private static String trimOrNull(String value) {

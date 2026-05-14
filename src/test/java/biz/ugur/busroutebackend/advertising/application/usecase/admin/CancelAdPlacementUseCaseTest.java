@@ -21,8 +21,6 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
@@ -55,7 +53,7 @@ class CancelAdPlacementUseCaseTest {
     void setUp() {
         placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "Title", "content", null, null, null, null, List.of("home"), null, 0);
+                null, "Title", "content", null, null, null, null, null, 0);
     }
 
     @Test

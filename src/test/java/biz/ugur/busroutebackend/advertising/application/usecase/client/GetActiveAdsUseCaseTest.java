@@ -47,10 +47,10 @@ class GetActiveAdsUseCaseTest {
     private EventBus eventBus;
 
     @Test
-    void returnsAllAdsWhenContextBlank() {
+    void returnsAdsFromRepository() {
         AdPlacement ad = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "Title", "content", null, null, null, null, List.of("home"), null, 0);
+                null, "Title", "content", null, null, null, null, null, 0);
         AdPlacementResponse response = mock(AdPlacementResponse.class);
 
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
@@ -60,43 +60,22 @@ class GetActiveAdsUseCaseTest {
                 .thenReturn(Flux.just(ad));
         when(responseMapper.toResponses(List.of(ad))).thenReturn(Flux.just(response));
 
-        StepVerifier.create(useCase.execute(new GetActiveAdsUseCase.Query(PlacementType.BANNER, "")))
+        StepVerifier.create(useCase.execute(new GetActiveAdsUseCase.Query(PlacementType.BANNER, null)))
                 .assertNext(list -> assertEquals(1, list.size()))
                 .verifyComplete();
     }
 
     @Test
-    void returnsEmptyListForMapHtmlContext() {
+    void returnsEmptyListWhenRepositoryIsEmpty() {
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
         when(placementRepository.findActiveByTypeAt(any(PlacementType.class), any(LocalDateTime.class)))
                 .thenReturn(Flux.empty());
+        when(responseMapper.toResponses(List.of())).thenReturn(Flux.empty());
 
-        StepVerifier.create(useCase.execute(new GetActiveAdsUseCase.Query(PlacementType.BANNER, "map.html")))
+        StepVerifier.create(useCase.execute(new GetActiveAdsUseCase.Query(PlacementType.BANNER, null)))
                 .assertNext(list -> assertEquals(0, list.size()))
-                .verifyComplete();
-    }
-
-    @Test
-    void filtersByContextKeyword() {
-        AdPlacement adHome = AdPlacement.create(
-                BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "Home ad", "", null, null, null, null, List.of("home"), null, 0);
-        AdPlacement adMap = AdPlacement.create(
-                BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "Map ad", "", null, null, null, null, List.of("map"), null, 0);
-        AdPlacementResponse response = mock(AdPlacementResponse.class);
-
-        when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
-        when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
-                .thenAnswer(inv -> inv.getArgument(0));
-        when(placementRepository.findActiveByTypeAt(any(PlacementType.class), any(LocalDateTime.class)))
-                .thenReturn(Flux.just(adHome, adMap));
-        when(responseMapper.toResponses(List.of(adHome))).thenReturn(Flux.just(response));
-
-        StepVerifier.create(useCase.execute(new GetActiveAdsUseCase.Query(PlacementType.BANNER, "home")))
-                .assertNext(list -> assertEquals(1, list.size()))
                 .verifyComplete();
     }
 

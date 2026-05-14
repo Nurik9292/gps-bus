@@ -62,7 +62,7 @@ class CreateAdPlacementUseCaseTest {
         CreateAdPlacementCommand cmd = mock(CreateAdPlacementCommand.class);
         AdPlacement placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "Title", "content", null, null, null, null, List.of("home"), null, 0);
+                null, "Title", "content", null, null, null, null, null, 0);
         AdPlacementResponse response = mock(AdPlacementResponse.class);
         when(response.id()).thenReturn(placement.getId().getValue());
         when(response.businessId()).thenReturn(placement.getBusinessId().getValue());
@@ -86,7 +86,7 @@ class CreateAdPlacementUseCaseTest {
         CreateAdPlacementCommand cmd = mock(CreateAdPlacementCommand.class);
         AdPlacement placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                PlacementKind.COMMERCIAL, "Promo", null, null, null, null, null, null,
+                PlacementKind.COMMERCIAL, "Promo", null, null, null, null, null,
                 java.util.List.of(
                         PlacementTarget.general(TargetType.HOME),
                         PlacementTarget.specific(TargetType.ROUTE, "route-14")),

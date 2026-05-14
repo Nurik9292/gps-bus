@@ -35,7 +35,7 @@ class AdPlacementResponseMapperTest {
         AdPlacement placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
                 null, "My Ad", "Body", "/img.jpg", "https://x.tm", "Click",
-                null, List.of("home"),
+                null,
                 List.of(PlacementTarget.general(TargetType.HOME)), 1);
 
         StepVerifier.create(mapper.toResponse(placement))
@@ -57,7 +57,7 @@ class AdPlacementResponseMapperTest {
         AdPlacement placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
                 null, "My Ad", null, null, null, null,
-                null, null, null, 0);
+                null, null, 0);
 
         when(targetRepository.findByPlacementId(placement.getId()))
                 .thenReturn(Flux.just(
@@ -75,10 +75,10 @@ class AdPlacementResponseMapperTest {
     void toResponsesBatchLoadsTargetsForList() {
         AdPlacement p1 = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "A", null, null, null, null, null, null, null, 0);
+                null, "A", null, null, null, null, null, null, 0);
         AdPlacement p2 = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "B", null, null, null, null, null, null, null, 0);
+                null, "B", null, null, null, null, null, null, 0);
 
         when(targetRepository.findByPlacementIds(any()))
                 .thenReturn(Mono.just(Map.of(

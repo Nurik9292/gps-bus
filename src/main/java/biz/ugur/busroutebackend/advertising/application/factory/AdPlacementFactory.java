@@ -64,7 +64,6 @@ public class AdPlacementFactory {
                                     storedImageUrl.isEmpty() ? null : storedImageUrl,
                                     cmd.targetUrl(), cmd.ctaText(),
                                     PlacementWindow.of(cmd.startsAt(), cmd.endsAt()),
-                                    cmd.displayContexts(),
                                     targets,
                                     cmd.displayOrder()));
                 });

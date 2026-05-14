@@ -20,7 +20,7 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
             "id", "business_id", "tariff_id", "placement_type", "kind", "status",
             "title", "content", "image_url", "target_url", "cta_text",
             "starts_at", "ends_at",
-            "display_contexts", "display_order",
+            "display_order",
             "rejection_reason",
             "approved_at", "approved_by_admin_id",
             "rejected_at", "rejected_by_admin_id",
@@ -57,7 +57,6 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
         columns.put("cta_text", e.getCtaText());
         columns.put("starts_at", e.getStartsAt());
         columns.put("ends_at", e.getEndsAt());
-        columns.put("display_contexts", e.getDisplayContexts());
         columns.put("display_order", e.getDisplayOrder());
         columns.put("rejection_reason", e.getRejectionReason());
         columns.put("approved_at", e.getApprovedAt());
@@ -85,7 +84,6 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
                 .ctaText(row.get("cta_text", String.class))
                 .startsAt(row.get("starts_at", LocalDateTime.class))
                 .endsAt(row.get("ends_at", LocalDateTime.class))
-                .displayContexts(row.get("display_contexts", String.class))
                 .displayOrder(row.get("display_order", Integer.class))
                 .rejectionReason(row.get("rejection_reason", String.class))
                 .approvedAt(row.get("approved_at", LocalDateTime.class))
