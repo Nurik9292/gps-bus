@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.advertising.application.usecase.admin;
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.dto.PaymentMethod;
 import biz.ugur.busroutebackend.advertising.application.factory.AdPlacementFactory;
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
@@ -205,7 +206,8 @@ class CreateAdPlacementUseCaseTest {
     private AdPlacement buildDraftPlacement(PlacementKind kind) {
         return AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                kind, "Test Ad", "content", null, null, null, null,
+                kind, "Test Ad", null, null, "https://target", null,
+                ContentType.LINK, null,
                 List.of(PlacementTarget.general(TargetType.HOME)), 0);
     }
 

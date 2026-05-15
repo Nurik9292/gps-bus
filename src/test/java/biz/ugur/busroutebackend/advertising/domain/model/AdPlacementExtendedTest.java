@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.advertising.domain.model;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementStatusChangedEvent;
@@ -20,8 +21,8 @@ class AdPlacementExtendedTest {
     private AdPlacement newDraft() {
         return AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "Promo", "content", "https://img", "https://target", "Click",
-                null, null, 1);
+                null, "Promo", null, "https://img", "https://target", "Click",
+                ContentType.LINK, null, null, 1);
     }
 
     private AdPlacement approvedDraft() {
@@ -163,6 +164,7 @@ class AdPlacementExtendedTest {
                     PlacementId.generate(), BusinessId.generate(), TariffId.generate(),
                     PlacementType.BANNER, null, PlacementStatus.ACTIVE,
                     "Title", "content", null, null, null,
+                    ContentType.LINK,
                     PlacementWindow.unscheduled(),
                     null, 0, null, null, null, null, null, null, null, null);
             assertEquals(0L, restored.getVersion());
@@ -175,6 +177,7 @@ class AdPlacementExtendedTest {
                     PlacementId.generate(), BusinessId.generate(), TariffId.generate(),
                     PlacementType.BANNER, null, PlacementStatus.ACTIVE,
                     "Title", null, null, null, null,
+                    ContentType.LINK,
                     PlacementWindow.unscheduled(),
                     null, 0, null, null, null, null, null, null, null, 7L);
             assertEquals(7L, restored.getVersion());

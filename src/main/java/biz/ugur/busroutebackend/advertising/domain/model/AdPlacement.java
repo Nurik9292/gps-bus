@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.advertising.domain.model;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
@@ -42,6 +43,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
     private final String imageUrl;
     private final String targetUrl;
     private final String ctaText;
+    private final ContentType contentType;
 
     private final PlacementWindow window;
 
@@ -67,17 +69,22 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                       String imageUrl,
                                       String targetUrl,
                                       String ctaText,
+                                      ContentType contentType,
                                       PlacementWindow window,
                                       List<PlacementTarget> targets,
                                       Integer displayOrder) {
-        if (businessId == null) throw new AdvertisingValidationException("businessId", "must not be null");
-        if (tariffId == null) throw new AdvertisingValidationException("tariffId", "must not be null");
+        PlacementKind resolvedKind = kind != null ? kind : PlacementKind.COMMERCIAL;
+        if (resolvedKind == PlacementKind.COMMERCIAL) {
+            if (businessId == null) throw new AdvertisingValidationException("businessId", "must not be null for COMMERCIAL");
+            if (tariffId == null) throw new AdvertisingValidationException("tariffId", "must not be null for COMMERCIAL");
+        }
         if (placementType == null) throw new AdvertisingValidationException("placementType", "must not be null");
         if (title == null || title.trim().isEmpty()) {
             throw new AdvertisingValidationException("title", "must not be blank");
         }
+        ContentType resolvedContentType = contentType != null ? contentType : ContentType.LINK;
+        validateContentConsistency(resolvedContentType, content, targetUrl);
 
-        PlacementKind resolvedKind = kind != null ? kind : PlacementKind.COMMERCIAL;
         List<PlacementTarget> resolvedTargets = immutableCopy(targets);
 
         AdPlacement placement = builder()
@@ -92,6 +99,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 .imageUrl(trimOrNull(imageUrl))
                 .targetUrl(trimOrNull(targetUrl))
                 .ctaText(trimOrNull(ctaText))
+                .contentType(resolvedContentType)
                 .window(window != null ? window : PlacementWindow.unscheduled())
                 .targets(resolvedTargets)
                 .displayOrder(displayOrder != null ? displayOrder : 0)
@@ -100,12 +108,24 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
 
         placement.registerEvent(new AdPlacementCreatedEvent(
                 placement.id.getValue(),
-                businessId.getValue(),
-                tariffId.getValue(),
+                businessId != null ? businessId.getValue() : null,
+                tariffId != null ? tariffId.getValue() : null,
                 placementType,
                 resolvedKind));
 
         return placement;
+    }
+
+    private static void validateContentConsistency(ContentType contentType, String content, String targetUrl) {
+        if (contentType == ContentType.CONTENT && (content == null || content.isBlank())) {
+            throw new AdvertisingValidationException("content", "required when contentType=CONTENT");
+        }
+        if (contentType == ContentType.LINK && (targetUrl == null || targetUrl.isBlank())) {
+            throw new AdvertisingValidationException("targetUrl", "required when contentType=LINK");
+        }
+        if (contentType == ContentType.LINK && content != null && !content.isBlank()) {
+            throw new AdvertisingValidationException("content", "must be empty for LINK type");
+        }
     }
 
     public static AdPlacement restore(PlacementId id,
@@ -119,6 +139,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                        String imageUrl,
                                        String targetUrl,
                                        String ctaText,
+                                       ContentType contentType,
                                        PlacementWindow window,
                                        List<PlacementTarget> targets,
                                        Integer displayOrder,
@@ -137,6 +158,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 .status(status)
                 .title(title).content(content).imageUrl(imageUrl)
                 .targetUrl(targetUrl).ctaText(ctaText)
+                .contentType(contentType != null ? contentType : ContentType.LINK)
                 .window(window)
                 .targets(immutableCopy(targets))
                 .displayOrder(displayOrder)

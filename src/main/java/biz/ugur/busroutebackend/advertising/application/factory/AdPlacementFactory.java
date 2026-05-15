@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.advertising.application.factory;
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.dto.PlacementTargetSpec;
 import biz.ugur.busroutebackend.advertising.application.processor.AdPlacementImageProcessor;
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
@@ -63,6 +64,7 @@ public class AdPlacementFactory {
                                     cmd.title(), cmd.content(),
                                     storedImageUrl.isEmpty() ? null : storedImageUrl,
                                     cmd.targetUrl(), cmd.ctaText(),
+                                    ContentType.LINK,
                                     PlacementWindow.of(cmd.startsAt(), cmd.endsAt()),
                                     targets,
                                     cmd.displayOrder()));

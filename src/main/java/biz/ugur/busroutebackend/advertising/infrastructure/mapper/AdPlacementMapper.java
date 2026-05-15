@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.advertising.infrastructure.mapper;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
@@ -34,6 +35,7 @@ public final class AdPlacementMapper {
                 e.getImageUrl(),
                 e.getTargetUrl(),
                 e.getCtaText(),
+                ContentType.LINK,
                 PlacementWindow.of(e.getStartsAt(), e.getEndsAt()),
                 targets,
                 e.getDisplayOrder(),

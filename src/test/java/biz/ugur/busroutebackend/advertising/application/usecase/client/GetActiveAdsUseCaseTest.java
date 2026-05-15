@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.advertising.application.usecase.client;
 
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.mapper.AdPlacementResponseMapper;
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
@@ -59,7 +60,8 @@ class GetActiveAdsUseCaseTest {
     private AdPlacement buildPlacement() {
         return AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "Title", "content", null, null, null, null, null, 0);
+                null, "Title", null, null, "https://target", null,
+                ContentType.LINK, null, null, 0);
     }
 
     private void setupCorrelation() {

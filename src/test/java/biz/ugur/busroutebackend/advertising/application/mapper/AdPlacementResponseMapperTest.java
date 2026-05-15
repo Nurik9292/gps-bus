@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.advertising.application.mapper;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
@@ -44,7 +45,7 @@ class AdPlacementResponseMapperTest {
         AdPlacement placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
                 null, "My Ad", "Body", "/img.jpg", "https://x.tm", "Click",
-                null,
+                ContentType.CONTENT, null,
                 List.of(PlacementTarget.general(TargetType.HOME)), 1);
 
         when(paymentRepository.findFirstBySubjectAndProviderAndStatus(
@@ -73,8 +74,8 @@ class AdPlacementResponseMapperTest {
     void toResponseFetchesTargetsFromRepoWhenAggregateHasNone() {
         AdPlacement placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "My Ad", null, null, null, null,
-                null, null, 0);
+                null, "My Ad", null, null, "https://target", null,
+                ContentType.LINK, null, null, 0);
 
         when(targetRepository.findByPlacementId(placement.getId()))
                 .thenReturn(Flux.just(
@@ -100,10 +101,12 @@ class AdPlacementResponseMapperTest {
     void toResponsesReturnsNullPendingCashPaymentForBatchWithoutLookup() {
         AdPlacement p1 = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "A", null, null, null, null, null, null, 0);
+                null, "A", null, null, "https://target", null,
+                ContentType.LINK, null, null, 0);
         AdPlacement p2 = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                null, "B", null, null, null, null, null, null, 0);
+                null, "B", null, null, "https://target", null,
+                ContentType.LINK, null, null, 0);
 
         when(targetRepository.findByPlacementIds(any()))
                 .thenReturn(Mono.just(Map.of(
