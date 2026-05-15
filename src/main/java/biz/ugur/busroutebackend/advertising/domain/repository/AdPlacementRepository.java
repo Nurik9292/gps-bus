@@ -25,6 +25,10 @@ public interface AdPlacementRepository extends BaseRepository<AdPlacement, Place
 
     Mono<Long> countByStatus(PlacementStatus status);
 
+    Flux<AdPlacement> findByKind(PlacementKind kind, Pageable pageable);
+
+    Mono<Long> countByKind(PlacementKind kind);
+
     Mono<Map<PlacementStatus, Long>> countsByStatus();
 
     Flux<AdPlacement> findActiveByTypeAt(PlacementType placementType, LocalDateTime moment);

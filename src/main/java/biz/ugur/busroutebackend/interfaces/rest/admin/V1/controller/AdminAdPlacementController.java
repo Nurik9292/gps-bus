@@ -93,10 +93,11 @@ public class AdminAdPlacementController extends BasePaginatedController {
             @RequestParam(required = false, defaultValue = "1") int page,
             @RequestParam(required = false, defaultValue = "20") int size,
             @RequestParam(required = false) String status,
-            @RequestParam(value = "business_id", required = false) String businessId) {
+            @RequestParam(value = "business_id", required = false) String businessId,
+            @RequestParam(required = false) String kind) {
         validatePagination(page, size);
         return okPaginated(getAdPlacementsPaginatedUseCase.execute(
-                new GetAdPlacementsPaginatedUseCase.Query(page, size, status, businessId)));
+                new GetAdPlacementsPaginatedUseCase.Query(page, size, status, businessId, kind)));
     }
 
     @GetMapping("/counts")

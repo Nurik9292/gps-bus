@@ -107,6 +107,30 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
     }
 
     @Override
+    public Flux<AdPlacement> findByKind(PlacementKind kind, Pageable pageable) {
+        String sql = String.format("""
+                SELECT %s FROM ad_placements
+                WHERE kind = :kind
+                %s
+                LIMIT :limit OFFSET :offset
+                """, selectColumns(), getOrderByClause(pageable));
+        return databaseClient.sql(sql)
+                .bind("kind", kind.name())
+                .bind("limit", pageable.getPageSize())
+                .bind("offset", pageable.getOffset())
+                .map(getRowMapper())
+                .all();
+    }
+
+    @Override
+    public Mono<Long> countByKind(PlacementKind kind) {
+        return databaseClient.sql("SELECT COUNT(*) FROM ad_placements WHERE kind = :kind")
+                .bind("kind", kind.name())
+                .map(row -> row.get(0, Long.class))
+                .one();
+    }
+
+    @Override
     public Flux<AdPlacement> findActiveByTypeAt(PlacementType placementType, LocalDateTime moment) {
         String sql = String.format("""
                         SELECT %s FROM ad_placements
