@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.advertising.application.dto.PaymentMethod;
 import biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig;
 import biz.ugur.busroutebackend.advertising.application.factory.AdPlacementFactory;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
+import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementTargetRepository;
@@ -70,9 +71,11 @@ public class CreateAdPlacementUseCase
     protected Mono<CreateAdPlacementResponse> process(Mono<CreateAdPlacementCommand> request) {
         return request.flatMap(cmd -> {
             cmd.validatePaymentConsistency();
+            cmd.validateContentConsistency();
             return securityService.getCurrentUsername()
                     .flatMap(username -> placementFactory.create(cmd)
                             .map(placement -> placement.approve(username))
+                            .map(CreateAdPlacementUseCase::hotFixEditorialStatus)
                             .flatMap(placementRepository::save)
                             .flatMap(saved -> persistTargets(saved)
                                     .then(createPaymentIfCommercial(saved, cmd)
@@ -83,6 +86,14 @@ public class CreateAdPlacementUseCase
                             .doOnSuccess(r -> log.info("AdPlacement created and auto-approved: id={}",
                                     r.placement().id())));
         });
+    }
+
+    static AdPlacement hotFixEditorialStatus(AdPlacement p) {
+        if (p.getKind() == PlacementKind.EDITORIAL
+                && p.getStatus() == PlacementStatus.PENDING_PAYMENT) {
+            return p.markAsScheduled();
+        }
+        return p;
     }
 
     private Mono<AdPlacement> persistTargets(AdPlacement placement) {

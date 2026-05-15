@@ -19,7 +19,6 @@ class CreateAdPlacementUseCaseEditorialHotFixTest {
         when(approved.getKind()).thenReturn(PlacementKind.EDITORIAL);
         when(approved.getStatus()).thenReturn(PlacementStatus.PENDING_PAYMENT);
         AdPlacement scheduled = mock(AdPlacement.class);
-        when(scheduled.getKind()).thenReturn(PlacementKind.EDITORIAL);
         when(scheduled.getStatus()).thenReturn(PlacementStatus.SCHEDULED);
         when(approved.markAsScheduled()).thenReturn(scheduled);
 

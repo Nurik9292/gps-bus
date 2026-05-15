@@ -77,10 +77,11 @@ class CreateAdPlacementUseCaseTest {
     void process_editorial_autoApprovesAndReturnsNoPayment() {
         AdPlacement draft = buildDraftPlacement(PlacementKind.EDITORIAL);
         AdPlacement approved = draft.approve("admin1");
+        AdPlacement scheduled = approved.markAsScheduled();
         CreateAdPlacementCommand cmd = editorialCommand(draft);
 
         when(placementFactory.create(cmd)).thenReturn(Mono.just(draft));
-        when(placementRepository.save(any(AdPlacement.class))).thenReturn(Mono.just(approved));
+        when(placementRepository.save(any(AdPlacement.class))).thenReturn(Mono.just(scheduled));
         when(targetRepository.replaceAll(any(), any())).thenReturn(Mono.empty());
 
         StepVerifier.create(useCase.execute(Mono.just(cmd)))
@@ -91,7 +92,7 @@ class CreateAdPlacementUseCaseTest {
                 .verifyComplete();
 
         verify(paymentRepository, never()).save(any());
-        verify(placementRepository).save(argThat(p -> p.getStatus() == PlacementStatus.PENDING_PAYMENT));
+        verify(placementRepository).save(argThat(p -> p.getStatus() == PlacementStatus.SCHEDULED));
     }
 
     @Test
