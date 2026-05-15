@@ -8,6 +8,7 @@ import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementApprovedEve
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementCreatedEvent;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementRejectedEvent;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementStatusChangedEvent;
+import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementUpdatedEvent;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.PlacementStateTransitionException;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
@@ -23,7 +24,10 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 
 @Builder(toBuilder = true)
@@ -174,6 +178,70 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
 
     public AdPlacement withTargets(List<PlacementTarget> targets) {
         return this.toBuilder().targets(immutableCopy(targets)).build();
+    }
+
+    public AdPlacement updateEditorialContent(String title,
+                                               String content,
+                                               String imageUrl,
+                                               String targetUrl,
+                                               String ctaText,
+                                               ContentType contentType,
+                                               PlacementWindow window,
+                                               List<PlacementTarget> targets,
+                                               Integer displayOrder) {
+        if (this.kind != PlacementKind.EDITORIAL) {
+            throw new IllegalStateException(
+                    "updateEditorialContent allowed only for EDITORIAL kind, got " + this.kind);
+        }
+        if (this.status == PlacementStatus.EXPIRED || this.status == PlacementStatus.CANCELLED) {
+            throw new PlacementStateTransitionException(
+                    "Cannot update placement in status " + this.status);
+        }
+        if (title == null || title.trim().isEmpty()) {
+            throw new AdvertisingValidationException("title", "must not be blank");
+        }
+        ContentType resolvedContentType = contentType != null ? contentType : ContentType.LINK;
+        validateContentConsistency(resolvedContentType, content, targetUrl);
+
+        String newTitle = title.trim();
+        String newContent = trimOrNull(content);
+        String newImageUrl = trimOrNull(imageUrl);
+        String newTargetUrl = trimOrNull(targetUrl);
+        String newCtaText = trimOrNull(ctaText);
+        PlacementWindow newWindow = window != null ? window : PlacementWindow.unscheduled();
+        List<PlacementTarget> newTargets = immutableCopy(targets);
+        int newDisplayOrder = displayOrder != null ? displayOrder : 0;
+
+        Map<String, Object> changes = new HashMap<>();
+        if (!Objects.equals(this.title, newTitle)) changes.put("title", newTitle);
+        if (!Objects.equals(this.content, newContent)) changes.put("content", newContent);
+        if (!Objects.equals(this.imageUrl, newImageUrl)) changes.put("imageUrl", newImageUrl);
+        if (!Objects.equals(this.targetUrl, newTargetUrl)) changes.put("targetUrl", newTargetUrl);
+        if (!Objects.equals(this.ctaText, newCtaText)) changes.put("ctaText", newCtaText);
+        if (this.contentType != resolvedContentType) {
+            changes.put("contentType", resolvedContentType.name());
+        }
+        if (!Objects.equals(this.window, newWindow)) changes.put("window", newWindow);
+        if (this.displayOrder == null || this.displayOrder != newDisplayOrder) {
+            changes.put("displayOrder", newDisplayOrder);
+        }
+
+        AdPlacement updated = this.toBuilder()
+                .title(newTitle)
+                .content(newContent)
+                .imageUrl(newImageUrl)
+                .targetUrl(newTargetUrl)
+                .ctaText(newCtaText)
+                .contentType(resolvedContentType)
+                .window(newWindow)
+                .targets(newTargets)
+                .displayOrder(newDisplayOrder)
+                .build();
+
+        updated.registerEvent(new AdPlacementUpdatedEvent(
+                this.id.getValue(), null, changes));
+
+        return updated;
     }
 
     public AdPlacement markAsPendingPayment() { return transition(PlacementStatus.PENDING_PAYMENT); }
