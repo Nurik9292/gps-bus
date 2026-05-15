@@ -234,12 +234,10 @@ class CreateAdPlacementUseCaseTest {
     }
 
     private CreateAdPlacementCommand editorialCommand(AdPlacement placement) {
-        String tariffId = placement != null ? placement.getTariffId().getValue() : TariffId.generate().getValue();
-        String businessId = placement != null ? placement.getBusinessId().getValue() : BusinessId.generate().getValue();
         return new CreateAdPlacementCommand(
-                businessId, tariffId, "BANNER", "EDITORIAL",
+                null, null, "BANNER", "EDITORIAL",
                 "Editorial Title", "content", null, null, null,
-                null, null, List.of(), 0, null, null);
+                null, null, List.of(), 0, null, null, ContentType.CONTENT);
     }
 
     private CreateAdPlacementCommand commercialCommand(AdPlacement placement,
@@ -249,7 +247,7 @@ class CreateAdPlacementUseCaseTest {
         String businessId = placement != null ? placement.getBusinessId().getValue() : BusinessId.generate().getValue();
         return new CreateAdPlacementCommand(
                 businessId, tariffId, "BANNER", "COMMERCIAL",
-                "Commercial Ad", "content", null, null, null,
-                null, null, List.of(), 0, paymentMethod, paymentProvider);
+                "Commercial Ad", null, null, "https://target", null,
+                null, null, List.of(), 0, paymentMethod, paymentProvider, ContentType.LINK);
     }
 }

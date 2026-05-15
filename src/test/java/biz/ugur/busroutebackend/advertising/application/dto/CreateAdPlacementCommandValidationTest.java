@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.advertising.application.dto;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import org.junit.jupiter.api.Test;
 
@@ -11,9 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class CreateAdPlacementCommandValidationTest {
 
     private CreateAdPlacementCommand build(PlacementKind kind, PaymentMethod method, String provider) {
+        boolean commercial = kind == PlacementKind.COMMERCIAL;
         return new CreateAdPlacementCommand(
-                "biz-001",
-                "tariff-001",
+                commercial ? "biz-001" : null,
+                commercial ? "tariff-001" : null,
                 "BANNER",
                 kind != null ? kind.name() : null,
                 "Test Title",
@@ -26,7 +28,8 @@ class CreateAdPlacementCommandValidationTest {
                 List.of(),
                 0,
                 method,
-                provider
+                provider,
+                ContentType.LINK
         );
     }
 
