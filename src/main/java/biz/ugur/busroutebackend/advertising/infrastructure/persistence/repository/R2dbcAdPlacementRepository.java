@@ -1,7 +1,9 @@
 package biz.ugur.busroutebackend.advertising.infrastructure.persistence.repository;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
+import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
 import biz.ugur.busroutebackend.advertising.domain.repository.SalesReportFilter;
@@ -23,6 +25,17 @@ import java.util.Map;
 
 @Repository
 public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implements AdPlacementRepository {
+
+    private static final String SELECT_COLUMNS_PREFIXED = String.join(", ",
+            "p.id", "p.business_id", "p.tariff_id", "p.placement_type", "p.kind", "p.status",
+            "p.title", "p.content", "p.image_url", "p.target_url", "p.cta_text", "p.content_type",
+            "p.starts_at", "p.ends_at",
+            "p.display_order",
+            "p.rejection_reason",
+            "p.approved_at", "p.approved_by_admin_id",
+            "p.rejected_at", "p.rejected_by_admin_id",
+            "p.created_at", "p.updated_at", "p.version"
+    );
 
     public R2dbcAdPlacementRepository(DatabaseClient databaseClient) {
         super(databaseClient);
@@ -105,6 +118,21 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
                         """, selectColumns());
         return databaseClient.sql(sql)
                 .bind("type", placementType.name())
+                .map(getRowMapper())
+                .all();
+    }
+
+    @Override
+    public Flux<AdPlacement> findActiveByKindAndTargetType(PlacementKind kind, TargetType targetType) {
+        String sql = "SELECT " + SELECT_COLUMNS_PREFIXED + " FROM ad_placements p "
+                + "JOIN ad_placement_targets t ON t.placement_id = p.id "
+                + "WHERE p.kind = :kind "
+                + "  AND p.status = 'ACTIVE' "
+                + "  AND t.target_type = :target_type "
+                + "ORDER BY p.display_order ASC, p.created_at DESC";
+        return databaseClient.sql(sql)
+                .bind("kind", kind.name())
+                .bind("target_type", targetType.name())
                 .map(getRowMapper())
                 .all();
     }
