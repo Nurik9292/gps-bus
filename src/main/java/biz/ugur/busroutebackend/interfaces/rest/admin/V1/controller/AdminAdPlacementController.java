@@ -9,6 +9,7 @@ import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementCom
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.RejectAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.dto.SalesReportResponse;
+import biz.ugur.busroutebackend.advertising.application.dto.UpdateEditorialAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.ApproveAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.CancelAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.CreateAdPlacementUseCase;
@@ -19,6 +20,7 @@ import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlace
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementsPaginatedUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetSalesReportUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.RejectAdPlacementUseCase;
+import biz.ugur.busroutebackend.advertising.application.usecase.admin.UpdateEditorialAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentProvider;
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentStatus;
@@ -28,6 +30,7 @@ import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -55,6 +58,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
     private final GetAdPlacementAnalyticsUseCase getAdPlacementAnalyticsUseCase;
     private final GetAdPlacementAnalyticsTrendUseCase getAdPlacementAnalyticsTrendUseCase;
     private final GetSalesReportUseCase getSalesReportUseCase;
+    private final UpdateEditorialAdPlacementUseCase updateEditorialUseCase;
     private final SecurityContextService securityContextService;
 
     public AdminAdPlacementController(CreateAdPlacementUseCase createAdPlacementUseCase,
@@ -67,6 +71,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
                                        GetAdPlacementAnalyticsUseCase getAdPlacementAnalyticsUseCase,
                                        GetAdPlacementAnalyticsTrendUseCase getAdPlacementAnalyticsTrendUseCase,
                                        GetSalesReportUseCase getSalesReportUseCase,
+                                       UpdateEditorialAdPlacementUseCase updateEditorialUseCase,
                                        SecurityContextService securityContextService,
                                        MessageSource messageSource) {
         super(messageSource);
@@ -80,6 +85,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
         this.getAdPlacementAnalyticsUseCase = getAdPlacementAnalyticsUseCase;
         this.getAdPlacementAnalyticsTrendUseCase = getAdPlacementAnalyticsTrendUseCase;
         this.getSalesReportUseCase = getSalesReportUseCase;
+        this.updateEditorialUseCase = updateEditorialUseCase;
         this.securityContextService = securityContextService;
     }
 
@@ -114,6 +120,18 @@ public class AdminAdPlacementController extends BasePaginatedController {
     public Mono<ResponseEntity<ApiResponse<CreateAdPlacementResponse>>> create(
             @Valid @RequestBody CreateAdPlacementCommand request) {
         return created(createAdPlacementUseCase.execute(Mono.just(request)));
+    }
+
+    @PatchMapping("/{id}")
+    public Mono<ResponseEntity<ApiResponse<AdPlacementResponse>>> updateEditorial(
+            @PathVariable("id") String id,
+            @RequestBody UpdateEditorialAdPlacementCommand body) {
+        UpdateEditorialAdPlacementCommand cmd = new UpdateEditorialAdPlacementCommand(
+                id,
+                body.title(), body.content(), body.imageUrl(), body.targetUrl(), body.ctaText(),
+                body.startsAt(), body.endsAt(),
+                body.targets(), body.displayOrder(), body.contentType());
+        return ok(updateEditorialUseCase.execute(Mono.just(cmd)));
     }
 
     @PostMapping("/{placementId}/approve")
