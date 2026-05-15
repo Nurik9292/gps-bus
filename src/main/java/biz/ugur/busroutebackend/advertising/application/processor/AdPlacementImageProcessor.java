@@ -23,13 +23,20 @@ public class AdPlacementImageProcessor {
     }
 
     public Mono<String> processForUpdate(String newImageUrl, String oldImageUrl) {
+        if (newImageUrl != null && newImageUrl.startsWith(DATA_URL_PREFIX)) {
+            return storage.save(newImageUrl)
+                    .flatMap(savedPath -> deleteIfStoredPath(oldImageUrl).thenReturn(savedPath));
+        }
         if (newImageUrl == null || newImageUrl.equals(oldImageUrl)) {
             return Mono.justOrEmpty(oldImageUrl);
         }
-        if (newImageUrl.startsWith(DATA_URL_PREFIX)) {
-            return storage.save(newImageUrl)
-                    .flatMap(savedPath -> storage.delete(oldImageUrl).thenReturn(savedPath));
+        return deleteIfStoredPath(oldImageUrl).thenReturn(newImageUrl);
+    }
+
+    private Mono<Void> deleteIfStoredPath(String path) {
+        if (path == null || path.isBlank() || path.startsWith(DATA_URL_PREFIX)) {
+            return Mono.empty();
         }
-        return storage.delete(oldImageUrl).thenReturn(newImageUrl);
+        return storage.delete(path);
     }
 }
