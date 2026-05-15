@@ -72,6 +72,7 @@ public class AdPlacementResponseMapper {
                 base.status(),
                 base.title(),
                 base.content(),
+                base.contentType(),
                 base.imageUrl(),
                 base.targetUrl(),
                 base.ctaText(),
