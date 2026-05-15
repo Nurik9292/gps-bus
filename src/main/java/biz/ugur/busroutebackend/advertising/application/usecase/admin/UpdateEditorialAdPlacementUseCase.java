@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.PlacementTargetSpec;
 import biz.ugur.busroutebackend.advertising.application.dto.UpdateEditorialAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.mapper.AdPlacementResponseMapper;
+import biz.ugur.busroutebackend.advertising.application.processor.AdPlacementImageProcessor;
 import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdPlacementNotFoundException;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
@@ -29,11 +30,13 @@ public class UpdateEditorialAdPlacementUseCase
     private final AdPlacementTargetRepository targetRepository;
     private final SecurityContextService securityService;
     private final AdPlacementResponseMapper responseMapper;
+    private final AdPlacementImageProcessor imageProcessor;
 
     public UpdateEditorialAdPlacementUseCase(AdPlacementRepository placementRepository,
                                               AdPlacementTargetRepository targetRepository,
                                               SecurityContextService securityService,
                                               AdPlacementResponseMapper responseMapper,
+                                              AdPlacementImageProcessor imageProcessor,
                                               CorrelationContextService correlationService,
                                               EventBus eventBus) {
         super(correlationService, eventBus);
@@ -41,6 +44,7 @@ public class UpdateEditorialAdPlacementUseCase
         this.targetRepository = targetRepository;
         this.securityService = securityService;
         this.responseMapper = responseMapper;
+        this.imageProcessor = imageProcessor;
     }
 
     @Override
@@ -57,15 +61,20 @@ public class UpdateEditorialAdPlacementUseCase
 
     private Mono<AdPlacementResponse> applyAndPersist(AdPlacement existing,
                                                        UpdateEditorialAdPlacementCommand cmd) {
-        List<PlacementTarget> domainTargets = toDomainTargets(cmd.targets());
-        PlacementWindow window = PlacementWindow.of(cmd.startsAt(), cmd.endsAt());
-        AdPlacement updated = existing.updateEditorialContent(
-                cmd.title(), cmd.content(), cmd.imageUrl(), cmd.targetUrl(),
-                cmd.ctaText(), cmd.contentType(), window, domainTargets, cmd.displayOrder());
-        return placementRepository.save(updated)
-                .flatMap(saved -> targetRepository.replaceAll(saved.getId(), saved.getTargets())
-                        .then(publishEvents(saved))
-                        .then(responseMapper.toResponse(saved)));
+        return imageProcessor.processForUpdate(cmd.imageUrl(), existing.getImageUrl())
+                .defaultIfEmpty("")
+                .flatMap(resolvedImageUrl -> {
+                    String finalImageUrl = resolvedImageUrl.isEmpty() ? null : resolvedImageUrl;
+                    List<PlacementTarget> domainTargets = toDomainTargets(cmd.targets());
+                    PlacementWindow window = PlacementWindow.of(cmd.startsAt(), cmd.endsAt());
+                    AdPlacement updated = existing.updateEditorialContent(
+                            cmd.title(), cmd.content(), finalImageUrl, cmd.targetUrl(),
+                            cmd.ctaText(), cmd.contentType(), window, domainTargets, cmd.displayOrder());
+                    return placementRepository.save(updated)
+                            .flatMap(saved -> targetRepository.replaceAll(saved.getId(), saved.getTargets())
+                                    .then(publishEvents(saved))
+                                    .then(responseMapper.toResponse(saved)));
+                });
     }
 
     private Mono<Void> publishEvents(AdPlacement aggregate) {

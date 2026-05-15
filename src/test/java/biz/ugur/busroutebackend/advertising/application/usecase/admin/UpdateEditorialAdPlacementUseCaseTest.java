@@ -42,13 +42,18 @@ class UpdateEditorialAdPlacementUseCaseTest {
     @Mock private CorrelationContextService correlationService;
     @Mock private EventBus eventBus;
     @Mock private AdPlacementResponseMapper responseMapper;
+    @Mock private biz.ugur.busroutebackend.advertising.application.processor.AdPlacementImageProcessor imageProcessor;
 
     @InjectMocks private UpdateEditorialAdPlacementUseCase useCase;
 
     @BeforeEach
     void setup() {
-        when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
+        org.mockito.Mockito.lenient()
+                .when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient()
+                .when(imageProcessor.processForUpdate(any(), any()))
+                .thenAnswer(inv -> Mono.justOrEmpty(inv.<String>getArgument(0)));
     }
 
     @Test
