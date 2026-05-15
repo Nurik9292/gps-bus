@@ -63,8 +63,8 @@ public record AdPlacementResponse(
                 : p.getTargets().stream().map(PlacementTargetView::fromDomain).toList();
         return new AdPlacementResponse(
                 p.getId().getValue(),
-                p.getBusinessId().getValue(),
-                p.getTariffId().getValue(),
+                p.getBusinessId() != null ? p.getBusinessId().getValue() : null,
+                p.getTariffId() != null ? p.getTariffId().getValue() : null,
                 p.getPlacementType().name(),
                 p.getKind() != null ? p.getKind().name() : null,
                 p.getStatus().name(),

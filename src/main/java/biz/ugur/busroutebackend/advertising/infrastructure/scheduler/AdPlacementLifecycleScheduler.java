@@ -70,8 +70,9 @@ public class AdPlacementLifecycleScheduler {
                     .timeout(PER_ITEM_TIMEOUT)
                     .doOnSuccess(p -> log.info(
                             "AdPlacement activated: id={} tariff={} business={}",
-                            p.getId().getValue(), p.getTariffId().getValue(),
-                            p.getBusinessId().getValue()))
+                            p.getId().getValue(),
+                            p.getTariffId() != null ? p.getTariffId().getValue() : null,
+                            p.getBusinessId() != null ? p.getBusinessId().getValue() : null))
                     .doOnError(err -> log.warn("AdPlacement activate save failed: id={} err={}",
                             placement.getId().getValue(), err.toString()))
                     .onErrorResume(err -> Mono.empty());
