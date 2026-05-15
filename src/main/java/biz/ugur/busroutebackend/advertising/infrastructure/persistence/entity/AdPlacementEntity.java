@@ -28,6 +28,7 @@ public class AdPlacementEntity {
     @Column("image_url")                 private String imageUrl;
     @Column("target_url")                private String targetUrl;
     @Column("cta_text")                  private String ctaText;
+    @Column("content_type")              private String contentType;
     @Column("starts_at")                 private LocalDateTime startsAt;
     @Column("ends_at")                   private LocalDateTime endsAt;
     @Column("display_order")             private Integer displayOrder;

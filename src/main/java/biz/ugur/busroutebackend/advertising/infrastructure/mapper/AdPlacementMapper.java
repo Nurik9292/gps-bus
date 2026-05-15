@@ -23,10 +23,13 @@ public final class AdPlacementMapper {
     }
 
     public static AdPlacement toDomain(AdPlacementEntity e, List<PlacementTarget> targets) {
+        ContentType ct = e.getContentType() != null
+                ? ContentType.valueOf(e.getContentType())
+                : ContentType.LINK;
         return AdPlacement.restore(
                 PlacementId.of(e.getId()),
-                BusinessId.of(e.getBusinessId()),
-                TariffId.of(e.getTariffId()),
+                e.getBusinessId() != null ? BusinessId.of(e.getBusinessId()) : null,
+                e.getTariffId() != null ? TariffId.of(e.getTariffId()) : null,
                 PlacementType.valueOf(e.getPlacementType()),
                 e.getKind() != null ? PlacementKind.from(e.getKind()) : PlacementKind.COMMERCIAL,
                 PlacementStatus.valueOf(e.getStatus()),
@@ -35,7 +38,7 @@ public final class AdPlacementMapper {
                 e.getImageUrl(),
                 e.getTargetUrl(),
                 e.getCtaText(),
-                ContentType.LINK,
+                ct,
                 PlacementWindow.of(e.getStartsAt(), e.getEndsAt()),
                 targets,
                 e.getDisplayOrder(),
@@ -54,8 +57,8 @@ public final class AdPlacementMapper {
         PlacementWindow window = p.getWindow();
         return AdPlacementEntity.builder()
                 .id(p.getId().getValue())
-                .businessId(p.getBusinessId().getValue())
-                .tariffId(p.getTariffId().getValue())
+                .businessId(p.getBusinessId() != null ? p.getBusinessId().getValue() : null)
+                .tariffId(p.getTariffId() != null ? p.getTariffId().getValue() : null)
                 .placementType(p.getPlacementType().name())
                 .kind(p.getKind() != null ? p.getKind().name() : PlacementKind.COMMERCIAL.name())
                 .status(p.getStatus().name())
@@ -64,6 +67,9 @@ public final class AdPlacementMapper {
                 .imageUrl(p.getImageUrl())
                 .targetUrl(p.getTargetUrl())
                 .ctaText(p.getCtaText())
+                .contentType(p.getContentType() != null
+                        ? p.getContentType().name()
+                        : ContentType.LINK.name())
                 .startsAt(window != null ? window.getStartsAt() : null)
                 .endsAt(window != null ? window.getEndsAt() : null)
                 .displayOrder(p.getDisplayOrder())

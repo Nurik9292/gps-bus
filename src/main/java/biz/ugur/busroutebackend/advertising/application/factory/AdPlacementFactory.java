@@ -3,7 +3,6 @@ package biz.ugur.busroutebackend.advertising.application.factory;
 import biz.ugur.busroutebackend.advertising.application.dto.CreateAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.dto.PlacementTargetSpec;
 import biz.ugur.busroutebackend.advertising.application.processor.AdPlacementImageProcessor;
-import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
@@ -38,10 +37,36 @@ public class AdPlacementFactory {
     }
 
     public Mono<AdPlacement> create(CreateAdPlacementCommand cmd) {
+        return Mono.defer(() -> {
+            PlacementKind kind = PlacementKind.from(cmd.kind());
+            if (kind == PlacementKind.EDITORIAL) {
+                return createEditorial(cmd);
+            }
+            return createCommercial(cmd);
+        });
+    }
+
+    private Mono<AdPlacement> createEditorial(CreateAdPlacementCommand cmd) {
+        PlacementType type = PlacementType.from(cmd.placementType());
+        List<PlacementTarget> targets = resolveTargets(cmd.targets());
+        return imageProcessor.process(cmd.imageUrl())
+                .defaultIfEmpty("")
+                .map(storedImageUrl -> AdPlacement.create(
+                        null, null, type,
+                        PlacementKind.EDITORIAL,
+                        cmd.title(), cmd.content(),
+                        storedImageUrl.isEmpty() ? null : storedImageUrl,
+                        cmd.targetUrl(), cmd.ctaText(),
+                        cmd.contentType(),
+                        PlacementWindow.of(cmd.startsAt(), cmd.endsAt()),
+                        targets,
+                        cmd.displayOrder()));
+    }
+
+    private Mono<AdPlacement> createCommercial(CreateAdPlacementCommand cmd) {
         BusinessId businessId = BusinessId.of(cmd.businessId());
         TariffId tariffId = TariffId.of(cmd.tariffId());
         PlacementType type = PlacementType.from(cmd.placementType());
-        PlacementKind kind = PlacementKind.from(cmd.kind());
         List<PlacementTarget> targets = resolveTargets(cmd.targets());
 
         return businessRepository.existsById(businessId)
@@ -60,11 +85,11 @@ public class AdPlacementFactory {
                             .defaultIfEmpty("")
                             .map(storedImageUrl -> AdPlacement.create(
                                     businessId, tariffId, type,
-                                    kind,
+                                    PlacementKind.COMMERCIAL,
                                     cmd.title(), cmd.content(),
                                     storedImageUrl.isEmpty() ? null : storedImageUrl,
                                     cmd.targetUrl(), cmd.ctaText(),
-                                    ContentType.LINK,
+                                    cmd.contentType(),
                                     PlacementWindow.of(cmd.startsAt(), cmd.endsAt()),
                                     targets,
                                     cmd.displayOrder()));

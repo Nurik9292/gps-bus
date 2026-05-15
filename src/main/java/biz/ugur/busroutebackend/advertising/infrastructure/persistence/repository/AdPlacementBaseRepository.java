@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.advertising.infrastructure.persistence.repository;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
 import biz.ugur.busroutebackend.advertising.infrastructure.mapper.AdPlacementMapper;
@@ -18,7 +19,7 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
 
     protected static final String SELECT_COLUMNS = String.join(", ",
             "id", "business_id", "tariff_id", "placement_type", "kind", "status",
-            "title", "content", "image_url", "target_url", "cta_text",
+            "title", "content", "image_url", "target_url", "cta_text", "content_type",
             "starts_at", "ends_at",
             "display_order",
             "rejection_reason",
@@ -55,6 +56,9 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
         columns.put("image_url", e.getImageUrl());
         columns.put("target_url", e.getTargetUrl());
         columns.put("cta_text", e.getCtaText());
+        columns.put("content_type", e.getContentType() != null
+                ? e.getContentType()
+                : ContentType.LINK.name());
         columns.put("starts_at", e.getStartsAt());
         columns.put("ends_at", e.getEndsAt());
         columns.put("display_order", e.getDisplayOrder());
@@ -82,6 +86,7 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
                 .imageUrl(row.get("image_url", String.class))
                 .targetUrl(row.get("target_url", String.class))
                 .ctaText(row.get("cta_text", String.class))
+                .contentType(row.get("content_type", String.class))
                 .startsAt(row.get("starts_at", LocalDateTime.class))
                 .endsAt(row.get("ends_at", LocalDateTime.class))
                 .displayOrder(row.get("display_order", Integer.class))
