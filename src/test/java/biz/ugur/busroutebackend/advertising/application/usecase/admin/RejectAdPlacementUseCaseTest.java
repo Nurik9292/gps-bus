@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.advertising.application.usecase.admin;
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.RejectAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.mapper.AdPlacementResponseMapper;
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdPlacementNotFoundException;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
@@ -21,8 +22,6 @@ import org.mockito.Mock;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -55,7 +54,8 @@ class RejectAdPlacementUseCaseTest {
     void setUp() {
         placement = AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Title", "content", null, null, null, null, List.of("home"), 0);
+                null, "Title", null, null, "https://target", null,
+                ContentType.LINK, null, null, 0);
     }
 
     @Test

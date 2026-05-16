@@ -1,6 +1,8 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
 import biz.ugur.busroutebackend.admin.application.usecase.dashboard.GetDashboardStatisticsUseCase;
+import biz.ugur.busroutebackend.advertising.application.dto.AdvertisingDashboardOverview;
+import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdvertisingDashboardOverviewUseCase;
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.dashboard.DashboardStatisticsResponse;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import org.springframework.context.MessageSource;
@@ -17,12 +19,15 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 public class AdminDashboardController extends BaseController {
 
     private final GetDashboardStatisticsUseCase getDashboardStatisticsUseCase;
+    private final GetAdvertisingDashboardOverviewUseCase getAdvertisingDashboardOverviewUseCase;
 
     public AdminDashboardController(
             GetDashboardStatisticsUseCase getDashboardStatisticsUseCase,
+            GetAdvertisingDashboardOverviewUseCase getAdvertisingDashboardOverviewUseCase,
             MessageSource messageSource) {
         super(messageSource);
         this.getDashboardStatisticsUseCase = getDashboardStatisticsUseCase;
+        this.getAdvertisingDashboardOverviewUseCase = getAdvertisingDashboardOverviewUseCase;
     }
 
     @Override
@@ -34,5 +39,10 @@ public class AdminDashboardController extends BaseController {
     public Mono<ResponseEntity<ApiResponse<DashboardStatisticsResponse>>> getStatistics() {
         return ok(getDashboardStatisticsUseCase.execute()
                 .map(DashboardStatisticsResponse::fromResult));
+    }
+
+    @GetMapping("/advertising-overview")
+    public Mono<ResponseEntity<ApiResponse<AdvertisingDashboardOverview>>> getAdvertisingOverview() {
+        return ok(getAdvertisingDashboardOverviewUseCase.execute(null));
     }
 }

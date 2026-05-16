@@ -36,10 +36,18 @@ class PaymentDomainEnumsTest {
         }
 
         @Test
-        void allProvidersUseSvEpgProtocol() {
+        void electronicProvidersUseSvEpgProtocol() {
             for (PaymentProvider p : PaymentProvider.values()) {
+                if (p == PaymentProvider.CASH) continue;
                 assertEquals("sv_epg", p.getProtocol(), p.name());
+                assertTrue(p.isElectronic(), p.name());
             }
+        }
+
+        @Test
+        void cashProviderIsNotElectronic() {
+            assertEquals("cash", PaymentProvider.CASH.getProtocol());
+            assertFalse(PaymentProvider.CASH.isElectronic());
         }
     }
 

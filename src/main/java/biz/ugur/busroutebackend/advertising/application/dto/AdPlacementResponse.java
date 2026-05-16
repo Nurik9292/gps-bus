@@ -5,15 +5,18 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record AdPlacementResponse(
         @JsonProperty("id")                   String id,
         @JsonProperty("business_id")          String businessId,
         @JsonProperty("tariff_id")            String tariffId,
         @JsonProperty("placement_type")       String placementType,
+        @JsonProperty("kind")                 String kind,
         @JsonProperty("status")               String status,
         @JsonProperty("title")                String title,
         @JsonProperty("content")              String content,
+        @JsonProperty("content_type")         String contentType,
         @JsonProperty("image_url")            String imageUrl,
         @JsonProperty("target_url")           String targetUrl,
         @JsonProperty("cta_text")             String ctaText,
@@ -26,9 +29,7 @@ public record AdPlacementResponse(
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
         LocalDateTime endsAt,
 
-        @JsonProperty("impressions_count")    long impressionsCount,
-        @JsonProperty("clicks_count")         long clicksCount,
-        @JsonProperty("display_contexts")     String displayContexts,
+        @JsonProperty("targets")              List<PlacementTargetView> targets,
         @JsonProperty("display_order")        Integer displayOrder,
 
         @JsonProperty("rejection_reason")     String rejectionReason,
@@ -51,26 +52,31 @@ public record AdPlacementResponse(
 
         @JsonProperty("updated_at")
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+
+        @JsonProperty("pending_cash_payment") PaymentInfo pendingCashPayment
 ) {
 
     public static AdPlacementResponse fromDomain(AdPlacement p) {
+        List<PlacementTargetView> targetViews = p.getTargets() == null
+                ? List.of()
+                : p.getTargets().stream().map(PlacementTargetView::fromDomain).toList();
         return new AdPlacementResponse(
                 p.getId().getValue(),
-                p.getBusinessId().getValue(),
-                p.getTariffId().getValue(),
+                p.getBusinessId() != null ? p.getBusinessId().getValue() : null,
+                p.getTariffId() != null ? p.getTariffId().getValue() : null,
                 p.getPlacementType().name(),
+                p.getKind() != null ? p.getKind().name() : null,
                 p.getStatus().name(),
                 p.getTitle(),
                 p.getContent(),
+                p.getContentType() != null ? p.getContentType().name() : null,
                 p.getImageUrl(),
                 p.getTargetUrl(),
                 p.getCtaText(),
                 p.getWindow() != null ? p.getWindow().getStartsAt() : null,
                 p.getWindow() != null ? p.getWindow().getEndsAt() : null,
-                p.getImpressionsCount() != null ? p.getImpressionsCount() : 0L,
-                p.getClicksCount() != null ? p.getClicksCount() : 0L,
-                p.getDisplayContexts(),
+                targetViews,
                 p.getDisplayOrder(),
                 p.getRejectionReason(),
                 p.getApprovedAt(),
@@ -78,7 +84,8 @@ public record AdPlacementResponse(
                 p.getRejectedAt(),
                 p.getRejectedByAdminId(),
                 p.getCreatedAt(),
-                p.getUpdatedAt()
+                p.getUpdatedAt(),
+                null
         );
     }
 }

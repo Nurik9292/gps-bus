@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.advertising.application.usecase.admin;
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementList;
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementResponse;
 import biz.ugur.busroutebackend.advertising.application.mapper.AdPlacementResponseMapper;
+import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
@@ -20,7 +21,7 @@ import reactor.core.publisher.Mono;
 public class GetAdPlacementsPaginatedUseCase
         extends BaseUseCase<GetAdPlacementsPaginatedUseCase.Query, AdPlacementList> {
 
-    public record Query(int page, int size, String status, String businessId) {}
+    public record Query(int page, int size, String status, String businessId, String kind) {}
 
     private final AdPlacementRepository placementRepository;
     private final AdPlacementResponseMapper responseMapper;
@@ -46,6 +47,10 @@ public class GetAdPlacementsPaginatedUseCase
             BusinessId businessId = BusinessId.of(q.businessId());
             items = placementRepository.findByBusinessId(businessId, pageable);
             total = placementRepository.countByBusinessId(businessId);
+        } else if (q.kind() != null && !q.kind().isBlank()) {
+            PlacementKind kind = PlacementKind.from(q.kind());
+            items = placementRepository.findByKind(kind, pageable);
+            total = placementRepository.countByKind(kind);
         } else if (q.status() != null && !q.status().isBlank()) {
             PlacementStatus status = PlacementStatus.valueOf(q.status().toUpperCase());
             items = placementRepository.findByStatus(status, pageable);
@@ -56,8 +61,8 @@ public class GetAdPlacementsPaginatedUseCase
         }
 
         return items
-                .concatMap(responseMapper::toResponse)
                 .collectList()
+                .flatMap(placements -> responseMapper.toResponses(placements).collectList())
                 .zipWith(total)
                 .map(tuple -> {
                     long activeCount = tuple.getT1().stream()

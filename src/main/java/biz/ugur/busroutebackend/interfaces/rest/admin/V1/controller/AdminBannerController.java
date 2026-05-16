@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig.V1_ADMIN_BANNERS;
 
 @RestController
+@Deprecated(since = "2026-05-15", forRemoval = true)
 @RequestMapping(V1_ADMIN_BANNERS)
 public class AdminBannerController extends BasePaginatedController {
 

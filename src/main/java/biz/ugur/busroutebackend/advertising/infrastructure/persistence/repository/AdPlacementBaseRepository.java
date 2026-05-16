@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.advertising.infrastructure.persistence.repository;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
 import biz.ugur.busroutebackend.advertising.infrastructure.mapper.AdPlacementMapper;
@@ -17,11 +18,10 @@ import java.util.function.BiFunction;
 public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPlacement, PlacementId> {
 
     protected static final String SELECT_COLUMNS = String.join(", ",
-            "id", "business_id", "tariff_id", "placement_type", "status",
-            "title", "content", "image_url", "target_url", "cta_text",
+            "id", "business_id", "tariff_id", "placement_type", "kind", "status",
+            "title", "content", "image_url", "target_url", "cta_text", "content_type",
             "starts_at", "ends_at",
-            "impressions_count", "clicks_count",
-            "display_contexts", "display_order",
+            "display_order",
             "rejection_reason",
             "approved_at", "approved_by_admin_id",
             "rejected_at", "rejected_by_admin_id",
@@ -49,17 +49,18 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
         columns.put("business_id", e.getBusinessId());
         columns.put("tariff_id", e.getTariffId());
         columns.put("placement_type", e.getPlacementType());
+        columns.put("kind", e.getKind());
         columns.put("status", e.getStatus());
         columns.put("title", e.getTitle());
         columns.put("content", e.getContent());
         columns.put("image_url", e.getImageUrl());
         columns.put("target_url", e.getTargetUrl());
         columns.put("cta_text", e.getCtaText());
+        columns.put("content_type", e.getContentType() != null
+                ? e.getContentType()
+                : ContentType.LINK.name());
         columns.put("starts_at", e.getStartsAt());
         columns.put("ends_at", e.getEndsAt());
-        columns.put("impressions_count", e.getImpressionsCount());
-        columns.put("clicks_count", e.getClicksCount());
-        columns.put("display_contexts", e.getDisplayContexts());
         columns.put("display_order", e.getDisplayOrder());
         columns.put("rejection_reason", e.getRejectionReason());
         columns.put("approved_at", e.getApprovedAt());
@@ -78,17 +79,16 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
                 .businessId(row.get("business_id", String.class))
                 .tariffId(row.get("tariff_id", String.class))
                 .placementType(row.get("placement_type", String.class))
+                .kind(row.get("kind", String.class))
                 .status(row.get("status", String.class))
                 .title(row.get("title", String.class))
                 .content(row.get("content", String.class))
                 .imageUrl(row.get("image_url", String.class))
                 .targetUrl(row.get("target_url", String.class))
                 .ctaText(row.get("cta_text", String.class))
+                .contentType(row.get("content_type", String.class))
                 .startsAt(row.get("starts_at", LocalDateTime.class))
                 .endsAt(row.get("ends_at", LocalDateTime.class))
-                .impressionsCount(row.get("impressions_count", Long.class))
-                .clicksCount(row.get("clicks_count", Long.class))
-                .displayContexts(row.get("display_contexts", String.class))
                 .displayOrder(row.get("display_order", Integer.class))
                 .rejectionReason(row.get("rejection_reason", String.class))
                 .approvedAt(row.get("approved_at", LocalDateTime.class))

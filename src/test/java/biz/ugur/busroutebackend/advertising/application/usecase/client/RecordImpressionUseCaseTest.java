@@ -1,89 +1,75 @@
 package biz.ugur.busroutebackend.advertising.application.usecase.client;
 
-import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
-import biz.ugur.busroutebackend.advertising.domain.exceptions.AdPlacementNotFoundException;
-import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
-import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
-import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
-import biz.ugur.busroutebackend.advertising.domain.valueobjects.TariffId;
-import biz.ugur.busroutebackend.business.domain.valueobjects.BusinessId;
+import biz.ugur.busroutebackend.advertising.application.dto.RecordImpressionCommand;
+import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
+import biz.ugur.busroutebackend.advertising.domain.model.AdImpressionEvent;
+import biz.ugur.busroutebackend.advertising.domain.repository.AdImpressionEventRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
-import biz.ugur.busroutebackend.shared.domain.valueObjects.CorrelationId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-import java.util.List;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(SpringExtension.class)
+@ExtendWith(MockitoExtension.class)
 class RecordImpressionUseCaseTest {
 
-    @InjectMocks
+    @Mock private AdImpressionEventRepository repository;
+    @Mock private CorrelationContextService correlationService;
+    @Mock private EventBus eventBus;
+
     private RecordImpressionUseCase useCase;
 
-    @Mock
-    private AdPlacementRepository placementRepository;
-
-    @Mock
-    private CorrelationContextService correlationService;
-
-    @Mock
-    private EventBus eventBus;
-
-    private AdPlacement placement;
+    private final Clock clock = Clock.fixed(Instant.parse("2026-05-14T12:00:00Z"), ZoneOffset.UTC);
 
     @BeforeEach
     void setUp() {
-        placement = AdPlacement.create(
-                BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Title", "Content", null, "https://example.com",
-                "Click", null, List.of("home"), 0);
-    }
-
-    @Test
-    void incrementsImpressionOnExistingPlacement() {
-        when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
+        useCase = new RecordImpressionUseCase(repository, clock, correlationService, eventBus);
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
-        when(placementRepository.findById(placement.getId())).thenReturn(Mono.just(placement));
-        when(placementRepository.save(any(AdPlacement.class)))
-                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
-
-        StepVerifier.create(useCase.execute(placement.getId().getValue()))
-                .verifyComplete();
-
-        verify(placementRepository).save(any(AdPlacement.class));
     }
 
     @Test
-    void errorsWhenPlacementNotFound() {
-        String id = PlacementId.generate().getValue();
+    void process_savesEventThroughRepository_withTargetType() {
+        UUID placementId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        when(repository.save(any(AdImpressionEvent.class))).thenReturn(Mono.empty());
 
-        when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
-        when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
-                .thenAnswer(inv -> inv.getArgument(0));
-        when(placementRepository.findById(any(PlacementId.class))).thenReturn(Mono.empty());
+        StepVerifier.create(useCase.execute(new RecordImpressionCommand(
+                placementId.toString(), TargetType.ROUTE, targetId
+        ))).verifyComplete();
 
-        StepVerifier.create(useCase.execute(id))
-                .expectErrorSatisfies(err -> assertInstanceOf(AdPlacementNotFoundException.class, err))
-                .verify();
+        ArgumentCaptor<AdImpressionEvent> captor = ArgumentCaptor.forClass(AdImpressionEvent.class);
+        verify(repository).save(captor.capture());
+        AdImpressionEvent saved = captor.getValue();
+        assertThat(saved.placementId().getValue()).isEqualTo(placementId.toString());
+        assertThat(saved.occurredAt()).isEqualTo(Instant.parse("2026-05-14T12:00:00Z"));
+        assertThat(saved.targetType()).isEqualTo(TargetType.ROUTE);
+        assertThat(saved.targetId()).isEqualTo(targetId);
     }
 
     @Test
-    void exposesBoundContext() {
-        assertEquals("advertising.client", useCase.getBoundContext());
+    void process_nullTargetType_andNullTargetId_isAllowed() {
+        UUID placementId = UUID.randomUUID();
+        when(repository.save(any(AdImpressionEvent.class))).thenReturn(Mono.empty());
+
+        StepVerifier.create(useCase.execute(new RecordImpressionCommand(
+                placementId.toString(), null, null
+        ))).verifyComplete();
     }
 }

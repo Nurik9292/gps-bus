@@ -11,12 +11,17 @@ public enum PaymentProvider {
     RYSGAL("sv_epg"),
     SENAGAT("sv_epg"),
     BKB("sv_epg"),
-    HALK("sv_epg");
+    HALK("sv_epg"),
+    CASH("cash");
 
     private final String protocol;
 
     PaymentProvider(String protocol) {
         this.protocol = protocol;
+    }
+
+    public boolean isElectronic() {
+        return "sv_epg".equals(protocol);
     }
 
     public static PaymentProvider from(String raw) {

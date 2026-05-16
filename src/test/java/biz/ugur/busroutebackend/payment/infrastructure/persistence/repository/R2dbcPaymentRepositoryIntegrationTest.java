@@ -68,6 +68,7 @@ class R2dbcPaymentRepositoryIntegrationTest {
                     completed_at        TIMESTAMP WITH TIME ZONE,
                     failed_at           TIMESTAMP WITH TIME ZONE,
                     expires_at          TIMESTAMP WITH TIME ZONE,
+                    completed_by        VARCHAR(100),
                     failure_code        VARCHAR(50),
                     failure_message     VARCHAR(512),
                     card_pan_masked     VARCHAR(32),

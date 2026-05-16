@@ -29,6 +29,8 @@ public record PaymentResponse(
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
         LocalDateTime completedAt,
 
+        @JsonProperty("completed_by")        String completedBy,
+
         @JsonProperty("failed_at")
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
         LocalDateTime failedAt,
@@ -55,6 +57,7 @@ public record PaymentResponse(
                 p.getReturnUrl(),
                 p.getInitiatedAt(),
                 p.getCompletedAt(),
+                p.getCompletedBy(),
                 p.getFailedAt(),
                 p.getFailureCode(),
                 p.getFailureMessage(),

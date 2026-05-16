@@ -9,4 +9,8 @@ public class PlacementStateTransitionException extends AdvertisingDomainExceptio
                 String.format("Illegal placement status transition: %s → %s", from, to),
                 Severity.WARNING);
     }
+
+    public PlacementStateTransitionException(String message) {
+        super("ILLEGAL_STATE_TRANSITION", message, Severity.WARNING);
+    }
 }

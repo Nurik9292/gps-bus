@@ -20,6 +20,7 @@ import java.util.Map;
 @Builder(toBuilder = true)
 @Getter
 @EqualsAndHashCode(callSuper = false)
+@Deprecated(since = "2026-05-15", forRemoval = true)
 public class Banner extends AggregateRoot<Banner, BannerId> {
 
     private final BannerId id;

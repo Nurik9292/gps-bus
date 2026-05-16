@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.payment.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentProvider;
 import biz.ugur.busroutebackend.payment.domain.enums.PaymentStatus;
+import biz.ugur.busroutebackend.payment.domain.enums.PaymentSubjectType;
 import biz.ugur.busroutebackend.payment.domain.model.Payment;
 import biz.ugur.busroutebackend.payment.domain.repository.PaymentRepository;
 import org.springframework.data.domain.Pageable;
@@ -9,6 +10,8 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.time.Instant;
 
 @Repository
 public class R2dbcPaymentRepository extends PaymentBaseRepository implements PaymentRepository {
@@ -83,5 +86,57 @@ public class R2dbcPaymentRepository extends PaymentBaseRepository implements Pay
                 .bind("offset", pageable.getOffset())
                 .map(getRowMapper())
                 .all();
+    }
+
+    @Override
+    public Mono<Payment> findFirstBySubjectAndProviderAndStatus(
+            PaymentSubjectType subjectType,
+            String subjectId,
+            PaymentProvider provider,
+            PaymentStatus status) {
+        String sql = String.format("""
+                SELECT %s FROM payments
+                WHERE subject_type = :subjectType
+                  AND subject_id   = :subjectId
+                  AND provider     = :provider
+                  AND status       = :status
+                ORDER BY created_at DESC
+                LIMIT 1
+                """, selectColumns());
+        return databaseClient.sql(sql)
+                .bind("subjectType", subjectType.name())
+                .bind("subjectId", subjectId)
+                .bind("provider", provider.name())
+                .bind("status", status.name())
+                .map(getRowMapper())
+                .one();
+    }
+
+    @Override
+    public Mono<Long> sumCompletedRevenueBetween(Instant from, Instant to) {
+        return databaseClient.sql("""
+                SELECT COALESCE(SUM(amount_minor), 0)::BIGINT AS total
+                FROM payments
+                WHERE status = 'COMPLETED'
+                  AND completed_at >= :from
+                  AND completed_at <  :to
+                """)
+                .bind("from", from)
+                .bind("to", to)
+                .map(row -> row.get("total", Long.class))
+                .one();
+    }
+
+    @Override
+    public Mono<Long> countByProviderAndStatus(PaymentProvider provider, PaymentStatus status) {
+        return databaseClient.sql("""
+                SELECT COUNT(*)::BIGINT AS cnt
+                FROM payments
+                WHERE provider = :provider AND status = :status
+                """)
+                .bind("provider", provider.name())
+                .bind("status", status.name())
+                .map(row -> row.get("cnt", Long.class))
+                .one();
     }
 }

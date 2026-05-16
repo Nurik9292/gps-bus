@@ -1,14 +1,18 @@
 package biz.ugur.busroutebackend.advertising.domain.model;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
+import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementApprovedEvent;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementCreatedEvent;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementRejectedEvent;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementStatusChangedEvent;
+import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementUpdatedEvent;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.PlacementStateTransitionException;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
+import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementTarget;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementWindow;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.TariffId;
 import biz.ugur.busroutebackend.business.domain.valueobjects.BusinessId;
@@ -18,7 +22,12 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 
 @Builder(toBuilder = true)
@@ -30,6 +39,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
     private final BusinessId businessId;
     private final TariffId tariffId;
     private final PlacementType placementType;
+    private final PlacementKind kind;
     private final PlacementStatus status;
 
     private final String title;
@@ -37,13 +47,11 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
     private final String imageUrl;
     private final String targetUrl;
     private final String ctaText;
+    private final ContentType contentType;
 
     private final PlacementWindow window;
 
-    private final Long impressionsCount;
-    private final Long clicksCount;
-
-    private final String displayContexts;
+    private final List<PlacementTarget> targets;
     private final Integer displayOrder;
 
     private final String rejectionReason;
@@ -59,63 +67,85 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
     public static AdPlacement create(BusinessId businessId,
                                       TariffId tariffId,
                                       PlacementType placementType,
+                                      PlacementKind kind,
                                       String title,
                                       String content,
                                       String imageUrl,
                                       String targetUrl,
                                       String ctaText,
+                                      ContentType contentType,
                                       PlacementWindow window,
-                                      List<String> displayContexts,
+                                      List<PlacementTarget> targets,
                                       Integer displayOrder) {
-        if (businessId == null) throw new AdvertisingValidationException("businessId", "must not be null");
-        if (tariffId == null) throw new AdvertisingValidationException("tariffId", "must not be null");
+        PlacementKind resolvedKind = kind != null ? kind : PlacementKind.COMMERCIAL;
+        if (resolvedKind == PlacementKind.COMMERCIAL) {
+            if (businessId == null) throw new AdvertisingValidationException("businessId", "must not be null for COMMERCIAL");
+            if (tariffId == null) throw new AdvertisingValidationException("tariffId", "must not be null for COMMERCIAL");
+        }
         if (placementType == null) throw new AdvertisingValidationException("placementType", "must not be null");
         if (title == null || title.trim().isEmpty()) {
             throw new AdvertisingValidationException("title", "must not be blank");
         }
+        ContentType resolvedContentType = contentType != null ? contentType : ContentType.LINK;
+        validateContentConsistency(resolvedContentType, content, targetUrl);
+
+        List<PlacementTarget> resolvedTargets = immutableCopy(targets);
 
         AdPlacement placement = builder()
                 .id(PlacementId.generate())
                 .businessId(businessId)
                 .tariffId(tariffId)
                 .placementType(placementType)
+                .kind(resolvedKind)
                 .status(PlacementStatus.DRAFT)
                 .title(title.trim())
                 .content(trimOrNull(content))
                 .imageUrl(trimOrNull(imageUrl))
                 .targetUrl(trimOrNull(targetUrl))
                 .ctaText(trimOrNull(ctaText))
+                .contentType(resolvedContentType)
                 .window(window != null ? window : PlacementWindow.unscheduled())
-                .displayContexts(serializeContexts(displayContexts))
+                .targets(resolvedTargets)
                 .displayOrder(displayOrder != null ? displayOrder : 0)
-                .impressionsCount(0L)
-                .clicksCount(0L)
                 .version(0L)
                 .build();
 
         placement.registerEvent(new AdPlacementCreatedEvent(
                 placement.id.getValue(),
-                businessId.getValue(),
-                tariffId.getValue(),
-                placementType));
+                businessId != null ? businessId.getValue() : null,
+                tariffId != null ? tariffId.getValue() : null,
+                placementType,
+                resolvedKind));
 
         return placement;
+    }
+
+    private static void validateContentConsistency(ContentType contentType, String content, String targetUrl) {
+        if (contentType == ContentType.CONTENT && (content == null || content.isBlank())) {
+            throw new AdvertisingValidationException("content", "required when contentType=CONTENT");
+        }
+        if (contentType == ContentType.LINK && (targetUrl == null || targetUrl.isBlank())) {
+            throw new AdvertisingValidationException("targetUrl", "required when contentType=LINK");
+        }
+        if (contentType == ContentType.LINK && content != null && !content.isBlank()) {
+            throw new AdvertisingValidationException("content", "must be empty for LINK type");
+        }
     }
 
     public static AdPlacement restore(PlacementId id,
                                        BusinessId businessId,
                                        TariffId tariffId,
                                        PlacementType placementType,
+                                       PlacementKind kind,
                                        PlacementStatus status,
                                        String title,
                                        String content,
                                        String imageUrl,
                                        String targetUrl,
                                        String ctaText,
+                                       ContentType contentType,
                                        PlacementWindow window,
-                                       Long impressionsCount,
-                                       Long clicksCount,
-                                       String displayContexts,
+                                       List<PlacementTarget> targets,
                                        Integer displayOrder,
                                        String rejectionReason,
                                        LocalDateTime approvedAt,
@@ -127,13 +157,15 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                        Long version) {
         return builder()
                 .id(id).businessId(businessId).tariffId(tariffId)
-                .placementType(placementType).status(status)
+                .placementType(placementType)
+                .kind(kind != null ? kind : PlacementKind.COMMERCIAL)
+                .status(status)
                 .title(title).content(content).imageUrl(imageUrl)
                 .targetUrl(targetUrl).ctaText(ctaText)
+                .contentType(contentType != null ? contentType : ContentType.LINK)
                 .window(window)
-                .impressionsCount(impressionsCount != null ? impressionsCount : 0L)
-                .clicksCount(clicksCount != null ? clicksCount : 0L)
-                .displayContexts(displayContexts).displayOrder(displayOrder)
+                .targets(immutableCopy(targets))
+                .displayOrder(displayOrder)
                 .rejectionReason(rejectionReason)
                 .approvedAt(approvedAt)
                 .approvedByAdminId(approvedByAdminId)
@@ -144,9 +176,79 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 .build();
     }
 
+    public AdPlacement withTargets(List<PlacementTarget> targets) {
+        return this.toBuilder().targets(immutableCopy(targets)).build();
+    }
+
+    public AdPlacement updateEditorialContent(String title,
+                                               String content,
+                                               String imageUrl,
+                                               String targetUrl,
+                                               String ctaText,
+                                               ContentType contentType,
+                                               PlacementWindow window,
+                                               List<PlacementTarget> targets,
+                                               Integer displayOrder) {
+        if (this.kind != PlacementKind.EDITORIAL) {
+            throw new IllegalStateException(
+                    "updateEditorialContent allowed only for EDITORIAL kind, got " + this.kind);
+        }
+        if (this.status == PlacementStatus.EXPIRED || this.status == PlacementStatus.CANCELLED) {
+            throw new PlacementStateTransitionException(
+                    "Cannot update placement in status " + this.status);
+        }
+        if (title == null || title.trim().isEmpty()) {
+            throw new AdvertisingValidationException("title", "must not be blank");
+        }
+        ContentType resolvedContentType = contentType != null ? contentType : ContentType.LINK;
+        validateContentConsistency(resolvedContentType, content, targetUrl);
+
+        String newTitle = title.trim();
+        String newContent = trimOrNull(content);
+        String newImageUrl = trimOrNull(imageUrl);
+        String newTargetUrl = trimOrNull(targetUrl);
+        String newCtaText = trimOrNull(ctaText);
+        PlacementWindow newWindow = window != null ? window : PlacementWindow.unscheduled();
+        List<PlacementTarget> newTargets = immutableCopy(targets);
+        int newDisplayOrder = displayOrder != null ? displayOrder : 0;
+
+        Map<String, Object> changes = new HashMap<>();
+        if (!Objects.equals(this.title, newTitle)) changes.put("title", newTitle);
+        if (!Objects.equals(this.content, newContent)) changes.put("content", newContent);
+        if (!Objects.equals(this.imageUrl, newImageUrl)) changes.put("imageUrl", newImageUrl);
+        if (!Objects.equals(this.targetUrl, newTargetUrl)) changes.put("targetUrl", newTargetUrl);
+        if (!Objects.equals(this.ctaText, newCtaText)) changes.put("ctaText", newCtaText);
+        if (this.contentType != resolvedContentType) {
+            changes.put("contentType", resolvedContentType.name());
+        }
+        if (!Objects.equals(this.window, newWindow)) changes.put("window", newWindow);
+        if (this.displayOrder == null || this.displayOrder != newDisplayOrder) {
+            changes.put("displayOrder", newDisplayOrder);
+        }
+
+        AdPlacement updated = this.toBuilder()
+                .title(newTitle)
+                .content(newContent)
+                .imageUrl(newImageUrl)
+                .targetUrl(newTargetUrl)
+                .ctaText(newCtaText)
+                .contentType(resolvedContentType)
+                .window(newWindow)
+                .targets(newTargets)
+                .displayOrder(newDisplayOrder)
+                .build();
+
+        updated.registerEvent(new AdPlacementUpdatedEvent(
+                this.id.getValue(), null, changes));
+
+        return updated;
+    }
+
     public AdPlacement markAsPendingPayment() { return transition(PlacementStatus.PENDING_PAYMENT); }
     public AdPlacement markAsScheduled()       { return transition(PlacementStatus.SCHEDULED); }
     public AdPlacement markAsActive()          { return transition(PlacementStatus.ACTIVE); }
+    public AdPlacement markAsPaused()          { return transition(PlacementStatus.PAUSED); }
+    public AdPlacement markAsResumed()         { return transition(PlacementStatus.ACTIVE); }
     public AdPlacement markAsExpired()         { return transition(PlacementStatus.EXPIRED); }
     public AdPlacement cancel()                { return transition(PlacementStatus.CANCELLED); }
 
@@ -195,18 +297,6 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
         return next;
     }
 
-    public AdPlacement recordImpression() {
-        return this.toBuilder()
-                .impressionsCount(this.impressionsCount + 1)
-                .build();
-    }
-
-    public AdPlacement recordClick() {
-        return this.toBuilder()
-                .clicksCount(this.clicksCount + 1)
-                .build();
-    }
-
     private AdPlacement transition(PlacementStatus target) {
         if (!this.status.canTransitionTo(target)) {
             throw new PlacementStateTransitionException(this.status, target);
@@ -217,19 +307,17 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
         return next;
     }
 
-    private static String serializeContexts(List<String> contexts) {
-        if (contexts == null || contexts.isEmpty()) return null;
-        return String.join(",", contexts.stream()
-                .filter(c -> c != null && !c.isBlank())
-                .map(c -> c.trim().toLowerCase())
-                .filter(c -> !"map.html".equals(c))
-                .toList());
-    }
-
     private static String trimOrNull(String value) {
         if (value == null) return null;
         String t = value.trim();
         return t.isEmpty() ? null : t;
+    }
+
+    private static List<PlacementTarget> immutableCopy(List<PlacementTarget> targets) {
+        if (targets == null || targets.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return Collections.unmodifiableList(new ArrayList<>(targets));
     }
 
     @Override public PlacementId getId() { return id; }

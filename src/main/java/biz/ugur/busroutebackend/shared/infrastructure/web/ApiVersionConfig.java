@@ -57,7 +57,8 @@ public class ApiVersionConfig {
     public static final String V1_ADMIN_ROUTE_ASSIGNMENTS = V1_ADMIN + ROUTES + "/assignments";
     public static final String V1_ADMIN_VEHICLES = V1_ADMIN + VEHICLES;
     public static final String V1_ADMIN_ROUTE_ALTERNATIVES = V1_ADMIN + ROUTE_ALTERNATIVES;
-    public static final String V1_ADMIN_DASHBOARD = V1_ADMIN + DASHBOARD;
+    public static final String V1_ADMIN_DASHBOARD             = V1_ADMIN + DASHBOARD;
+    public static final String V1_ADMIN_DASHBOARD_ADVERTISING = V1_ADMIN_DASHBOARD + "/advertising-overview";
     public static final String ROUTING_ADMIN = "/routing";
     public static final String V1_ADMIN_ROUTING = V1_ADMIN + ROUTING_ADMIN;
 
@@ -94,9 +95,13 @@ public class ApiVersionConfig {
     public static final String V1_ADMIN_BUSINESSES     = V1_ADMIN + BUSINESSES;
     public static final String V1_ADMIN_AD_TARIFFS     = V1_ADMIN + AD_TARIFFS;
     public static final String V1_ADMIN_AD_PLACEMENTS  = V1_ADMIN + AD_PLACEMENTS;
+    public static final String V1_ADMIN_AD_PLACEMENT_PAYMENT_CALLBACK = V1_ADMIN_AD_PLACEMENTS + "/{placementId}/payment-callback";
+    public static final String V1_ADMIN_AD_PLACEMENT_ANALYTICS_TREND = V1_ADMIN_AD_PLACEMENTS + "/{placementId}/analytics/trend";
+    public static final String V1_ADMIN_AD_PLACEMENT_SALES_REPORT     = V1_ADMIN_AD_PLACEMENTS + "/sales-report";
 
-    public static final String V1_MOBILE_ADS           = V1_MOBILE + ADS;
-    public static final String V1_MOBILE_AD_TARIFFS    = V1_MOBILE + AD_TARIFFS;
+    public static final String V1_MOBILE_ADS              = V1_MOBILE + ADS;
+    public static final String V1_MOBILE_AD_DETAIL_VIEW   = V1_MOBILE_ADS + "/{placementId}/detail-view";
+    public static final String V1_MOBILE_AD_TARIFFS       = V1_MOBILE + AD_TARIFFS;
 
     public static final String PAYMENTS = "/payments";
     public static final String V1_ADMIN_PAYMENTS  = V1_ADMIN + PAYMENTS;

@@ -30,6 +30,7 @@ public final class PaymentMapper {
                 e.getCompletedAt(),
                 e.getFailedAt(),
                 e.getExpiresAt(),
+                e.getCompletedBy(),
                 e.getFailureCode(),
                 e.getFailureMessage(),
                 e.getCardPanMasked(),
@@ -59,6 +60,7 @@ public final class PaymentMapper {
                 .completedAt(p.getCompletedAt())
                 .failedAt(p.getFailedAt())
                 .expiresAt(p.getExpiresAt())
+                .completedBy(p.getCompletedBy())
                 .failureCode(p.getFailureCode())
                 .failureMessage(p.getFailureMessage())
                 .cardPanMasked(p.getCardPanMasked())

@@ -21,7 +21,7 @@ public abstract class PaymentBaseRepository extends BaseR2dbcRepository<Payment,
             "subject_type", "subject_id", "business_id",
             "amount_minor", "currency", "status",
             "form_url", "return_url",
-            "initiated_at", "completed_at", "failed_at", "expires_at",
+            "initiated_at", "completed_at", "failed_at", "expires_at", "completed_by",
             "failure_code", "failure_message",
             "card_pan_masked", "card_expiration", "cardholder_name",
             "created_at", "updated_at", "version"
@@ -60,6 +60,7 @@ public abstract class PaymentBaseRepository extends BaseR2dbcRepository<Payment,
         columns.put("completed_at", e.getCompletedAt());
         columns.put("failed_at", e.getFailedAt());
         columns.put("expires_at", e.getExpiresAt());
+        columns.put("completed_by", e.getCompletedBy());
         columns.put("failure_code", e.getFailureCode());
         columns.put("failure_message", e.getFailureMessage());
         columns.put("card_pan_masked", e.getCardPanMasked());
@@ -89,6 +90,7 @@ public abstract class PaymentBaseRepository extends BaseR2dbcRepository<Payment,
                 .completedAt(row.get("completed_at", LocalDateTime.class))
                 .failedAt(row.get("failed_at", LocalDateTime.class))
                 .expiresAt(row.get("expires_at", LocalDateTime.class))
+                .completedBy(row.get("completed_by", String.class))
                 .failureCode(row.get("failure_code", String.class))
                 .failureMessage(row.get("failure_message", String.class))
                 .cardPanMasked(row.get("card_pan_masked", String.class))

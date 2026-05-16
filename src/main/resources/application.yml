@@ -48,6 +48,7 @@ spring:
     validate-on-migrate: true
     clean-disabled: true
     schemas: public
+    ignore-migration-patterns: "*:ignored"
 
   webflux:
     multipart:
@@ -178,7 +179,7 @@ app:
 
   storage:
     avatars:
-      base-path: ${AVATAR_STORAGE_PATH:/home/user/bus/bus_route_backend/app/data/avatars}
+      base-path: ${AVATAR_STORAGE_PATH:/home/developer/projects/bus/ugur_v4/bus-route-backend/app/data/avatars}
       base-url: ${AVATAR_BASE_URL:http://localhost:8080/uploads/avatars}
       max-size-mb: ${AVATAR_MAX_SIZE_MB:2}
       create-thumbnails: ${AVATAR_CREATE_THUMBNAILS:false}
@@ -186,7 +187,7 @@ app:
       jpeg-quality: ${AVATAR_JPEG_QUALITY:0.85}
 
     banners:
-      base-path: ${BANNER_STORAGE_PATH:/home/user/bus_route_backend/app/data/banners}
+      base-path: ${BANNER_STORAGE_PATH:/home/developer/projects/bus/ugur_v4/bus-route-backend/app/data/banners}
       base-url: ${BANNER_BASE_URL:http://localhost:8080/uploads/banners}
       max-size-mb: 10
       create-thumbnails: ${BANNER_CREATE_THUMBNAILS:false}
@@ -195,7 +196,7 @@ app:
       jpeg-quality: ${BANNER_JPEG_QUALITY:0.85}
 
     ad-placements:
-      base-path: ${AD_PLACEMENT_STORAGE_PATH:/home/user/bus_route_backend/app/data/ad-placements}
+      base-path: ${AD_PLACEMENT_STORAGE_PATH:/home/developer/projects/bus/ugur_v4/bus-route-backend/app/data/ad-placements}
       base-url: ${AD_PLACEMENT_BASE_URL:http://localhost:8080/uploads/ad-placements}
       max-size-mb: ${AD_PLACEMENT_MAX_SIZE_MB:10}
       create-thumbnails: ${AD_PLACEMENT_CREATE_THUMBNAILS:false}
@@ -695,4 +696,12 @@ payment:
         base-url: ${PAYMENT_HALK_URL:}
         user-name: ${PAYMENT_HALK_USER:}
         password: ${PAYMENT_HALK_PASS:}
+
+advertising:
+  events:
+    partition:
+      enabled: ${AD_EVENT_PARTITION_ENABLED:true}
+      lookahead-months: 2
+      cron: "0 0 3 * * *"
+      zone: "UTC"
 

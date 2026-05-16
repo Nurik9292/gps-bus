@@ -1,7 +1,8 @@
 package biz.ugur.busroutebackend.advertising.application.usecase.client;
 
-import biz.ugur.busroutebackend.advertising.domain.exceptions.AdPlacementNotFoundException;
-import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
+import biz.ugur.busroutebackend.advertising.application.dto.RecordImpressionCommand;
+import biz.ugur.busroutebackend.advertising.domain.model.AdImpressionEvent;
+import biz.ugur.busroutebackend.advertising.domain.repository.AdImpressionEventRepository;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
@@ -9,27 +10,36 @@ import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.time.Clock;
+
 @Service
-public class RecordImpressionUseCase extends BaseUseCase<String, Void> {
+public class RecordImpressionUseCase extends BaseUseCase<RecordImpressionCommand, Void> {
 
-    private final AdPlacementRepository placementRepository;
+    private final AdImpressionEventRepository eventRepository;
+    private final Clock clock;
 
-    public RecordImpressionUseCase(AdPlacementRepository placementRepository,
-                                    CorrelationContextService correlationService,
-                                    EventBus eventBus) {
+    public RecordImpressionUseCase(AdImpressionEventRepository eventRepository,
+                                   Clock clock,
+                                   CorrelationContextService correlationService,
+                                   EventBus eventBus) {
         super(correlationService, eventBus);
-        this.placementRepository = placementRepository;
+        this.eventRepository = eventRepository;
+        this.clock = clock;
     }
 
     @Override
-    protected Mono<Void> process(String placementId) {
-        return placementRepository.findById(PlacementId.of(placementId))
-                .switchIfEmpty(Mono.error(new AdPlacementNotFoundException(placementId)))
-                .map(p -> p.recordImpression())
-                .flatMap(placementRepository::save)
-                .then();
+    protected Mono<Void> process(RecordImpressionCommand command) {
+        AdImpressionEvent event = AdImpressionEvent.newRecord(
+                PlacementId.of(command.placementId()),
+                command.targetType(),
+                command.targetId(),
+                clock
+        );
+        return eventRepository.save(event);
     }
 
     @Override
-    protected String getBoundContext() { return "advertising.client"; }
+    protected String getBoundContext() {
+        return "advertising.client";
+    }
 }

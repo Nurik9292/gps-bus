@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.advertising.domain.model;
 
+import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementStatusChangedEvent;
@@ -20,8 +21,8 @@ class AdPlacementExtendedTest {
     private AdPlacement newDraft() {
         return AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
-                "Promo", "content", "https://img", "https://target", "Click",
-                null, List.of("home"), 1);
+                null, "Promo", null, "https://img", "https://target", "Click",
+                ContentType.LINK, null, null, 1);
     }
 
     private AdPlacement approvedDraft() {
@@ -155,18 +156,17 @@ class AdPlacementExtendedTest {
     }
 
     @Nested
-    class RestoreAndCounters {
+    class RestoreAndVersion {
 
         @Test
-        void restoreRebuildsWithDefaultsForNullCounters() {
+        void restoreRebuildsWithDefaultsForNullVersion() {
             AdPlacement restored = AdPlacement.restore(
                     PlacementId.generate(), BusinessId.generate(), TariffId.generate(),
-                    PlacementType.BANNER, PlacementStatus.ACTIVE,
+                    PlacementType.BANNER, null, PlacementStatus.ACTIVE,
                     "Title", "content", null, null, null,
-                    PlacementWindow.unscheduled(), null, null,
+                    ContentType.LINK,
+                    PlacementWindow.unscheduled(),
                     null, 0, null, null, null, null, null, null, null, null);
-            assertEquals(0L, restored.getImpressionsCount());
-            assertEquals(0L, restored.getClicksCount());
             assertEquals(0L, restored.getVersion());
             assertEquals(0, restored.getDomainEvents().size());
         }
@@ -175,20 +175,12 @@ class AdPlacementExtendedTest {
         void restorePreservesVersion() {
             AdPlacement restored = AdPlacement.restore(
                     PlacementId.generate(), BusinessId.generate(), TariffId.generate(),
-                    PlacementType.BANNER, PlacementStatus.ACTIVE,
+                    PlacementType.BANNER, null, PlacementStatus.ACTIVE,
                     "Title", null, null, null, null,
-                    PlacementWindow.unscheduled(), 10L, 3L,
+                    ContentType.LINK,
+                    PlacementWindow.unscheduled(),
                     null, 0, null, null, null, null, null, null, null, 7L);
             assertEquals(7L, restored.getVersion());
-            assertEquals(10L, restored.getImpressionsCount());
-            assertEquals(3L, restored.getClicksCount());
-        }
-
-        @Test
-        void recordImpressionDoesNotEmitStatusEvent() {
-            AdPlacement placement = newDraft();
-            AdPlacement bumped = placement.recordImpression();
-            assertEquals(0, bumped.getDomainEvents().size());
         }
     }
 }
