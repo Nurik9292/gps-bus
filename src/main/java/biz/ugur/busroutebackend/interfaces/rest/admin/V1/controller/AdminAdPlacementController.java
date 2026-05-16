@@ -12,6 +12,8 @@ import biz.ugur.busroutebackend.advertising.application.dto.SalesReportResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.UpdateEditorialAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.ApproveAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.CancelAdPlacementUseCase;
+import biz.ugur.busroutebackend.advertising.application.usecase.admin.PauseAdPlacementUseCase;
+import biz.ugur.busroutebackend.advertising.application.usecase.admin.ResumeAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.CreateAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementAnalyticsUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.GetAdPlacementAnalyticsTrendUseCase;
@@ -59,6 +61,8 @@ public class AdminAdPlacementController extends BasePaginatedController {
     private final GetAdPlacementAnalyticsTrendUseCase getAdPlacementAnalyticsTrendUseCase;
     private final GetSalesReportUseCase getSalesReportUseCase;
     private final UpdateEditorialAdPlacementUseCase updateEditorialUseCase;
+    private final PauseAdPlacementUseCase pauseAdPlacementUseCase;
+    private final ResumeAdPlacementUseCase resumeAdPlacementUseCase;
     private final SecurityContextService securityContextService;
 
     public AdminAdPlacementController(CreateAdPlacementUseCase createAdPlacementUseCase,
@@ -72,6 +76,8 @@ public class AdminAdPlacementController extends BasePaginatedController {
                                        GetAdPlacementAnalyticsTrendUseCase getAdPlacementAnalyticsTrendUseCase,
                                        GetSalesReportUseCase getSalesReportUseCase,
                                        UpdateEditorialAdPlacementUseCase updateEditorialUseCase,
+                                       PauseAdPlacementUseCase pauseAdPlacementUseCase,
+                                       ResumeAdPlacementUseCase resumeAdPlacementUseCase,
                                        SecurityContextService securityContextService,
                                        MessageSource messageSource) {
         super(messageSource);
@@ -86,6 +92,8 @@ public class AdminAdPlacementController extends BasePaginatedController {
         this.getAdPlacementAnalyticsTrendUseCase = getAdPlacementAnalyticsTrendUseCase;
         this.getSalesReportUseCase = getSalesReportUseCase;
         this.updateEditorialUseCase = updateEditorialUseCase;
+        this.pauseAdPlacementUseCase = pauseAdPlacementUseCase;
+        this.resumeAdPlacementUseCase = resumeAdPlacementUseCase;
         this.securityContextService = securityContextService;
     }
 
@@ -154,6 +162,16 @@ public class AdminAdPlacementController extends BasePaginatedController {
     @PostMapping("/{placementId}/cancel")
     public Mono<ResponseEntity<ApiResponse<AdPlacementResponse>>> cancel(@PathVariable String placementId) {
         return ok(cancelAdPlacementUseCase.execute(placementId));
+    }
+
+    @PostMapping("/{placementId}/pause")
+    public Mono<ResponseEntity<ApiResponse<AdPlacementResponse>>> pause(@PathVariable String placementId) {
+        return ok(pauseAdPlacementUseCase.execute(placementId));
+    }
+
+    @PostMapping("/{placementId}/resume")
+    public Mono<ResponseEntity<ApiResponse<AdPlacementResponse>>> resume(@PathVariable String placementId) {
+        return ok(resumeAdPlacementUseCase.execute(placementId));
     }
 
     @GetMapping("/{placementId}/analytics")

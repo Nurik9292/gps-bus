@@ -247,6 +247,8 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
     public AdPlacement markAsPendingPayment() { return transition(PlacementStatus.PENDING_PAYMENT); }
     public AdPlacement markAsScheduled()       { return transition(PlacementStatus.SCHEDULED); }
     public AdPlacement markAsActive()          { return transition(PlacementStatus.ACTIVE); }
+    public AdPlacement markAsPaused()          { return transition(PlacementStatus.PAUSED); }
+    public AdPlacement markAsResumed()         { return transition(PlacementStatus.ACTIVE); }
     public AdPlacement markAsExpired()         { return transition(PlacementStatus.EXPIRED); }
     public AdPlacement cancel()                { return transition(PlacementStatus.CANCELLED); }
 

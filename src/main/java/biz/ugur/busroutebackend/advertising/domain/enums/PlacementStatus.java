@@ -9,6 +9,7 @@ public enum PlacementStatus {
     PENDING_PAYMENT("Created, awaiting payment confirmation"),
     SCHEDULED("Paid, waiting for start window"),
     ACTIVE("Currently displayed in app"),
+    PAUSED("Temporarily hidden by admin, can be resumed"),
     EXPIRED("Display window ended"),
     CANCELLED("Cancelled by admin or business");
 
@@ -23,7 +24,8 @@ public enum PlacementStatus {
             case DRAFT            -> target == PENDING_PAYMENT || target == CANCELLED;
             case PENDING_PAYMENT  -> target == SCHEDULED || target == CANCELLED;
             case SCHEDULED        -> target == ACTIVE || target == CANCELLED;
-            case ACTIVE           -> target == EXPIRED || target == CANCELLED;
+            case ACTIVE           -> target == PAUSED || target == EXPIRED || target == CANCELLED;
+            case PAUSED           -> target == ACTIVE || target == EXPIRED || target == CANCELLED;
             case EXPIRED, CANCELLED -> false;
         };
     }
