@@ -166,8 +166,7 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
         String sql = String.format("""
                         SELECT %s FROM ad_placements
                         WHERE status = 'SCHEDULED'
-                          AND starts_at IS NOT NULL
-                          AND starts_at <= NOW()
+                          AND (starts_at IS NULL OR starts_at <= NOW())
                         """, selectColumns());
         return databaseClient.sql(sql)
                 .map(getRowMapper())
