@@ -3,9 +3,12 @@ package biz.ugur.busroutebackend.advertising.application.usecase.admin;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
+import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementWindow;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -14,18 +17,56 @@ import static org.mockito.Mockito.*;
 class CreateAdPlacementUseCaseEditorialHotFixTest {
 
     @Test
-    void editorial_after_approve_is_scheduled() {
+    void editorial_without_window_goes_directly_active() {
         AdPlacement approved = mock(AdPlacement.class);
         when(approved.getKind()).thenReturn(PlacementKind.EDITORIAL);
         when(approved.getStatus()).thenReturn(PlacementStatus.PENDING_PAYMENT);
         AdPlacement scheduled = mock(AdPlacement.class);
+        when(scheduled.getWindow()).thenReturn(null);
+        AdPlacement active = mock(AdPlacement.class);
+        when(active.getStatus()).thenReturn(PlacementStatus.ACTIVE);
+        when(approved.markAsScheduled()).thenReturn(scheduled);
+        when(scheduled.markAsActive()).thenReturn(active);
+
+        AdPlacement result = CreateAdPlacementUseCase.hotFixEditorialStatus(approved);
+
+        assertEquals(PlacementStatus.ACTIVE, result.getStatus());
+        verify(scheduled).markAsActive();
+    }
+
+    @Test
+    void editorial_with_past_starts_at_goes_directly_active() {
+        AdPlacement approved = mock(AdPlacement.class);
+        when(approved.getKind()).thenReturn(PlacementKind.EDITORIAL);
+        when(approved.getStatus()).thenReturn(PlacementStatus.PENDING_PAYMENT);
+        AdPlacement scheduled = mock(AdPlacement.class);
+        when(scheduled.getWindow()).thenReturn(PlacementWindow.of(LocalDateTime.now().minusHours(1), null));
+        AdPlacement active = mock(AdPlacement.class);
+        when(active.getStatus()).thenReturn(PlacementStatus.ACTIVE);
+        when(approved.markAsScheduled()).thenReturn(scheduled);
+        when(scheduled.markAsActive()).thenReturn(active);
+
+        AdPlacement result = CreateAdPlacementUseCase.hotFixEditorialStatus(approved);
+
+        assertEquals(PlacementStatus.ACTIVE, result.getStatus());
+        verify(scheduled).markAsActive();
+    }
+
+    @Test
+    void editorial_with_future_starts_at_stays_scheduled() {
+        AdPlacement approved = mock(AdPlacement.class);
+        when(approved.getKind()).thenReturn(PlacementKind.EDITORIAL);
+        when(approved.getStatus()).thenReturn(PlacementStatus.PENDING_PAYMENT);
+        AdPlacement scheduled = mock(AdPlacement.class);
+        when(scheduled.getWindow()).thenReturn(PlacementWindow.of(LocalDateTime.now().plusDays(1), null));
         when(scheduled.getStatus()).thenReturn(PlacementStatus.SCHEDULED);
         when(approved.markAsScheduled()).thenReturn(scheduled);
 
         AdPlacement result = CreateAdPlacementUseCase.hotFixEditorialStatus(approved);
 
         assertEquals(PlacementStatus.SCHEDULED, result.getStatus());
-        verify(approved).markAsScheduled();
+        verify(scheduled, never()).markAsActive();
+        assertSame(scheduled, result);
     }
 
     @Test

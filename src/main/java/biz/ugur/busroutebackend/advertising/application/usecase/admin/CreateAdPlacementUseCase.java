@@ -89,11 +89,16 @@ public class CreateAdPlacementUseCase
     }
 
     static AdPlacement hotFixEditorialStatus(AdPlacement p) {
-        if (p.getKind() == PlacementKind.EDITORIAL
-                && p.getStatus() == PlacementStatus.PENDING_PAYMENT) {
-            return p.markAsScheduled();
+        if (p.getKind() != PlacementKind.EDITORIAL
+                || p.getStatus() != PlacementStatus.PENDING_PAYMENT) {
+            return p;
         }
-        return p;
+        AdPlacement scheduled = p.markAsScheduled();
+        LocalDateTime startsAt = scheduled.getWindow() != null ? scheduled.getWindow().getStartsAt() : null;
+        if (startsAt == null || !startsAt.isAfter(LocalDateTime.now())) {
+            return scheduled.markAsActive();
+        }
+        return scheduled;
     }
 
     private Mono<AdPlacement> persistTargets(AdPlacement placement) {

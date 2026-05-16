@@ -92,7 +92,7 @@ class CreateAdPlacementUseCaseTest {
                 .verifyComplete();
 
         verify(paymentRepository, never()).save(any());
-        verify(placementRepository).save(argThat(p -> p.getStatus() == PlacementStatus.SCHEDULED));
+        verify(placementRepository).save(argThat(p -> p.getStatus() == PlacementStatus.ACTIVE));
     }
 
     @Test
