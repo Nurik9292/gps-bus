@@ -174,6 +174,32 @@
             border-bottom: 8px solid white;
         }
 
+        /* Course indicator — отдельная стрелка на маркере, поворачивается независимо от иконки */
+        .bus-course-wrap {
+            position: absolute;
+            inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            pointer-events: none;
+            transition: transform 0.5s ease;
+        }
+        .bus-course-arrow {
+            width: 0; height: 0;
+            border-left: 7px solid transparent;
+            border-right: 7px solid transparent;
+            border-bottom: 14px solid #fbbf24;
+            filter: drop-shadow(0 0 2px rgba(0,0,0,0.7));
+            position: absolute;
+            top: -18px; left: 50%;
+            transform: translateX(-50%);
+        }
+
+        /* GPS trail visualization */
+        .gps-trail-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: #fff; border: 1px solid #000;
+            box-shadow: 0 0 3px rgba(0,0,0,0.7);
+        }
+
         .stop-marker { background: none; border: none; }
         .stop-dot {
             width: 10px; height: 10px; border-radius: 50%;
@@ -498,9 +524,21 @@
     let stopMarkers = {};
     let stops = [];
     let activeRouteFilters = new Set();
-    let wsSubscribedRoutes = new Set(); 
+    let wsSubscribedRoutes = new Set();
     let updateCounter = 0;
     let lastCounterReset = Date.now();
+
+    let routesGeoJsonCache = null;
+    let routesGeoJsonLoading = null;
+    let routePolylineLayer = null;
+    const ROUTE_POLYLINE_LIMIT = 5;
+
+    let gpsTrailLayer = null;
+    let gpsTrailTimer = null;
+    const GPS_TRAIL_REFRESH_MS = 15000;
+    const GPS_TRAIL_MINUTES = 10;
+    const GPS_TRAIL_LIMIT = 5;
+    const GPS_TRAIL_COLORS = ['#22d3ee','#fb923c','#84cc16','#a855f7','#f472b6','#facc15','#34d399','#60a5fa','#fb7185','#c084fc'];
 
     let vehicleTrails = {};      
     let vehicleTrailLayers = {}; 
@@ -519,6 +557,9 @@
         }).addTo(map);
 
         map.on('click', onMapClickRouteMode);
+
+        routePolylineLayer = L.layerGroup().addTo(map);
+        gpsTrailLayer = L.layerGroup().addTo(map);
 
         loadStops();
         connectWebSocket();
@@ -716,23 +757,158 @@
         label.textContent = connected ? 'LIVE' : 'OFF';
     }
 
+    function loadRoutesGeoJson() {
+        if (routesGeoJsonCache) return Promise.resolve(routesGeoJsonCache);
+        if (routesGeoJsonLoading) return routesGeoJsonLoading;
+        routesGeoJsonLoading = fetch('/routes.geojson')
+            .then(r => r.json())
+            .then(data => {
+                const byRoute = {};
+                for (const f of (data.features || [])) {
+                    const num = String(f.properties.route_number || '').toUpperCase();
+                    if (!num) continue;
+                    if (!byRoute[num]) byRoute[num] = { forward: null, backward: null };
+                    if (f.properties.direction === 'forward') byRoute[num].forward = f;
+                    else if (f.properties.direction === 'backward') byRoute[num].backward = f;
+                }
+                routesGeoJsonCache = byRoute;
+                return byRoute;
+            })
+            .catch(err => {
+                console.warn('[map] failed to load /routes.geojson', err);
+                routesGeoJsonLoading = null;
+                return null;
+            });
+        return routesGeoJsonLoading;
+    }
+
+    async function renderRoutePolylines() {
+        if (!routePolylineLayer) return;
+        routePolylineLayer.clearLayers();
+
+        const selected = [...wsSubscribedRoutes];
+        if (selected.length === 0) return;
+        if (selected.length > ROUTE_POLYLINE_LIMIT) {
+            console.log('[map] too many routes selected (' + selected.length + '), skipping polyline overlay');
+            return;
+        }
+
+        const byRoute = await loadRoutesGeoJson();
+        if (!byRoute) return;
+
+        for (const routeNum of selected) {
+            const r = byRoute[routeNum];
+            if (!r) {
+                console.warn('[map] no geometry for route ' + routeNum);
+                continue;
+            }
+            const color = getRouteColor(routeNum);
+            if (r.forward && r.forward.geometry) {
+                L.geoJSON(r.forward.geometry, {
+                    style: { color: color, weight: 5, opacity: 0.65 }
+                }).bindTooltip(routeNum + ' forward (Прямой)', { sticky: true })
+                  .addTo(routePolylineLayer);
+            }
+            if (r.backward && r.backward.geometry) {
+                L.geoJSON(r.backward.geometry, {
+                    style: { color: color, weight: 5, opacity: 0.65, dashArray: '10 6' }
+                }).bindTooltip(routeNum + ' backward (Обратный)', { sticky: true })
+                  .addTo(routePolylineLayer);
+            }
+        }
+    }
+
+    async function loadAndDrawGpsTrails() {
+        if (!gpsTrailLayer) return;
+        gpsTrailLayer.clearLayers();
+
+        const selected = [...wsSubscribedRoutes];
+        if (selected.length === 0 || selected.length > GPS_TRAIL_LIMIT) return;
+
+        let vehicleColorIdx = 0;
+        for (const routeNum of selected) {
+            try {
+                const url = `${API_BASE}/diagnostics/gps-trail?route=${encodeURIComponent(routeNum)}&minutes=${GPS_TRAIL_MINUTES}`;
+                const res = await fetch(url);
+                if (!res.ok) {
+                    console.warn('[map] gps-trail HTTP', res.status, 'for route', routeNum);
+                    continue;
+                }
+                const data = await res.json();
+                for (const veh of data) {
+                    const points = veh.points || [];
+                    if (points.length < 1) continue;
+                    const color = GPS_TRAIL_COLORS[vehicleColorIdx % GPS_TRAIL_COLORS.length];
+                    vehicleColorIdx++;
+                    const sorted = points.slice().sort((a, b) => a.ts - b.ts);
+                    const latlngs = sorted.map(p => [p.lat, p.lon]);
+                    if (latlngs.length >= 2) {
+                        L.polyline(latlngs, { color, weight: 2, opacity: 0.85, dashArray: '3 4' })
+                            .bindTooltip(`${veh.plate} GPS trail · ${points.length} pts`, { sticky: true })
+                            .addTo(gpsTrailLayer);
+                    }
+                    for (const p of sorted) {
+                        L.circleMarker([p.lat, p.lon], {
+                            radius: 3, color: '#000', weight: 1,
+                            fillColor: color, fillOpacity: 0.9
+                        }).bindTooltip(`${veh.plate} @ ${new Date(p.ts).toLocaleTimeString()} ${Math.round(p.speed)}km/h`, { sticky: true })
+                          .addTo(gpsTrailLayer);
+                    }
+                    if (sorted.length > 0) {
+                        const last = sorted[sorted.length - 1];
+                        L.circleMarker([last.lat, last.lon], {
+                            radius: 6, color: color, weight: 2,
+                            fillColor: '#fff', fillOpacity: 1
+                        }).bindTooltip(`${veh.plate} — last GPS fix`, { permanent: false, sticky: true })
+                          .addTo(gpsTrailLayer);
+                    }
+                }
+            } catch (e) {
+                console.warn('[map] gps-trail error for route', routeNum, e);
+            }
+        }
+    }
+
+    function startGpsTrailRefresh() {
+        if (gpsTrailTimer) clearInterval(gpsTrailTimer);
+        loadAndDrawGpsTrails();
+        gpsTrailTimer = setInterval(loadAndDrawGpsTrails, GPS_TRAIL_REFRESH_MS);
+    }
+
+    function stopGpsTrailRefresh() {
+        if (gpsTrailTimer) { clearInterval(gpsTrailTimer); gpsTrailTimer = null; }
+        if (gpsTrailLayer) gpsTrailLayer.clearLayers();
+    }
+
+    function onSubscribedRoutesChanged() {
+        renderRoutePolylines();
+        if (wsSubscribedRoutes.size === 0 || wsSubscribedRoutes.size > GPS_TRAIL_LIMIT) {
+            stopGpsTrailRefresh();
+        } else {
+            startGpsTrailRefresh();
+        }
+    }
+
     function addWsRoute(routeNum) {
         routeNum = routeNum.trim().toUpperCase();
         if (!routeNum || wsSubscribedRoutes.has(routeNum)) return;
         wsSubscribedRoutes.add(routeNum);
         renderWsRouteTags();
+        onSubscribedRoutesChanged();
         reconnectWebSocket();
     }
 
     function removeWsRoute(routeNum) {
         wsSubscribedRoutes.delete(routeNum);
         renderWsRouteTags();
+        onSubscribedRoutesChanged();
         reconnectWebSocket();
     }
 
     function clearWsRoutes() {
         wsSubscribedRoutes.clear();
         renderWsRouteTags();
+        onSubscribedRoutesChanged();
         reconnectWebSocket();
     }
 
@@ -949,6 +1125,7 @@
         const color = getRouteColor(v.route);
         const label = v.route || '?';
 
+        const labelText = label;
         if (vehicleMarkers[v.id]) {
             const marker = vehicleMarkers[v.id];
             const oldLatLng = marker.getLatLng();
@@ -962,21 +1139,34 @@
             if (el) {
                 const icon = el.querySelector('.bus-icon-v2');
                 if (icon) {
-                    icon.textContent = label;
+                    const labelEl = icon.querySelector('.bus-label');
+                    if (labelEl) labelEl.textContent = labelText;
                     icon.style.background = color;
                     icon.style.opacity = v.predicted ? '0.6' : '1';
                     icon.classList.toggle('moving', v.moving);
                     icon.classList.toggle('filtered-out', isFiltered);
-                    icon.style.transform = v.moving ? `rotate(${v.course}deg)` : '';
                     if (highlightedBusId === v.id) icon.classList.add('highlighted');
+                }
+                const courseWrap = el.querySelector('.bus-course-wrap');
+                if (courseWrap) {
+                    if (v.moving) {
+                        courseWrap.style.display = '';
+                        courseWrap.style.transform = `rotate(${v.course}deg)`;
+                    } else {
+                        courseWrap.style.display = 'none';
+                    }
                 }
             }
 
             marker.setPopupContent(createPopupHtml(v, color));
         } else {
+            const courseStyle = v.moving ? `transform:rotate(${v.course}deg)` : 'display:none';
             const icon = L.divIcon({
                 className: 'bus-marker',
-                html: `<div class="bus-icon-v2 ${v.moving ? 'moving' : ''} ${isFiltered ? 'filtered-out' : ''}" style="background:${color}; opacity:${v.predicted ? '0.6' : '1'}; transform:rotate(${v.moving ? v.course : 0}deg)">${label}</div>`,
+                html: `<div class="bus-icon-v2 ${v.moving ? 'moving' : ''} ${isFiltered ? 'filtered-out' : ''}" style="background:${color}; opacity:${v.predicted ? '0.6' : '1'}; position:relative;">`
+                    + `<span class="bus-label">${labelText}</span>`
+                    + `<div class="bus-course-wrap" style="${courseStyle}"><div class="bus-course-arrow"></div></div>`
+                    + `</div>`,
                 iconSize: [32, 32], iconAnchor: [16, 16]
             });
 

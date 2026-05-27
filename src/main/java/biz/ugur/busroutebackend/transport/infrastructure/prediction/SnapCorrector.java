@@ -74,6 +74,9 @@ class SnapCorrector {
                          String vehicleId, String licensePlate, String routeNumber,
                          double latitude, double longitude, double course, int direction) {
 
+        final int inputDirection = direction;
+        final double inputFraction = existing != null ? existing.getFractionOnRoute() : -1;
+
         double newRejectedFrac = existing != null ? existing.getLastRejectedGpsFraction() : -1;
         int newImplausibleCount = existing != null ? existing.getConsecutiveImplausibleCount() : 0;
 
@@ -306,6 +309,13 @@ class SnapCorrector {
         }
         pipelineTracer.traceSnap(vehicleId, licensePlate, routeNumber, direction,
                 rawSnapMinDistance, fraction, snap.snapped(), branch);
+
+        if (direction != inputDirection) {
+            pipelineTracer.traceSnapStateDirectionMutation(
+                    vehicleId, licensePlate, routeNumber,
+                    inputDirection, direction, branch,
+                    inputFraction, fraction, rawSnapMinDistance);
+        }
 
         return new SnapResult(predictedLat, predictedLon, fraction, direction,
                 routeCoords, totalDist, course, newRejectedFrac, newImplausibleCount,

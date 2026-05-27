@@ -253,4 +253,17 @@ public class PipelineTracer {
         log.info("[TRACE_WS_DROPPED_BY_SUBSCRIPTION] vehicle={} plate={} route={} subscription={} filter={}",
                 vehicleId, plate, routeNumber, subscriptionType, filter);
     }
+
+    public void traceSnapStateDirectionMutation(String vehicleId, String plate, String routeNumber,
+                                                  int inputDirection, int outputDirection,
+                                                  String branch, double fracIn, double fracOut,
+                                                  double snapDistMeters) {
+        if (!isTracked(plate, vehicleId, routeNumber)) return;
+        log.warn("[TRACE_SNAP_STATE_DIR_FLIP] vehicle={} plate={} route={} inputDir={} outputDir={} branch={} fracIn={} fracOut={} snapDist={}m — state.direction flipped by snap; Vehicle.currentDirection NOT updated by this code path, next batchUpdate may revert in DB",
+                vehicleId, plate, routeNumber,
+                inputDirection, outputDirection, branch,
+                fracIn >= 0 ? String.format("%.4f", fracIn) : "-",
+                fracOut >= 0 ? String.format("%.4f", fracOut) : "-",
+                String.format("%.1f", snapDistMeters));
+    }
 }
