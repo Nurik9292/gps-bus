@@ -64,8 +64,11 @@ public class PersistAndBroadcastStage {
         Mono<Void> predictionsMono = dispatchPredictionsOffEventLoop(ctx);
 
         return predictionsMono.then(Mono.defer(() -> {
+            Map<String, Integer> directionFixes = predictionService.drainPendingDirectionFixes();
+
             List<Vehicle> gatedVehicles = ctx.updatedVehicles().stream()
                     .map(v -> applyGatekeeperDecision(v, ctx.oldCoordsByVehicleId()))
+                    .map(v -> applyPendingDirectionFix(v, directionFixes))
                     .toList();
 
             for (Vehicle v : gatedVehicles) {
@@ -74,11 +77,18 @@ public class PersistAndBroadcastStage {
                         ctx.frozenCoordsWithMotionById().getOrDefault(v.getId().getValue(), false));
             }
 
-            Map<String, Integer> directionFixes = predictionService.drainPendingDirectionFixes();
-            Mono<Integer> dirFixMono = directionFixes.isEmpty()
+            Set<String> fixedInBatch = gatedVehicles.stream()
+                    .map(v -> v.getId().getValue())
+                    .filter(directionFixes::containsKey)
+                    .collect(java.util.stream.Collectors.toSet());
+            Map<String, Integer> leftoverFixes = directionFixes.entrySet().stream()
+                    .filter(e -> !fixedInBatch.contains(e.getKey()))
+                    .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+            Mono<Integer> dirFixMono = leftoverFixes.isEmpty()
                     ? Mono.just(0)
-                    : vehicleRepository.batchUpdateDirections(directionFixes)
-                            .doOnNext(n -> log.debug("[GPS_PIPELINE] DIR_AUTO_FIX applied {} direction corrections", n));
+                    : vehicleRepository.batchUpdateDirections(leftoverFixes)
+                            .doOnNext(n -> log.debug("[GPS_PIPELINE] DIR_AUTO_FIX applied {} direction corrections (leftover, vehicle not in batch)", n));
 
             Mono<Integer> updateMono = gatedVehicles.isEmpty()
                     ? Mono.just(0)
@@ -88,13 +98,33 @@ public class PersistAndBroadcastStage {
                     ? Mono.just(List.of())
                     : vehicleRepository.batchInsert(ctx.vehiclesToCreate()).collectList();
 
-            return Mono.zip(updateMono, insertMono, dirFixMono)
+            return updateMono
+                    .then(Mono.zip(insertMono, dirFixMono))
                     .flatMap(tuple -> persistRawGpsHistory(ctx).thenReturn(tuple))
                     .doOnNext(tuple ->
-                            log.debug("Batch operations: {} updated, {} created, {} direction fixes",
-                                    tuple.getT1(), tuple.getT2().size(), tuple.getT3()))
+                            log.debug("Batch operations: updated={} created={} dir-fixes-leftover={} dir-fixes-merged-into-batch={}",
+                                    gatedVehicles.size(), tuple.getT1().size(), tuple.getT2(), fixedInBatch.size()))
                     .then();
         }));
+    }
+
+    private Vehicle applyPendingDirectionFix(Vehicle vehicle, Map<String, Integer> directionFixes) {
+        if (directionFixes.isEmpty()) {
+            return vehicle;
+        }
+        Integer fixedDirection = directionFixes.get(vehicle.getId().getValue());
+        if (fixedDirection == null) {
+            return vehicle;
+        }
+        if (vehicle.getCurrentDirection() != null && vehicle.getCurrentDirection().equals(fixedDirection)) {
+            return vehicle;
+        }
+        log.info("[GPS_PIPELINE] DIR_AUTO_FIX_MERGED_INTO_BATCH vehicle={} plate={} batchDir={} → fixedDir={} (snap-corrected direction merged into Vehicle before batchUpdate to avoid race with batchUpdateDirections)",
+                vehicle.getId().getValue(), vehicle.getLicensePlate(),
+                vehicle.getCurrentDirection(), fixedDirection);
+        return vehicle.toBuilder()
+                .currentDirection(fixedDirection)
+                .build();
     }
 
     private Mono<Void> dispatchPredictionsOffEventLoop(Context ctx) {
