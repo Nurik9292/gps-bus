@@ -10,6 +10,7 @@ import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId;
 import biz.ugur.busroutebackend.transport.domain.valueobject.GpsProviderType;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer;
 import biz.ugur.busroutebackend.transport.infrastructure.persistence.entity.VehicleEntity;
 import biz.ugur.busroutebackend.transport.infrastructure.mapper.VehicleEntityMapper;
 import io.r2dbc.spi.Row;
@@ -54,13 +55,16 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
 
     private final VehicleEntityMapper entityMapper;
     private final OptimisticLockMetricsRecorder metricsRecorder;
+    private final PipelineTracer pipelineTracer;
 
     public R2dbcVehicleRepository(DatabaseClient databaseClient,
                                    VehicleEntityMapper entityMapper,
-                                   OptimisticLockMetricsRecorder metricsRecorder) {
+                                   OptimisticLockMetricsRecorder metricsRecorder,
+                                   PipelineTracer pipelineTracer) {
         super(databaseClient, "vehicles", Vehicle.class);
         this.entityMapper = entityMapper;
         this.metricsRecorder = metricsRecorder;
+        this.pipelineTracer = pipelineTracer;
     }
 
     @Override
@@ -539,12 +543,18 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .toList();
 
         return Flux.fromIterable(sortedEntries)
-                .concatMap(entry -> databaseClient.sql(sql)
-                        .bind("dir", entry.getValue())
-                        .bind("id", entry.getKey())
-                        .fetch()
-                        .rowsUpdated()
-                        .map(Long::intValue))
+                .concatMap(entry -> {
+                    pipelineTracer.traceDbWriteVehicle(
+                            entry.getKey(), null, null, null,
+                            entry.getValue(), null, null,
+                            "batchUpdateDirections", null);
+                    return databaseClient.sql(sql)
+                            .bind("dir", entry.getValue())
+                            .bind("id", entry.getKey())
+                            .fetch()
+                            .rowsUpdated()
+                            .map(Long::intValue);
+                })
                 .reduce(0, Integer::sum)
                 .doOnNext(n -> log.debug("[GPS_PIPELINE] DIR_AUTO_FIX updated direction for {} vehicles", n));
     }
@@ -615,6 +625,17 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
         spec = bindValue(spec, "updatedAt", LocalDateTime.now());
         spec = spec.bind("id", vehicle.getId().getValue());
         spec = spec.bind("version", vehicle.getVersion());
+
+        pipelineTracer.traceDbWriteVehicle(
+                vehicle.getId() != null ? vehicle.getId().getValue() : null,
+                vehicle.getDeviceId(),
+                vehicle.getLicensePlate(),
+                vehicle.getRouteNumber(),
+                vehicle.getCurrentDirection(),
+                vehicle.getCurrentLatitude(),
+                vehicle.getCurrentLongitude(),
+                "batchUpdate",
+                vehicle.getVersion());
 
         return spec.fetch()
                 .rowsUpdated()

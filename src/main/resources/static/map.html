@@ -462,6 +462,16 @@
     const DEFAULT_CENTER = [37.9601, 58.3261];
     const DEFAULT_ZOOM = 13;
 
+    window.__TRACE_PLATE = window.__TRACE_PLATE
+        || (new URLSearchParams(window.location.search).get('trace') || '').toUpperCase();
+    if (window.__TRACE_PLATE) {
+        console.log('[TRACE] map.html plate tracing enabled for:', window.__TRACE_PLATE);
+    }
+    function __isTraced(plate) {
+        if (!window.__TRACE_PLATE || !plate) return false;
+        return String(plate).toUpperCase().includes(window.__TRACE_PLATE);
+    }
+
     const ROUTE_COLORS = {};
     const COLOR_PALETTE = [
         '#6366f1','#ec4899','#14b8a6','#f97316','#8b5cf6','#06b6d4',
@@ -641,6 +651,29 @@
                 if (data.type === 'initial_positions' || data.type === 'position_update') {
                     const vlist = data.vehicles || [];
                     const isInitial = data.type === 'initial_positions';
+                    if (window.__TRACE_PLATE) {
+                        for (const v of vlist) {
+                            const plate = v.licensePlate || v.license_plate || v.plate;
+                            if (__isTraced(plate)) {
+                                console.log('[TRACE_P9_WS_RECV]', {
+                                    type: data.type,
+                                    plate,
+                                    route: v.routeNumber || v.route_number || v.route,
+                                    lat: v.latitude ?? v.lat,
+                                    lon: v.longitude ?? v.lon,
+                                    direction: v.direction,
+                                    line: v.line,
+                                    course: v.dir ?? v.course,
+                                    speed: v.speedKmh ?? v.speed_kmh ?? v.speed,
+                                    inMotion: v.isInMotion ?? v.is_in_motion,
+                                    predicted: v.predicted,
+                                    fraction: v.fraction,
+                                    confidence: v.confidence,
+                                    ts_recv: new Date().toISOString(),
+                                });
+                            }
+                        }
+                    }
                     vlist.forEach(v => processVehicle(v, { initial: isInitial }));
                     updateCounter += vlist.length;
                     updateStats();
@@ -880,6 +913,19 @@
     function processVehicle(raw, options) {
         const v = normalizeVehicle(raw);
         if (!v.id || !v.lat || !v.lon) return;
+        if (__isTraced(v.plate)) {
+            console.log('[TRACE_P10_RENDER]', {
+                plate: v.plate,
+                route: v.route,
+                lat: v.lat,
+                lon: v.lon,
+                course: v.course,
+                moving: v.moving,
+                predicted: v.predicted,
+                initial: !!(options && options.initial),
+                ts_render: new Date().toISOString(),
+            });
+        }
 
         vehicleDeadReckoning[v.id] = {
             lat: v.lat,

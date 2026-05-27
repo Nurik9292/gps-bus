@@ -124,7 +124,23 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 .toList();
 
                         return vehicleRepository.findByDeviceIds(filteredDeviceIds)
-                                .flatMap(existingVehiclesMap -> processBatch(filteredPositions, existingVehiclesMap));
+                                .flatMap(existingVehiclesMap -> {
+                                    for (Vehicle v : existingVehiclesMap.values()) {
+                                        if (v == null) continue;
+                                        pipelineTracer.rememberDeviceRoute(v.getDeviceId(), v.getRouteNumber());
+                                        pipelineTracer.traceDbReadVehicle(
+                                                v.getId() != null ? v.getId().getValue() : null,
+                                                v.getDeviceId(),
+                                                v.getLicensePlate(),
+                                                v.getRouteNumber(),
+                                                v.getCurrentDirection(),
+                                                v.getCurrentLatitude(),
+                                                v.getCurrentLongitude(),
+                                                v.getLastPositionUpdate(),
+                                                v.getVersion());
+                                    }
+                                    return processBatch(filteredPositions, existingVehiclesMap);
+                                });
                     })
                     .doOnSuccess(result -> log.debug("[GPS_PIPELINE] GPS batch update completed: {}", result.updatedCount()))
                     .onErrorResume(error -> {

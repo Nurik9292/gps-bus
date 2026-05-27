@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.GatekeeperDecision;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePositionPredictionService;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistoryService;
@@ -34,15 +35,18 @@ public class PersistAndBroadcastStage {
     private final VehicleRepository vehicleRepository;
     private final VehicleGpsHistoryService gpsHistoryService;
     private final DomainEventPublisher domainEventPublisher;
+    private final PipelineTracer pipelineTracer;
 
     public PersistAndBroadcastStage(VehiclePositionPredictionService predictionService,
                                      VehicleRepository vehicleRepository,
                                      VehicleGpsHistoryService gpsHistoryService,
-                                     DomainEventPublisher domainEventPublisher) {
+                                     DomainEventPublisher domainEventPublisher,
+                                     PipelineTracer pipelineTracer) {
         this.predictionService = predictionService;
         this.vehicleRepository = vehicleRepository;
         this.gpsHistoryService = gpsHistoryService;
         this.domainEventPublisher = domainEventPublisher;
+        this.pipelineTracer = pipelineTracer;
     }
 
     public record Context(
@@ -183,15 +187,31 @@ public class PersistAndBroadcastStage {
     private Vehicle applyGatekeeperDecision(Vehicle v, Map<String, double[]> oldCoordsByVehicleId) {
         String vehicleId = v.getId().getValue();
         GatekeeperDecision decision = predictionService.evaluateGate(vehicleId);
+        double[] oldCoords = oldCoordsByVehicleId.get(vehicleId);
         if (decision.allowsCoordinateWrite()) {
+            pipelineTracer.traceDbSave(
+                    v.getDeviceId(), v.getLicensePlate(),
+                    oldCoords != null ? oldCoords[0] : null,
+                    oldCoords != null ? oldCoords[1] : null,
+                    v.getCurrentLatitude(), v.getCurrentLongitude(),
+                    true, decision.name());
             return v;
         }
-        double[] oldCoords = oldCoordsByVehicleId.get(vehicleId);
         if (oldCoords == null) {
+            pipelineTracer.traceDbSave(
+                    v.getDeviceId(), v.getLicensePlate(),
+                    null, null,
+                    v.getCurrentLatitude(), v.getCurrentLongitude(),
+                    true, decision.name() + "-noOldCoords");
             return v;
         }
         log.debug("[GPS_PIPELINE] DB_HEARTBEAT_ONLY vehicle={} plate={} decision={} — preserving coords, updating timing only",
                 vehicleId, v.getLicensePlate(), decision);
+        pipelineTracer.traceDbSave(
+                v.getDeviceId(), v.getLicensePlate(),
+                oldCoords[0], oldCoords[1],
+                v.getCurrentLatitude(), v.getCurrentLongitude(),
+                false, decision.name() + "-heartbeatOnly");
         return v.toBuilder()
                 .currentLatitude(oldCoords[0])
                 .currentLongitude(oldCoords[1])

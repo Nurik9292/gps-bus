@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.domain.service.GpsOutlierDetector;
 import biz.ugur.busroutebackend.transport.domain.valueobject.OutlierDetectionResult;
 import biz.ugur.busroutebackend.transport.infrastructure.config.GpsOutlierDetectionProperties;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer;
 import biz.ugur.busroutebackend.transport.infrastructure.metrics.GpsOutlierMetricsRecorder;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistoryService;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +36,7 @@ class OutlierFilterStageTest {
     private GpsOutlierMetricsRecorder metricsRecorder;
     private GpsOutlierDetectionProperties properties;
     private VehicleGpsHistoryService historyService;
+    private PipelineTracer pipelineTracer;
     private OutlierFilterStage stage;
 
     @BeforeEach
@@ -47,8 +49,9 @@ class OutlierFilterStageTest {
         properties.setRejectFrozenMotion(true);
         properties.setHistoryPointsToCheck(3);
         historyService = mock(VehicleGpsHistoryService.class);
+        pipelineTracer = mock(PipelineTracer.class);
 
-        stage = new OutlierFilterStage(outlierDetector, metricsRecorder, properties, historyService);
+        stage = new OutlierFilterStage(outlierDetector, metricsRecorder, properties, historyService, pipelineTracer);
 
         lenient().when(historyService.getHistoryBatch(anyList(), anyInt()))
                 .thenReturn(Mono.just(Map.of()));

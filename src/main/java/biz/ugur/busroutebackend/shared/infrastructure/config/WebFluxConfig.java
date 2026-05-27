@@ -48,6 +48,8 @@ public class WebFluxConfig implements WebFluxConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/*.html")
                 .addResourceLocations("classpath:/static/");
+        registry.addResourceHandler("/*.geojson")
+                .addResourceLocations("classpath:/static/");
         registry.addResourceHandler("/static/**")
                 .addResourceLocations("classpath:/static/");
 

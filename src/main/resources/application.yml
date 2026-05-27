@@ -656,6 +656,7 @@ ugur:
   diagnostics:
     tracked-plates: ${TRACKED_PLATES:}
     tracked-device-ids: ${TRACKED_DEVICE_IDS:}
+    tracked-routes: ${TRACKED_ROUTES:}
 
 gps:
   recorder:

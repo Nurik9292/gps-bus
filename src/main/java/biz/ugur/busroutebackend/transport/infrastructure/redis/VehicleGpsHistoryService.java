@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.transport.infrastructure.redis;
 
 import biz.ugur.busroutebackend.shared.infrastructure.redis.RedisTimeoutHandler;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +47,7 @@ public class VehicleGpsHistoryService {
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
     private final RedisTimeoutHandler timeoutHandler;
+    private final PipelineTracer pipelineTracer;
 
     @Value("${business.gps-history.max-points:100}")
     private int maxPoints;
@@ -55,10 +57,12 @@ public class VehicleGpsHistoryService {
 
     public VehicleGpsHistoryService(ReactiveRedisTemplate<String, Object> redisTemplate,
                                     ObjectMapper objectMapper,
-                                    RedisTimeoutHandler timeoutHandler) {
+                                    RedisTimeoutHandler timeoutHandler,
+                                    PipelineTracer pipelineTracer) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.timeoutHandler = timeoutHandler;
+        this.pipelineTracer = pipelineTracer;
     }
 
     public Mono<Void> addPoint(String vehicleId, Double latitude, Double longitude,
@@ -72,6 +76,8 @@ public class VehicleGpsHistoryService {
 
         try {
             String jsonPoint = objectMapper.writeValueAsString(point);
+
+            pipelineTracer.traceGpsHistoryWrite(vehicleId, latitude, longitude, speed, timestamp);
 
             Mono<Void> operation = redisTemplate.opsForList().leftPush(key, jsonPoint)
                     .then(redisTemplate.opsForList().trim(key, 0, maxPoints - 1))

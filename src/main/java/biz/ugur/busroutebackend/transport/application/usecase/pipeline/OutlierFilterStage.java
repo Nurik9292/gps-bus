@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.domain.service.GpsOutlierDetector;
 import biz.ugur.busroutebackend.transport.domain.valueobject.OutlierDetectionResult;
 import biz.ugur.busroutebackend.transport.infrastructure.config.GpsOutlierDetectionProperties;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer;
 import biz.ugur.busroutebackend.transport.infrastructure.metrics.GpsOutlierMetricsRecorder;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistoryService;
 import lombok.extern.slf4j.Slf4j;
@@ -23,15 +24,18 @@ public class OutlierFilterStage {
     private final GpsOutlierMetricsRecorder outlierMetricsRecorder;
     private final GpsOutlierDetectionProperties outlierDetectionProperties;
     private final VehicleGpsHistoryService gpsHistoryService;
+    private final PipelineTracer pipelineTracer;
 
     public OutlierFilterStage(GpsOutlierDetector outlierDetector,
                                GpsOutlierMetricsRecorder outlierMetricsRecorder,
                                GpsOutlierDetectionProperties outlierDetectionProperties,
-                               VehicleGpsHistoryService gpsHistoryService) {
+                               VehicleGpsHistoryService gpsHistoryService,
+                               PipelineTracer pipelineTracer) {
         this.outlierDetector = outlierDetector;
         this.outlierMetricsRecorder = outlierMetricsRecorder;
         this.outlierDetectionProperties = outlierDetectionProperties;
         this.gpsHistoryService = gpsHistoryService;
+        this.pipelineTracer = pipelineTracer;
     }
 
     private record PositionWithOutlierResult(GpsPositionDTO position, OutlierDetectionResult detectionResult) {}
@@ -75,6 +79,14 @@ public class OutlierFilterStage {
                     for (PositionWithOutlierResult r : results) {
                         allResults.add(r.detectionResult());
                         OutlierDetectionResult.OutlierType type = r.detectionResult().type();
+
+                        pipelineTracer.traceOutlierDecision(
+                                r.detectionResult().deviceId(),
+                                null,
+                                type.name(),
+                                r.detectionResult().distanceMeters(),
+                                r.detectionResult().timeDifferenceSeconds() * 1000L,
+                                r.detectionResult().maxAllowedSpeedKmh());
 
                         boolean isTeleportation = type == OutlierDetectionResult.OutlierType.SPEED_EXCEEDED;
                         boolean isFrozen = type == OutlierDetectionResult.OutlierType.FROZEN_COORDINATES_WITH_MOTION;

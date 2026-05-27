@@ -92,7 +92,9 @@ public class PublicSecurityConfig {
                         .pathMatchers("/actuator/info").permitAll()
 
                         .pathMatchers("/*.html").permitAll()
+                        .pathMatchers("/*.geojson").permitAll()
                         .pathMatchers("/static/**").permitAll()
+                        .pathMatchers("/api/v1/diagnostics/**").permitAll()
                         .pathMatchers("/api/v1/routing/**").permitAll()
 
                         .anyExchange().denyAll()
