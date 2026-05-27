@@ -30,7 +30,7 @@ public class PipelineTracer {
     private volatile Set<String> trackedRoutes = Set.of();
     private volatile boolean trackAll = false;
 
-    private final ConcurrentHashMap<String, String> deviceToRoute = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> idToRoute = new ConcurrentHashMap<>();
 
     @PostConstruct
     void init() {
@@ -64,8 +64,16 @@ public class PipelineTracer {
     }
 
     public void rememberDeviceRoute(String deviceId, String routeNumber) {
-        if (deviceId != null && routeNumber != null && !routeNumber.isBlank()) {
-            deviceToRoute.put(deviceId, routeNumber);
+        rememberRoute(deviceId, null, routeNumber);
+    }
+
+    public void rememberRoute(String deviceId, String vehicleId, String routeNumber) {
+        if (routeNumber == null || routeNumber.isBlank()) return;
+        if (deviceId != null && !deviceId.isBlank()) {
+            idToRoute.put(deviceId, routeNumber);
+        }
+        if (vehicleId != null && !vehicleId.isBlank()) {
+            idToRoute.put(vehicleId, routeNumber);
         }
     }
 
@@ -88,13 +96,13 @@ public class PipelineTracer {
         return isTracked(licensePlate, deviceId, null);
     }
 
-    public boolean isTracked(String licensePlate, String deviceId, String routeNumber) {
+    public boolean isTracked(String licensePlate, String anyId, String routeNumber) {
         if (trackAll) return true;
         if (isTrackedByPlate(licensePlate)) return true;
-        if (isTrackedByDevice(deviceId)) return true;
+        if (isTrackedByDevice(anyId)) return true;
         if (isTrackedByRoute(routeNumber)) return true;
-        if (deviceId != null && !trackedRoutes.isEmpty()) {
-            String cachedRoute = deviceToRoute.get(deviceId);
+        if (anyId != null && !trackedRoutes.isEmpty()) {
+            String cachedRoute = idToRoute.get(anyId);
             if (cachedRoute != null && trackedRoutes.contains(cachedRoute)) return true;
         }
         return false;

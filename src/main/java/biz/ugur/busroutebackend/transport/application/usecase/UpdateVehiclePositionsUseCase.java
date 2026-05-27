@@ -127,7 +127,10 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                 .flatMap(existingVehiclesMap -> {
                                     for (Vehicle v : existingVehiclesMap.values()) {
                                         if (v == null) continue;
-                                        pipelineTracer.rememberDeviceRoute(v.getDeviceId(), v.getRouteNumber());
+                                        pipelineTracer.rememberRoute(
+                                                v.getDeviceId(),
+                                                v.getId() != null ? v.getId().getValue() : null,
+                                                v.getRouteNumber());
                                         pipelineTracer.traceDbReadVehicle(
                                                 v.getId() != null ? v.getId().getValue() : null,
                                                 v.getDeviceId(),
