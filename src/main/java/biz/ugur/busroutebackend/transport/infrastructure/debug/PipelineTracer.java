@@ -266,4 +266,23 @@ public class PipelineTracer {
                 fracOut >= 0 ? String.format("%.4f", fracOut) : "-",
                 String.format("%.1f", snapDistMeters));
     }
+
+    public void tracePredictorAdvance(String vehicleId, String plate, String routeNumber,
+                                       int direction, double oldFrac, double newFrac,
+                                       double oldPredLat, double oldPredLon,
+                                       double newPredLat, double newPredLon,
+                                       double rawGpsLat, double rawGpsLon,
+                                       double driftFromRawGpsMeters,
+                                       double speedKmh, long msSinceGps) {
+        if (!isTracked(plate, vehicleId, routeNumber)) return;
+        log.info("[TRACE_PREDICTOR_ADVANCE] vehicle={} plate={} route={} dir={} frac={}→{} predicted=({},{}) gps=({},{}) drift={}m speed={}km/h msSinceGps={}",
+                vehicleId, plate, routeNumber, direction,
+                String.format("%.4f", oldFrac),
+                String.format("%.4f", newFrac),
+                String.format("%.5f", oldPredLat), String.format("%.5f", oldPredLon),
+                String.format("%.5f", newPredLat), String.format("%.5f", newPredLon),
+                String.format("%.5f", rawGpsLat), String.format("%.5f", rawGpsLon),
+                String.format("%.0f", driftFromRawGpsMeters),
+                String.format("%.1f", speedKmh), msSinceGps);
+    }
 }
