@@ -275,7 +275,7 @@ public class PipelineTracer {
                                        double driftFromRawGpsMeters,
                                        double speedKmh, long msSinceGps) {
         if (!isTracked(plate, vehicleId, routeNumber)) return;
-        log.info("[TRACE_PREDICTOR_ADVANCE] vehicle={} plate={} route={} dir={} frac={}→{} predicted=({},{}) gps=({},{}) drift={}m speed={}km/h msSinceGps={}",
+        log.info("[TRACE_PREDICTOR_ADVANCE] vehicle={} plate={} route={} dir={} frac={}→{} oldPred=({},{}) newPred=({},{}) rawGps=({},{}) drift={}m speed={}km/h msSinceGps={}",
                 vehicleId, plate, routeNumber, direction,
                 String.format("%.4f", oldFrac),
                 String.format("%.4f", newFrac),
