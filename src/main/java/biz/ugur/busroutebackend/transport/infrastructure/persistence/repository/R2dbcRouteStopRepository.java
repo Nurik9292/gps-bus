@@ -16,6 +16,8 @@ import java.util.UUID;
 @Repository
 public class R2dbcRouteStopRepository implements RouteStopRepository {
 
+    private static final double STRONG_POLYLINE_PROXIMITY_THRESHOLD_METERS = 150.0;
+
     private final DatabaseClient databaseClient;
 
     public R2dbcRouteStopRepository(DatabaseClient databaseClient) {
@@ -480,6 +482,10 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
                         WHEN forward_bearing IS NULL AND backward_bearing IS NOT NULL THEN 1
                         WHEN forward_bearing IS NOT NULL AND backward_bearing IS NOT NULL THEN
                             CASE
+                                WHEN dist_fwd_poly IS NOT NULL
+                                     AND dist_bwd_poly IS NOT NULL
+                                     AND ABS(dist_fwd_poly - dist_bwd_poly) > :strongProximityThreshold
+                                    THEN CASE WHEN dist_fwd_poly < dist_bwd_poly THEN 0 ELSE 1 END
                                 WHEN forward_stop_id IS NOT NULL
                                      AND backward_stop_id IS NOT NULL
                                      AND forward_stop_id = backward_stop_id
@@ -521,6 +527,7 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
                 .bind("longitude", longitude)
                 .bind("course", course)
                 .bind("currentDirection", currentDirectionParam)
+                .bind("strongProximityThreshold", STRONG_POLYLINE_PROXIMITY_THRESHOLD_METERS)
                 .map(row -> new NearestStopResult(
                         row.get("stop_sequence", Integer.class),
                         row.get("direction", Integer.class)))
