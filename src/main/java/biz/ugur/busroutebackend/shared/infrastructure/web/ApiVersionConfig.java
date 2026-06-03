@@ -108,4 +108,9 @@ public class ApiVersionConfig {
     public static final String V1_PAYMENTS_RETURN = API_V1 + PAYMENTS + "/return";
 
     public static final String V1_ADMIN_GPS_RECORDER = V1_ADMIN + "/debug/gps-recorder";
+
+    public static final String DIAGNOSTICS = "/diagnostics";
+    public static final String V1_DIAGNOSTICS = API_V1 + DIAGNOSTICS;
+    public static final String V1_DIAGNOSTICS_VEHICLE_SNAPSHOT = V1_DIAGNOSTICS + "/vehicle-snapshot";
+    public static final String V1_DIAGNOSTICS_GPS_TRAIL = V1_DIAGNOSTICS + "/gps-trail";
 }

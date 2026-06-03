@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.transport.domain.repository.RouteStopRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteStopRepository.NearestStopResult;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteStopRepository.VehiclePositionKey;
 import biz.ugur.busroutebackend.transport.domain.service.VehicleDirectionDetectionService;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import java.util.Map;
 public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDetectionService {
 
     private final RouteStopRepository routeStopRepository;
+    private final PipelineTracer pipelineTracer;
 
     @Override
     public Mono<NearestStopResult> findNearestStopSequence(Vehicle vehicle) {
@@ -162,6 +164,18 @@ public class VehicleDirectionDetectionServiceImpl implements VehicleDirectionDet
 
                             boolean hasCourse = vehicle.getCourse() != null && vehicle.getCourse() > 0;
                             if (hasCourse) courseBasedCount++;
+
+                            pipelineTracer.traceNearestStops(
+                                    vehicle.getId().getValue(),
+                                    vehicle.getLicensePlate(),
+                                    vehicle.getRouteNumber(),
+                                    vehicle.getCurrentDirection(),
+                                    vehicle.getCourse(),
+                                    vehicle.getSpeedKmh(),
+                                    stopResult.direction(),
+                                    stopResult.sequence(),
+                                    null,
+                                    null);
 
                             if (updatedVehicle.getCurrentDirection() != null &&
                                     !updatedVehicle.getCurrentDirection().equals(vehicle.getCurrentDirection())) {

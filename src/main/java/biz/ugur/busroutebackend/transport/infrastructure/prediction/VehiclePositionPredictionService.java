@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
 import biz.ugur.busroutebackend.transport.infrastructure.debug.GpsRecorder;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer;
 import biz.ugur.busroutebackend.transport.infrastructure.monitoring.offroute.VehicleOffRouteAlertMonitor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -41,25 +42,6 @@ public class VehiclePositionPredictionService {
 
     private final ConcurrentHashMap<String, GatekeeperDecision> lastDecisions = new ConcurrentHashMap<>();
 
-    @org.springframework.beans.factory.annotation.Value("${ugur.diagnostics.tracked-plates:}")
-    private String trackedPlatesProperty;
-    private volatile java.util.Set<String> trackedPlates = java.util.Set.of();
-
-    @jakarta.annotation.PostConstruct
-    public void initTrackedPlates() {
-        if (trackedPlatesProperty != null && !trackedPlatesProperty.isBlank()) {
-            trackedPlates = java.util.Arrays.stream(trackedPlatesProperty.split(","))
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
-            log.info("[DIAG] TRACKED_PLATES enabled: {}", trackedPlates);
-        }
-    }
-
-    private boolean isTracked(String licensePlate) {
-        return licensePlate != null && !trackedPlates.isEmpty() && trackedPlates.contains(licensePlate);
-    }
-
     private VehiclePredictionState replaceState(String vehicleId, VehiclePredictionState newState, String reason) {
         return vehicleStates.compute(vehicleId, (k, existing) -> {
             logStateTransition(vehicleId, existing, newState, reason);
@@ -80,33 +62,30 @@ public class VehiclePositionPredictionService {
     }
 
     private void logStateTransition(String vehicleId, VehiclePredictionState existing, VehiclePredictionState newState, String reason) {
-        if (existing == null || newState == null) return;
-        double prevLat = existing.getPredictedLatitude();
-        double prevLon = existing.getPredictedLongitude();
+        if (newState == null) return;
         double newLat = newState.getPredictedLatitude();
         double newLon = newState.getPredictedLongitude();
-        if (prevLat != 0.0 && newLat != 0.0) {
-            double delta = biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService
-                    .haversineDistanceMeters(prevLat, prevLon, newLat, newLon);
-            if (delta > properties.getPositionJumpInternalThresholdMeters()) {
-                log.warn("[GPS_PIPELINE] POSITION_JUMP_INTERNAL vehicle={} plate={} reason={} delta={}m prev=({},{}) new=({},{})",
-                        vehicleId, newState.getLicensePlate(), reason,
-                        String.format("%.0f", delta),
-                        String.format("%.5f", prevLat), String.format("%.5f", prevLon),
-                        String.format("%.5f", newLat), String.format("%.5f", newLon));
+        if (existing != null) {
+            double prevLat = existing.getPredictedLatitude();
+            double prevLon = existing.getPredictedLongitude();
+            if (prevLat != 0.0 && newLat != 0.0) {
+                double delta = DistanceCalculationService.haversineDistanceMeters(prevLat, prevLon, newLat, newLon);
+                if (delta > properties.getPositionJumpInternalThresholdMeters()) {
+                    log.warn("[GPS_PIPELINE] POSITION_JUMP_INTERNAL vehicle={} plate={} reason={} delta={}m prev=({},{}) new=({},{})",
+                            vehicleId, newState.getLicensePlate(), reason,
+                            String.format("%.0f", delta),
+                            String.format("%.5f", prevLat), String.format("%.5f", prevLon),
+                            String.format("%.5f", newLat), String.format("%.5f", newLon));
+                }
             }
         }
-        if (isTracked(newState.getLicensePlate())) {
-            log.info("[GPS_PIPELINE] TRACE_STATE_WRITE vehicle={} plate={} reason={} predicted=({},{}) gps=({},{}) frac={} inMotion={} speed={} coldStartUntil={}",
-                    vehicleId, newState.getLicensePlate(), reason,
-                    String.format("%.5f", newLat), String.format("%.5f", newLon),
-                    String.format("%.5f", newState.getGpsLatitude()),
-                    String.format("%.5f", newState.getGpsLongitude()),
-                    String.format("%.4f", newState.getFractionOnRoute()),
-                    newState.isInMotion(),
-                    String.format("%.1f", newState.getSpeedKmh()),
-                    newState.getColdStartUntilAt());
-        }
+        pipelineTracer.traceStateWrite(
+                vehicleId, newState.getLicensePlate(), newState.getRouteNumber(), reason,
+                newState.getPredictedLatitude(), newState.getPredictedLongitude(),
+                newState.getGpsLatitude(), newState.getGpsLongitude(),
+                newState.getFractionOnRoute(), newState.isInMotion(), newState.getSpeedKmh(),
+                newState.getDirection(), newState.isDirectionConfirmed(),
+                newState.getColdStartUntilAt());
     }
 
     private final ConcurrentHashMap<String, VehiclePredictionState> vehicleStates = new ConcurrentHashMap<>();
@@ -125,6 +104,7 @@ public class VehiclePositionPredictionService {
     private final VehiclePositionPredictor predictor;
     private final Optional<VehicleOffRouteAlertMonitor> offRouteMonitor;
     private final Clock clock;
+    private final PipelineTracer pipelineTracer;
 
     public VehiclePositionPredictionService(PredictionProperties properties,
                                              PredictionBroadcaster broadcaster,
@@ -135,7 +115,8 @@ public class VehiclePositionPredictionService {
                                              SnapCorrector snapCorrector,
                                              VehiclePositionPredictor predictor,
                                              Optional<VehicleOffRouteAlertMonitor> offRouteMonitor,
-                                             Clock clock) {
+                                             Clock clock,
+                                             PipelineTracer pipelineTracer) {
         this.properties = properties;
         this.broadcaster = broadcaster;
         this.routeGeometryCache = routeGeometryCache;
@@ -146,6 +127,7 @@ public class VehiclePositionPredictionService {
         this.predictor = predictor;
         this.offRouteMonitor = offRouteMonitor;
         this.clock = clock;
+        this.pipelineTracer = pipelineTracer;
     }
 
     private static final Duration RESTORE_TIMEOUT = Duration.ofSeconds(30);

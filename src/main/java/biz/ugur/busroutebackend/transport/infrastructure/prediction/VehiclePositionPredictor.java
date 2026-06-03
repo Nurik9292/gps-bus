@@ -1,9 +1,11 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.transport.domain.repository.SegmentTravelStatsRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat;
 import biz.ugur.busroutebackend.transport.domain.valueobject.StopDwellStat;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -32,6 +34,7 @@ class VehiclePositionPredictor {
     private final MapMatchingService mapMatchingService;
     private final StopDwellStatsRepository dwellStatsRepository;
     private final SegmentTravelStatsRepository segmentTravelStatsRepository;
+    private final PipelineTracer pipelineTracer;
 
     private final ConcurrentHashMap<String, StopDwellStat> dwellStatsCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, SegmentTravelStat> segmentTravelStatsCache = new ConcurrentHashMap<>();
@@ -40,12 +43,14 @@ class VehiclePositionPredictor {
                               RouteGeometryCache routeGeometryCache,
                               MapMatchingService mapMatchingService,
                               StopDwellStatsRepository dwellStatsRepository,
-                              SegmentTravelStatsRepository segmentTravelStatsRepository) {
+                              SegmentTravelStatsRepository segmentTravelStatsRepository,
+                              PipelineTracer pipelineTracer) {
         this.properties = properties;
         this.routeGeometryCache = routeGeometryCache;
         this.mapMatchingService = mapMatchingService;
         this.dwellStatsRepository = dwellStatsRepository;
         this.segmentTravelStatsRepository = segmentTravelStatsRepository;
+        this.pipelineTracer = pipelineTracer;
     }
 
     Mono<Void> loadDwellStats() {
@@ -250,6 +255,20 @@ class VehiclePositionPredictor {
 
             double newCourse = mapMatchingService.calculateCourseFromRoute(
                     routeCoords, cumDistAdvance, newFraction, state.getDirection(), totalRouteDistance);
+
+            double driftFromRawGps = (state.getGpsLatitude() != 0.0 && state.getGpsLongitude() != 0.0)
+                    ? DistanceCalculationService.haversineDistanceMeters(
+                            coords[0], coords[1], state.getGpsLatitude(), state.getGpsLongitude())
+                    : 0.0;
+            pipelineTracer.tracePredictorAdvance(
+                    state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber(),
+                    state.getDirection(),
+                    state.getFractionOnRoute(), newFraction,
+                    state.getPredictedLatitude(), state.getPredictedLongitude(),
+                    coords[0], coords[1],
+                    state.getGpsLatitude(), state.getGpsLongitude(),
+                    driftFromRawGps,
+                    decayedSpeedKmh, msSinceGps);
 
             return state.toBuilder()
                     .speedKmh(decayedSpeedKmh)

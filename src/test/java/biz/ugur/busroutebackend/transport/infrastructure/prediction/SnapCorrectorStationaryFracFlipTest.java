@@ -40,7 +40,7 @@ class SnapCorrectorStationaryFracFlipTest {
     @BeforeEach
     void setUp() {
         properties = new PredictionProperties();
-        snapCorrector = new SnapCorrector(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ConsecutiveOppositeCounter(), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.OppositeFallbackStrategy(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ConsecutiveOppositeCounter()), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.HeadingFlipStrategy(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties)), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.FracFlipStrategy(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties)), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ImplausibleJumpHandler());
+        snapCorrector = new SnapCorrector(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ConsecutiveOppositeCounter(), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.OppositeFallbackStrategy(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ConsecutiveOppositeCounter()), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.HeadingFlipStrategy(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties)), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.FracFlipStrategy(properties, routeGeometryCache, mapMatchingService, new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.DirectionChangeCooldown(properties), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker(properties)), new biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.ImplausibleJumpHandler(), new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer());
 
         List<double[]> forwardCoords = List.of(new double[]{FORWARD_LAT, FORWARD_LON});
         List<double[]> backwardCoords = List.of(new double[]{BACKWARD_LAT, BACKWARD_LON});
@@ -101,23 +101,23 @@ class SnapCorrectorStationaryFracFlipTest {
                 .kalmanSpeedKmh(20.0)
                 .build();
 
-        MapMatchingService.SnappedResult forwardSnap =
-                new MapMatchingService.SnappedResult(FORWARD_LAT, FORWARD_LON, 0.4483, 5.5, true);
-        MapMatchingService.SnappedResult backwardSnap =
+        MapMatchingService.SnappedResult primarySnap =
+                new MapMatchingService.SnappedResult(FORWARD_LAT, FORWARD_LON, 0.4483, 120.0, true);
+        MapMatchingService.SnappedResult oppositeSnap =
                 new MapMatchingService.SnappedResult(FORWARD_LAT + 0.0001, FORWARD_LON + 0.0001, 0.5587, 5.0, true);
 
         when(mapMatchingService.snapToNearestSegment(anyDouble(), anyDouble(), any(), any(), anyDouble(), anyDouble(), anyDouble()))
-                .thenReturn(forwardSnap);
+                .thenReturn(primarySnap);
         when(mapMatchingService.snapToNearestSegment(anyDouble(), anyDouble(), any(), anyDouble()))
-                .thenReturn(backwardSnap);
+                .thenReturn(oppositeSnap);
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
                 FORWARD_LAT, FORWARD_LON, 0.0, 1);
 
         assertThat(result.direction())
-                .as("inMotion=true rawGpsSpeed=20 — bus is actually moving, " +
-                    "flip path is preserved (legacy behavior unchanged)")
+                .as("inMotion=true rawGpsSpeed=20 + primary snap 120m far + opposite snap 5m close — " +
+                    "real reversal, flip allowed (frontage guard NOT triggered: primary > 30m)")
                 .isEqualTo(0);
     }
 

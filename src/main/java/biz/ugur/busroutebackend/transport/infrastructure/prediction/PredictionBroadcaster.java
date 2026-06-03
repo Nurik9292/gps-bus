@@ -221,6 +221,15 @@ public class PredictionBroadcaster {
                         broadcastSpeedKmhFinal, broadcastInMotionFinal,
                         Boolean.TRUE,
                         fractionValue != null ? "SNAPPED" : "DEAD_RECKONING");
+                pipelineTracer.traceWsPayload(
+                        state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber(),
+                        msg.getLatitude(), msg.getLongitude(),
+                        msg.getCourse(), msg.getDirection(),
+                        msg.getSpeedKmh(), msg.getIsInMotion(),
+                        msg.getPredicted(), msg.getConfidence(),
+                        prevBroadcast != null ? prevBroadcast[0] : Double.NaN,
+                        prevBroadcast != null ? prevBroadcast[1] : Double.NaN,
+                        motionCourseFinal, state.getCourse());
                 log.debug("[GPS_PIPELINE] WS_PRED vehicle={} plate={} mode={} frac={} lat={} lon={} speed={}km/h rawSpeed={}km/h moving={} course={}° eta_stops={}",
                         state.getVehicleId(), state.getLicensePlate(),
                         fractionValue != null ? "SNAPPED" : "DEAD_RECKONING",
@@ -319,6 +328,13 @@ public class PredictionBroadcaster {
                         lat, lon,
                         speedKmh, broadcastInMotion,
                         Boolean.FALSE, "RAW_GPS_FALLBACK");
+                pipelineTracer.traceWsPayload(
+                        state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber(),
+                        msg.getLatitude(), msg.getLongitude(),
+                        msg.getCourse(), msg.getDirection(),
+                        msg.getSpeedKmh(), msg.getIsInMotion(),
+                        msg.getPredicted(), msg.getConfidence(),
+                        Double.NaN, Double.NaN, Double.NaN, state.getCourse());
                 log.warn("[GPS_PIPELINE] WS_RAW_GPS_FALLBACK vehicle={} plate={} reason={} lat={} lon={} speed={}km/h moving={}",
                         state.getVehicleId(), state.getLicensePlate(), reason,
                         String.format("%.6f", lat),

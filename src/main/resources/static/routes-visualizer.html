@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>UGUR — Routes Visualizer (forward/backward inspector)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #21262d;
+    --text: #c9d1d9; --text-dim: #8b949e; --accent: #58a6ff;
+    --fwd: #1f77b4; --bwd: #d62728;
+    --pattern-same: #2ca02c; --pattern-narrow: #1f77b4;
+    --pattern-medium: #ff7f0e; --pattern-wide: #d62728; --pattern-diff: #9467bd;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace; font-size: 13px; height: 100vh; display: flex; }
+  #sidebar { width: 360px; background: var(--surface); padding: 12px; overflow-y: auto; border-right: 1px solid var(--surface2); display: flex; flex-direction: column; gap: 10px; }
+  #map { flex: 1; }
+  h1 { font-size: 14px; color: var(--accent); margin-bottom: 4px; }
+  .stats { background: var(--surface2); padding: 8px; border-radius: 4px; font-size: 11px; line-height: 1.6; }
+  .ctrl { display: flex; flex-direction: column; gap: 4px; }
+  label { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  select, input, button { background: var(--bg); color: var(--text); border: 1px solid var(--surface2); padding: 6px 8px; border-radius: 4px; font-family: inherit; font-size: 12px; }
+  button { cursor: pointer; transition: background 0.15s; }
+  button:hover { background: var(--surface2); }
+  button.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-color { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+  .route-list { flex: 1; overflow-y: auto; background: var(--surface2); border-radius: 4px; padding: 6px; max-height: 360px; }
+  .route-item { display: flex; justify-content: space-between; padding: 4px 8px; cursor: pointer; border-radius: 3px; font-size: 11px; }
+  .route-item:hover { background: rgba(88,166,255,0.1); }
+  .route-item.active { background: rgba(88,166,255,0.25); color: var(--accent); }
+  .route-num { font-weight: 700; min-width: 32px; }
+  .route-sep { color: var(--text-dim); font-size: 10px; }
+  .pattern-badge { font-size: 9px; padding: 1px 4px; border-radius: 2px; color: white; }
+  .info-row { display: flex; justify-content: space-between; padding: 2px 0; }
+  .info-label { color: var(--text-dim); }
+  .footer { color: var(--text-dim); font-size: 10px; text-align: center; padding-top: 8px; border-top: 1px solid var(--surface2); }
+  .bus-marker { width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; color: white; font-size: 8px; font-weight: 700; }
+  .bus-marker.snapped { background: #1f77b4; }
+  .bus-marker.raw_gps { background: #d62728; }
+  .bus-marker.dead_reckoning { background: #7f7f7f; }
+  .bus-marker.medium { background: #ff7f0e; }
+  .bus-marker.low { background: #d62728; }
+  .bus-marker.stationary { opacity: 0.5; transform: scale(0.7); }
+  .teleport-ring { border: 3px solid #d62728; border-radius: 50%; animation: pulse 1.5s ease-out infinite; }
+  @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+  #teleportPanel { background: var(--surface2); padding: 6px; border-radius: 4px; max-height: 120px; overflow-y: auto; font-size: 10px; display: none; }
+  #teleportPanel.visible { display: block; }
+  .teleport-item { padding: 3px 4px; border-bottom: 1px solid var(--surface); color: var(--text-dim); cursor: pointer; }
+  .teleport-item:hover { background: rgba(214,39,40,0.15); color: white; }
+  .teleport-item .tp-jump { color: #d62728; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>UGUR — Routes Visualizer</h1>
+
+  <div class="stats" id="globalStats">Loading 194 polylines...</div>
+
+  <div class="ctrl">
+    <label>Filter by pattern</label>
+    <select id="patternFilter">
+      <option value="">All patterns</option>
+      <option value="SAME_STREET">SAME_STREET (&lt;30m)</option>
+      <option value="NARROW_DIVIDED">NARROW_DIVIDED (30-100m)</option>
+      <option value="MEDIUM_FRONTAGE">MEDIUM_FRONTAGE (100-300m)</option>
+      <option value="WIDE_FRONTAGE">WIDE_FRONTAGE (300-800m)</option>
+      <option value="COMPLETELY_DIFFERENT">COMPLETELY_DIFFERENT (&gt;800m)</option>
+    </select>
+  </div>
+
+  <div class="ctrl">
+    <label>Show</label>
+    <div style="display:flex; gap:4px;">
+      <button id="btnShowAll" class="active">All routes</button>
+      <button id="btnShowOne">Selected only</button>
+    </div>
+  </div>
+
+  <div class="ctrl">
+    <label>Live overlay</label>
+    <div style="display:flex; gap:4px; flex-wrap:wrap;">
+      <button id="btnLiveConnect">Connect WS</button>
+      <button id="btnSnapDrift">Snap-drift arrows</button>
+      <button id="btnOsrmMatch">OSRM match</button>
+      <button id="btnGpsTrail">GPS trail (5min)</button>
+    </div>
+    <div id="liveStatus" style="font-size:10px;color:var(--text-dim);margin-top:4px;">WS: offline</div>
+  </div>
+
+  <div class="ctrl">
+    <label>Routes (97)</label>
+    <input type="text" id="searchInput" placeholder="search by number/name...">
+    <div class="route-list" id="routeList"></div>
+  </div>
+
+  <div class="stats" id="selectedStats" style="display:none;"></div>
+
+  <div id="trackedVehiclePanel" class="stats" style="display:none;border:1px solid var(--accent);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <span style="font-weight:700;color:var(--accent);">📍 Tracking <span id="trackedPlate"></span></span>
+      <button id="btnUntrack" style="padding:1px 6px;font-size:10px;">✕</button>
+    </div>
+    <div id="trackedInfo"></div>
+  </div>
+
+  <div id="teleportPanel">
+    <div style="font-weight:700;color:#d62728;margin-bottom:4px;">⚡ Live teleports (>500m)</div>
+    <div id="teleportList"></div>
+  </div>
+
+  <div class="ctrl">
+    <label>Legend</label>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-color" style="background:var(--fwd)"></div>Forward</div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--bwd)"></div>Backward</div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--pattern-same)"></div>SAME_STREET</div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--pattern-narrow)"></div>NARROW_DIVIDED</div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--pattern-medium)"></div>MEDIUM_FRONTAGE</div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--pattern-wide)"></div>WIDE_FRONTAGE</div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--pattern-diff)"></div>COMPLETELY_DIFFERENT</div>
+    </div>
+  </div>
+
+  <div class="footer">Click marker to zoom · pattern based on avg fwd↔bwd separation</div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map', { preferCanvas: true }).setView([37.95, 58.38], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '© OpenStreetMap'
+}).addTo(map);
+
+const patternColors = {
+  SAME_STREET: '#2ca02c',
+  NARROW_DIVIDED: '#1f77b4',
+  MEDIUM_FRONTAGE: '#ff7f0e',
+  WIDE_FRONTAGE: '#d62728',
+  COMPLETELY_DIFFERENT: '#9467bd'
+};
+
+let allFeatures = [];
+let routes = {};
+let displayedLayers = [];
+let selectedRoute = null;
+let showAllMode = true;
+let patternStats = {};
+
+function classifyAvgSep(avgSep) {
+  if (avgSep < 30) return 'SAME_STREET';
+  if (avgSep < 100) return 'NARROW_DIVIDED';
+  if (avgSep < 300) return 'MEDIUM_FRONTAGE';
+  if (avgSep < 800) return 'WIDE_FRONTAGE';
+  return 'COMPLETELY_DIFFERENT';
+}
+
+function computeAvgSeparation(fwdCoords, bwdCoords) {
+  if (!fwdCoords || !bwdCoords || fwdCoords.length < 2 || bwdCoords.length < 2) return 0;
+  const sampleStep = Math.max(1, Math.floor(fwdCoords.length / 30));
+  let totalDist = 0, count = 0;
+  for (let i = 0; i < fwdCoords.length; i += sampleStep) {
+    const [flon, flat] = fwdCoords[i];
+    let minDist = Infinity;
+    for (let j = 0; j < bwdCoords.length; j += Math.max(1, Math.floor(bwdCoords.length / 30))) {
+      const [blon, blat] = bwdCoords[j];
+      const dLat = (blat - flat) * 111000;
+      const dLon = (blon - flon) * 88000 * Math.cos(flat * Math.PI / 180);
+      const d = Math.sqrt(dLat*dLat + dLon*dLon);
+      if (d < minDist) minDist = d;
+    }
+    totalDist += minDist;
+    count++;
+  }
+  return Math.round(totalDist / Math.max(1, count));
+}
+
+async function loadData() {
+  const res = await fetch('/routes.geojson');
+  const data = await res.json();
+  allFeatures = data.features;
+
+  for (const f of allFeatures) {
+    const num = f.properties.route_number;
+    if (!routes[num]) {
+      routes[num] = { number: num, name: f.properties.route_name, forward: null, backward: null };
+    }
+    if (f.properties.direction === 'forward') routes[num].forward = f;
+    else routes[num].backward = f;
+  }
+
+  for (const num in routes) {
+    const r = routes[num];
+    if (r.forward && r.backward) {
+      const fwdCoords = r.forward.geometry.coordinates;
+      const bwdCoords = r.backward.geometry.coordinates;
+      r.avgSep = computeAvgSeparation(fwdCoords, bwdCoords);
+      r.pattern = classifyAvgSep(r.avgSep);
+      patternStats[r.pattern] = (patternStats[r.pattern] || 0) + 1;
+    } else {
+      r.pattern = 'INCOMPLETE';
+      r.avgSep = -1;
+    }
+  }
+
+  renderGlobalStats();
+  renderRouteList();
+  renderMap();
+}
+
+function renderGlobalStats() {
+  const total = Object.keys(routes).length;
+  let html = `<b>${total}</b> routes · <b>${allFeatures.length}</b> polylines<br>`;
+  for (const [p, c] of Object.entries(patternStats)) {
+    const color = patternColors[p];
+    html += `<div style="display:inline-block;margin:2px 4px;"><span style="display:inline-block;width:10px;height:10px;background:${color};border-radius:2px;vertical-align:middle;"></span> ${c} ${p}</div>`;
+  }
+  document.getElementById('globalStats').innerHTML = html;
+}
+
+function renderRouteList() {
+  const filter = document.getElementById('patternFilter').value;
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const list = document.getElementById('routeList');
+  list.innerHTML = '';
+  const sortedNums = Object.keys(routes).sort((a, b) => {
+    const na = parseInt(a) || 999; const nb = parseInt(b) || 999;
+    return na - nb;
+  });
+  for (const num of sortedNums) {
+    const r = routes[num];
+    if (filter && r.pattern !== filter) continue;
+    if (search && !(`${num} ${r.name}`.toLowerCase().includes(search))) continue;
+    const item = document.createElement('div');
+    item.className = 'route-item' + (selectedRoute === num ? ' active' : '');
+    const badgeColor = patternColors[r.pattern] || '#666';
+    item.innerHTML = `<span><span class="route-num">${num}</span> <span class="route-sep">${r.name?.substring(0,28) || ''}</span></span>` +
+                     `<span class="pattern-badge" style="background:${badgeColor}" title="${r.pattern} avg sep ${r.avgSep}m">${r.avgSep >= 0 ? r.avgSep + 'm' : '—'}</span>`;
+    item.onclick = () => selectRoute(num);
+    list.appendChild(item);
+  }
+}
+
+function selectRoute(num) {
+  selectedRoute = num;
+  renderRouteList();
+  renderMap();
+  showSelectedStats();
+  const r = routes[num];
+  if (r.forward) {
+    const bounds = L.geoJSON(r.forward.geometry).getBounds();
+    if (r.backward) bounds.extend(L.geoJSON(r.backward.geometry).getBounds());
+    map.fitBounds(bounds, { padding: [30, 30] });
+  }
+  if (ws && ws.readyState === WebSocket.OPEN) sendSubscription();
+}
+
+function showSelectedStats() {
+  const s = document.getElementById('selectedStats');
+  if (!selectedRoute) { s.style.display = 'none'; return; }
+  const r = routes[selectedRoute];
+  s.style.display = 'block';
+  s.innerHTML = `
+    <div class="info-row"><span class="info-label">Route</span><span><b>${r.number}</b> ${r.name || ''}</span></div>
+    <div class="info-row"><span class="info-label">Pattern</span><span style="color:${patternColors[r.pattern]}">${r.pattern}</span></div>
+    <div class="info-row"><span class="info-label">Avg separation</span><span>${r.avgSep}m</span></div>
+    <div class="info-row"><span class="info-label">Forward length</span><span>${r.forward?.properties.length_m}m</span></div>
+    <div class="info-row"><span class="info-label">Backward length</span><span>${r.backward?.properties.length_m}m</span></div>
+    <div class="info-row"><span class="info-label">Forward points</span><span>${r.forward?.geometry.coordinates.length}</span></div>
+    <div class="info-row"><span class="info-label">Backward points</span><span>${r.backward?.geometry.coordinates.length}</span></div>
+  `;
+}
+
+function renderMap() {
+  for (const l of displayedLayers) map.removeLayer(l);
+  displayedLayers = [];
+
+  const filter = document.getElementById('patternFilter').value;
+  const targetNums = showAllMode ? Object.keys(routes) : (selectedRoute ? [selectedRoute] : []);
+
+  for (const num of targetNums) {
+    const r = routes[num];
+    if (filter && r.pattern !== filter && showAllMode) continue;
+    const isSelected = num === selectedRoute;
+    const op = showAllMode ? (isSelected ? 0.9 : 0.22) : 0.85;
+    const weight = isSelected ? 4 : (showAllMode ? 2 : 3);
+
+    if (r.forward) {
+      const layer = L.geoJSON(r.forward.geometry, {
+        style: { color: 'var(--fwd)', color: '#1f77b4', weight: weight, opacity: op }
+      }).bindTooltip(`${num} forward · ${r.forward.properties.length_m}m · ${r.pattern}`, { sticky: true });
+      layer.addTo(map);
+      displayedLayers.push(layer);
+    }
+    if (r.backward) {
+      const layer = L.geoJSON(r.backward.geometry, {
+        style: { color: '#d62728', weight: weight, opacity: op, dashArray: '6 3' }
+      }).bindTooltip(`${num} backward · ${r.backward.properties.length_m}m · ${r.pattern}`, { sticky: true });
+      layer.addTo(map);
+      displayedLayers.push(layer);
+    }
+  }
+}
+
+document.getElementById('patternFilter').onchange = () => { renderRouteList(); renderMap(); };
+document.getElementById('searchInput').oninput = renderRouteList;
+document.getElementById('btnShowAll').onclick = () => {
+  showAllMode = true;
+  document.getElementById('btnShowAll').classList.add('active');
+  document.getElementById('btnShowOne').classList.remove('active');
+  renderMap();
+};
+document.getElementById('btnShowOne').onclick = () => {
+  showAllMode = false;
+  document.getElementById('btnShowOne').classList.add('active');
+  document.getElementById('btnShowAll').classList.remove('active');
+  renderMap();
+};
+
+loadData().catch(err => {
+  document.getElementById('globalStats').innerHTML = '<span style="color:#d62728">Error loading data: ' + err.message + '</span>';
+  console.error(err);
+});
+
+const liveMarkers = {};
+const lastPositions = {};
+const teleportEvents = [];
+const driftLines = {};
+const trailLayers = {};
+let osrmLayer = null;
+let ws = null;
+let snapDriftEnabled = false;
+
+function distHaversine(a, b) {
+  const R = 6371000;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLon = (b.lon - a.lon) * Math.PI / 180;
+  const lat1 = a.lat * Math.PI / 180;
+  const lat2 = b.lat * Math.PI / 180;
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function confidenceClass(conf) {
+  if (conf === 'RAW_GPS') return 'raw_gps';
+  if (conf === 'HIGH') return 'snapped';
+  if (conf === 'MEDIUM') return 'medium';
+  if (conf === 'LOW' || conf === 'STALE') return 'low';
+  if (conf === 'DEAD_RECKONING') return 'dead_reckoning';
+  return 'snapped';
+}
+
+function flashTeleport(lat, lon, info) {
+  const ring = L.divIcon({ className: 'teleport-ring', html: '', iconSize: [40, 40], iconAnchor: [20, 20] });
+  const marker = L.marker([lat, lon], { icon: ring }).addTo(map);
+  setTimeout(() => map.removeLayer(marker), 3000);
+  teleportEvents.unshift(info);
+  if (teleportEvents.length > 30) teleportEvents.pop();
+  renderTeleportPanel();
+}
+
+function renderTeleportPanel() {
+  const list = document.getElementById('teleportList');
+  document.getElementById('teleportPanel').classList.add('visible');
+  list.innerHTML = teleportEvents.map(e =>
+    `<div class="teleport-item" data-lat="${e.lat}" data-lon="${e.lon}">
+       <b>${e.plate}</b> r=${e.route} <span class="tp-jump">${e.jump}m</span> ${e.time}
+     </div>`).join('');
+  for (const el of list.querySelectorAll('.teleport-item')) {
+    el.onclick = () => map.setView([parseFloat(el.dataset.lat), parseFloat(el.dataset.lon)], 16);
+  }
+}
+
+let trackedVehicleId = null;
+
+function buildPopupContent(v, snap) {
+  const drift = snap && snap.rawLat ? distHaversine(
+    {lat: snap.rawLat, lon: snap.rawLon}, {lat: v.lat, lon: v.lon}) : null;
+  const driftColor = drift == null ? '#888' : drift > 200 ? '#d62728' : drift > 60 ? '#ff7f0e' : '#2ca02c';
+  const driftStr = drift == null ? '—' : `<span style="color:${driftColor};font-weight:700">${Math.round(drift)}m</span>`;
+  return `<div style="font-family:monospace;font-size:11px;min-width:220px;">
+    <div style="font-weight:700;font-size:13px;color:#58a6ff;margin-bottom:4px;">
+      <span style="background:#21262d;padding:1px 6px;border-radius:3px;">r=${v.route}</span> ${v.plate}
+    </div>
+    <div>📍 ${v.lat.toFixed(5)}, ${v.lon.toFixed(5)}</div>
+    <div>🏃 speed: <b>${Math.round(v.speed)}</b> km/h</div>
+    <div>🎯 mode: <b>${v.conf}</b></div>
+    <div>↔ drift (snap vs GPS): ${driftStr}</div>
+    ${snap ? `<div>📏 raw GPS: ${snap.rawLat?.toFixed(5)}, ${snap.rawLon?.toFixed(5)}</div>` : ''}
+    ${snap ? `<div>↗ direction: <b>${snap.direction === 0 ? 'forward (Прямая)' : 'backward (Обратная)'}</b> ${snap.directionConfirmed ? '✓' : '?'}</div>` : ''}
+    ${snap ? `<div>🧭 course: ${Math.round(snap.course)}°</div>` : ''}
+    ${snap ? `<div>📊 fraction: ${snap.fraction?.toFixed(4)}</div>` : ''}
+    ${snap ? `<div>🛑 offRoute: ${snap.offRoute ? '<span style="color:#d62728">YES</span>' : 'no'} · inMotion: ${snap.inMotion ? 'yes' : 'no'}</div>` : ''}
+    <div style="margin-top:4px;padding-top:4px;border-top:1px solid #21262d;font-size:10px;color:#888;">
+      vehicleId ${v.id?.slice(0, 12)}...
+    </div>
+    <div style="margin-top:4px;">
+      <button onclick="trackVehicle('${v.id}')" style="padding:2px 8px;font-size:10px;background:#58a6ff;color:#0d1117;border:none;border-radius:3px;cursor:pointer;font-family:monospace;">📌 track (sticky)</button>
+    </div>
+  </div>`;
+}
+
+function trackVehicle(id) {
+  trackedVehicleId = id;
+  document.getElementById('trackedVehiclePanel').style.display = 'block';
+  document.getElementById('trackedPlate').textContent = lastPositions[id]?.plate || id.slice(0,8);
+  updateTrackedPanel();
+  const pos = lastPositions[id];
+  if (pos) map.setView([pos.lat, pos.lon], Math.max(map.getZoom(), 16));
+}
+window.trackVehicle = trackVehicle;
+
+function updateTrackedPanel() {
+  if (!trackedVehicleId) return;
+  const pos = lastPositions[trackedVehicleId];
+  if (!pos) return;
+  const snap = snapshotCache.get(trackedVehicleId);
+  const drift = snap && snap.rawLat ? distHaversine({lat: snap.rawLat, lon: snap.rawLon}, {lat: pos.lat, lon: pos.lon}) : null;
+  const driftColor = drift == null ? '#888' : drift > 200 ? '#d62728' : drift > 60 ? '#ff7f0e' : '#2ca02c';
+  document.getElementById('trackedInfo').innerHTML = `
+    <div class="info-row"><span class="info-label">Route</span><span><b>${pos.route}</b></span></div>
+    <div class="info-row"><span class="info-label">Speed</span><span>${Math.round(pos.speed)} km/h</span></div>
+    <div class="info-row"><span class="info-label">Mode</span><span>${pos.conf}</span></div>
+    ${snap ? `<div class="info-row"><span class="info-label">Direction</span><span>${snap.direction === 0 ? 'forward' : 'backward'} ${snap.directionConfirmed ? '✓' : '?'}</span></div>` : ''}
+    ${snap ? `<div class="info-row"><span class="info-label">Course</span><span>${Math.round(snap.course)}°</span></div>` : ''}
+    ${snap ? `<div class="info-row"><span class="info-label">Fraction</span><span>${snap.fraction?.toFixed(4)}</span></div>` : ''}
+    <div class="info-row"><span class="info-label">Drift</span><span style="color:${driftColor};font-weight:700">${drift == null ? '—' : Math.round(drift) + 'm'}</span></div>
+    ${snap ? `<div class="info-row"><span class="info-label">Off-route</span><span>${snap.offRoute ? '<span style="color:#d62728">YES</span>' : 'no'}</span></div>` : ''}
+    <div class="info-row"><span class="info-label">Updated</span><span>${Math.round((Date.now() - pos.time)/1000)}s ago</span></div>
+  `;
+}
+document.getElementById('btnUntrack').onclick = () => {
+  trackedVehicleId = null;
+  document.getElementById('trackedVehiclePanel').style.display = 'none';
+};
+setInterval(updateTrackedPanel, 1000);
+
+function updateBusMarker(v) {
+  const id = v.vehicleId || v.vehicle_id || v.id;
+  if (!id) return;
+  const lat = v.latitude ?? v.lat;
+  const lon = v.longitude ?? v.lon;
+  const plate = v.licensePlate || v.plate || id.slice(0, 8);
+  const route = v.routeNumber || v.route || '?';
+  const speed = v.speedKmh ?? v.speed ?? 0;
+  const conf = v.confidence || (v.predicted === false ? 'RAW_GPS' : 'HIGH');
+  if (!lat || !lon) return;
+
+  const cls = confidenceClass(conf) + (speed < 1 ? ' stationary' : '');
+  const icon = L.divIcon({
+    className: 'bus-marker ' + cls,
+    html: route,
+    iconSize: [14, 14], iconAnchor: [7, 7]
+  });
+
+  const prev = lastPositions[id];
+  const inGrace = Date.now() < subscriptionGracePeriodUntil;
+  if (prev && !inGrace) {
+    const jump = distHaversine({lat: prev.lat, lon: prev.lon}, {lat, lon});
+    const dtSec = Math.max(0.1, (Date.now() - prev.time) / 1000);
+    const impliedSpeedKmh = (jump / 1000) / (dtSec / 3600);
+    if (jump > 500 && impliedSpeedKmh > 150) {
+      flashTeleport(lat, lon, {
+        plate, route, jump: Math.round(jump),
+        from: {lat: prev.lat, lon: prev.lon}, lat, lon,
+        time: new Date().toLocaleTimeString()
+      });
+    }
+  }
+  lastPositions[id] = {id, lat, lon, plate, route, conf, speed, time: Date.now()};
+
+  const popupContent = buildPopupContent(lastPositions[id], snapshotCache.get(id));
+
+  if (liveMarkers[id]) {
+    liveMarkers[id].setLatLng([lat, lon]);
+    liveMarkers[id].setIcon(icon);
+    if (liveMarkers[id].isPopupOpen()) {
+      liveMarkers[id].setPopupContent(popupContent);
+    } else {
+      liveMarkers[id].setPopupContent(popupContent);
+    }
+  } else {
+    liveMarkers[id] = L.marker([lat, lon], { icon, riseOnHover: true })
+      .bindPopup(popupContent, { autoClose: false, closeOnClick: false, maxWidth: 320 })
+      .on('popupopen', () => {
+        if (snapDriftEnabled) updateSnapDriftFor(id);
+        refreshSnapshotForDrift();
+      })
+      .addTo(map);
+  }
+
+  if (trackedVehicleId === id) {
+    map.panTo([lat, lon], { animate: true, duration: 0.4 });
+  }
+
+  if (snapDriftEnabled) updateSnapDriftFor(id);
+}
+
+async function updateSnapDriftFor(id) {
+  if (!snapshotCache.has(id)) return;
+  const snap = snapshotCache.get(id);
+  const live = lastPositions[id];
+  if (!snap || !live || !snap.rawLat || !snap.rawLon) return;
+  const drift = distHaversine({lat: snap.rawLat, lon: snap.rawLon}, {lat: live.lat, lon: live.lon});
+  if (drift < 10) {
+    if (driftLines[id]) { map.removeLayer(driftLines[id]); delete driftLines[id]; }
+    return;
+  }
+  const color = drift > 200 ? '#d62728' : drift > 60 ? '#ff7f0e' : '#ffd54f';
+  if (driftLines[id]) map.removeLayer(driftLines[id]);
+  driftLines[id] = L.polyline([[snap.rawLat, snap.rawLon], [live.lat, live.lon]],
+    { color, weight: 2, opacity: 0.85, dashArray: '4 4' })
+    .bindTooltip(`${live.plate}: drift ${Math.round(drift)}m`, { sticky: true })
+    .addTo(map);
+}
+
+const snapshotCache = new Map();
+async function refreshSnapshotForDrift() {
+  try {
+    const res = await fetch('/api/v1/diagnostics/vehicle-snapshot');
+    if (!res.ok) return;
+    const arr = await res.json();
+    snapshotCache.clear();
+    for (const v of arr) snapshotCache.set(v.vehicleId, v);
+    for (const id of Object.keys(liveMarkers)) updateSnapDriftFor(id);
+  } catch (e) {}
+}
+
+function clearAllLiveMarkers() {
+  for (const id in liveMarkers) { map.removeLayer(liveMarkers[id]); }
+  for (const id in driftLines) { map.removeLayer(driftLines[id]); }
+  for (const k of Object.keys(liveMarkers)) delete liveMarkers[k];
+  for (const k of Object.keys(driftLines)) delete driftLines[k];
+  for (const k of Object.keys(lastPositions)) delete lastPositions[k];
+}
+
+let subscriptionGracePeriodUntil = 0;
+
+function sendSubscription() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  clearAllLiveMarkers();
+  subscriptionGracePeriodUntil = Date.now() + 3000;
+  if (selectedRoute) {
+    ws.send(JSON.stringify({ type: 'subscribe_routes', routes: [selectedRoute] }));
+    document.getElementById('liveStatus').innerHTML = `WS: <span style="color:#2ca02c">connected</span> · route <b>${selectedRoute}</b>`;
+  } else {
+    ws.send(JSON.stringify({ type: 'subscribe_routes', routes: Object.keys(routes) }));
+    document.getElementById('liveStatus').innerHTML = `WS: <span style="color:#2ca02c">connected</span> · all routes`;
+  }
+}
+
+function connectWebSocket() {
+  if (ws) { ws.close(); ws = null; }
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${proto}//${window.location.host}/api/v1/ws/vehicle-positions`;
+  document.getElementById('liveStatus').textContent = 'WS: connecting...';
+  ws = new WebSocket(url);
+  ws.onopen = () => {
+    document.getElementById('liveStatus').innerHTML = 'WS: <span style="color:#2ca02c">connected</span>';
+    sendSubscription();
+  };
+  ws.onerror = (e) => {
+    document.getElementById('liveStatus').innerHTML = 'WS: <span style="color:#d62728">error</span>';
+    console.error('WS error', e);
+  };
+  ws.onclose = () => {
+    document.getElementById('liveStatus').innerHTML = 'WS: <span style="color:#d62728">closed</span>';
+  };
+  ws.onmessage = (msg) => {
+    try {
+      const data = JSON.parse(msg.data);
+      if (data.type === 'initial_positions' || data.type === 'position_update') {
+        const list = data.vehicles || (data.vehicle ? [data.vehicle] : []);
+        for (const v of list) updateBusMarker(v);
+      }
+    } catch (e) { console.warn('parse err', e); }
+  };
+}
+
+async function osrmMatchChunk(coords, dir, layers) {
+  if (coords.length < 2) return;
+  const seen = new Set();
+  const uniq = [];
+  for (const c of coords) {
+    const key = c[0].toFixed(5) + ',' + c[1].toFixed(5);
+    if (!seen.has(key)) { seen.add(key); uniq.push(c); }
+  }
+  if (uniq.length < 2) return;
+  const coordsStr = uniq.map(c => `${c[0]},${c[1]}`).join(';');
+  try {
+    const res = await fetch(`http://localhost:5001/match/v1/driving/${coordsStr}?overview=full&geometries=geojson&tidy=true`);
+    const data = await res.json();
+    if (data.code !== 'Ok') {
+      console.warn(`OSRM ${dir}:`, data.code, data.message);
+      return;
+    }
+    for (const match of (data.matchings || [])) {
+      L.geoJSON(match.geometry, {
+        style: { color: dir === 'forward' ? '#00ffff' : '#ff00ff', weight: 4, opacity: 0.55 }
+      }).bindTooltip(`OSRM ${dir} match · confidence ${match.confidence?.toFixed(2)}`).addTo(layers);
+    }
+  } catch (e) { console.warn('OSRM error', e); }
+}
+
+async function osrmMatchSelectedRoute() {
+  if (!selectedRoute) { alert('Select a route first'); return; }
+  const r = routes[selectedRoute];
+  if (osrmLayer) { map.removeLayer(osrmLayer); osrmLayer = null; }
+  const layers = L.layerGroup().addTo(map);
+  osrmLayer = layers;
+  const CHUNK_SIZE = 40;
+  for (const dir of ['forward', 'backward']) {
+    const f = r[dir];
+    if (!f) continue;
+    const coords = f.geometry.coordinates;
+    const targetSamples = Math.min(120, Math.max(20, Math.floor(coords.length / 8)));
+    const stride = Math.max(1, Math.floor(coords.length / targetSamples));
+    const sampled = [];
+    for (let i = 0; i < coords.length; i += stride) sampled.push(coords[i]);
+    if (sampled[sampled.length-1] !== coords[coords.length-1]) sampled.push(coords[coords.length-1]);
+    for (let i = 0; i < sampled.length; i += CHUNK_SIZE - 1) {
+      const chunk = sampled.slice(i, i + CHUNK_SIZE);
+      if (chunk.length < 2) break;
+      await osrmMatchChunk(chunk, dir, layers);
+    }
+  }
+}
+
+async function loadGpsTrailSelected() {
+  if (!selectedRoute) { alert('Select a route first'); return; }
+  if (trailLayers.current) { map.removeLayer(trailLayers.current); }
+  const layer = L.layerGroup().addTo(map);
+  trailLayers.current = layer;
+  try {
+    const res = await fetch(`/api/v1/diagnostics/gps-trail?route=${encodeURIComponent(selectedRoute)}&minutes=10`);
+    if (!res.ok) { alert('GPS trail endpoint not available (need Tier 2/4 backend)'); return; }
+    const data = await res.json();
+    for (const veh of data) {
+      const points = veh.points || [];
+      if (points.length < 2) continue;
+      const coords = points.map(p => [p.lat, p.lon]);
+      L.polyline(coords, { color: '#2ca02c', weight: 2, opacity: 0.7 })
+        .bindTooltip(`${veh.plate}: ${points.length} GPS points`).addTo(layer);
+      for (const p of points) {
+        L.circleMarker([p.lat, p.lon], {
+          radius: 2, color: '#2ca02c', fillColor: '#2ca02c', fillOpacity: 0.7, weight: 0
+        }).bindTooltip(`${veh.plate} @ ${new Date(p.ts).toLocaleTimeString()}`).addTo(layer);
+      }
+    }
+  } catch (e) { console.error('GPS trail', e); }
+}
+
+document.getElementById('btnLiveConnect').onclick = connectWebSocket;
+document.getElementById('btnSnapDrift').onclick = () => {
+  snapDriftEnabled = !snapDriftEnabled;
+  document.getElementById('btnSnapDrift').classList.toggle('active', snapDriftEnabled);
+  if (snapDriftEnabled) {
+    refreshSnapshotForDrift();
+    setInterval(refreshSnapshotForDrift, 3000);
+  } else {
+    for (const id in driftLines) { map.removeLayer(driftLines[id]); delete driftLines[id]; }
+  }
+};
+document.getElementById('btnOsrmMatch').onclick = osrmMatchSelectedRoute;
+document.getElementById('btnGpsTrail').onclick = loadGpsTrailSelected;
+</script>
+
+</body>
+</html>

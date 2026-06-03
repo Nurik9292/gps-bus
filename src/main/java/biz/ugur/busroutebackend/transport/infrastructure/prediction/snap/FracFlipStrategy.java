@@ -13,6 +13,9 @@ import java.util.List;
 @Slf4j
 public class FracFlipStrategy {
 
+    private static final double FRONTAGE_GUARD_PRIMARY_MAX_METERS = 30.0;
+    private static final double FRONTAGE_GUARD_MIN_DELTA_METERS   = 30.0;
+
     private final PredictionProperties properties;
     private final RouteGeometryCache routeGeometryCache;
     private final MapMatchingService mapMatchingService;
@@ -130,6 +133,23 @@ public class FracFlipStrategy {
         double rawSnapMinDistance = currentRawSnapMinDistance;
         if (correctedSnap.snapped()) {
             rawSnapMinDistance = Math.min(rawSnapMinDistance, correctedSnap.distanceMeters());
+        }
+
+        double primarySnapDist  = primarySnap.snapped()   ? primarySnap.distanceMeters()   : Double.POSITIVE_INFINITY;
+        double oppositeSnapDist = correctedSnap.snapped() ? correctedSnap.distanceMeters() : Double.POSITIVE_INFINITY;
+        boolean frontageRoadParallelRun = primarySnap.snapped()
+                && primarySnapDist <= FRONTAGE_GUARD_PRIMARY_MAX_METERS
+                && (primarySnapDist - oppositeSnapDist) < FRONTAGE_GUARD_MIN_DELTA_METERS;
+        if (frontageRoadParallelRun && !atTerminalFlip) {
+            log.info("[GPS_PIPELINE] DIR_FLIP_BLOCKED_FRONTAGE_GUARD vehicle={} route={} dir={} " +
+                            "primaryDist={}m oppositeDist={}m delta={}m fracDelta={} — frontage-road parallel polylines, refusing flip",
+                    vehicleId, routeNumber, currentDirection,
+                    String.format("%.1f", primarySnapDist),
+                    String.format("%.1f", oppositeSnapDist),
+                    String.format("%.1f", primarySnapDist - oppositeSnapDist),
+                    String.format("%.4f", fracDelta));
+            return Result.notFlipped(currentDirection, currentRouteCoords,
+                    currentTotalDist, primarySnap, rawSnapMinDistance);
         }
 
         boolean terminalFlipSmoothOnOpposite = wasNearTerminal && correctedSnap.snapped()

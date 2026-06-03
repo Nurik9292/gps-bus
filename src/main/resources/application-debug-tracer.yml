@@ -1,0 +1,18 @@
+logging:
+  level:
+    root: WARN
+    org.springframework: WARN
+    org.springframework.web: WARN
+    org.springframework.r2dbc: WARN
+    io.r2dbc: WARN
+    io.netty: WARN
+    biz.ugur.busroutebackend: WARN
+    biz.ugur.busroutebackend.transport.infrastructure.debug: INFO
+    biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer: INFO
+    biz.ugur.busroutebackend.transport.infrastructure.prediction: INFO
+    biz.ugur.busroutebackend.transport.infrastructure.services.VehicleDirectionDetectionServiceImpl: INFO
+    biz.ugur.busroutebackend.transport.application.usecase.pipeline: INFO
+    biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase: INFO
+    biz.ugur.busroutebackend.transport.infrastructure.persistence.repository.R2dbcVehicleRepository: INFO
+    biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistoryService: INFO
+    biz.ugur.busroutebackend.interfaces.websocket: INFO

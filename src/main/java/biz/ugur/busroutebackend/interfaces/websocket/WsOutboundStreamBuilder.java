@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.interfaces.websocket.dto.InitialPositionsMessage
 import biz.ugur.busroutebackend.interfaces.websocket.dto.PositionUpdateMessage;
 import biz.ugur.busroutebackend.transport.application.dto.VehiclePositionDTO;
 import biz.ugur.busroutebackend.transport.application.usecase.GetActiveVehiclesUseCase;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer;
 import biz.ugur.busroutebackend.transport.infrastructure.messaging.VehiclePositionWebSocketMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,13 +41,16 @@ public class WsOutboundStreamBuilder {
     private final GetActiveVehiclesUseCase getActiveVehiclesUseCase;
     private final ObjectMapper objectMapper;
     private final WsBroadcastSink broadcastSink;
+    private final PipelineTracer pipelineTracer;
 
     public WsOutboundStreamBuilder(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                    ObjectMapper objectMapper,
-                                   WsBroadcastSink broadcastSink) {
+                                   WsBroadcastSink broadcastSink,
+                                   PipelineTracer pipelineTracer) {
         this.getActiveVehiclesUseCase = getActiveVehiclesUseCase;
         this.objectMapper = objectMapper;
         this.broadcastSink = broadcastSink;
+        this.pipelineTracer = pipelineTracer;
     }
 
     public Flux<WebSocketMessage> buildFor(WebSocketSession session, SessionConfig config) {
@@ -104,6 +108,11 @@ public class WsOutboundStreamBuilder {
                     try {
                         log.info("Sending {} initial positions for subscription type: {}, filter: {}",
                                 positions.size(), config.getSubscriptionType(), config.getRouteFilter());
+                        pipelineTracer.traceWsInitialSnapshotRead(
+                                session.getId(),
+                                config.getSubscriptionType(),
+                                config.getRouteFilter(),
+                                positions.size());
                         InitialPositionsMessage response = InitialPositionsMessage.of(positions);
                         return session.textMessage(objectMapper.writeValueAsString(response));
                     } catch (JsonProcessingException e) {
@@ -162,6 +171,14 @@ public class WsOutboundStreamBuilder {
                         log.debug("Live update filter: sessionId={}, vehicle={}, vehicleRoute={}, subscribedRoutes={}, inScope={}",
                                 session.getId(), positionMsg.getVehicleId(), positionMsg.getRouteNumber(),
                                 config.getRouteFilter(), inScope);
+                        if (!inScope) {
+                            pipelineTracer.traceWsDroppedBySubscription(
+                                    positionMsg.getVehicleId(),
+                                    positionMsg.getLicensePlate(),
+                                    positionMsg.getRouteNumber(),
+                                    config.getSubscriptionType(),
+                                    config.getRouteFilter());
+                        }
                     }
                 })
                 .filter(positionMsg -> isPositionInScope(positionMsg, config))
