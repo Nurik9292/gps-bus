@@ -73,6 +73,9 @@ public class ApiVersionConfig {
     public static final String V1_INTEGRATION = API_V1 + INTEGRATION;
     public static final String V1_INTEGRATION_CLIENTS = V1_INTEGRATION + CLIENTS;
 
+    public static final String SUBSCRIPTIONS = "/subscriptions";
+    public static final String V1_CLIENT_SUBSCRIPTIONS = V1_CLIENT + SUBSCRIPTIONS;
+
     public static final String PLACES = "/places";
     public static final String STREETS = "/streets";
     public static final String V1_PLACES = API_V1 + PLACES;
