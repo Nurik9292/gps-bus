@@ -70,6 +70,19 @@ public class HeadingFlipStrategy {
                     primarySnap, currentRawSnapMinDistance);
         }
 
+        boolean isStationary = existing != null && (!existing.isInMotion()
+                || (existing.getRawGpsSpeedKmh() >= 0
+                        && existing.getRawGpsSpeedKmh() < properties.getStationarySpeedThresholdKmh()));
+        if (isStationary) {
+            log.info("[GPS_PIPELINE] DIR_HEADING_SKIP_STATIONARY vehicle={} plate={} route={} dir={} course={}° inMotion={} rawSpeed={}km/h — course is stale on stationary bus, no flip",
+                    vehicleId, licensePlate, routeNumber, currentDirection,
+                    (int) course,
+                    existing != null && existing.isInMotion(),
+                    existing != null ? String.format("%.1f", existing.getRawGpsSpeedKmh()) : "-");
+            return Result.notFlipped(currentDirection, currentRouteCoords, currentTotalDist,
+                    primarySnap, currentRawSnapMinDistance);
+        }
+
         double routeHeading = mapMatchingService.calculateCourseFromRoute(
                 currentRouteCoords, currentCumDist, primarySnap.fraction(), currentDirection, currentTotalDist);
         double headingDiff = Math.abs(course - routeHeading);

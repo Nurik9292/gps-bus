@@ -80,7 +80,9 @@ class SnapCorrectorDirectionCooldownTest {
                 .predictedLatitude(37.90270)
                 .predictedLongitude(58.34309)
                 .fractionOnRoute(0.85)
-                .lastGpsFraction(0.85);
+                .lastGpsFraction(0.85)
+                .inMotion(true)
+                .rawGpsSpeedKmh(20.0);
     }
 
     @Test
