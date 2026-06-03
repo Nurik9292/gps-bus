@@ -416,6 +416,10 @@
         <div class="ws-route-tags" id="ws-route-tags"></div>
         <span class="ws-status-badge all" id="ws-status-badge">ВСЕ ТС</span>
         <button class="ws-clear-btn" id="ws-clear-btn" onclick="clearWsRoutes()" style="display:none">Сбросить</button>
+        <span id="route-stops-legend" style="display:none; margin-left:8px; font-size:11px; color:#cbd5e1;">
+            <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#10b981; border:1px solid #0f172a; vertical-align:middle; margin-right:3px;"></span>forward
+            <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#f43f5e; border:1px solid #0f172a; vertical-align:middle; margin:0 3px 0 8px;"></span>backward
+        </span>
     </div>
 
     <button class="route-btn" id="route-mode-btn" onclick="toggleRouteMode()">🗺 Маршрут</button>
@@ -540,6 +544,11 @@
     const GPS_TRAIL_LIMIT = 5;
     const GPS_TRAIL_COLORS = ['#22d3ee','#fb923c','#84cc16','#a855f7','#f472b6','#facc15','#34d399','#60a5fa','#fb7185','#c084fc'];
 
+    let routeStopsLayer = null;
+    const ROUTE_STOPS_LIMIT = 5;
+    const ROUTE_STOP_FORWARD_COLOR  = '#10b981';
+    const ROUTE_STOP_BACKWARD_COLOR = '#f43f5e';
+
     let vehicleTrails = {};      
     let vehicleTrailLayers = {}; 
     let trailsVisible = true;
@@ -560,6 +569,7 @@
 
         routePolylineLayer = L.layerGroup().addTo(map);
         gpsTrailLayer = L.layerGroup().addTo(map);
+        routeStopsLayer = L.layerGroup().addTo(map);
 
         loadStops();
         connectWebSocket();
@@ -880,8 +890,54 @@
         if (gpsTrailLayer) gpsTrailLayer.clearLayers();
     }
 
+    async function loadAndDrawRouteStops() {
+        if (!routeStopsLayer) return;
+        routeStopsLayer.clearLayers();
+
+        const legend = document.getElementById('route-stops-legend');
+        const selected = [...wsSubscribedRoutes];
+        if (selected.length === 0 || selected.length > ROUTE_STOPS_LIMIT) {
+            if (legend) legend.style.display = 'none';
+            return;
+        }
+        if (legend) legend.style.display = 'inline-block';
+
+        for (const routeNum of selected) {
+            try {
+                const url = `${API_BASE}/diagnostics/route-stops?route=${encodeURIComponent(routeNum)}`;
+                const res = await fetch(url);
+                if (!res.ok) {
+                    console.warn('[map] route-stops HTTP', res.status, 'for route', routeNum);
+                    continue;
+                }
+                const data = await res.json();
+                for (const s of data) {
+                    if (s.lat == null || s.lon == null) continue;
+                    const isForward = s.direction === 0;
+                    const color = isForward ? ROUTE_STOP_FORWARD_COLOR : ROUTE_STOP_BACKWARD_COLOR;
+                    const dirName = isForward ? 'forward' : 'backward';
+                    L.circleMarker([s.lat, s.lon], {
+                        radius: 7,
+                        color: '#0f172a',
+                        weight: 1.5,
+                        fillColor: color,
+                        fillOpacity: 0.95
+                    })
+                    .bindTooltip(
+                        `<b>${routeNum} · #${s.sequence} · ${dirName}</b><br>${s.stopName || ''}`,
+                        { sticky: true, direction: 'top', opacity: 0.95 }
+                    )
+                    .addTo(routeStopsLayer);
+                }
+            } catch (e) {
+                console.warn('[map] route-stops error for route', routeNum, e);
+            }
+        }
+    }
+
     function onSubscribedRoutesChanged() {
         renderRoutePolylines();
+        loadAndDrawRouteStops();
         if (wsSubscribedRoutes.size === 0 || wsSubscribedRoutes.size > GPS_TRAIL_LIMIT) {
             stopGpsTrailRefresh();
         } else {

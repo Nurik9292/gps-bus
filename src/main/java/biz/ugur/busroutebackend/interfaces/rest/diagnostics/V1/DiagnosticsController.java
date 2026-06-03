@@ -8,6 +8,7 @@ import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePredi
 import biz.ugur.busroutebackend.transport.infrastructure.redis.GpsPoint;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistoryService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -28,13 +29,16 @@ public class DiagnosticsController {
     private final VehiclePositionPredictionService predictionService;
     private final VehicleRepository vehicleRepository;
     private final VehicleGpsHistoryService gpsHistoryService;
+    private final DatabaseClient databaseClient;
 
     public DiagnosticsController(VehiclePositionPredictionService predictionService,
                                   VehicleRepository vehicleRepository,
-                                  VehicleGpsHistoryService gpsHistoryService) {
+                                  VehicleGpsHistoryService gpsHistoryService,
+                                  DatabaseClient databaseClient) {
         this.predictionService = predictionService;
         this.vehicleRepository = vehicleRepository;
         this.gpsHistoryService = gpsHistoryService;
+        this.databaseClient = databaseClient;
     }
 
     @GetMapping("/vehicle-snapshot")
@@ -74,6 +78,39 @@ public class DiagnosticsController {
                 .flatMap(vehicle -> gpsHistoryService.getHistoryList(vehicle.getDeviceId(), DEFAULT_TRAIL_LIMIT_POINTS)
                         .map(points -> trailFor(vehicle, points, cutoffEpochMs)))
                 .filter(item -> !item.points().isEmpty());
+    }
+
+    @GetMapping("/route-stops")
+    public Flux<RouteStopItem> routeStops(@RequestParam("route") String routeNumber) {
+        if (routeNumber == null || routeNumber.isBlank()) {
+            return Flux.empty();
+        }
+        String sql = """
+                SELECT rs.direction          AS direction,
+                       rs.stop_sequence      AS stop_sequence,
+                       rs.distance_from_start_meters AS distance_from_start_meters,
+                       bs.id                 AS stop_id,
+                       bs.stop_name          AS stop_name,
+                       bs.latitude           AS latitude,
+                       bs.longitude          AS longitude
+                  FROM route_stops rs
+                  JOIN bus_stops bs   ON bs.id = rs.stop_id
+                  JOIN bus_routes br  ON br.id = rs.route_id
+                 WHERE br.route_number = :routeNumber
+                 ORDER BY rs.direction, rs.stop_sequence
+                """;
+        return databaseClient.sql(sql)
+                .bind("routeNumber", routeNumber)
+                .map((row, meta) -> new RouteStopItem(
+                        row.get("stop_id", String.class),
+                        row.get("stop_name", String.class),
+                        row.get("latitude", Double.class),
+                        row.get("longitude", Double.class),
+                        row.get("direction", Integer.class),
+                        row.get("stop_sequence", Integer.class),
+                        row.get("distance_from_start_meters", Double.class)
+                ))
+                .all();
     }
 
     private GpsTrailItem trailFor(Vehicle vehicle, List<GpsPoint> points, long cutoffEpochMs) {
@@ -124,5 +161,15 @@ public class DiagnosticsController {
             Double lon,
             Double speed,
             Long ts
+    ) {}
+
+    public record RouteStopItem(
+            String stopId,
+            String stopName,
+            Double lat,
+            Double lon,
+            Integer direction,
+            Integer sequence,
+            Double distanceFromStartMeters
     ) {}
 }
