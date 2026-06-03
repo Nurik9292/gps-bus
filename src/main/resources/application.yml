@@ -393,6 +393,13 @@ business:
     min-speed-for-frozen-detection-kmh: ${GPS_OUTLIER_FROZEN_SPEED_THRESHOLD:10.0}
     reject-frozen-motion: ${GPS_OUTLIER_REJECT_FROZEN:false}
 
+  subscription:
+    monthly-amount-minor: ${SUBSCRIPTION_MONTHLY_AMOUNT_MINOR:400}
+    yearly-amount-minor: ${SUBSCRIPTION_YEARLY_AMOUNT_MINOR:4000}
+    currency: ${SUBSCRIPTION_CURRENCY:TMT}
+    payment-session-minutes: ${SUBSCRIPTION_PAYMENT_SESSION_MIN:30}
+    payment-return-url: ${SUBSCRIPTION_PAYMENT_RETURN_URL:https://api.duralga.tm/api/v1/payments/return}
+
 cache:
   redis:
     routes-ttl: 3600
