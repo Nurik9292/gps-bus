@@ -42,7 +42,8 @@ public class SvEpgPaymentProviderGateway implements PaymentProviderGateway {
                         payment.getMoney().getAmountMinor(),
                         payment.getMoney().getIso4217NumericCode(),
                         payment.getReturnUrl(),
-                        "Ad placement: " + payment.getSubjectId())
+                        payment.getFailUrl(),
+                        descriptionFor(payment))
                 .map(json -> {
                     requireNoError(json);
                     String orderId = textOrNull(json, "orderId");
@@ -96,6 +97,14 @@ public class SvEpgPaymentProviderGateway implements PaymentProviderGateway {
     // -------------------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------------------
+
+    private static String descriptionFor(Payment payment) {
+        String subject = switch (payment.getSubjectType()) {
+            case AD_PLACEMENT -> "Ad placement";
+            case CLIENT_SUBSCRIPTION -> "Client subscription";
+        };
+        return subject + ": " + payment.getSubjectId();
+    }
 
     private static ActionResult toActionResult(JsonNode json) {
         String errorCode = textOrNull(json, "errorCode");
