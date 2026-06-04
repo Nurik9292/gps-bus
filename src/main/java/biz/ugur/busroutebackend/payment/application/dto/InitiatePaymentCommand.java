@@ -10,5 +10,6 @@ public record InitiatePaymentCommand(
         @JsonProperty("amount_minor")   Long amountMinor,
         @JsonProperty("currency")       String currency,       
         @JsonProperty("return_url")     String returnUrl,
+        @JsonProperty("fail_url")       String failUrl,
         @JsonProperty("expires_in_min") Integer expiresInMinutes
 ) {}

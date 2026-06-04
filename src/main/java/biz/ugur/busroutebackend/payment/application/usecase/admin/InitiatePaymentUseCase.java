@@ -59,7 +59,7 @@ public class InitiatePaymentUseCase
 
         Payment draft = Payment.register(
                 provider, subjectType, cmd.subjectId(), cmd.businessId(),
-                money, cmd.returnUrl(),
+                money, cmd.returnUrl(), cmd.failUrl(),
                 LocalDateTime.now().plusMinutes(expiresInMinutes));
 
         return paymentRepository.save(draft)
