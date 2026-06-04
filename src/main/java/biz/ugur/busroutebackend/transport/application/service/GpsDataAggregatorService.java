@@ -76,9 +76,11 @@ public class GpsDataAggregatorService {
                 .doOnSuccess(positions ->
                         log.debug("Provider {} returned {} positions for {} devices",
                                 providerType, positions.size(), deviceIds.size()))
-                .doOnError(error ->
-                        log.error("Provider {} failed to fetch positions: {}",
-                                providerType, error.getMessage()));
+                .onErrorResume(error -> {
+                    log.error("Provider {} failed to fetch positions — returning empty list. Error: {}",
+                            providerType, error.getMessage());
+                    return Mono.just(List.of());
+                });
     }
 
 
