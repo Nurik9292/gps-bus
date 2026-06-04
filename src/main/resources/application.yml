@@ -603,17 +603,7 @@ server:
   max-http-request-header-size: 1MB
 
 routing:
-  dijkstra:
-    enabled: ${DIJKSTRA_ENABLED:true}
-    transfer-penalty-minutes: 5
-    max-transfers: 2
-    k-paths: 3
-    route-penalty-minutes: 30
-    max-iterations: 10000
-    max-cost-minutes: 120
-
   raptor:
-    enabled: ${RAPTOR_ENABLED:false}
     default-headway-seconds: ${RAPTOR_DEFAULT_HEADWAY_SECONDS:600}
     service-day-start: ${RAPTOR_SERVICE_DAY_START:06:00}
     service-day-end: ${RAPTOR_SERVICE_DAY_END:23:00}
@@ -624,11 +614,6 @@ routing:
     transfer-walking-speed-kmh: ${RAPTOR_TRANSFER_WALKING_SPEED_KMH:5.0}
     timetable-generation:
       enabled: ${RAPTOR_TIMETABLE_GENERATION_ENABLED:false}
-
-  shadow-mode:
-    enabled: ${ROUTING_SHADOW_MODE_ENABLED:false}
-    sample-rate: ${ROUTING_SHADOW_SAMPLE_RATE:0.1}
-    eta-diff-threshold-seconds: ${ROUTING_SHADOW_ETA_DIFF_THRESHOLD_SECONDS:300}
 
 
 springdoc:

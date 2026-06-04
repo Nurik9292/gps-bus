@@ -3,7 +3,6 @@ package biz.ugur.busroutebackend.routing.infrastructure.raptor;
 import biz.ugur.busroutebackend.routing.domain.model.raptor.RaptorTimetable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -14,8 +13,6 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Component
-@ConditionalOnExpression(
-        "${routing.raptor.enabled:false} or ${routing.shadow-mode.enabled:false}")
 @Slf4j
 public class RaptorTimetableCache {
 
