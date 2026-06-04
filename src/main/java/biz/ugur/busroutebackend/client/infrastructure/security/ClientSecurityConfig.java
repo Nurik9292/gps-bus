@@ -65,6 +65,7 @@ public class ClientSecurityConfig {
                         .pathMatchers("/api/v1/client/favorites/**").authenticated()
                         .pathMatchers("/api/v1/client/suggestions/**").authenticated()
                         .pathMatchers("/api/v1/client/complaints/**").authenticated()
+                        .pathMatchers("/api/v1/client/subscriptions/**").authenticated()
 
                         .anyExchange().authenticated()
                 )

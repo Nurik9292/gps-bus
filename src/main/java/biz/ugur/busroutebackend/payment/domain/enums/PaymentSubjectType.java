@@ -6,7 +6,8 @@ import java.util.Arrays;
 
 public enum PaymentSubjectType {
 
-    AD_PLACEMENT;
+    AD_PLACEMENT,
+    CLIENT_SUBSCRIPTION;
 
     public static PaymentSubjectType from(String raw) {
         if (raw == null || raw.isBlank()) {
