@@ -49,17 +49,17 @@ class PaymentTest {
                 PaymentSubjectType.CLIENT_SUBSCRIPTION,
                 "sub-id", null,
                 Money.ofMinor(400, "TMT"),
-                "https://api.duralga.tm/api/v1/payments/return/HALK",
-                "  https://api.duralga.tm/api/v1/payments/return/HALK  ",
+                "https://admduralga.ulgam.biz/api/v1/payments/return/HALK",
+                "  https://admduralga.ulgam.biz/api/v1/payments/return/HALK  ",
                 LocalDateTime.now().plusMinutes(30));
-        assertEquals("https://api.duralga.tm/api/v1/payments/return/HALK", withFail.getFailUrl());
+        assertEquals("https://admduralga.ulgam.biz/api/v1/payments/return/HALK", withFail.getFailUrl());
 
         Payment blankFail = Payment.register(
                 PaymentProvider.HALK,
                 PaymentSubjectType.CLIENT_SUBSCRIPTION,
                 "sub-id", null,
                 Money.ofMinor(400, "TMT"),
-                "https://api.duralga.tm/api/v1/payments/return/HALK",
+                "https://admduralga.ulgam.biz/api/v1/payments/return/HALK",
                 "   ",
                 LocalDateTime.now().plusMinutes(30));
         assertEquals(null, blankFail.getFailUrl());

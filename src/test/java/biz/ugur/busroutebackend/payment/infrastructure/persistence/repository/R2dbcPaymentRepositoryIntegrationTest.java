@@ -190,16 +190,16 @@ class R2dbcPaymentRepositoryIntegrationTest {
                 "sub-" + System.nanoTime(),
                 null,
                 Money.ofMinor(400, "TMT"),
-                "https://api.duralga.tm/api/v1/payments/return/HALK",
-                "https://api.duralga.tm/api/v1/payments/return/HALK",
+                "https://admduralga.ulgam.biz/api/v1/payments/return/HALK",
+                "https://admduralga.ulgam.biz/api/v1/payments/return/HALK",
                 LocalDateTime.now().plusMinutes(30));
 
         repository.save(withFail).block();
 
         StepVerifier.create(repository.findById(withFail.getId()))
                 .assertNext(found -> {
-                    assertEquals("https://api.duralga.tm/api/v1/payments/return/HALK", found.getReturnUrl());
-                    assertEquals("https://api.duralga.tm/api/v1/payments/return/HALK", found.getFailUrl());
+                    assertEquals("https://admduralga.ulgam.biz/api/v1/payments/return/HALK", found.getReturnUrl());
+                    assertEquals("https://admduralga.ulgam.biz/api/v1/payments/return/HALK", found.getFailUrl());
                 })
                 .verifyComplete();
     }

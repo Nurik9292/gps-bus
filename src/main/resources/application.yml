@@ -398,7 +398,7 @@ business:
     yearly-amount-minor: ${SUBSCRIPTION_YEARLY_AMOUNT_MINOR:4000}
     currency: ${SUBSCRIPTION_CURRENCY:TMT}
     payment-session-minutes: ${SUBSCRIPTION_PAYMENT_SESSION_MIN:30}
-    payment-return-url: ${SUBSCRIPTION_PAYMENT_RETURN_URL:https://api.duralga.tm/api/v1/payments/return}
+    payment-return-url: ${SUBSCRIPTION_PAYMENT_RETURN_URL:https://admduralga.ulgam.biz/api/v1/payments/return}
 
 cache:
   redis:
