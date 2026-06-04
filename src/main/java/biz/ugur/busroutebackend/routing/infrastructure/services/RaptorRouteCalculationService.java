@@ -14,8 +14,6 @@ import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -30,8 +28,6 @@ import java.util.Optional;
 import java.util.Set;
 
 @Service
-@Primary
-@ConditionalOnProperty(name = "routing.raptor.enabled", havingValue = "true")
 @Slf4j
 public class RaptorRouteCalculationService implements RouteCalculationService {
 

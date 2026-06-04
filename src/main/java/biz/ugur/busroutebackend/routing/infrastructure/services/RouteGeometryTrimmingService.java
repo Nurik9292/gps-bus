@@ -151,13 +151,6 @@ public class RouteGeometryTrimmingService {
         return nearestIndex;
     }
 
-    /**
-     * @deprecated direction теперь приходит авторитативно из {@code TransitPathSegment#direction()}
-     * (Dijkstra-путь). Эвристика на основе проекции остановок на полилинию оставлена для legacy
-     * SQL-fallback пути ({@code R2dbcRouteSearchRepository}), где direction в результирующих
-     * record'ах = null. Не удалять, пока SQL-путь жив.
-     */
-    @Deprecated(since = "2026-04-27", forRemoval = false)
     public String selectGeometryForDirection(String forwardGeom, String backwardGeom,
                                              BusStop fromStop, BusStop toStop) {
         if (forwardGeom != null && !forwardGeom.isBlank()) {
