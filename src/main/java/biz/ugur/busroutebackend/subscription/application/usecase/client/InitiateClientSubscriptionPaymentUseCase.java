@@ -57,6 +57,7 @@ public class InitiateClientSubscriptionPaymentUseCase
         return subscriptionRepository.save(draft)
                 .transform(this::persistAndPublish)
                 .flatMap(savedSubscription -> {
+                    String redirectUrl = buildRedirectUrl(provider);
                     InitiatePaymentCommand paymentCmd = new InitiatePaymentCommand(
                             provider.name(),
                             PaymentSubjectType.CLIENT_SUBSCRIPTION.name(),
@@ -64,7 +65,8 @@ public class InitiateClientSubscriptionPaymentUseCase
                             null,
                             amountMinor,
                             currency,
-                            properties.getPaymentReturnUrl(),
+                            redirectUrl,
+                            redirectUrl,
                             properties.getPaymentSessionMinutes()
                     );
                     return initiatePaymentUseCase.execute(Mono.just(paymentCmd))
@@ -75,7 +77,7 @@ public class InitiateClientSubscriptionPaymentUseCase
                                             paymentResponse.paymentId(),
                                             paymentResponse.orderNumber(),
                                             paymentResponse.formUrl(),
-                                            properties.getPaymentReturnUrl(),
+                                            redirectUrl,
                                             paymentResponse.provider(),
                                             period.name(),
                                             amountMinor,
@@ -86,6 +88,12 @@ public class InitiateClientSubscriptionPaymentUseCase
                 .doOnSuccess(r -> log.info("Subscription payment initiated: subscriptionId={} paymentId={} provider={} period={}",
                         r.subscriptionId(), r.paymentId(), r.provider(), r.period()))
                 .doOnError(e -> log.warn("Subscription payment initiation failed: {}", e.getMessage()));
+    }
+
+    private String buildRedirectUrl(PaymentProvider provider) {
+        String base = properties.getPaymentReturnUrl();
+        String trimmed = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
+        return trimmed + "/" + provider.name();
     }
 
     private long amountFor(SubscriptionPeriod period) {

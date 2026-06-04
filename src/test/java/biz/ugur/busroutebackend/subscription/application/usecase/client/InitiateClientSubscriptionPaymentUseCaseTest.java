@@ -82,7 +82,7 @@ class InitiateClientSubscriptionPaymentUseCaseTest {
                     assertThat(response.currency()).isEqualTo("TMT");
                     assertThat(response.period()).isEqualTo("MONTHLY");
                     assertThat(response.provider()).isEqualTo("HALK");
-                    assertThat(response.returnUrl()).isEqualTo("https://api.duralga.tm/api/v1/payments/return");
+                    assertThat(response.returnUrl()).isEqualTo("https://api.duralga.tm/api/v1/payments/return/HALK");
                 })
                 .verifyComplete();
 
@@ -95,6 +95,8 @@ class InitiateClientSubscriptionPaymentUseCaseTest {
         assertThat(inner.subjectType()).isEqualTo("CLIENT_SUBSCRIPTION");
         assertThat(inner.amountMinor()).isEqualTo(400);
         assertThat(inner.currency()).isEqualTo("TMT");
+        assertThat(inner.returnUrl()).isEqualTo("https://api.duralga.tm/api/v1/payments/return/HALK");
+        assertThat(inner.failUrl()).isEqualTo("https://api.duralga.tm/api/v1/payments/return/HALK");
     }
 
     @Test
