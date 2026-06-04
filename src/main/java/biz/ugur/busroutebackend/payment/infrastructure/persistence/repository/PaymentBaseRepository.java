@@ -20,7 +20,7 @@ public abstract class PaymentBaseRepository extends BaseR2dbcRepository<Payment,
             "id", "provider", "provider_order_id", "order_number",
             "subject_type", "subject_id", "business_id",
             "amount_minor", "currency", "status",
-            "form_url", "return_url",
+            "form_url", "return_url", "fail_url",
             "initiated_at", "completed_at", "failed_at", "expires_at", "completed_by",
             "failure_code", "failure_message",
             "card_pan_masked", "card_expiration", "cardholder_name",
@@ -56,6 +56,7 @@ public abstract class PaymentBaseRepository extends BaseR2dbcRepository<Payment,
         columns.put("status", e.getStatus());
         columns.put("form_url", e.getFormUrl());
         columns.put("return_url", e.getReturnUrl());
+        columns.put("fail_url", e.getFailUrl());
         columns.put("initiated_at", e.getInitiatedAt());
         columns.put("completed_at", e.getCompletedAt());
         columns.put("failed_at", e.getFailedAt());
@@ -86,6 +87,7 @@ public abstract class PaymentBaseRepository extends BaseR2dbcRepository<Payment,
                 .status(row.get("status", String.class))
                 .formUrl(row.get("form_url", String.class))
                 .returnUrl(row.get("return_url", String.class))
+                .failUrl(row.get("fail_url", String.class))
                 .initiatedAt(row.get("initiated_at", LocalDateTime.class))
                 .completedAt(row.get("completed_at", LocalDateTime.class))
                 .failedAt(row.get("failed_at", LocalDateTime.class))

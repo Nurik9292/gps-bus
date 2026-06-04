@@ -39,6 +39,7 @@ public class Payment extends AggregateRoot<Payment, PaymentId> {
     private final PaymentStatus status;
     private final String formUrl;
     private final String returnUrl;
+    private final String failUrl;
 
     private final LocalDateTime initiatedAt;
     private final LocalDateTime completedAt;
@@ -69,6 +70,18 @@ public class Payment extends AggregateRoot<Payment, PaymentId> {
                                     Money money,
                                     String returnUrl,
                                     LocalDateTime expiresAt) {
+        return register(provider, subjectType, subjectId, businessId,
+                money, returnUrl, null, expiresAt);
+    }
+
+    public static Payment register(PaymentProvider provider,
+                                    PaymentSubjectType subjectType,
+                                    String subjectId,
+                                    String businessId,
+                                    Money money,
+                                    String returnUrl,
+                                    String failUrl,
+                                    LocalDateTime expiresAt) {
         if (provider == null)     throw new PaymentValidationException("provider", "must not be null");
         if (subjectType == null)  throw new PaymentValidationException("subjectType", "must not be null");
         if (subjectId == null || subjectId.isBlank()) {
@@ -89,6 +102,7 @@ public class Payment extends AggregateRoot<Payment, PaymentId> {
                 .money(money)
                 .status(PaymentStatus.REGISTERED)
                 .returnUrl(returnUrl.trim())
+                .failUrl(failUrl != null && !failUrl.isBlank() ? failUrl.trim() : null)
                 .initiatedAt(LocalDateTime.now())
                 .expiresAt(expiresAt)
                 .version(0L)
@@ -116,6 +130,7 @@ public class Payment extends AggregateRoot<Payment, PaymentId> {
                                     PaymentStatus status,
                                     String formUrl,
                                     String returnUrl,
+                                    String failUrl,
                                     LocalDateTime initiatedAt,
                                     LocalDateTime completedAt,
                                     LocalDateTime failedAt,
@@ -141,6 +156,7 @@ public class Payment extends AggregateRoot<Payment, PaymentId> {
                 .status(status)
                 .formUrl(formUrl)
                 .returnUrl(returnUrl)
+                .failUrl(failUrl)
                 .initiatedAt(initiatedAt)
                 .completedAt(completedAt)
                 .failedAt(failedAt)

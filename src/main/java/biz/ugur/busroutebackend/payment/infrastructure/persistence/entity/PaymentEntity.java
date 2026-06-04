@@ -32,6 +32,7 @@ public class PaymentEntity {
     @Column("status")                     private String status;
     @Column("form_url")                   private String formUrl;
     @Column("return_url")                 private String returnUrl;
+    @Column("fail_url")                   private String failUrl;
 
     @Column("initiated_at")               private LocalDateTime initiatedAt;
     @Column("completed_at")               private LocalDateTime completedAt;

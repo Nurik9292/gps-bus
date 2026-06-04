@@ -64,6 +64,7 @@ class R2dbcPaymentRepositoryIntegrationTest {
                     status              VARCHAR(20)  NOT NULL DEFAULT 'REGISTERED',
                     form_url            TEXT,
                     return_url          TEXT NOT NULL,
+                    fail_url            TEXT,
                     initiated_at        TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     completed_at        TIMESTAMP WITH TIME ZONE,
                     failed_at           TIMESTAMP WITH TIME ZONE,
@@ -177,6 +178,29 @@ class R2dbcPaymentRepositoryIntegrationTest {
         StepVerifier.create(repository.findByStatus(PaymentStatus.REGISTERED, PageRequest.of(0, 3))
                         .count())
                 .assertNext(n -> assertEquals(3L, n))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("save + find round-trips fail_url")
+    void failUrlRoundTrip() {
+        Payment withFail = Payment.register(
+                PaymentProvider.HALK,
+                PaymentSubjectType.CLIENT_SUBSCRIPTION,
+                "sub-" + System.nanoTime(),
+                null,
+                Money.ofMinor(400, "TMT"),
+                "https://api.duralga.tm/api/v1/payments/return/HALK",
+                "https://api.duralga.tm/api/v1/payments/return/HALK",
+                LocalDateTime.now().plusMinutes(30));
+
+        repository.save(withFail).block();
+
+        StepVerifier.create(repository.findById(withFail.getId()))
+                .assertNext(found -> {
+                    assertEquals("https://api.duralga.tm/api/v1/payments/return/HALK", found.getReturnUrl());
+                    assertEquals("https://api.duralga.tm/api/v1/payments/return/HALK", found.getFailUrl());
+                })
                 .verifyComplete();
     }
 
