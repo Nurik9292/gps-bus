@@ -102,6 +102,23 @@ public class R2dbcSubscriptionRepository extends SubscriptionBaseRepository impl
                 .all();
     }
 
+    @Override
+    public Flux<Subscription> findExpiredActive(Pageable pageable) {
+        String sql = String.format("""
+                SELECT %s FROM client_subscriptions
+                 WHERE status = 'ACTIVE'
+                   AND expires_at IS NOT NULL
+                   AND expires_at < NOW()
+                 ORDER BY expires_at ASC
+                 LIMIT :limit OFFSET :offset
+                """, selectColumns());
+        return databaseClient.sql(sql)
+                .bind("limit", pageable.getPageSize())
+                .bind("offset", pageable.getOffset())
+                .map(getRowMapper())
+                .all();
+    }
+
     private List<String> filterConditions(SubscriptionStatus status, SubscriptionPeriod period) {
         List<String> conditions = new ArrayList<>();
         if (status != null) {

@@ -25,4 +25,6 @@ public interface SubscriptionRepository {
     Mono<Long> countFiltered(SubscriptionStatus status, SubscriptionPeriod period);
 
     Flux<Subscription> findAllByClientId(String clientId);
+
+    Flux<Subscription> findExpiredActive(Pageable pageable);
 }
