@@ -17,9 +17,17 @@ public record SubscriptionResponse(
         @JsonProperty("expires_at")         LocalDateTime expiresAt,
         @JsonProperty("cancelled_at")       LocalDateTime cancelledAt,
         @JsonProperty("cancellation_reason") String cancellationReason,
-        @JsonProperty("active")             boolean active
+        @JsonProperty("active")             boolean active,
+        @JsonProperty("payment_status")     String paymentStatus,
+        @JsonProperty("last_transaction")   TransactionSummary lastTransaction
 ) {
     public static SubscriptionResponse fromDomain(Subscription subscription) {
+        return fromDomain(subscription, null, null);
+    }
+
+    public static SubscriptionResponse fromDomain(Subscription subscription,
+                                                  String paymentStatus,
+                                                  TransactionSummary lastTransaction) {
         return new SubscriptionResponse(
                 subscription.getId().getValue(),
                 subscription.getClientId(),
@@ -32,7 +40,9 @@ public record SubscriptionResponse(
                 subscription.getExpiresAt(),
                 subscription.getCancelledAt(),
                 subscription.getCancellationReason(),
-                subscription.isActive()
+                subscription.isActive(),
+                paymentStatus,
+                lastTransaction
         );
     }
 }

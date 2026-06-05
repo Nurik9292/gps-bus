@@ -399,6 +399,7 @@ business:
     currency: ${SUBSCRIPTION_CURRENCY:TMT}
     payment-session-minutes: ${SUBSCRIPTION_PAYMENT_SESSION_MIN:30}
     payment-return-url: ${SUBSCRIPTION_PAYMENT_RETURN_URL:https://admduralga.ulgam.biz/api/v1/payments/return}
+    payment-status-sync-timeout-ms: ${SUBSCRIPTION_STATUS_SYNC_TIMEOUT_MS:3000}
 
 cache:
   redis:

@@ -16,4 +16,5 @@ public class SubscriptionProperties {
     private String currency = "TMT";
     private int paymentSessionMinutes = 30;
     private String paymentReturnUrl;
+    private long paymentStatusSyncTimeoutMs = 3000;
 }
