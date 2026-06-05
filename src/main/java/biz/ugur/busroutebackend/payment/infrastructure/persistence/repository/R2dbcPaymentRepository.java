@@ -12,6 +12,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 @Repository
 public class R2dbcPaymentRepository extends PaymentBaseRepository implements PaymentRepository {
@@ -138,5 +141,95 @@ public class R2dbcPaymentRepository extends PaymentBaseRepository implements Pay
                 .bind("status", status.name())
                 .map(row -> row.get("cnt", Long.class))
                 .one();
+    }
+
+    @Override
+    public Flux<Payment> findBySubjectTypeAndSubjectIdIn(PaymentSubjectType subjectType,
+                                                         Collection<String> subjectIds,
+                                                         PaymentStatus status,
+                                                         Instant from,
+                                                         Instant to,
+                                                         Pageable pageable) {
+        if (subjectIds.isEmpty()) {
+            return Flux.empty();
+        }
+        String where = subjectConditions(status, from, to);
+        String sql = String.format("""
+                SELECT %s FROM payments
+                %s
+                ORDER BY initiated_at DESC
+                LIMIT :limit OFFSET :offset
+                """, selectColumns(), where);
+        var spec = databaseClient.sql(sql)
+                .bind("subjectType", subjectType.name())
+                .bind("subjectIds", subjectIds)
+                .bind("limit", pageable.getPageSize())
+                .bind("offset", pageable.getOffset());
+        spec = bindSubjectFilters(spec, status, from, to);
+        return spec.map(getRowMapper()).all();
+    }
+
+    @Override
+    public Mono<Long> countBySubjectTypeAndSubjectIdIn(PaymentSubjectType subjectType,
+                                                       Collection<String> subjectIds,
+                                                       PaymentStatus status,
+                                                       Instant from,
+                                                       Instant to) {
+        if (subjectIds.isEmpty()) {
+            return Mono.just(0L);
+        }
+        String where = subjectConditions(status, from, to);
+        var spec = databaseClient.sql("SELECT COUNT(*) FROM payments " + where)
+                .bind("subjectType", subjectType.name())
+                .bind("subjectIds", subjectIds);
+        spec = bindSubjectFilters(spec, status, from, to);
+        return spec.map(row -> row.get(0, Long.class)).one();
+    }
+
+    @Override
+    public Mono<Payment> findLatestBySubject(PaymentSubjectType subjectType, String subjectId) {
+        String sql = String.format("""
+                SELECT %s FROM payments
+                WHERE subject_type = :subjectType AND subject_id = :subjectId
+                ORDER BY initiated_at DESC
+                LIMIT 1
+                """, selectColumns());
+        return databaseClient.sql(sql)
+                .bind("subjectType", subjectType.name())
+                .bind("subjectId", subjectId)
+                .map(getRowMapper())
+                .one();
+    }
+
+    private String subjectConditions(PaymentStatus status, Instant from, Instant to) {
+        List<String> conditions = new ArrayList<>();
+        conditions.add("subject_type = :subjectType");
+        conditions.add("subject_id IN (:subjectIds)");
+        if (status != null) {
+            conditions.add("status = :status");
+        }
+        if (from != null) {
+            conditions.add("initiated_at >= :from");
+        }
+        if (to != null) {
+            conditions.add("initiated_at < :to");
+        }
+        return "WHERE " + String.join(" AND ", conditions);
+    }
+
+    private DatabaseClient.GenericExecuteSpec bindSubjectFilters(DatabaseClient.GenericExecuteSpec spec,
+                                                                 PaymentStatus status,
+                                                                 Instant from,
+                                                                 Instant to) {
+        if (status != null) {
+            spec = spec.bind("status", status.name());
+        }
+        if (from != null) {
+            spec = spec.bind("from", from);
+        }
+        if (to != null) {
+            spec = spec.bind("to", to);
+        }
+        return spec;
     }
 }
