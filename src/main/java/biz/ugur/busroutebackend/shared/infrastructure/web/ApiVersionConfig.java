@@ -75,6 +75,7 @@ public class ApiVersionConfig {
 
     public static final String SUBSCRIPTIONS = "/subscriptions";
     public static final String V1_CLIENT_SUBSCRIPTIONS = V1_CLIENT + SUBSCRIPTIONS;
+    public static final String V1_ADMIN_SUBSCRIPTIONS = V1_ADMIN + SUBSCRIPTIONS;
 
     public static final String PLACES = "/places";
     public static final String STREETS = "/streets";

@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.subscription.application.dto;
 
+import biz.ugur.busroutebackend.client.application.dto.ClientSummary;
 import biz.ugur.busroutebackend.subscription.domain.model.Subscription;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -17,9 +18,18 @@ public record SubscriptionResponse(
         @JsonProperty("expires_at")         LocalDateTime expiresAt,
         @JsonProperty("cancelled_at")       LocalDateTime cancelledAt,
         @JsonProperty("cancellation_reason") String cancellationReason,
-        @JsonProperty("active")             boolean active
+        @JsonProperty("active")             boolean active,
+        @JsonProperty("payment_status")     String paymentStatus,
+        @JsonProperty("last_transaction")   TransactionSummary lastTransaction,
+        @JsonProperty("client")             ClientSummary client
 ) {
     public static SubscriptionResponse fromDomain(Subscription subscription) {
+        return fromDomain(subscription, null, null);
+    }
+
+    public static SubscriptionResponse fromDomain(Subscription subscription,
+                                                  String paymentStatus,
+                                                  TransactionSummary lastTransaction) {
         return new SubscriptionResponse(
                 subscription.getId().getValue(),
                 subscription.getClientId(),
@@ -32,7 +42,18 @@ public record SubscriptionResponse(
                 subscription.getExpiresAt(),
                 subscription.getCancelledAt(),
                 subscription.getCancellationReason(),
-                subscription.isActive()
+                subscription.isActive(),
+                paymentStatus,
+                lastTransaction,
+                null
+        );
+    }
+
+    public SubscriptionResponse withClient(ClientSummary client) {
+        return new SubscriptionResponse(
+                subscriptionId, clientId, period, status, paymentId, amountMinor, currency,
+                startedAt, expiresAt, cancelledAt, cancellationReason, active,
+                paymentStatus, lastTransaction, client
         );
     }
 }

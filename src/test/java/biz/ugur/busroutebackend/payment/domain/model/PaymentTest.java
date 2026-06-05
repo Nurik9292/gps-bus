@@ -36,6 +36,36 @@ class PaymentTest {
     }
 
     @Test
+    @DisplayName("register without failUrl leaves it null")
+    void registerWithoutFailUrlIsNull() {
+        assertEquals(null, registered().getFailUrl());
+    }
+
+    @Test
+    @DisplayName("register with failUrl stores trimmed value; blank becomes null")
+    void registerWithFailUrl() {
+        Payment withFail = Payment.register(
+                PaymentProvider.HALK,
+                PaymentSubjectType.CLIENT_SUBSCRIPTION,
+                "sub-id", null,
+                Money.ofMinor(400, "TMT"),
+                "https://admduralga.ulgam.biz/api/v1/payments/return/HALK",
+                "  https://admduralga.ulgam.biz/api/v1/payments/return/HALK  ",
+                LocalDateTime.now().plusMinutes(30));
+        assertEquals("https://admduralga.ulgam.biz/api/v1/payments/return/HALK", withFail.getFailUrl());
+
+        Payment blankFail = Payment.register(
+                PaymentProvider.HALK,
+                PaymentSubjectType.CLIENT_SUBSCRIPTION,
+                "sub-id", null,
+                Money.ofMinor(400, "TMT"),
+                "https://admduralga.ulgam.biz/api/v1/payments/return/HALK",
+                "   ",
+                LocalDateTime.now().plusMinutes(30));
+        assertEquals(null, blankFail.getFailUrl());
+    }
+
+    @Test
     @DisplayName("attachProviderOrder fails when already attached")
     void attachProviderOrderIsOneShot() {
         Payment p = registered().attachProviderOrder("a", "url");

@@ -1,0 +1,1 @@
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS fail_url TEXT;

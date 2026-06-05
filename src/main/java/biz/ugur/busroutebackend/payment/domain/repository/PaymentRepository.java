@@ -11,6 +11,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.Collection;
 
 public interface PaymentRepository extends BaseRepository<Payment, PaymentId> {
 
@@ -34,4 +35,22 @@ public interface PaymentRepository extends BaseRepository<Payment, PaymentId> {
     Mono<Long> sumCompletedRevenueBetween(Instant from, Instant to);
 
     Mono<Long> countByProviderAndStatus(PaymentProvider provider, PaymentStatus status);
+
+    Flux<Payment> findBySubjectTypeAndSubjectIdIn(PaymentSubjectType subjectType,
+                                                  Collection<String> subjectIds,
+                                                  PaymentStatus status,
+                                                  Instant from,
+                                                  Instant to,
+                                                  Pageable pageable);
+
+    Mono<Long> countBySubjectTypeAndSubjectIdIn(PaymentSubjectType subjectType,
+                                                Collection<String> subjectIds,
+                                                PaymentStatus status,
+                                                Instant from,
+                                                Instant to);
+
+    Mono<Payment> findLatestBySubject(PaymentSubjectType subjectType, String subjectId);
+
+    Mono<java.util.Map<String, Long>> countBySubjectTypeAndSubjectIdInGroupByStatus(
+            PaymentSubjectType subjectType, Collection<String> subjectIds);
 }

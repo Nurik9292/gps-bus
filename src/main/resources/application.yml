@@ -398,7 +398,13 @@ business:
     yearly-amount-minor: ${SUBSCRIPTION_YEARLY_AMOUNT_MINOR:4000}
     currency: ${SUBSCRIPTION_CURRENCY:TMT}
     payment-session-minutes: ${SUBSCRIPTION_PAYMENT_SESSION_MIN:30}
-    payment-return-url: ${SUBSCRIPTION_PAYMENT_RETURN_URL:https://api.duralga.tm/api/v1/payments/return}
+    payment-return-url: ${SUBSCRIPTION_PAYMENT_RETURN_URL:https://admduralga.ulgam.biz/api/v1/payments/return}
+    payment-status-sync-timeout-ms: ${SUBSCRIPTION_STATUS_SYNC_TIMEOUT_MS:3000}
+    expiry-scheduler:
+      enabled: ${SUBSCRIPTION_EXPIRY_SCHEDULER_ENABLED:false}
+      batch-size: ${SUBSCRIPTION_EXPIRY_BATCH_SIZE:100}
+      fixed-delay-ms: ${SUBSCRIPTION_EXPIRY_FIXED_DELAY_MS:300000}
+      initial-delay-ms: ${SUBSCRIPTION_EXPIRY_INITIAL_DELAY_MS:60000}
 
 cache:
   redis:

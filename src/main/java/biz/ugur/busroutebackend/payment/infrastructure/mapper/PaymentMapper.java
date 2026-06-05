@@ -26,6 +26,7 @@ public final class PaymentMapper {
                 PaymentStatus.valueOf(e.getStatus()),
                 e.getFormUrl(),
                 e.getReturnUrl(),
+                e.getFailUrl(),
                 e.getInitiatedAt(),
                 e.getCompletedAt(),
                 e.getFailedAt(),
@@ -56,6 +57,7 @@ public final class PaymentMapper {
                 .status(p.getStatus().name())
                 .formUrl(p.getFormUrl())
                 .returnUrl(p.getReturnUrl())
+                .failUrl(p.getFailUrl())
                 .initiatedAt(p.getInitiatedAt())
                 .completedAt(p.getCompletedAt())
                 .failedAt(p.getFailedAt())

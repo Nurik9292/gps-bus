@@ -22,6 +22,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.test.StepVerifier;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -64,6 +66,7 @@ class R2dbcPaymentRepositoryIntegrationTest {
                     status              VARCHAR(20)  NOT NULL DEFAULT 'REGISTERED',
                     form_url            TEXT,
                     return_url          TEXT NOT NULL,
+                    fail_url            TEXT,
                     initiated_at        TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     completed_at        TIMESTAMP WITH TIME ZONE,
                     failed_at           TIMESTAMP WITH TIME ZONE,
@@ -126,9 +129,8 @@ class R2dbcPaymentRepositoryIntegrationTest {
     @Test
     @DisplayName("markCompleted persists COMPLETED status + card data")
     void completePayment() {
-        Payment payment = newPayment(PaymentProvider.RYSGAL)
-                .attachProviderOrder("ext-1", "https://form");
-        repository.save(payment).block();
+        Payment payment = repository.save(newPayment(PaymentProvider.RYSGAL)
+                .attachProviderOrder("ext-1", "https://form")).block();
 
         Payment completed = payment.markCompleted("411111******1111", "202512", "IVAN IVANOV");
         repository.save(completed).block();
@@ -150,14 +152,15 @@ class R2dbcPaymentRepositoryIntegrationTest {
         Payment b = newPayment(PaymentProvider.RYSGAL).attachProviderOrder("b", "url");
         Payment c = newPayment(PaymentProvider.SENAGAT).attachProviderOrder("c", "url");
 
-        repository.save(a).then(repository.save(b)).then(repository.save(c)).block();
+        repository.save(a).block();
+        Payment savedB = repository.save(b).block();
+        repository.save(c).block();
 
         StepVerifier.create(repository.countByStatus(PaymentStatus.REGISTERED))
                 .assertNext(count -> assertEquals(3L, count))
                 .verifyComplete();
 
-        Payment completedB = b.markCompleted("4444", "202612", "TEST");
-        repository.save(completedB).block();
+        repository.save(savedB.markCompleted("4444", "202612", "TEST")).block();
 
         StepVerifier.create(repository.countByStatus(PaymentStatus.REGISTERED))
                 .assertNext(count -> assertEquals(2L, count))
@@ -180,7 +183,128 @@ class R2dbcPaymentRepositoryIntegrationTest {
                 .verifyComplete();
     }
 
+    @Test
+    @DisplayName("save + find round-trips fail_url")
+    void failUrlRoundTrip() {
+        Payment withFail = Payment.register(
+                PaymentProvider.HALK,
+                PaymentSubjectType.CLIENT_SUBSCRIPTION,
+                "sub-" + System.nanoTime(),
+                null,
+                Money.ofMinor(400, "TMT"),
+                "https://admduralga.ulgam.biz/api/v1/payments/return/HALK",
+                "https://admduralga.ulgam.biz/api/v1/payments/return/HALK",
+                LocalDateTime.now().plusMinutes(30));
+
+        repository.save(withFail).block();
+
+        StepVerifier.create(repository.findById(withFail.getId()))
+                .assertNext(found -> {
+                    assertEquals("https://admduralga.ulgam.biz/api/v1/payments/return/HALK", found.getReturnUrl());
+                    assertEquals("https://admduralga.ulgam.biz/api/v1/payments/return/HALK", found.getFailUrl());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("findBySubjectTypeAndSubjectIdIn filters by subject IN-list and status")
+    void findBySubjectIn() {
+        repository.save(newSubscriptionPayment("sub-1", PaymentProvider.HALK)).block();
+        repository.save(newSubscriptionPayment("sub-2", PaymentProvider.RYSGAL)).block();
+        repository.save(newSubscriptionPayment("sub-3", PaymentProvider.HALK)).block();
+        repository.save(newPayment(PaymentProvider.HALK)).block();
+
+        StepVerifier.create(repository.findBySubjectTypeAndSubjectIdIn(
+                        PaymentSubjectType.CLIENT_SUBSCRIPTION, List.of("sub-1", "sub-2"),
+                        null, null, null, PageRequest.of(0, 50)).count())
+                .assertNext(n -> assertEquals(2L, n))
+                .verifyComplete();
+
+        StepVerifier.create(repository.countBySubjectTypeAndSubjectIdIn(
+                        PaymentSubjectType.CLIENT_SUBSCRIPTION, List.of("sub-1", "sub-2", "sub-3"),
+                        null, null, null))
+                .assertNext(n -> assertEquals(3L, n))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("findBySubjectTypeAndSubjectIdIn with COMPLETED status filter")
+    void findBySubjectInWithStatus() {
+        Payment p1 = repository.save(
+                newSubscriptionPayment("sub-10", PaymentProvider.HALK).attachProviderOrder("o10", "url")).block();
+        repository.save(newSubscriptionPayment("sub-11", PaymentProvider.HALK)).block();
+        repository.save(p1.markCompleted("4444", "202612", "TEST")).block();
+
+        StepVerifier.create(repository.countBySubjectTypeAndSubjectIdIn(
+                        PaymentSubjectType.CLIENT_SUBSCRIPTION, List.of("sub-10", "sub-11"),
+                        PaymentStatus.COMPLETED, null, null))
+                .assertNext(n -> assertEquals(1L, n))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("findBySubjectTypeAndSubjectIdIn with empty id list returns nothing")
+    void findBySubjectInEmpty() {
+        repository.save(newSubscriptionPayment("sub-20", PaymentProvider.HALK)).block();
+
+        StepVerifier.create(repository.findBySubjectTypeAndSubjectIdIn(
+                        PaymentSubjectType.CLIENT_SUBSCRIPTION, Collections.emptyList(),
+                        null, null, null, PageRequest.of(0, 50)).count())
+                .assertNext(n -> assertEquals(0L, n))
+                .verifyComplete();
+        StepVerifier.create(repository.countBySubjectTypeAndSubjectIdIn(
+                        PaymentSubjectType.CLIENT_SUBSCRIPTION, Collections.emptyList(), null, null, null))
+                .assertNext(n -> assertEquals(0L, n))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("findLatestBySubject returns the most recent by initiated_at")
+    void findLatestBySubject() {
+        Payment older = newSubscriptionPayment("sub-30", PaymentProvider.HALK);
+        Payment newer = newSubscriptionPayment("sub-30", PaymentProvider.RYSGAL);
+        repository.save(older).block();
+        repository.save(newer).block();
+        databaseClient.sql("UPDATE payments SET initiated_at = NOW() - INTERVAL '10 days' WHERE id = :id")
+                .bind("id", older.getId().getValue())
+                .then().block();
+
+        StepVerifier.create(repository.findLatestBySubject(
+                        PaymentSubjectType.CLIENT_SUBSCRIPTION, "sub-30"))
+                .assertNext(found -> assertEquals(newer.getId(), found.getId()))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("countBySubjectTypeAndSubjectIdInGroupByStatus aggregates per status")
+    void groupByStatus() {
+        Payment completed = repository.save(
+                newSubscriptionPayment("sub-40", PaymentProvider.HALK).attachProviderOrder("o40", "url")).block();
+        repository.save(completed.markCompleted("4444", "202612", "TEST")).block();
+        repository.save(newSubscriptionPayment("sub-40", PaymentProvider.RYSGAL)).block();
+        repository.save(newSubscriptionPayment("sub-41", PaymentProvider.HALK)).block();
+
+        StepVerifier.create(repository.countBySubjectTypeAndSubjectIdInGroupByStatus(
+                        PaymentSubjectType.CLIENT_SUBSCRIPTION, List.of("sub-40", "sub-41")))
+                .assertNext(counts -> {
+                    assertEquals(1L, counts.get("COMPLETED"));
+                    assertEquals(2L, counts.get("REGISTERED"));
+                })
+                .verifyComplete();
+    }
+
     // ---------- helpers ----------
+
+    private static Payment newSubscriptionPayment(String subjectId, PaymentProvider provider) {
+        return Payment.register(
+                provider,
+                PaymentSubjectType.CLIENT_SUBSCRIPTION,
+                subjectId,
+                null,
+                Money.ofMinor(400, "TMT"),
+                "https://example.com/return/" + provider.name(),
+                LocalDateTime.now().plusMinutes(30));
+    }
 
     private static Payment newPayment(PaymentProvider provider) {
         return Payment.register(

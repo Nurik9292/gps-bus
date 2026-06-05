@@ -35,12 +35,16 @@ public class SvEpgApiClient {
                                     long amountMinor,
                                     int currencyIso4217,
                                     String returnUrl,
+                                    String failUrl,
                                     String description) {
         MultiValueMap<String, String> form = baseForm(creds);
         form.add("orderNumber", orderNumber);
         form.add("amount", String.valueOf(amountMinor));
         form.add("currency", String.valueOf(currencyIso4217));
         form.add("returnUrl", returnUrl);
+        if (failUrl != null && !failUrl.isBlank()) {
+            form.add("failUrl", failUrl);
+        }
         if (description != null && !description.isBlank()) {
             form.add("description", description);
         }

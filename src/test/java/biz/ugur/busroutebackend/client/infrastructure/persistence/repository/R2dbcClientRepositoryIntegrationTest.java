@@ -89,6 +89,30 @@ class R2dbcClientRepositoryIntegrationTest {
     }
 
     @Test
+    void findByIds_returnsOnlyRequestedClients() {
+        Client a = Client.create("Alice", "+99361000010", Platform.ANDROID);
+        Client b = Client.create("Bob", "+99361000011", Platform.IOS);
+        Client c = Client.create("Carol", "+99361000012", Platform.ANDROID);
+        repository.save(a).then(repository.save(b)).then(repository.save(c)).block();
+
+        StepVerifier.create(repository.findByIds(java.util.List.of(
+                        a.getId().getValue(), b.getId().getValue())).collectList())
+                .assertNext(list -> {
+                    assertEquals(2, list.size());
+                    assertTrue(list.stream().anyMatch(x -> "Alice".equals(x.getName())));
+                    assertTrue(list.stream().anyMatch(x -> "Bob".equals(x.getName())));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void findByIds_emptyInput_returnsEmpty() {
+        StepVerifier.create(repository.findByIds(java.util.List.of()).collectList())
+                .assertNext(list -> assertTrue(list.isEmpty()))
+                .verifyComplete();
+    }
+
+    @Test
     void findByPhone_returnsExistingClient() {
         Client client = Client.create("Bob", "+99361000002", Platform.IOS);
         repository.save(client).block();
