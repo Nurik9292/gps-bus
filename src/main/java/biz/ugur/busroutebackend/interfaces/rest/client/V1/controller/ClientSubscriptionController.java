@@ -64,5 +64,10 @@ public class ClientSubscriptionController extends BaseController {
                 .map(auth -> (ClientPrincipal) auth.getPrincipal());
     }
 
-    public record PaymentRequest(String bank, String period) {}
+    public record PaymentRequest(String bank, String period) {
+        public PaymentRequest {
+            bank = bank == null ? null : bank.trim().toUpperCase();
+            period = period == null ? null : period.trim().toUpperCase();
+        }
+    }
 }
