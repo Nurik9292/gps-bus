@@ -10,10 +10,13 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 
 public interface ClientRepository extends BaseRepository<Client, ClientId> {
 
     Mono<Client> findByPhone(String phone);
+
+    Flux<Client> findByIds(Collection<String> ids);
 
     Flux<Client> findByStatus(ClientStatus status);
 

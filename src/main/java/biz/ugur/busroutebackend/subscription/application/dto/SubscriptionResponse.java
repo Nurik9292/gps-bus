@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.subscription.application.dto;
 
+import biz.ugur.busroutebackend.client.application.dto.ClientSummary;
 import biz.ugur.busroutebackend.subscription.domain.model.Subscription;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -19,7 +20,8 @@ public record SubscriptionResponse(
         @JsonProperty("cancellation_reason") String cancellationReason,
         @JsonProperty("active")             boolean active,
         @JsonProperty("payment_status")     String paymentStatus,
-        @JsonProperty("last_transaction")   TransactionSummary lastTransaction
+        @JsonProperty("last_transaction")   TransactionSummary lastTransaction,
+        @JsonProperty("client")             ClientSummary client
 ) {
     public static SubscriptionResponse fromDomain(Subscription subscription) {
         return fromDomain(subscription, null, null);
@@ -42,7 +44,16 @@ public record SubscriptionResponse(
                 subscription.getCancellationReason(),
                 subscription.isActive(),
                 paymentStatus,
-                lastTransaction
+                lastTransaction,
+                null
+        );
+    }
+
+    public SubscriptionResponse withClient(ClientSummary client) {
+        return new SubscriptionResponse(
+                subscriptionId, clientId, period, status, paymentId, amountMinor, currency,
+                startedAt, expiresAt, cancelledAt, cancellationReason, active,
+                paymentStatus, lastTransaction, client
         );
     }
 }

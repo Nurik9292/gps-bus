@@ -1,5 +1,7 @@
 package biz.ugur.busroutebackend.subscription.application.usecase.admin;
 
+import biz.ugur.busroutebackend.client.application.dto.ClientSummary;
+import biz.ugur.busroutebackend.client.application.service.ClientLookupService;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.subscription.domain.enums.SubscriptionPeriod;
@@ -31,6 +33,9 @@ class GetSubscriptionsPaginatedUseCaseTest {
     private SubscriptionRepository subscriptionRepository;
 
     @Mock
+    private ClientLookupService clientLookupService;
+
+    @Mock
     private CorrelationContextService correlationService;
 
     @Mock
@@ -40,9 +45,13 @@ class GetSubscriptionsPaginatedUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new GetSubscriptionsPaginatedUseCase(subscriptionRepository, correlationService, eventBus);
+        useCase = new GetSubscriptionsPaginatedUseCase(
+                subscriptionRepository, clientLookupService, correlationService, eventBus);
         lenient().when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(clientLookupService.findByIds(any()))
+                .thenReturn(Mono.just(java.util.Map.of("client-1",
+                        new ClientSummary("client-1", "Тест Клиент", "+99361000000", "ACTIVE", "ANDROID", null))));
     }
 
     private Subscription sub() {
@@ -60,6 +69,8 @@ class GetSubscriptionsPaginatedUseCaseTest {
                     assertThat(list.items()).hasSize(2);
                     assertThat(list.activeCount()).isEqualTo(2L);
                     assertThat(list.pagination().getTotalItems()).isEqualTo(5L);
+                    assertThat(list.items().get(0).client()).isNotNull();
+                    assertThat(list.items().get(0).client().phone()).isEqualTo("+99361000000");
                 })
                 .verifyComplete();
     }

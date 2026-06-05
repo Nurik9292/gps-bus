@@ -13,6 +13,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 
 @Repository
 @Slf4j
@@ -21,6 +22,18 @@ public class R2dbcClientRepository extends ClientBaseRepository implements Clien
 
     public R2dbcClientRepository(DatabaseClient databaseClient) {
         super(databaseClient);
+    }
+
+    @Override
+    public Flux<Client> findByIds(Collection<String> ids) {
+        if (ids.isEmpty()) {
+            return Flux.empty();
+        }
+        String sql = String.format("SELECT %s FROM clients WHERE id IN (:ids)", selectColumns());
+        return databaseClient.sql(sql)
+                .bind("ids", ids)
+                .map(getRowMapper())
+                .all();
     }
 
     @Override
