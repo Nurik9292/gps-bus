@@ -6,11 +6,16 @@ import biz.ugur.busroutebackend.payment.application.usecase.admin.InitiatePaymen
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.subscription.application.dto.InitiateSubscriptionPaymentCommand;
+import biz.ugur.busroutebackend.subscription.domain.enums.SubscriptionPeriod;
 import biz.ugur.busroutebackend.subscription.domain.enums.SubscriptionStatus;
 import biz.ugur.busroutebackend.subscription.domain.exceptions.SubscriptionValidationException;
 import biz.ugur.busroutebackend.subscription.domain.model.Subscription;
+import biz.ugur.busroutebackend.subscription.domain.model.SubscriptionPlanPrice;
+import biz.ugur.busroutebackend.subscription.domain.repository.SubscriptionPlanPriceRepository;
 import biz.ugur.busroutebackend.subscription.domain.repository.SubscriptionRepository;
 import biz.ugur.busroutebackend.subscription.infrastructure.config.SubscriptionProperties;
+
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +40,9 @@ class InitiateClientSubscriptionPaymentUseCaseTest {
     private SubscriptionRepository subscriptionRepository;
 
     @Mock
+    private SubscriptionPlanPriceRepository priceRepository;
+
+    @Mock
     private InitiatePaymentUseCase initiatePaymentUseCase;
 
     @Mock
@@ -56,13 +64,14 @@ class InitiateClientSubscriptionPaymentUseCaseTest {
         properties.setPaymentReturnUrl("https://admduralga.ulgam.biz/api/v1/payments/return");
 
         useCase = new InitiateClientSubscriptionPaymentUseCase(
-                subscriptionRepository, initiatePaymentUseCase, properties,
+                subscriptionRepository, priceRepository, initiatePaymentUseCase, properties,
                 correlationService, eventBus);
 
         lenient().when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
         lenient().when(subscriptionRepository.save(any(Subscription.class)))
                 .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        lenient().when(priceRepository.findByPeriod(any())).thenReturn(Mono.empty());
     }
 
     @Test
@@ -115,6 +124,30 @@ class InitiateClientSubscriptionPaymentUseCaseTest {
                     assertThat(response.provider()).isEqualTo("RYSGAL");
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void initiateMonthly_priceFromDb_overridesProperties() {
+        when(priceRepository.findByPeriod(SubscriptionPeriod.MONTHLY))
+                .thenReturn(Mono.just(SubscriptionPlanPrice.restore(
+                        SubscriptionPeriod.MONTHLY, 1500, "TMT", "admin",
+                        LocalDateTime.now(), LocalDateTime.now(), 1L)));
+        when(initiatePaymentUseCase.execute(any()))
+                .thenReturn(Mono.just(new InitiatePaymentResponse(
+                        "pay-db", "ORD-db", "https://bank/db", "HALK")));
+
+        StepVerifier.create(useCase.execute(
+                        new InitiateSubscriptionPaymentCommand("client-1", "halk", "month")))
+                .assertNext(response -> {
+                    assertThat(response.amountMinor()).isEqualTo(1500);
+                    assertThat(response.currency()).isEqualTo("TMT");
+                })
+                .verifyComplete();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Mono<InitiatePaymentCommand>> cmdCaptor = ArgumentCaptor.forClass(Mono.class);
+        verify(initiatePaymentUseCase).execute(cmdCaptor.capture());
+        assertThat(cmdCaptor.getValue().block().amountMinor()).isEqualTo(1500);
     }
 
     @Test
