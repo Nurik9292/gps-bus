@@ -2,8 +2,10 @@ package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
 import biz.ugur.busroutebackend.payment.application.dto.PaymentList;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
+import biz.ugur.busroutebackend.subscription.application.dto.PaymentAttemptsSummary;
 import biz.ugur.busroutebackend.subscription.application.dto.SubscriptionList;
 import biz.ugur.busroutebackend.subscription.application.dto.SubscriptionResponse;
+import biz.ugur.busroutebackend.subscription.application.usecase.admin.GetClientPaymentAttemptsUseCase;
 import biz.ugur.busroutebackend.subscription.application.usecase.admin.GetClientTransactionsUseCase;
 import biz.ugur.busroutebackend.subscription.application.usecase.admin.GetSubscriptionByIdUseCase;
 import biz.ugur.busroutebackend.subscription.application.usecase.admin.GetSubscriptionsPaginatedUseCase;
@@ -27,15 +29,18 @@ public class AdminSubscriptionController extends BasePaginatedController {
     private final GetSubscriptionsPaginatedUseCase getSubscriptionsPaginatedUseCase;
     private final GetSubscriptionByIdUseCase getSubscriptionByIdUseCase;
     private final GetClientTransactionsUseCase getClientTransactionsUseCase;
+    private final GetClientPaymentAttemptsUseCase getClientPaymentAttemptsUseCase;
 
     public AdminSubscriptionController(GetSubscriptionsPaginatedUseCase getSubscriptionsPaginatedUseCase,
                                        GetSubscriptionByIdUseCase getSubscriptionByIdUseCase,
                                        GetClientTransactionsUseCase getClientTransactionsUseCase,
+                                       GetClientPaymentAttemptsUseCase getClientPaymentAttemptsUseCase,
                                        MessageSource messageSource) {
         super(messageSource);
         this.getSubscriptionsPaginatedUseCase = getSubscriptionsPaginatedUseCase;
         this.getSubscriptionByIdUseCase = getSubscriptionByIdUseCase;
         this.getClientTransactionsUseCase = getClientTransactionsUseCase;
+        this.getClientPaymentAttemptsUseCase = getClientPaymentAttemptsUseCase;
     }
 
     @Override
@@ -70,5 +75,11 @@ public class AdminSubscriptionController extends BasePaginatedController {
         validatePagination(page, size);
         return okPaginated(getClientTransactionsUseCase.execute(
                 new GetClientTransactionsUseCase.Query(clientId, page, size, status, from, to)));
+    }
+
+    @GetMapping("/by-client/{clientId}/transactions/summary")
+    public Mono<ResponseEntity<ApiResponse<PaymentAttemptsSummary>>> clientPaymentAttempts(
+            @PathVariable String clientId) {
+        return ok(getClientPaymentAttemptsUseCase.execute(clientId));
     }
 }

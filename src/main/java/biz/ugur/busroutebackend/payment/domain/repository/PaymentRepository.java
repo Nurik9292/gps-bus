@@ -50,4 +50,7 @@ public interface PaymentRepository extends BaseRepository<Payment, PaymentId> {
                                                 Instant to);
 
     Mono<Payment> findLatestBySubject(PaymentSubjectType subjectType, String subjectId);
+
+    Mono<java.util.Map<String, Long>> countBySubjectTypeAndSubjectIdInGroupByStatus(
+            PaymentSubjectType subjectType, Collection<String> subjectIds);
 }

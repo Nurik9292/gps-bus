@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 @Repository
 public class R2dbcPaymentRepository extends PaymentBaseRepository implements PaymentRepository {
@@ -199,6 +200,25 @@ public class R2dbcPaymentRepository extends PaymentBaseRepository implements Pay
                 .bind("subjectId", subjectId)
                 .map(getRowMapper())
                 .one();
+    }
+
+    @Override
+    public Mono<Map<String, Long>> countBySubjectTypeAndSubjectIdInGroupByStatus(
+            PaymentSubjectType subjectType, Collection<String> subjectIds) {
+        if (subjectIds.isEmpty()) {
+            return Mono.just(Map.of());
+        }
+        String sql = """
+                SELECT status, COUNT(*)::BIGINT AS cnt FROM payments
+                WHERE subject_type = :subjectType AND subject_id IN (:subjectIds)
+                GROUP BY status
+                """;
+        return databaseClient.sql(sql)
+                .bind("subjectType", subjectType.name())
+                .bind("subjectIds", subjectIds)
+                .map(row -> Map.entry(row.get("status", String.class), row.get("cnt", Long.class)))
+                .all()
+                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
     }
 
     private String subjectConditions(PaymentStatus status, Instant from, Instant to) {

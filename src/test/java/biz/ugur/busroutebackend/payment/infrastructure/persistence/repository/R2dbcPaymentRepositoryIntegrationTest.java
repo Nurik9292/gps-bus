@@ -275,6 +275,24 @@ class R2dbcPaymentRepositoryIntegrationTest {
                 .verifyComplete();
     }
 
+    @Test
+    @DisplayName("countBySubjectTypeAndSubjectIdInGroupByStatus aggregates per status")
+    void groupByStatus() {
+        Payment completed = repository.save(
+                newSubscriptionPayment("sub-40", PaymentProvider.HALK).attachProviderOrder("o40", "url")).block();
+        repository.save(completed.markCompleted("4444", "202612", "TEST")).block();
+        repository.save(newSubscriptionPayment("sub-40", PaymentProvider.RYSGAL)).block();
+        repository.save(newSubscriptionPayment("sub-41", PaymentProvider.HALK)).block();
+
+        StepVerifier.create(repository.countBySubjectTypeAndSubjectIdInGroupByStatus(
+                        PaymentSubjectType.CLIENT_SUBSCRIPTION, List.of("sub-40", "sub-41")))
+                .assertNext(counts -> {
+                    assertEquals(1L, counts.get("COMPLETED"));
+                    assertEquals(2L, counts.get("REGISTERED"));
+                })
+                .verifyComplete();
+    }
+
     // ---------- helpers ----------
 
     private static Payment newSubscriptionPayment(String subjectId, PaymentProvider provider) {
