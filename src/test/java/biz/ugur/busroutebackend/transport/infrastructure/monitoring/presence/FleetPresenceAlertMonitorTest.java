@@ -6,7 +6,6 @@ import biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.Gp
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
 import biz.ugur.busroutebackend.transport.domain.model.RouteAssignment;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
-import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteAssignmentRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
@@ -31,7 +30,6 @@ class FleetPresenceAlertMonitorTest {
     private EmailNotificationService email;
     private RouteAssignmentRepository assignments;
     private VehicleRepository vehicles;
-    private BusRouteRepository routes;
     private OffRouteStateRegistry registry;
     private GpsAlertProperties gpsProps;
     private FleetPresenceAlertProperties props;
@@ -46,7 +44,6 @@ class FleetPresenceAlertMonitorTest {
                 .thenReturn(Mono.empty());
         assignments = mock(RouteAssignmentRepository.class);
         vehicles = mock(VehicleRepository.class);
-        routes = mock(BusRouteRepository.class);
         registry = new OffRouteStateRegistry();
         gpsProps = new GpsAlertProperties();
         gpsProps.setRecipients("ops@busroute.tm");
@@ -54,7 +51,7 @@ class FleetPresenceAlertMonitorTest {
 
         when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FULL_DAY))).thenReturn(Flux.empty());
 
-        monitor = new FleetPresenceAlertMonitor(email, props, gpsProps, assignments, vehicles, routes, registry, clock);
+        monitor = new FleetPresenceAlertMonitor(email, props, gpsProps, assignments, vehicles, registry, clock);
     }
 
     private RouteAssignment assignment(String vehicleId) {
@@ -112,6 +109,25 @@ class FleetPresenceAlertMonitorTest {
         when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v));
 
         monitor.checkNow().block();
+        monitor.checkNow().block();
+
+        verify(email, times(1)).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void doesNotResendChangedSetWithinCooldown() {
+        RouteAssignment a1 = assignment("v1");
+        Vehicle v1 = silentVehicle("v1");
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
+                .thenReturn(Flux.just(a1));
+        when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v1));
+        monitor.checkNow().block();
+
+        RouteAssignment a2 = assignment("v2");
+        Vehicle v2 = silentVehicle("v2");
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
+                .thenReturn(Flux.just(a1, a2));
+        when(vehicles.findById(VehicleId.of("v2"))).thenReturn(Mono.just(v2));
         monitor.checkNow().block();
 
         verify(email, times(1)).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());

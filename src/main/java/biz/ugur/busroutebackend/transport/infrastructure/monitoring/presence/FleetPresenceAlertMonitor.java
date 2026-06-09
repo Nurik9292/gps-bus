@@ -6,7 +6,6 @@ import biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.Gp
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
 import biz.ugur.busroutebackend.transport.domain.model.RouteAssignment;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
-import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteAssignmentRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
@@ -20,6 +19,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -51,9 +52,9 @@ public class FleetPresenceAlertMonitor {
     private final GpsAlertProperties gpsAlertProperties;
     private final RouteAssignmentRepository assignmentRepository;
     private final VehicleRepository vehicleRepository;
-    private final BusRouteRepository busRouteRepository;
     private final OffRouteStateRegistry offRouteStateRegistry;
     private final Clock clock;
+    private final String emailTemplate;
 
     private final AtomicBoolean inProgress = new AtomicBoolean(false);
     private volatile String lastSentHash = null;
@@ -64,7 +65,6 @@ public class FleetPresenceAlertMonitor {
                                      GpsAlertProperties gpsAlertProperties,
                                      RouteAssignmentRepository assignmentRepository,
                                      VehicleRepository vehicleRepository,
-                                     BusRouteRepository busRouteRepository,
                                      OffRouteStateRegistry offRouteStateRegistry,
                                      Clock clock) {
         this.emailService = emailService;
@@ -72,9 +72,9 @@ public class FleetPresenceAlertMonitor {
         this.gpsAlertProperties = gpsAlertProperties;
         this.assignmentRepository = assignmentRepository;
         this.vehicleRepository = vehicleRepository;
-        this.busRouteRepository = busRouteRepository;
         this.offRouteStateRegistry = offRouteStateRegistry;
         this.clock = clock;
+        this.emailTemplate = loadTemplate();
     }
 
     @Scheduled(fixedRateString = "${app.fleet-presence-alerts.check-interval-minutes:10}", timeUnit = TimeUnit.MINUTES)
@@ -199,8 +199,7 @@ public class FleetPresenceAlertMonitor {
             rows.add(p.licensePlate() + " | " + p.routeNumber() + " | " + shift.name() + " | "
                     + p.status().name() + " | " + p.lastSignalAgo() + " | " + p.distanceMeters());
         }
-        String template = loadTemplate();
-        return template
+        return emailTemplate
                 .replace("{shift}", shift.name())
                 .replace("{detectedAt}", formatInstant(now))
                 .replace("{count}", String.valueOf(problems.size()))
@@ -212,8 +211,8 @@ public class FleetPresenceAlertMonitor {
             if (is == null) {
                 return "Назначенные автобусы не на линии:\n{rows}";
             }
-            return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        } catch (java.io.IOException e) {
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
             log.error("[FLEET_PRESENCE] template load failed: {}", e.getMessage());
             return "Назначенные автобусы не на линии:\n{rows}";
         }
