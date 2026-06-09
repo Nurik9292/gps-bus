@@ -9,15 +9,18 @@ import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteAssignmentRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
+import biz.ugur.busroutebackend.transport.infrastructure.monitoring.offroute.OffRouteRecord;
 import biz.ugur.busroutebackend.transport.infrastructure.monitoring.offroute.OffRouteStateRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -78,7 +81,7 @@ class FleetPresenceAlertMonitorTest {
                 .thenReturn(Flux.just(a));
         when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v));
 
-        monitor.checkNow().block();
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
 
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(email).sendGpsAlert(eq(List.of("ops@busroute.tm")), anyString(),
@@ -95,9 +98,29 @@ class FleetPresenceAlertMonitorTest {
                 .thenReturn(Flux.just(a));
         when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(online));
 
-        monitor.checkNow().block();
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
 
         verify(email, never()).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void sendsAlertWhenAssignedVehicleIsOffRoute() {
+        RouteAssignment a = assignment("v1");
+        Vehicle v = mock(Vehicle.class);
+        when(v.getIsActive()).thenReturn(true);
+        when(v.getLicensePlate()).thenReturn("AG-v1");
+        when(v.getRouteNumber()).thenReturn("12");
+        when(v.getLastPositionUpdate()).thenReturn(LocalDateTime.of(2026, 6, 9, 9, 59));
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
+                .thenReturn(Flux.just(a));
+        when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v));
+        registry.record("v1", LocalDate.of(2026, 6, 9), ShiftType.FIRST,
+                new OffRouteRecord(Instant.parse("2026-06-09T09:40:00Z"), 280.0, 37.9, 58.3));
+
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
+
+        verify(email).sendGpsAlert(eq(List.of("ops@busroute.tm")), anyString(),
+                eq(AlertKind.ASSIGNED_NOT_ON_LINE), anyString(), anyString());
     }
 
     @Test
@@ -108,8 +131,8 @@ class FleetPresenceAlertMonitorTest {
                 .thenReturn(Flux.just(a));
         when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v));
 
-        monitor.checkNow().block();
-        monitor.checkNow().block();
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
 
         verify(email, times(1)).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
     }
@@ -121,14 +144,14 @@ class FleetPresenceAlertMonitorTest {
         when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
                 .thenReturn(Flux.just(a1));
         when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v1));
-        monitor.checkNow().block();
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
 
         RouteAssignment a2 = assignment("v2");
         Vehicle v2 = silentVehicle("v2");
         when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
                 .thenReturn(Flux.just(a1, a2));
         when(vehicles.findById(VehicleId.of("v2"))).thenReturn(Mono.just(v2));
-        monitor.checkNow().block();
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
 
         verify(email, times(1)).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
     }
