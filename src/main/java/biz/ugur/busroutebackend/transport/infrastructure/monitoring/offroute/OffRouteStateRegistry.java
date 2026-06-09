@@ -1,9 +1,11 @@
 package biz.ugur.busroutebackend.transport.infrastructure.monitoring.offroute;
 
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -23,5 +25,10 @@ public class OffRouteStateRegistry {
 
     public void cleanupBefore(LocalDate cutoff) {
         records.keySet().removeIf(key -> key.date().isBefore(cutoff));
+    }
+
+    @Scheduled(cron = "0 5 0 * * *", zone = "UTC")
+    public void scheduledCleanup() {
+        cleanupBefore(LocalDate.now(ZoneOffset.UTC).minusDays(1));
     }
 }
