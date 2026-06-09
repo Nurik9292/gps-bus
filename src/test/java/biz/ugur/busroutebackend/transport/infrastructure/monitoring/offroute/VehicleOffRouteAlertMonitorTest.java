@@ -71,7 +71,8 @@ class VehicleOffRouteAlertMonitorTest {
 
         monitor = new VehicleOffRouteAlertMonitor(
                 emailService, properties, clock,
-                routeAssignmentRepository, vehicleRepository, busRouteRepository);
+                routeAssignmentRepository, vehicleRepository, busRouteRepository,
+                new OffRouteStateRegistry());
 
         when(emailService.sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString()))
                 .thenReturn(Mono.empty());
@@ -170,7 +171,8 @@ class VehicleOffRouteAlertMonitorTest {
         clock = Clock.fixed(Instant.parse("2026-05-12T13:50:00Z"), ZoneOffset.UTC);
         monitor = new VehicleOffRouteAlertMonitor(
                 emailService, properties, clock,
-                routeAssignmentRepository, vehicleRepository, busRouteRepository);
+                routeAssignmentRepository, vehicleRepository, busRouteRepository,
+                new OffRouteStateRegistry());
         when(emailService.sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString()))
                 .thenReturn(Mono.empty());
 
