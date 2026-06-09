@@ -24,6 +24,13 @@ class FleetPresenceClassificationTest {
     }
 
     @Test
+    void offRouteTakesPriorityOverStaleGps() {
+        Optional<OffRouteRecord> offRoute = Optional.of(new OffRouteRecord(Instant.now(), 300, 0, 0));
+        var status = FleetPresenceAlertMonitor.classify(now.minusMinutes(40), offRoute, now, shift, props);
+        assertEquals(Optional.of(AssignedVehicleStatus.OFF_ROUTE), status);
+    }
+
+    @Test
     void freshWithinThresholdIsOk() {
         var status = FleetPresenceAlertMonitor.classify(now.minusMinutes(5), Optional.empty(), now, shift, props);
         assertTrue(status.isEmpty());
