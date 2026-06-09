@@ -31,33 +31,33 @@ public class GetDashboardStatisticsUseCase {
 
     private Mono<DashboardStatisticsResult> fetchAllStatistics() {
         Mono<DashboardStatistics.RouteStats> routeStats = Mono.zip(
-                routeRepository.count().onErrorReturn(0L),
-                routeRepository.countActiveRoutes().onErrorReturn(0L)
+                countOrZero(routeRepository.count(), "routes.total"),
+                countOrZero(routeRepository.countActiveRoutes(), "routes.active")
         ).map(tuple -> new DashboardStatistics.RouteStats(tuple.getT1(), tuple.getT2()))
                 .onErrorReturn(DashboardStatistics.RouteStats.empty());
 
         Mono<DashboardStatistics.StopStats> stopStats = Mono.zip(
-                stopRepository.count().onErrorReturn(0L),
-                stopRepository.countActiveStops().onErrorReturn(0L)
+                countOrZero(stopRepository.count(), "stops.total"),
+                countOrZero(stopRepository.countActiveStops(), "stops.active")
         ).map(tuple -> new DashboardStatistics.StopStats(tuple.getT1(), tuple.getT2()))
                 .onErrorReturn(DashboardStatistics.StopStats.empty());
 
         Mono<DashboardStatistics.VehicleStats> vehicleStats = Mono.zip(
-                vehicleRepository.count().onErrorReturn(0L),
-                vehicleRepository.countActiveVehicles().onErrorReturn(0L),
-                vehicleRepository.findVehiclesInMotion().count().onErrorReturn(0L)
+                countOrZero(vehicleRepository.count(), "vehicles.total"),
+                countOrZero(vehicleRepository.countActiveVehicles(), "vehicles.active"),
+                countOrZero(vehicleRepository.findVehiclesInMotion().count(), "vehicles.inMotion")
         ).map(tuple -> new DashboardStatistics.VehicleStats(tuple.getT1(), tuple.getT2(), tuple.getT3()))
                 .onErrorReturn(DashboardStatistics.VehicleStats.empty());
 
         Mono<DashboardStatistics.AdminStats> adminStats = Mono.zip(
-                adminRepository.count().onErrorReturn(0L),
-                adminRepository.countActiveAdmins().onErrorReturn(0L)
+                countOrZero(adminRepository.count(), "admins.total"),
+                countOrZero(adminRepository.countActiveAdmins(), "admins.active")
         ).map(tuple -> new DashboardStatistics.AdminStats(tuple.getT1(), tuple.getT2()))
                 .onErrorReturn(DashboardStatistics.AdminStats.empty());
 
         Mono<DashboardStatistics.CityStats> cityStats = Mono.zip(
-                cityRepository.count().onErrorReturn(0L),
-                cityRepository.countActiveCities().onErrorReturn(0L)
+                countOrZero(cityRepository.count(), "cities.total"),
+                countOrZero(cityRepository.countActiveCities(), "cities.active")
         ).map(tuple -> new DashboardStatistics.CityStats(tuple.getT1(), tuple.getT2()))
                 .onErrorReturn(DashboardStatistics.CityStats.empty());
 
@@ -79,5 +79,10 @@ public class GetDashboardStatisticsUseCase {
                     return DashboardStatisticsResult.fromStatistics(statistics);
                 })
                 .doOnError(error -> log.error("Error fetching dashboard statistics", error));
+    }
+
+    private Mono<Long> countOrZero(Mono<Long> source, String label) {
+        return source.doOnError(e -> log.error("Dashboard count '{}' failed, defaulting to 0", label, e))
+                .onErrorReturn(0L);
     }
 }
