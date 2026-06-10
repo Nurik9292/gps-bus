@@ -224,6 +224,20 @@
         .bus-popup .info-label { color: var(--text-dim); }
         .bus-popup .info-value { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
 
+        .stop-popup { font-family: 'Outfit', sans-serif; min-width: 240px; }
+        .stop-popup h3 { font-size: 14px; margin-bottom: 6px; }
+        .arr-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; border-top: 1px solid var(--border); }
+        .arr-route {
+            padding: 1px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace;
+            font-weight: 700; font-size: 13px; color: white; min-width: 26px; text-align: center;
+        }
+        .arr-plate { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); flex: 1; }
+        .arr-dist { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+        .arr-eta { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 12px; color: var(--green); white-space: nowrap; }
+        .arr-eta.at-stop { color: var(--yellow); }
+        .arr-empty { color: var(--text-dim); font-size: 12px; padding: 6px 0; }
+        .arr-updated { font-size: 10px; color: var(--text-dim); margin-top: 6px; text-align: right; }
+
         .no-vehicles-msg {
             text-align: center; padding: 40px 20px; color: var(--text-dim);
         }
@@ -641,9 +655,8 @@
                 html: `<div class="stop-dot ${zoom < 14 ? 'hidden' : ''}"></div>`,
                 iconSize: [10, 10], iconAnchor: [5, 5]
             });
-            const marker = L.marker([stop.lat, stop.lon], { icon })
-                .addTo(map)
-                .bindPopup(`<b>${stop.name}</b>`);
+            const marker = L.marker([stop.lat, stop.lon], { icon }).addTo(map);
+            attachArrivalsPopup(marker, stop.id, stop.name);
             stopMarkers[stop.id] = marker;
         });
 
@@ -656,6 +669,74 @@
                     if (dot) dot.classList.toggle('hidden', z < 14);
                 }
             });
+        });
+    }
+
+    const STOP_ARRIVALS_REFRESH_MS = 15000;
+    const STOP_ARRIVALS_LIMIT = 8;
+    let stopArrivalsTimer = null;
+
+    async function loadStopArrivals(stopId) {
+        const res = await fetch(`${API_BASE}/stops/${encodeURIComponent(stopId)}/arrivals`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!data.success || !data.data) throw new Error('empty arrivals response');
+        return data.data;
+    }
+
+    function arrivalRowHtml(a) {
+        const color = a.routeColor || '#475569';
+        const atStop = a.arrivalStatus === 'at_stop';
+        const eta = a.estimatedArrivalMinutes;
+        const etaText = atStop ? 'на остановке' : (eta != null ? `${eta} мин` : '—');
+        const dist = a.distanceMeters == null ? ''
+            : a.distanceMeters >= 1000 ? (a.distanceMeters / 1000).toFixed(1) + ' км'
+            : a.distanceMeters + ' м';
+        return `<div class="arr-row">
+            <span class="arr-route" style="background:${color}">${a.routeNumber || '?'}</span>
+            <span class="arr-plate">${a.licensePlate || ''}</span>
+            <span class="arr-dist">${dist}</span>
+            <span class="arr-eta ${atStop ? 'at-stop' : ''}">${etaText}</span>
+        </div>`;
+    }
+
+    function stopPopupHtml(stopName, bodyHtml) {
+        return `<div class="stop-popup"><h3>${stopName}</h3>${bodyHtml}</div>`;
+    }
+
+    function stopArrivalsHtml(stopName, arrivals) {
+        const sorted = (arrivals || [])
+            .slice()
+            .sort((a, b) => (a.estimatedArrivalMinutes ?? 999) - (b.estimatedArrivalMinutes ?? 999))
+            .slice(0, STOP_ARRIVALS_LIMIT);
+        const rows = sorted.length
+            ? sorted.map(arrivalRowHtml).join('')
+            : '<div class="arr-empty">Нет приближающихся автобусов</div>';
+        const time = new Date().toLocaleTimeString('ru-RU');
+        return stopPopupHtml(stopName, `${rows}<div class="arr-updated">обновлено ${time}</div>`);
+    }
+
+    function attachArrivalsPopup(marker, stopId, stopName) {
+        marker.bindPopup(stopPopupHtml(stopName, '<div class="arr-empty">Загрузка прибытий…</div>'), { maxWidth: 320 });
+
+        const refresh = async () => {
+            try {
+                const d = await loadStopArrivals(stopId);
+                marker.setPopupContent(stopArrivalsHtml(d.stopName || stopName, d.arrivals));
+            } catch (e) {
+                console.warn('[map] stop arrivals error for', stopId, e);
+                marker.setPopupContent(stopPopupHtml(stopName, '<div class="arr-empty">Не удалось загрузить прибытия</div>'));
+            }
+        };
+
+        marker.on('popupopen', () => {
+            refresh();
+            clearInterval(stopArrivalsTimer);
+            stopArrivalsTimer = setInterval(refresh, STOP_ARRIVALS_REFRESH_MS);
+        });
+        marker.on('popupclose', () => {
+            clearInterval(stopArrivalsTimer);
+            stopArrivalsTimer = null;
         });
     }
 
@@ -916,7 +997,7 @@
                     const isForward = s.direction === 0;
                     const color = isForward ? ROUTE_STOP_FORWARD_COLOR : ROUTE_STOP_BACKWARD_COLOR;
                     const dirName = isForward ? 'forward' : 'backward';
-                    L.circleMarker([s.lat, s.lon], {
+                    const stopCircle = L.circleMarker([s.lat, s.lon], {
                         radius: 7,
                         color: '#0f172a',
                         weight: 1.5,
@@ -926,8 +1007,9 @@
                     .bindTooltip(
                         `<b>${routeNum} · #${s.sequence} · ${dirName}</b><br>${s.stopName || ''}`,
                         { sticky: true, direction: 'top', opacity: 0.95 }
-                    )
-                    .addTo(routeStopsLayer);
+                    );
+                    attachArrivalsPopup(stopCircle, s.stopId, s.stopName || '');
+                    stopCircle.addTo(routeStopsLayer);
                 }
             } catch (e) {
                 console.warn('[map] route-stops error for route', routeNum, e);
