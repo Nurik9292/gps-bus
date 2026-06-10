@@ -163,6 +163,7 @@ public class GpsProviderHealthMonitor {
             case STALE -> "данные устарели";
             case RECOVERY -> "восстановлен";
             case VEHICLE_OFF_ROUTE -> "автобус уехал с маршрута";
+            case ASSIGNED_NOT_ON_LINE -> "назначенные автобусы не на линии";
         };
     }
 

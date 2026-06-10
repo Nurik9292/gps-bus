@@ -46,6 +46,7 @@ public class VehicleOffRouteAlertMonitor {
     private final RouteAssignmentRepository routeAssignmentRepository;
     private final VehicleRepository vehicleRepository;
     private final BusRouteRepository busRouteRepository;
+    private final OffRouteStateRegistry offRouteStateRegistry;
 
     private final Map<OffRouteAlertKey, Instant> alerted = new ConcurrentHashMap<>();
 
@@ -54,13 +55,15 @@ public class VehicleOffRouteAlertMonitor {
                                        Clock clock,
                                        RouteAssignmentRepository routeAssignmentRepository,
                                        VehicleRepository vehicleRepository,
-                                       BusRouteRepository busRouteRepository) {
+                                       BusRouteRepository busRouteRepository,
+                                       OffRouteStateRegistry offRouteStateRegistry) {
         this.emailService = emailService;
         this.properties = properties;
         this.clock = clock;
         this.routeAssignmentRepository = routeAssignmentRepository;
         this.vehicleRepository = vehicleRepository;
         this.busRouteRepository = busRouteRepository;
+        this.offRouteStateRegistry = offRouteStateRegistry;
     }
 
     public void onWentOffRoute(String vehicleId, VehiclePredictionState state,
@@ -73,6 +76,8 @@ public class VehicleOffRouteAlertMonitor {
         ShiftType shift = shiftOpt.get();
         LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);
         OffRouteAlertKey key = new OffRouteAlertKey(vehicleId, today, shift);
+        offRouteStateRegistry.record(vehicleId, today, shift,
+                new OffRouteRecord(now, distanceFromRouteMeters, latitude, longitude));
 
         if (alerted.putIfAbsent(key, now) != null) {
             return;
