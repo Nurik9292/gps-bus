@@ -55,3 +55,6 @@ data/node_modules/
 
 # Deploy secrets
 deploy/.env
+
+# Generated route diagnostics overlay (regen via scripts/regen-routes-geojson.sh)
+src/main/resources/static/routes.geojson
