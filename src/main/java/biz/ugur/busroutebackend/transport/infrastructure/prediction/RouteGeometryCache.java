@@ -36,10 +36,14 @@ public class RouteGeometryCache {
     private final ConcurrentHashMap<String, String>            routeNameCache     = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String>            routeColorCache    = new ConcurrentHashMap<>();
 
-    private final BusRouteRepository busRouteRepository;
+    private static final double SEQUENCE_INVERSION_TOLERANCE = 0.002;
 
-    public RouteGeometryCache(BusRouteRepository busRouteRepository) {
+    private final BusRouteRepository busRouteRepository;
+    private final MapMatchingService mapMatchingService;
+
+    public RouteGeometryCache(BusRouteRepository busRouteRepository, MapMatchingService mapMatchingService) {
         this.busRouteRepository = busRouteRepository;
+        this.mapMatchingService = mapMatchingService;
     }
 
     private volatile boolean loaded = false;
@@ -99,36 +103,73 @@ public class RouteGeometryCache {
         double totalDistance = distanceCache.getOrDefault(key, 0.0);
         if (totalDistance <= 0 || stops == null || stops.isEmpty()) return;
 
-        List<RouteStopInfo> sorted = stops.stream()
-                .filter(s -> s.getDistanceFromStartMeters() != null && s.getDistanceFromStartMeters() >= 0)
-                .sorted(Comparator.comparingInt(RouteStopInfo::getDistanceFromStartMeters))
-                .toList();
+        List<double[]> points = pointsCache.get(key);
 
-        double[] fractions = sorted.stream()
-                .mapToDouble(s -> s.getDistanceFromStartMeters() / totalDistance)
+        List<StopWithFraction> resolved = stops.stream()
+                .map(stop -> resolveStopFraction(points, totalDistance, stop))
+                .filter(java.util.Objects::nonNull)
+                .sorted(Comparator.comparingDouble(StopWithFraction::fraction))
+                .toList();
+        if (resolved.isEmpty()) return;
+
+        double[] fractions = resolved.stream()
+                .mapToDouble(StopWithFraction::fraction)
                 .toArray();
 
-        if (fractions.length > 0) {
-            stopFractionsCache.put(key, fractions);
-            routeStopsCache.put(key, sorted);
+        stopFractionsCache.put(key, fractions);
+        routeStopsCache.put(key, resolved.stream().map(StopWithFraction::stop).toList());
 
-            java.util.Map<String, Double> byId = new java.util.HashMap<>();
-            java.util.Map<String, Double> byName = new java.util.HashMap<>();
-            for (RouteStopInfo s : sorted) {
-                double f = s.getDistanceFromStartMeters() / totalDistance;
-                if (s.getStopId() != null) {
-                    byId.put(s.getStopId(), f);
-                }
-                if (s.getStopName() != null) {
-                    byName.putIfAbsent(s.getStopName().toLowerCase(), f);
-                }
+        java.util.Map<String, Double> byId = new java.util.HashMap<>();
+        java.util.Map<String, Double> byName = new java.util.HashMap<>();
+        for (StopWithFraction sf : resolved) {
+            byId.put(sf.stop().getStopId(), sf.fraction());
+            if (sf.stop().getStopName() != null) {
+                byName.putIfAbsent(sf.stop().getStopName().toLowerCase(), sf.fraction());
             }
-            stopFractionsByIdCache.put(key, java.util.Map.copyOf(byId));
-            stopFractionsByNameCache.put(key, java.util.Map.copyOf(byName));
+        }
+        stopFractionsByIdCache.put(key, java.util.Map.copyOf(byId));
+        stopFractionsByNameCache.put(key, java.util.Map.copyOf(byName));
 
-            log.debug("Cached {} stop fractions for route {} dir={}", fractions.length, routeNumber, direction);
+        warnOnSequenceOrderInversions(routeNumber, direction, resolved);
+        log.debug("Cached {} stop fractions for route {} dir={}", fractions.length, routeNumber, direction);
+    }
+
+    private StopWithFraction resolveStopFraction(List<double[]> points, double totalDistance, RouteStopInfo stop) {
+        if (points != null && points.size() >= 2) {
+            MapMatchingService.SnappedResult snap = mapMatchingService.snapToNearestSegment(
+                    stop.getLatitude().doubleValue(), stop.getLongitude().doubleValue(),
+                    points, totalDistance);
+            if (snap.snapped()) {
+                return new StopWithFraction(stop, snap.fraction());
+            }
+            log.debug("[GPS_PIPELINE] Stop {} is {}m from route polyline — falling back to legacy distance",
+                    stop.getStopId(), (int) snap.distanceMeters());
+        }
+        Integer legacyDistance = stop.getDistanceFromStartMeters();
+        if (legacyDistance != null && legacyDistance >= 0) {
+            return new StopWithFraction(stop, legacyDistance / totalDistance);
+        }
+        return null;
+    }
+
+    private void warnOnSequenceOrderInversions(String routeNumber, int direction, List<StopWithFraction> resolved) {
+        List<StopWithFraction> bySequence = resolved.stream()
+                .filter(sf -> sf.stop().getSequence() != null)
+                .sorted(Comparator.comparingInt(sf -> sf.stop().getSequence()))
+                .toList();
+        long inversions = 0;
+        for (int i = 1; i < bySequence.size(); i++) {
+            if (bySequence.get(i).fraction() < bySequence.get(i - 1).fraction() - SEQUENCE_INVERSION_TOLERANCE) {
+                inversions++;
+            }
+        }
+        if (inversions > 0) {
+            log.warn("[GPS_PIPELINE] Route {} dir={}: {} stop fraction inversions against stop_sequence order — possible out-and-back wrong-pass snap",
+                    routeNumber, direction, inversions);
         }
     }
+
+    private record StopWithFraction(RouteStopInfo stop, double fraction) {}
 
 
     public List<double[]> getPoints(String routeNumber, int direction) {
@@ -204,12 +245,9 @@ public class RouteGeometryCache {
 
     public OptionalDouble getStopFractionByCoordinates(String routeNumber, int direction,
                                                         double lat, double lon, double maxDistanceMeters) {
-        double totalDistance = getTotalDistance(routeNumber, direction);
-        if (totalDistance <= 0) return OptionalDouble.empty();
         RouteStopInfo nearest = null;
         double nearestDist = Double.MAX_VALUE;
         for (RouteStopInfo s : getRouteStops(routeNumber, direction)) {
-            if (s.getDistanceFromStartMeters() == null) continue;
             double dist = haversineMeters(lat, lon,
                     s.getLatitude().doubleValue(), s.getLongitude().doubleValue());
             if (dist < nearestDist) {
@@ -218,7 +256,7 @@ public class RouteGeometryCache {
             }
         }
         if (nearest == null || nearestDist > maxDistanceMeters) return OptionalDouble.empty();
-        return OptionalDouble.of(nearest.getDistanceFromStartMeters() / totalDistance);
+        return getStopFraction(routeNumber, direction, nearest.getStopId());
     }
 
     private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
