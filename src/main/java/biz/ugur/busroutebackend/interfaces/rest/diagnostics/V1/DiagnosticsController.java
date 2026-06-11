@@ -80,6 +80,23 @@ public class DiagnosticsController {
                 .filter(item -> !item.points().isEmpty());
     }
 
+    @GetMapping("/stops")
+    public Flux<StopItem> stops() {
+        String sql = """
+                SELECT id, stop_name, latitude, longitude
+                  FROM bus_stops
+                 WHERE is_active = true
+                """;
+        return databaseClient.sql(sql)
+                .map((row, meta) -> new StopItem(
+                        row.get("id", String.class),
+                        row.get("stop_name", String.class),
+                        row.get("latitude", Double.class),
+                        row.get("longitude", Double.class)
+                ))
+                .all();
+    }
+
     @GetMapping("/route-stops")
     public Flux<RouteStopItem> routeStops(@RequestParam("route") String routeNumber) {
         if (routeNumber == null || routeNumber.isBlank()) {
@@ -171,5 +188,12 @@ public class DiagnosticsController {
             Integer direction,
             Integer sequence,
             Double distanceFromStartMeters
+    ) {}
+
+    public record StopItem(
+            String stopId,
+            String stopName,
+            Double lat,
+            Double lon
     ) {}
 }

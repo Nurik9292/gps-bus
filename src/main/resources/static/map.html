@@ -620,28 +620,15 @@
 
     async function loadStops() {
         try {
-            const res = await fetch(`${API_BASE}/routes/active`);
-            const data = await res.json();
-            if (!data.success || !data.data) return;
-
-            const stopMap = new Map();
-            const routesToLoad = data.data.slice(0, 20);
-
-            for (const route of routesToLoad) {
-                try {
-                    const sr = await fetch(`${API_BASE}/routes/${route.route_number}/stops`);
-                    const sd = await sr.json();
-                    if (sd.success && sd.data) {
-                        sd.data.forEach(s => {
-                            if (!stopMap.has(s.stop_id)) {
-                                stopMap.set(s.stop_id, { id: s.stop_id, name: s.stop_name, lat: s.latitude, lon: s.longitude });
-                            }
-                        });
-                    }
-                } catch(e) {}
+            const res = await fetch(`${API_BASE}/diagnostics/stops`);
+            if (!res.ok) {
+                console.warn('[map] stops HTTP', res.status);
+                return;
             }
-
-            stops = Array.from(stopMap.values());
+            const data = await res.json();
+            stops = data
+                .filter(s => s.lat && s.lon)
+                .map(s => ({ id: s.stopId, name: s.stopName, lat: s.lat, lon: s.lon }));
             renderStops();
         } catch(e) { console.error('Failed to load stops:', e); }
     }
