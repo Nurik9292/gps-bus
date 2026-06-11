@@ -66,7 +66,11 @@ class R2dbcRouteStopRepositoryIntegrationTest {
                 CREATE TABLE bus_routes (
                     id                 VARCHAR(36) PRIMARY KEY,
                     geometry_forward   geometry(LineString, 4326),
-                    geometry_backward  geometry(LineString, 4326)
+                    geometry_backward  geometry(LineString, 4326),
+                    route_geometry_forward  TEXT,
+                    route_geometry_backward TEXT,
+                    total_distance_forward_meters  INTEGER,
+                    total_distance_backward_meters INTEGER
                 )
                 """).then().block();
 
@@ -305,6 +309,59 @@ class R2dbcRouteStopRepositoryIntegrationTest {
                         .as("same shared terminal, current direction = backward stays backward")
                         .isEqualTo(1))
                 .verifyComplete();
+    }
+
+    private void setRouteWktGeometry(String routeId, String forwardWkt, Integer forwardTotalMeters) {
+        databaseClient.sql("""
+                UPDATE bus_routes
+                   SET route_geometry_forward = :wkt,
+                       total_distance_forward_meters = :total
+                 WHERE id = :id
+                """)
+                .bind("id", routeId)
+                .bind("wkt", forwardWkt)
+                .bind("total", forwardTotalMeters)
+                .then()
+                .block();
+    }
+
+    private Integer readDistanceFromStart(String stopId) {
+        return databaseClient.sql("SELECT distance_from_start_meters FROM route_stops WHERE stop_id = :sid")
+                .bind("sid", stopId)
+                .map(row -> java.util.Optional.ofNullable(row.get("distance_from_start_meters", Integer.class)))
+                .one()
+                .block()
+                .orElse(null);
+    }
+
+    @Test
+    void insertRouteStop_writesDistanceProjectedOntoRouteGeometry() {
+        setRouteWktGeometry(ROUTE_ID, "LINESTRING(58.000 38.0000, 58.000 38.0090)", 1002);
+        String midpointStop = "mid-stop";
+        insertStop(midpointStop, "Midpoint", 38.0045, 58.000);
+
+        StepVerifier.create(repository.insertRouteStop(ROUTE_ID, midpointStop, 7, 0))
+                .verifyComplete();
+
+        assertThat(readDistanceFromStart(midpointStop)).isBetween(490, 510);
+    }
+
+    @Test
+    void insertRouteStop_withoutRouteGeometryWritesNullDistance() {
+        String orphanGeometryStop = "no-geom-stop";
+        insertStop(orphanGeometryStop, "No geometry", 38.0045, 58.000);
+
+        StepVerifier.create(repository.insertRouteStop(ROUTE_ID, orphanGeometryStop, 7, 0))
+                .verifyComplete();
+
+        assertThat(readDistanceFromStart(orphanGeometryStop)).isNull();
+    }
+
+    @Test
+    void insertRouteStop_unknownStopFailsInsteadOfSilentSkip() {
+        StepVerifier.create(repository.insertRouteStop(ROUTE_ID, "ghost-stop", 1, 0))
+                .expectErrorSatisfies(err -> assertThat(err).isInstanceOf(IllegalStateException.class))
+                .verify();
     }
 
     @Test
