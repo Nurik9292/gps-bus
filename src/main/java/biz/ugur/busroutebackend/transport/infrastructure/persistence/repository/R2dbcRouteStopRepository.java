@@ -38,17 +38,33 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
     public Mono<Void> insertRouteStop(String routeId, String stopId, int sequence, int direction) {
         String sql = """
             INSERT INTO route_stops (
-                id, route_id, stop_id, stop_sequence, direction, 
+                id, route_id, stop_id, stop_sequence, direction,
                 estimated_travel_time_minutes, distance_from_start_meters, created_at
-            ) VALUES (
-                :id, :routeId, :stopId, :sequence, :direction,
-                :estimatedTime, :distance, CURRENT_TIMESTAMP
             )
+            SELECT :id, :routeId, bs.id, :sequence, :direction, :estimatedTime,
+                   CASE
+                       WHEN :direction = 0 AND br.route_geometry_forward LIKE 'LINESTRING%'
+                            AND COALESCE(br.total_distance_forward_meters, 0) > 0 THEN
+                           ROUND(ST_LineLocatePoint(
+                               ST_GeomFromText(br.route_geometry_forward, 4326),
+                               ST_SetSRID(ST_Point(bs.longitude, bs.latitude), 4326)
+                           ) * br.total_distance_forward_meters)::int
+                       WHEN :direction = 1 AND br.route_geometry_backward LIKE 'LINESTRING%'
+                            AND COALESCE(br.total_distance_backward_meters, 0) > 0 THEN
+                           ROUND(ST_LineLocatePoint(
+                               ST_GeomFromText(br.route_geometry_backward, 4326),
+                               ST_SetSRID(ST_Point(bs.longitude, bs.latitude), 4326)
+                           ) * br.total_distance_backward_meters)::int
+                       ELSE NULL
+                   END,
+                   CURRENT_TIMESTAMP
+            FROM bus_stops bs
+            LEFT JOIN bus_routes br ON br.id = :routeId
+            WHERE bs.id = :stopId
             """;
 
         String id = UUID.randomUUID().toString();
-        int estimatedTime = sequence * 2; 
-        int distance = sequence * 500; 
+        int estimatedTime = sequence * 2;
 
         return databaseClient.sql(sql)
                 .bind("id", id)
@@ -57,8 +73,12 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
                 .bind("sequence", sequence)
                 .bind("direction", direction)
                 .bind("estimatedTime", estimatedTime)
-                .bind("distance", distance)
-                .then();
+                .fetch()
+                .rowsUpdated()
+                .flatMap(rows -> rows == 1
+                        ? Mono.<Void>empty()
+                        : Mono.error(new IllegalStateException(
+                                "Route stop insert affected " + rows + " rows: route=" + routeId + " stop=" + stopId)));
     }
 
     @Override
