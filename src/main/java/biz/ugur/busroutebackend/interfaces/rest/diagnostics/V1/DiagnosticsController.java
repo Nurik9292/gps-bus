@@ -7,6 +7,8 @@ import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePosit
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePredictionState;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.GpsPoint;
 import biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistoryService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,15 +32,18 @@ public class DiagnosticsController {
     private final VehicleRepository vehicleRepository;
     private final VehicleGpsHistoryService gpsHistoryService;
     private final DatabaseClient databaseClient;
+    private final ObjectMapper objectMapper;
 
     public DiagnosticsController(VehiclePositionPredictionService predictionService,
                                   VehicleRepository vehicleRepository,
                                   VehicleGpsHistoryService gpsHistoryService,
-                                  DatabaseClient databaseClient) {
+                                  DatabaseClient databaseClient,
+                                  ObjectMapper objectMapper) {
         this.predictionService = predictionService;
         this.vehicleRepository = vehicleRepository;
         this.gpsHistoryService = gpsHistoryService;
         this.databaseClient = databaseClient;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping("/vehicle-snapshot")
@@ -95,6 +100,43 @@ public class DiagnosticsController {
                         row.get("longitude", Double.class)
                 ))
                 .all();
+    }
+
+    @GetMapping("/route-geometry")
+    public Flux<RouteGeometryItem> routeGeometry(@RequestParam(value = "route", required = false) String routeNumber) {
+        boolean hasFilter = routeNumber != null && !routeNumber.isBlank();
+        String sql = """
+                SELECT route_number, dir, ST_AsGeoJSON(geom) AS geom_json
+                  FROM (
+                      SELECT route_number, 0 AS dir, geometry_forward AS geom
+                        FROM bus_routes WHERE is_active = true AND geometry_forward IS NOT NULL
+                      UNION ALL
+                      SELECT route_number, 1 AS dir, geometry_backward AS geom
+                        FROM bus_routes WHERE is_active = true AND geometry_backward IS NOT NULL
+                  ) t
+                 WHERE (:routeFilter IS NULL OR route_number = :routeFilter)
+                """;
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
+        spec = hasFilter ? spec.bind("routeFilter", routeNumber) : spec.bindNull("routeFilter", String.class);
+        return spec
+                .map((row, meta) -> new RouteGeometryItem(
+                        row.get("route_number", String.class),
+                        row.get("dir", Integer.class),
+                        parseGeoJson(row.get("geom_json", String.class))
+                ))
+                .all();
+    }
+
+    private JsonNode parseGeoJson(String json) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(json);
+        } catch (Exception e) {
+            log.warn("[DIAGNOSTICS] failed to parse route geometry GeoJSON: {}", e.getMessage());
+            return null;
+        }
     }
 
     @GetMapping("/route-stops")
@@ -195,5 +237,11 @@ public class DiagnosticsController {
             String stopName,
             Double lat,
             Double lon
+    ) {}
+
+    public record RouteGeometryItem(
+            String routeNumber,
+            Integer direction,
+            JsonNode geometry
     ) {}
 }
