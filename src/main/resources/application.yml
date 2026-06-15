@@ -175,8 +175,8 @@ app:
         issuer: "bus-route-system"
       client:
         secret: ${JWT_CLIENT_SECRET:${JWT_SECRET}}
-        access-token-expiration: "P31D"   # 744 hours (31 days)
-        refresh-token-expiration: "P90D"  # 912 days
+        access-token-expiration: ${JWT_CLIENT_ACCESS_EXPIRATION:P31D}
+        refresh-token-expiration: ${JWT_CLIENT_REFRESH_EXPIRATION:P90D}
         issuer: "bus-route-system"
 
   cors:

@@ -8,6 +8,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -66,6 +67,24 @@ public class DatabaseExceptionHandler {
                 HttpStatus.CONFLICT,
                 "DATA_INTEGRITY_VIOLATION",
                 userMessage,
+                exchange
+        );
+
+        return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse));
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public Mono<ResponseEntity<ErrorResponse>> handleOptimisticLockingFailureException(
+            OptimisticLockingFailureException ex,
+            ServerWebExchange exchange
+    ) {
+        log.warn("Optimistic lock conflict - Path: {} - Message: {}",
+                exchange.getRequest().getPath().value(), ex.getMessage());
+
+        ErrorResponse errorResponse = errorResponseFactory.fromGenericError(
+                HttpStatus.CONFLICT,
+                "CONCURRENT_MODIFICATION",
+                "Resource was modified concurrently, please retry",
                 exchange
         );
 

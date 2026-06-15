@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.integration.application.usecase;
 import biz.ugur.busroutebackend.client.domain.model.Client;
 import biz.ugur.busroutebackend.client.domain.repository.ClientRepository;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
+import biz.ugur.busroutebackend.client.infrastructure.security.ClientJwtProperties;
 import biz.ugur.busroutebackend.client.infrastructure.security.ClientJwtTokenService;
 import biz.ugur.busroutebackend.integration.application.dto.IntegrationClientTokenRequest;
 import biz.ugur.busroutebackend.integration.application.dto.IntegrationClientTokenResponse;
@@ -14,8 +15,14 @@ import biz.ugur.busroutebackend.integration.domain.repository.ExternalServiceRep
 import biz.ugur.busroutebackend.integration.domain.valueobjects.ExternalServiceId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
+
+import java.time.Duration;
 
 
 @Service
@@ -23,11 +30,13 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class GetIntegrationClientTokenUseCase {
 
-    private static final Long ACCESS_TOKEN_EXPIRATION_SECONDS = 2678400L;
+    private static final int MAX_TOKEN_ROTATION_RETRIES = 3;
+    private static final Duration RETRY_BACKOFF = Duration.ofMillis(50);
 
     private final ExternalServiceRepository externalServiceRepository;
     private final ClientRepository clientRepository;
     private final ClientJwtTokenService clientJwtTokenService;
+    private final ClientJwtProperties clientJwtProperties;
 
     public Mono<IntegrationClientTokenResponse> execute(String serviceId,
                                                          IntegrationClientTokenRequest request) {
@@ -38,8 +47,11 @@ public class GetIntegrationClientTokenUseCase {
                 .switchIfEmpty(Mono.error(new ExternalServiceNotFoundException(ExternalServiceId.of(serviceId))))
                 .flatMap(service -> {
                     service.validateClientManagement();
-                    return findAndValidateClient(service, request)
-                            .flatMap(client -> generateTokens(client, service));
+                    return Mono.defer(() -> findAndValidateClient(service, request)
+                                    .flatMap(client -> generateTokens(client, service)))
+                            .retryWhen(Retry.backoff(MAX_TOKEN_ROTATION_RETRIES, RETRY_BACKOFF)
+                                    .filter(e -> e instanceof OptimisticLockingFailureException)
+                                    .onRetryExhaustedThrow((spec, signal) -> signal.failure()));
                 })
                 .doOnSuccess(response -> log.info("Successfully generated token for client: {}",
                         response.clientId()))
@@ -66,8 +78,15 @@ public class GetIntegrationClientTokenUseCase {
                             IntegrationClientNotFoundException.byClientId(request.clientId())
                     ));
         } else if (request.externalUserId() != null && !request.externalUserId().isBlank()) {
-            clientMono = clientRepository.findByServiceAndExternalUserId(serviceId, request.externalUserId())
-                    .switchIfEmpty(Mono.defer(() -> autoCreate(service, request.externalUserId())));
+            String externalUserId = request.externalUserId();
+            clientMono = clientRepository.findByServiceAndExternalUserId(serviceId, externalUserId)
+                    .switchIfEmpty(Mono.defer(() -> autoCreate(service, externalUserId)
+                            .onErrorResume(DuplicateKeyException.class, dup -> {
+                                log.info("[INTEGRATION] concurrent auto-create for service={} externalUserId={} — reusing existing",
+                                        serviceId, externalUserId);
+                                return clientRepository.findByServiceAndExternalUserId(serviceId, externalUserId)
+                                        .switchIfEmpty(Mono.error(dup));
+                            })));
         } else {
             return Mono.error(new IllegalArgumentException(
                     "Either clientId or externalUserId must be provided"
@@ -106,8 +125,18 @@ public class GetIntegrationClientTokenUseCase {
                 .doOnNext(reused -> log.debug("Reusing existing valid tokens for client {}",
                         client.getId().getValue()))
                 .switchIfEmpty(Mono.defer(() -> rotateAndPersist(client)))
-                .flatMap(tokens -> externalServiceRepository.save(service.recordUsage())
+                .flatMap(tokens -> recordUsageBestEffort(service)
                         .thenReturn(buildResponse(client, tokens)));
+    }
+
+    private Mono<Void> recordUsageBestEffort(ExternalService service) {
+        return externalServiceRepository.save(service.recordUsage())
+                .onErrorResume(DataAccessException.class, e -> {
+                    log.debug("[INTEGRATION] usage counter update skipped for service={}: {}",
+                            service.getId().getValue(), e.getMessage());
+                    return Mono.empty();
+                })
+                .then();
     }
 
     private Mono<TokenPair> existingValidTokenPair(Client client) {
@@ -140,7 +169,7 @@ public class GetIntegrationClientTokenUseCase {
                 .externalUserId(client.getExternalUserId())
                 .accessToken(tokens.access())
                 .refreshToken(tokens.refresh())
-                .expiresIn(ACCESS_TOKEN_EXPIRATION_SECONDS)
+                .expiresIn(clientJwtProperties.getAccessTokenExpiration().toSeconds())
                 .tokenType("Bearer")
                 .build();
     }
