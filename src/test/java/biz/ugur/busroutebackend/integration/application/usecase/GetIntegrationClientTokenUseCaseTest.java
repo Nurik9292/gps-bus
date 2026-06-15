@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.client.domain.enums.Platform;
 import biz.ugur.busroutebackend.client.domain.model.Client;
 import biz.ugur.busroutebackend.client.domain.repository.ClientRepository;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
+import biz.ugur.busroutebackend.client.infrastructure.security.ClientJwtProperties;
 import biz.ugur.busroutebackend.client.infrastructure.security.ClientJwtTokenService;
 import biz.ugur.busroutebackend.integration.application.dto.IntegrationClientTokenRequest;
 import biz.ugur.busroutebackend.integration.domain.exceptions.ClientManagementNotAllowedException;
@@ -19,15 +20,19 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -55,6 +60,9 @@ class GetIntegrationClientTokenUseCaseTest {
     @Mock
     private ClientJwtTokenService clientJwtTokenService;
 
+    @Mock
+    private ClientJwtProperties clientJwtProperties;
+
     private ExternalService service;
 
     @BeforeEach
@@ -67,6 +75,8 @@ class GetIntegrationClientTokenUseCaseTest {
                 60,
                 true
         );
+        lenient().when(clientJwtProperties.getAccessTokenExpiration())
+                .thenReturn(Duration.ofDays(31));
     }
 
     private Client clientWithTokens(String access, String refresh) {
@@ -191,6 +201,104 @@ class GetIntegrationClientTokenUseCaseTest {
         Assertions.assertEquals("User " + EXTERNAL_USER_ID, created.getName());
         Assertions.assertEquals(EXTERNAL_USER_ID, created.getExternalUserId());
         Assertions.assertEquals(Platform.API, created.getPlatform());
+    }
+
+    @Test
+    void autoCreateConcurrentDuplicateKeyRefetchesExistingClient() {
+        Client concurrentlyCreated = clientWithTokens(EXISTING_ACCESS_TOKEN, EXISTING_REFRESH_TOKEN);
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(service.getId().getValue(), EXTERNAL_USER_ID))
+                .thenReturn(Mono.empty())
+                .thenReturn(Mono.just(concurrentlyCreated));
+        when(clientRepository.save(any(Client.class)))
+                .thenReturn(Mono.error(new DuplicateKeyException("duplicate external_user_id")));
+        when(clientJwtTokenService.isTokenExpired(EXISTING_ACCESS_TOKEN)).thenReturn(Mono.just(false));
+        when(externalServiceRepository.save(any(ExternalService.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(service.getId().getValue(), byExternalUser()))
+                .assertNext(response -> assertEquals(EXISTING_ACCESS_TOKEN, response.accessToken()))
+                .verifyComplete();
+    }
+
+    @Test
+    void rotateRetriesOnOptimisticLockThenReusesConcurrentlyWrittenTokens() {
+        Client stale = clientWithTokens(null, null);
+        Client refreshed = clientWithTokens(EXISTING_ACCESS_TOKEN, EXISTING_REFRESH_TOKEN);
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(service.getId().getValue(), EXTERNAL_USER_ID))
+                .thenReturn(Mono.just(stale))
+                .thenReturn(Mono.just(refreshed));
+        when(clientJwtTokenService.generateAccessToken(any())).thenReturn(Mono.just(NEW_ACCESS_TOKEN));
+        when(clientJwtTokenService.generateRefreshToken(any())).thenReturn(Mono.just(NEW_REFRESH_TOKEN));
+        when(clientRepository.save(any(Client.class)))
+                .thenReturn(Mono.error(new OptimisticLockingFailureException("version conflict")));
+        when(clientJwtTokenService.isTokenExpired(EXISTING_ACCESS_TOKEN)).thenReturn(Mono.just(false));
+        when(externalServiceRepository.save(any(ExternalService.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(service.getId().getValue(), byExternalUser()))
+                .assertNext(response -> assertEquals(EXISTING_ACCESS_TOKEN, response.accessToken()))
+                .verifyComplete();
+
+        verify(clientRepository, times(1)).save(any(Client.class));
+    }
+
+    @Test
+    void exhaustedRetriesWithoutUsableTokenSurfaceOptimisticLockException() {
+        Client stale = clientWithTokens(null, null);
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(service.getId().getValue(), EXTERNAL_USER_ID))
+                .thenReturn(Mono.just(stale));
+        when(clientJwtTokenService.generateAccessToken(any())).thenReturn(Mono.just(NEW_ACCESS_TOKEN));
+        when(clientJwtTokenService.generateRefreshToken(any())).thenReturn(Mono.just(NEW_REFRESH_TOKEN));
+        when(clientRepository.save(any(Client.class)))
+                .thenReturn(Mono.error(new OptimisticLockingFailureException("persistent version conflict")));
+
+        StepVerifier.create(useCase.execute(service.getId().getValue(), byExternalUser()))
+                .expectErrorSatisfies(err ->
+                        Assertions.assertInstanceOf(OptimisticLockingFailureException.class, err))
+                .verify();
+    }
+
+    @Test
+    void exhaustedRetriesReuseConcurrentlyWrittenTokenInsteadOfFailing() {
+        Client noToken = clientWithTokens(null, null);
+        Client concurrentlyWritten = clientWithTokens(EXISTING_ACCESS_TOKEN, EXISTING_REFRESH_TOKEN);
+        java.util.concurrent.atomic.AtomicInteger reads = new java.util.concurrent.atomic.AtomicInteger();
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(service.getId().getValue(), EXTERNAL_USER_ID))
+                .thenAnswer(inv -> Mono.just(reads.incrementAndGet() >= 5 ? concurrentlyWritten : noToken));
+        when(clientJwtTokenService.generateAccessToken(any())).thenReturn(Mono.just(NEW_ACCESS_TOKEN));
+        when(clientJwtTokenService.generateRefreshToken(any())).thenReturn(Mono.just(NEW_REFRESH_TOKEN));
+        when(clientRepository.save(any(Client.class)))
+                .thenReturn(Mono.error(new OptimisticLockingFailureException("version conflict")));
+        when(clientJwtTokenService.isTokenExpired(EXISTING_ACCESS_TOKEN)).thenReturn(Mono.just(false));
+
+        StepVerifier.create(useCase.execute(service.getId().getValue(), byExternalUser()))
+                .assertNext(response -> assertEquals(EXISTING_ACCESS_TOKEN, response.accessToken()))
+                .verifyComplete();
+    }
+
+    @Test
+    void expiresInReflectsConfiguredAccessTokenTtl() {
+        when(clientJwtProperties.getAccessTokenExpiration()).thenReturn(Duration.ofDays(7));
+        Client client = clientWithTokens(EXISTING_ACCESS_TOKEN, EXISTING_REFRESH_TOKEN);
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(service.getId().getValue(), EXTERNAL_USER_ID))
+                .thenReturn(Mono.just(client));
+        when(clientJwtTokenService.isTokenExpired(EXISTING_ACCESS_TOKEN)).thenReturn(Mono.just(false));
+        when(externalServiceRepository.save(any(ExternalService.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(service.getId().getValue(), byExternalUser()))
+                .assertNext(response -> assertEquals(Duration.ofDays(7).toSeconds(), response.expiresIn()))
+                .verifyComplete();
     }
 
     @Test
