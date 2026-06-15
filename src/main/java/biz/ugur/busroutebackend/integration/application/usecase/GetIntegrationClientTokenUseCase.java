@@ -51,7 +51,9 @@ public class GetIntegrationClientTokenUseCase {
                                     .flatMap(client -> generateTokens(client, service)))
                             .retryWhen(Retry.backoff(MAX_TOKEN_ROTATION_RETRIES, RETRY_BACKOFF)
                                     .filter(e -> e instanceof OptimisticLockingFailureException)
-                                    .onRetryExhaustedThrow((spec, signal) -> signal.failure()));
+                                    .onRetryExhaustedThrow((spec, signal) -> signal.failure()))
+                            .onErrorResume(OptimisticLockingFailureException.class,
+                                    contention -> reuseExistingAfterContention(service, request, contention));
                 })
                 .doOnSuccess(response -> log.info("Successfully generated token for client: {}",
                         response.clientId()))
@@ -127,6 +129,18 @@ public class GetIntegrationClientTokenUseCase {
                 .switchIfEmpty(Mono.defer(() -> rotateAndPersist(client)))
                 .flatMap(tokens -> recordUsageBestEffort(service)
                         .thenReturn(buildResponse(client, tokens)));
+    }
+
+    private Mono<IntegrationClientTokenResponse> reuseExistingAfterContention(
+            ExternalService service,
+            IntegrationClientTokenRequest request,
+            OptimisticLockingFailureException contention) {
+        log.warn("[INTEGRATION] token rotation contended for service={} — reusing concurrently written token",
+                service.getId().getValue());
+        return findAndValidateClient(service, request)
+                .flatMap(client -> existingValidTokenPair(client)
+                        .map(tokens -> buildResponse(client, tokens)))
+                .switchIfEmpty(Mono.error(contention));
     }
 
     private Mono<Void> recordUsageBestEffort(ExternalService service) {

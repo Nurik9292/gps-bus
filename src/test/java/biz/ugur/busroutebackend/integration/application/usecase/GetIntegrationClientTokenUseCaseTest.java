@@ -247,7 +247,7 @@ class GetIntegrationClientTokenUseCaseTest {
     }
 
     @Test
-    void exhaustedOptimisticLockRetriesSurfaceOptimisticLockException() {
+    void exhaustedRetriesWithoutUsableTokenSurfaceOptimisticLockException() {
         Client stale = clientWithTokens(null, null);
 
         when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
@@ -262,6 +262,26 @@ class GetIntegrationClientTokenUseCaseTest {
                 .expectErrorSatisfies(err ->
                         Assertions.assertInstanceOf(OptimisticLockingFailureException.class, err))
                 .verify();
+    }
+
+    @Test
+    void exhaustedRetriesReuseConcurrentlyWrittenTokenInsteadOfFailing() {
+        Client noToken = clientWithTokens(null, null);
+        Client concurrentlyWritten = clientWithTokens(EXISTING_ACCESS_TOKEN, EXISTING_REFRESH_TOKEN);
+        java.util.concurrent.atomic.AtomicInteger reads = new java.util.concurrent.atomic.AtomicInteger();
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(service.getId().getValue(), EXTERNAL_USER_ID))
+                .thenAnswer(inv -> Mono.just(reads.incrementAndGet() >= 5 ? concurrentlyWritten : noToken));
+        when(clientJwtTokenService.generateAccessToken(any())).thenReturn(Mono.just(NEW_ACCESS_TOKEN));
+        when(clientJwtTokenService.generateRefreshToken(any())).thenReturn(Mono.just(NEW_REFRESH_TOKEN));
+        when(clientRepository.save(any(Client.class)))
+                .thenReturn(Mono.error(new OptimisticLockingFailureException("version conflict")));
+        when(clientJwtTokenService.isTokenExpired(EXISTING_ACCESS_TOKEN)).thenReturn(Mono.just(false));
+
+        StepVerifier.create(useCase.execute(service.getId().getValue(), byExternalUser()))
+                .assertNext(response -> assertEquals(EXISTING_ACCESS_TOKEN, response.accessToken()))
+                .verifyComplete();
     }
 
     @Test
