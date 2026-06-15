@@ -838,22 +838,22 @@
     function loadRoutesGeoJson() {
         if (routesGeoJsonCache) return Promise.resolve(routesGeoJsonCache);
         if (routesGeoJsonLoading) return routesGeoJsonLoading;
-        routesGeoJsonLoading = fetch('/routes.geojson')
+        routesGeoJsonLoading = fetch(`${API_BASE}/diagnostics/route-geometry`)
             .then(r => r.json())
-            .then(data => {
+            .then(items => {
                 const byRoute = {};
-                for (const f of (data.features || [])) {
-                    const num = String(f.properties.route_number || '').toUpperCase();
-                    if (!num) continue;
+                for (const it of (items || [])) {
+                    const num = String(it.routeNumber || '').toUpperCase();
+                    if (!num || !it.geometry) continue;
                     if (!byRoute[num]) byRoute[num] = { forward: null, backward: null };
-                    if (f.properties.direction === 'forward') byRoute[num].forward = f;
-                    else if (f.properties.direction === 'backward') byRoute[num].backward = f;
+                    if (it.direction === 0) byRoute[num].forward = { geometry: it.geometry };
+                    else if (it.direction === 1) byRoute[num].backward = { geometry: it.geometry };
                 }
                 routesGeoJsonCache = byRoute;
                 return byRoute;
             })
             .catch(err => {
-                console.warn('[map] failed to load /routes.geojson', err);
+                console.warn('[map] failed to load route geometry', err);
                 routesGeoJsonLoading = null;
                 return null;
             });
