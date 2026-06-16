@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.i18n.LocaleContextResolver;
 import reactor.core.publisher.Mono;
@@ -60,6 +61,30 @@ public class GlobalExceptionHandler {
                 ex.getCorrelationId().value(), ex.getErrorCode(), ex.getMessage(), status.value());
 
         ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status);
+
+        return Mono.just(ResponseEntity.status(status).body(errorResponse));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public Mono<ResponseEntity<ErrorResponse>> handleResponseStatusException(
+            ResponseStatusException ex,
+            ServerWebExchange exchange
+    ) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        if (status == null) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+
+        log.warn("Request failed - Status: {} - Path: {} - Reason: {}",
+                status.value(), exchange.getRequest().getPath().value(), ex.getReason());
+
+        String message = ex.getReason() != null ? ex.getReason() : status.getReasonPhrase();
+        ErrorResponse errorResponse = errorResponseFactory.fromGenericError(
+                status,
+                status.name(),
+                message,
+                exchange
+        );
 
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
     }
