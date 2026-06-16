@@ -273,6 +273,8 @@ class GetIntegrationClientTokenUseCaseTest {
         when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
         when(clientRepository.findByServiceAndExternalUserId(service.getId().getValue(), EXTERNAL_USER_ID))
                 .thenAnswer(inv -> Mono.just(reads.incrementAndGet() >= 5 ? concurrentlyWritten : noToken));
+        when(externalServiceRepository.save(any(ExternalService.class)))
+                .thenReturn(Mono.just(service));
         when(clientJwtTokenService.generateAccessToken(any())).thenReturn(Mono.just(NEW_ACCESS_TOKEN));
         when(clientJwtTokenService.generateRefreshToken(any())).thenReturn(Mono.just(NEW_REFRESH_TOKEN));
         when(clientRepository.save(any(Client.class)))
