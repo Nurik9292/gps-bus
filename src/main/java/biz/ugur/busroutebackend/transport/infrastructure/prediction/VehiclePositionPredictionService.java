@@ -90,6 +90,7 @@ public class VehiclePositionPredictionService {
 
     private final ConcurrentHashMap<String, VehiclePredictionState> vehicleStates = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, PendingTeleport> pendingTeleports = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Integer> pendingDirectionChanges = new ConcurrentHashMap<>();
 
     private record PendingTeleport(double lat, double lon, double fraction, int direction,
                                    int count, Instant firstSeen) {}
@@ -265,28 +266,39 @@ public class VehiclePositionPredictionService {
         VehiclePredictionState existing = vehicleStates.get(vehicleId);
 
         if (existing != null && existing.getDirection() != direction) {
-            log.info("[GPS_PIPELINE] DIR_EXTERNAL_CHANGE vehicle={} plate={} prevDir={} newDir={} — full reset of direction-tied state, cooldown started",
-                    vehicleId, licensePlate, existing.getDirection(), direction);
-            existing = existing.toBuilder()
-                    .direction(direction)
-                    .directionConfirmed(directionConfirmed || existing.isDirectionConfirmed())
-                    .fractionOnRoute(-1)
-                    .lastGpsFraction(-1)
-                    .lastRejectedGpsFraction(-1)
-                    .consecutiveImplausibleCount(0)
-                    .consecutiveInconsistentAdvanceCount(0)
-                    .consecutiveOffRouteCount(0)
-                    .offRoute(false)
-                    .predictedLatitude(latitude)
-                    .predictedLongitude(longitude)
-                    .routeCoordinates(null)
-                    .totalRouteDistanceMeters(0)
-                    .dwellStartedAt(null)
-                    .dwellStopFraction(-1)
-                    .dwellStopId(null)
-                    .directionChangedAt(Instant.now())
-                    .build();
-            replaceState(vehicleId, existing, "direction-external-change");
+            int confirmations = pendingDirectionChanges.merge(vehicleId, 1, Integer::sum);
+            if (confirmations < properties.getDirectionChangeConfirmations()) {
+                log.debug("[GPS_PIPELINE] DIR_EXTERNAL_CHANGE_PENDING vehicle={} plate={} candidate={} confirmations={}/{} — holding direction {}",
+                        vehicleId, licensePlate, direction, confirmations,
+                        properties.getDirectionChangeConfirmations(), existing.getDirection());
+                direction = existing.getDirection();
+            } else {
+                pendingDirectionChanges.remove(vehicleId);
+                log.info("[GPS_PIPELINE] DIR_EXTERNAL_CHANGE vehicle={} plate={} prevDir={} newDir={} confirmations={} — full reset of direction-tied state, cooldown started",
+                        vehicleId, licensePlate, existing.getDirection(), direction, confirmations);
+                existing = existing.toBuilder()
+                        .direction(direction)
+                        .directionConfirmed(directionConfirmed || existing.isDirectionConfirmed())
+                        .fractionOnRoute(-1)
+                        .lastGpsFraction(-1)
+                        .lastRejectedGpsFraction(-1)
+                        .consecutiveImplausibleCount(0)
+                        .consecutiveInconsistentAdvanceCount(0)
+                        .consecutiveOffRouteCount(0)
+                        .offRoute(false)
+                        .predictedLatitude(latitude)
+                        .predictedLongitude(longitude)
+                        .routeCoordinates(null)
+                        .totalRouteDistanceMeters(0)
+                        .dwellStartedAt(null)
+                        .dwellStopFraction(-1)
+                        .dwellStopId(null)
+                        .directionChangedAt(Instant.now())
+                        .build();
+                replaceState(vehicleId, existing, "direction-external-change");
+            }
+        } else {
+            pendingDirectionChanges.remove(vehicleId);
         }
 
         if (existing != null && !timestamp.isAfter(existing.getLastGpsUpdate())) {
@@ -752,6 +764,7 @@ public class VehiclePositionPredictionService {
             return stale;
         });
         pendingTeleports.keySet().retainAll(vehicleStates.keySet());
+        pendingDirectionChanges.keySet().retainAll(vehicleStates.keySet());
         pendingAltBaselines.keySet().retainAll(vehicleStates.keySet());
         lastDecisions.keySet().retainAll(vehicleStates.keySet());
         snapCorrector.onVehicleStaleCleanup(vehicleStates.keySet());

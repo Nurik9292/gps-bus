@@ -98,13 +98,17 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
     @Test
     void detectsExternalDirectionChange_resetsLastGpsFraction_setsCooldown() {
         Instant earlyBoundary = Instant.now().minusSeconds(2);
+        int confirms = properties.getDirectionChangeConfirmations();
 
+        long secondsAgo = confirms + 1;
         service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
                 LAT, LON, 30.0, 90.0, true,
-                Instant.now().minusSeconds(1), 0, false, false);
-        service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
-                LAT + 0.0001, LON + 0.0001, 30.0, 90.0, true,
-                Instant.now(), 1, false, false);
+                Instant.now().minusSeconds(secondsAgo--), 0, false, false);
+        for (int i = 0; i < confirms; i++) {
+            service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                    LAT + 0.0001, LON + 0.0001, 30.0, 90.0, true,
+                    Instant.now().minusSeconds(secondsAgo--), 1, false, false);
+        }
 
         VehiclePredictionState state = service.snapshotAllStatesForTest().stream()
                 .filter(s -> VEHICLE_ID.equals(s.getVehicleId()))
@@ -112,7 +116,7 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
                 .orElseThrow();
 
         assertThat(state.getDirection())
-                .as("state.direction must be updated to the new external direction")
+                .as("state.direction must be updated to the new external direction after confirmation")
                 .isEqualTo(1);
         assertThat(state.getDirectionChangedAt())
                 .as("directionChangedAt must be set when external direction changes")
@@ -124,9 +128,11 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
 
     @Test
     void directionExternalChange_resetsAllDirectionTiedFields() {
+        int confirms = properties.getDirectionChangeConfirmations();
+        long secondsAgo = confirms + 1;
         service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
                 LAT, LON, 30.0, 90.0, true,
-                Instant.now().minusSeconds(1), 0, false, false);
+                Instant.now().minusSeconds(secondsAgo--), 0, false, false);
 
         VehiclePredictionState before = service.snapshotAllStatesForTest().stream()
                 .filter(s -> VEHICLE_ID.equals(s.getVehicleId()))
@@ -148,9 +154,11 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
 
         double newLat = LAT + 0.0001;
         double newLon = LON + 0.0001;
-        service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
-                newLat, newLon, 30.0, 90.0, true,
-                Instant.now(), 1, false, false);
+        for (int i = 0; i < confirms; i++) {
+            service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                    newLat, newLon, 30.0, 90.0, true,
+                    Instant.now().minusSeconds(secondsAgo--), 1, false, false);
+        }
 
         VehiclePredictionState state = service.snapshotAllStatesForTest().stream()
                 .filter(s -> VEHICLE_ID.equals(s.getVehicleId()))
@@ -186,13 +194,16 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
 
     @Test
     void directionExternalChange_preservesDirectionIndependentFields() {
+        int confirms = properties.getDirectionChangeConfirmations();
+        long secondsAgo = confirms + 1;
         service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
                 LAT, LON, 30.0, 90.0, true,
-                Instant.now().minusSeconds(1), 0, false, false);
-
-        service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
-                LAT + 0.0001, LON + 0.0001, 30.0, 90.0, true,
-                Instant.now(), 1, false, false);
+                Instant.now().minusSeconds(secondsAgo--), 0, false, false);
+        for (int i = 0; i < confirms; i++) {
+            service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                    LAT + 0.0001, LON + 0.0001, 30.0, 90.0, true,
+                    Instant.now().minusSeconds(secondsAgo--), 1, false, false);
+        }
 
         VehiclePredictionState state = service.snapshotAllStatesForTest().stream()
                 .filter(s -> VEHICLE_ID.equals(s.getVehicleId()))
@@ -208,6 +219,54 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
         assertThat(state.getKalmanSpeedVariance())
                 .as("Kalman variance must not be reset by direction change")
                 .isLessThan(1000.0);
+    }
+
+    @Test
+    void flappingExternalDirection_isHeldUntilConfirmed() {
+        service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                LAT, LON, 30.0, 90.0, true,
+                Instant.now().minusSeconds(6), 0, false, false);
+
+        int[] flap = {1, 0, 1, 0, 1};
+        long secondsAgo = 5;
+        for (int dir : flap) {
+            service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                    LAT + 0.0001, LON + 0.0001, 30.0, 90.0, true,
+                    Instant.now().minusSeconds(secondsAgo--), dir, false, false);
+        }
+
+        VehiclePredictionState state = service.snapshotAllStatesForTest().stream()
+                .filter(s -> VEHICLE_ID.equals(s.getVehicleId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(state.getDirection())
+                .as("alternating external direction (noise flap) must not commit a direction change")
+                .isEqualTo(0);
+    }
+
+    @Test
+    void sustainedExternalDirectionChange_eventuallyCommits() {
+        service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                LAT, LON, 30.0, 90.0, true,
+                Instant.now().minusSeconds(6), 0, false, false);
+
+        long secondsAgo = 5;
+        for (int i = 0; i < 5; i++) {
+            service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                    LAT + 0.0001, LON + 0.0001, 30.0, 90.0, true,
+                    Instant.now().minusSeconds(secondsAgo--), 1, false, false);
+        }
+
+        VehiclePredictionState state = service.snapshotAllStatesForTest().stream()
+                .filter(s -> VEHICLE_ID.equals(s.getVehicleId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(state.getDirection())
+                .as("sustained external direction must commit once confirmed")
+                .isEqualTo(1);
+        assertThat(state.getDirectionChangedAt()).isNotNull();
     }
 
     @Test
