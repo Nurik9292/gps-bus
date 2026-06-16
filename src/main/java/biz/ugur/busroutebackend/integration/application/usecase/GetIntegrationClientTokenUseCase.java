@@ -30,7 +30,7 @@ import java.time.Duration;
 @Slf4j
 public class GetIntegrationClientTokenUseCase {
 
-    private static final int MAX_TOKEN_ROTATION_RETRIES = 3;
+    private static final int MAX_TOKEN_ROTATION_RETRIES = 8;
     private static final Duration RETRY_BACKOFF = Duration.ofMillis(50);
 
     private final ExternalServiceRepository externalServiceRepository;
@@ -127,8 +127,13 @@ public class GetIntegrationClientTokenUseCase {
                 .doOnNext(reused -> log.debug("Reusing existing valid tokens for client {}",
                         client.getId().getValue()))
                 .switchIfEmpty(Mono.defer(() -> rotateAndPersist(client)))
-                .flatMap(tokens -> recordUsageBestEffort(service)
-                        .thenReturn(buildResponse(client, tokens)));
+                .map(tokens -> {
+                    recordUsageBestEffort(service)
+                            .subscribe(ignored -> { },
+                                    err -> log.debug("[INTEGRATION] detached usage record failed for service={}: {}",
+                                            service.getId().getValue(), err.getMessage()));
+                    return buildResponse(client, tokens);
+                });
     }
 
     private Mono<IntegrationClientTokenResponse> reuseExistingAfterContention(
