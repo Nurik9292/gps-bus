@@ -87,6 +87,8 @@ public class PredictionProperties {
 
     private long dirChangeCooldownMs = 5_000;
 
+    private int directionChangeConfirmations = 3;
+
     private double offRouteDistanceThresholdMeters = 200.0;
 
     private int offRouteConfirmations = 5;
