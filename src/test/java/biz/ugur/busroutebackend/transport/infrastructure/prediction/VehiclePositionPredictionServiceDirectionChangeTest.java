@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.transport.domain.repository.SegmentTravelStatsRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.StopDwellStatsRepository;
 import biz.ugur.busroutebackend.transport.infrastructure.debug.GpsRecorder;
@@ -267,6 +268,53 @@ class VehiclePositionPredictionServiceDirectionChangeTest {
                 .as("sustained external direction must commit once confirmed")
                 .isEqualTo(1);
         assertThat(state.getDirectionChangedAt()).isNotNull();
+    }
+
+    @Test
+    void directionFlipWithLargeJump_holdsPreviousPositionUntilConfirmed() {
+        double farLat = LAT + 0.02;
+        double farLon = LON;
+
+        service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                LAT, LON, 30.0, 90.0, true,
+                Instant.now().minusSeconds(10), 0, false, false);
+
+        VehiclePredictionState before = service.snapshotAllStatesForTest().stream()
+                .filter(s -> VEHICLE_ID.equals(s.getVehicleId()))
+                .findFirst()
+                .orElseThrow();
+        VehiclePredictionState seeded = before.toBuilder()
+                .direction(0)
+                .predictedLatitude(farLat)
+                .predictedLongitude(farLon)
+                .gpsLatitude(LAT)
+                .gpsLongitude(LON)
+                .fractionOnRoute(0.9)
+                .build();
+        service.replaceStateForTest(VEHICLE_ID, seeded);
+
+        int confirms = properties.getDirectionChangeConfirmations();
+        long secondsAgo = confirms + 2;
+        for (int i = 0; i < confirms; i++) {
+            service.onGpsUpdate(VEHICLE_ID, PLATE, ROUTE,
+                    LAT, LON, 30.0, 90.0, true,
+                    Instant.now().minusSeconds(secondsAgo--), 1, false, false);
+        }
+
+        VehiclePredictionState state = service.snapshotAllStatesForTest().stream()
+                .filter(s -> VEHICLE_ID.equals(s.getVehicleId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(state.getDirection())
+                .as("direction flip itself is confirmed by layer 1 debounce")
+                .isEqualTo(1);
+
+        double jumpFromPrevious = DistanceCalculationService.haversineDistanceMeters(
+                state.getPredictedLatitude(), state.getPredictedLongitude(), farLat, farLon);
+        assertThat(jumpFromPrevious)
+                .as("on a confirmed flip with stationary GPS the published position must stay near the previous location, not teleport to the new-line snap")
+                .isLessThan(properties.getPositionJumpInternalThresholdMeters());
     }
 
     @Test
