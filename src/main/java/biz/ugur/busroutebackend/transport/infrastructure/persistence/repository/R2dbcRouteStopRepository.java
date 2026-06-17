@@ -82,6 +82,28 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
     }
 
     @Override
+    public Mono<Void> resequenceStopsByDistance(String routeId) {
+        String sql = """
+            UPDATE route_stops AS rs
+               SET stop_sequence = ranked.rn
+              FROM (
+                  SELECT id,
+                         ROW_NUMBER() OVER (
+                             PARTITION BY route_id, direction
+                             ORDER BY distance_from_start_meters ASC NULLS LAST, stop_sequence ASC
+                         ) AS rn
+                    FROM route_stops
+                   WHERE route_id = :routeId
+              ) AS ranked
+             WHERE rs.id = ranked.id
+            """;
+
+        return databaseClient.sql(sql)
+                .bind("routeId", routeId)
+                .then();
+    }
+
+    @Override
     public Flux<RouteStopInfo> getRouteStops(String routeId, int direction) {
         String sql = """
             SELECT rs.stop_id, rs.stop_sequence, rs.direction, 
