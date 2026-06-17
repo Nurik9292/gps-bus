@@ -334,6 +334,44 @@ class R2dbcRouteStopRepositoryIntegrationTest {
                 .orElse(null);
     }
 
+    private Integer readSequence(String stopId) {
+        return databaseClient.sql("SELECT stop_sequence FROM route_stops WHERE stop_id = :sid")
+                .bind("sid", stopId)
+                .map(row -> row.get("stop_sequence", Integer.class))
+                .one()
+                .block();
+    }
+
+    @Test
+    void resequenceStopsByDistance_reordersSequenceByProjectionAlongLine() {
+        setRouteWktGeometry(ROUTE_ID, "LINESTRING(58.000 38.0000, 58.000 38.0090)", 1002);
+        databaseClient.sql("DELETE FROM route_stops WHERE route_id = :rid AND direction = 0")
+                .bind("rid", ROUTE_ID)
+                .then()
+                .block();
+
+        String nearStart = "near-start";
+        String midLine = "mid-line";
+        String farEnd = "far-end";
+        insertStop(nearStart, "Near start", 38.0010, 58.000);
+        insertStop(midLine, "Mid line", 38.0045, 58.000);
+        insertStop(farEnd, "Far end", 38.0085, 58.000);
+
+        repository.insertRouteStop(ROUTE_ID, farEnd, 1, 0).block();
+        repository.insertRouteStop(ROUTE_ID, nearStart, 2, 0).block();
+        repository.insertRouteStop(ROUTE_ID, midLine, 3, 0).block();
+
+        StepVerifier.create(repository.resequenceStopsByDistance(ROUTE_ID)).verifyComplete();
+
+        assertThat(readSequence(nearStart))
+                .as("stop nearest the start of the line must get sequence 1")
+                .isEqualTo(1);
+        assertThat(readSequence(midLine)).isEqualTo(2);
+        assertThat(readSequence(farEnd))
+                .as("stop nearest the end of the line must get the last sequence")
+                .isEqualTo(3);
+    }
+
     @Test
     void insertRouteStop_writesDistanceProjectedOntoRouteGeometry() {
         setRouteWktGeometry(ROUTE_ID, "LINESTRING(58.000 38.0000, 58.000 38.0090)", 1002);

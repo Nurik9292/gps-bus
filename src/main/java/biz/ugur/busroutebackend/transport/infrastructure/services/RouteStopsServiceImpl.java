@@ -32,6 +32,7 @@ public class RouteStopsServiceImpl implements RouteStopsService {
         return routeStopRepository.deleteExistingStops(routeId)
                 .then(saveForwardStops(routeId, forwardStops))
                 .then(saveBackwardStops(routeId, backwardStops))
+                .then(routeStopRepository.resequenceStopsByDistance(routeId))
                 .doOnSuccess(v -> log.info("Route stops saved successfully for route: {}", routeId))
                 .doOnError(error -> log.error("Failed to save route stops for route: {}", routeId, error));
     }

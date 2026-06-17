@@ -14,6 +14,8 @@ public interface RouteStopRepository {
 
     Mono<Void> insertRouteStop(String routeId, String stopId, int sequence, int direction);
 
+    Mono<Void> resequenceStopsByDistance(String routeId);
+
     Flux<RouteStopInfo> getRouteStops(String routeId, int direction);
 
     Flux<RouteStopDetail> getRouteStopsDetail(String routeId, int direction);
