@@ -276,6 +276,13 @@ public class VehiclePositionPredictionService {
                 pendingDirectionChanges.remove(vehicleId);
                 log.info("[GPS_PIPELINE] DIR_EXTERNAL_CHANGE vehicle={} plate={} prevDir={} newDir={} confirmations={} — full reset of direction-tied state, cooldown started",
                         vehicleId, licensePlate, existing.getDirection(), direction, confirmations);
+                double prevPredictedLat = existing.getPredictedLatitude();
+                double prevPredictedLon = existing.getPredictedLongitude();
+                double flipPositionJumpMeters = (prevPredictedLat != 0.0 && prevPredictedLon != 0.0)
+                        ? DistanceCalculationService.haversineDistanceMeters(prevPredictedLat, prevPredictedLon, latitude, longitude)
+                        : 0.0;
+                boolean holdPositionThroughTeleportGate =
+                        flipPositionJumpMeters > properties.getPositionJumpInternalThresholdMeters();
                 existing = existing.toBuilder()
                         .direction(direction)
                         .directionConfirmed(directionConfirmed || existing.isDirectionConfirmed())
@@ -286,8 +293,8 @@ public class VehiclePositionPredictionService {
                         .consecutiveInconsistentAdvanceCount(0)
                         .consecutiveOffRouteCount(0)
                         .offRoute(false)
-                        .predictedLatitude(latitude)
-                        .predictedLongitude(longitude)
+                        .predictedLatitude(holdPositionThroughTeleportGate ? prevPredictedLat : latitude)
+                        .predictedLongitude(holdPositionThroughTeleportGate ? prevPredictedLon : longitude)
                         .routeCoordinates(null)
                         .totalRouteDistanceMeters(0)
                         .dwellStartedAt(null)
@@ -295,6 +302,10 @@ public class VehiclePositionPredictionService {
                         .dwellStopId(null)
                         .directionChangedAt(Instant.now())
                         .build();
+                if (holdPositionThroughTeleportGate) {
+                    log.info("[GPS_PIPELINE] DIR_FLIP_POSITION_HELD vehicle={} plate={} jump={}m — keeping previous position through teleport gate until new-direction snap is confirmed",
+                            vehicleId, licensePlate, String.format("%.0f", flipPositionJumpMeters));
+                }
                 replaceState(vehicleId, existing, "direction-external-change");
             }
         } else {
