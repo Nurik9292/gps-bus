@@ -1,6 +1,5 @@
 package biz.ugur.busroutebackend.transport.application.mapper;
 
-import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
@@ -13,6 +12,12 @@ import java.util.List;
 
 @Component
 public class RouteDataMapper {
+
+    private final RouteGeometryPointsCache geometryCache;
+
+    public RouteDataMapper(RouteGeometryPointsCache geometryCache) {
+        this.geometryCache = geometryCache;
+    }
 
     public Mono<RouteData> toRouteData(BusRoute busRoute) {
         return Mono.just(toRouteDataSync(busRoute));
@@ -60,8 +65,8 @@ public class RouteDataMapper {
                 backwardStops.size(),
                 convertMetersToKm(busRoute.getTotalDistanceForwardMeters()),
                 convertMetersToKm(busRoute.getTotalDistanceBackwardMeters()),
-                getBackwardGeometry(busRoute),
-                getForwardGeometry(busRoute),
+                geometryCache.backwardPoints(busRoute),
+                geometryCache.forwardPoints(busRoute),
                 activeVehicleCount != null ? activeVehicleCount : 0L,
                 busRoute.getCreatedAt(),
                 busRoute.getUpdatedAt(),
@@ -78,15 +83,4 @@ public class RouteDataMapper {
                 .divide(new BigDecimal(1000), 2, RoundingMode.HALF_UP);
     }
 
-    private List<Coordinates> getForwardGeometry(BusRoute busRoute) {
-        return busRoute.getForwardGeometry() != null
-                ? busRoute.getForwardGeometry().getPoints()
-                : List.of();
-    }
-
-    private List<Coordinates> getBackwardGeometry(BusRoute busRoute) {
-        return busRoute.getBackwardGeometry() != null
-                ? busRoute.getBackwardGeometry().getPoints()
-                : List.of();
-    }
 }

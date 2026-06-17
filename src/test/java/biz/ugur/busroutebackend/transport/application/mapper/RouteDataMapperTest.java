@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RouteDataMapperTest {
 
-    private final RouteDataMapper mapper = new RouteDataMapper();
+    private final RouteDataMapper mapper = new RouteDataMapper(new RouteGeometryPointsCache());
     private BusRoute route;
 
     @BeforeEach
