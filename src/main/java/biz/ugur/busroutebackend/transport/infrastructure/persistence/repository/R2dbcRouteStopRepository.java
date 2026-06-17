@@ -51,10 +51,24 @@ public class R2dbcRouteStopRepository implements RouteStopRepository {
                            ) * br.total_distance_forward_meters)::int
                        WHEN :direction = 1 AND br.route_geometry_backward LIKE 'LINESTRING%'
                             AND COALESCE(br.total_distance_backward_meters, 0) > 0 THEN
-                           ROUND(ST_LineLocatePoint(
-                               ST_GeomFromText(br.route_geometry_backward, 4326),
-                               ST_SetSRID(ST_Point(bs.longitude, bs.latitude), 4326)
-                           ) * br.total_distance_backward_meters)::int
+                           ROUND(
+                               CASE
+                                   WHEN br.route_geometry_forward LIKE 'LINESTRING%'
+                                        AND ST_Distance(
+                                                ST_StartPoint(ST_GeomFromText(br.route_geometry_backward, 4326)),
+                                                ST_EndPoint(ST_GeomFromText(br.route_geometry_forward, 4326))
+                                            ) > ST_Distance(
+                                                ST_EndPoint(ST_GeomFromText(br.route_geometry_backward, 4326)),
+                                                ST_EndPoint(ST_GeomFromText(br.route_geometry_forward, 4326))
+                                            )
+                                   THEN 1 - ST_LineLocatePoint(
+                                            ST_GeomFromText(br.route_geometry_backward, 4326),
+                                            ST_SetSRID(ST_Point(bs.longitude, bs.latitude), 4326))
+                                   ELSE ST_LineLocatePoint(
+                                            ST_GeomFromText(br.route_geometry_backward, 4326),
+                                            ST_SetSRID(ST_Point(bs.longitude, bs.latitude), 4326))
+                               END * br.total_distance_backward_meters
+                           )::int
                        ELSE NULL
                    END,
                    CURRENT_TIMESTAMP
