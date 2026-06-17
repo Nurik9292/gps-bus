@@ -21,7 +21,7 @@ public class HttpStatusMapper {
 
         return switch (errorCode) {
             // 404 Not Found
-            case String s when s.endsWith(".NOT_FOUND") -> HttpStatus.NOT_FOUND;
+            case String s when s.endsWith("NOT_FOUND") -> HttpStatus.NOT_FOUND;
 
             // 409 Conflict
             case String s when s.endsWith(".ALREADY_EXISTS") -> HttpStatus.CONFLICT;
@@ -63,7 +63,7 @@ public class HttpStatusMapper {
         }
 
         return switch (errorCode) {
-            case String s when s.endsWith(".NOT_FOUND") -> HttpStatus.NOT_FOUND;
+            case String s when s.endsWith("NOT_FOUND") -> HttpStatus.NOT_FOUND;
             case String s when s.endsWith(".ALREADY_EXISTS") -> HttpStatus.CONFLICT;
             case String s when s.endsWith(".CONCURRENCY_ERROR") -> HttpStatus.CONFLICT;
             case String s when s.endsWith(".VALIDATION_ERROR") -> HttpStatus.BAD_REQUEST;

@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopData;
 import biz.ugur.busroutebackend.transport.application.dto.stop.StopDetail;
+import biz.ugur.busroutebackend.transport.domain.exceptions.BusStopNotFoundException;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 import biz.ugur.busroutebackend.transport.infrastructure.persistence.repository.R2dbcRouteStopRepository;
@@ -40,16 +41,16 @@ public class GetBusStopByIdUseCase extends BaseUseCase<Mono<GetBusStopByIdUseCas
     }
 
     private Mono<StopData> processInternal(Query query) {
+        if (query.stopId() == null || query.stopId().isBlank() || "null".equalsIgnoreCase(query.stopId())) {
+            return Mono.error(new BusStopNotFoundException(String.valueOf(query.stopId()), "id"));
+        }
         return correlationService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
-                    log.debug("Getting stop by id - Correlation {}: stopId={}", correlationId, query.stopId);
-                    return busStopRepository.findById(BusStopId.of(query.stopId))
+                    log.debug("Getting stop by id - Correlation {}: stopId={}", correlationId, query.stopId());
+                    return busStopRepository.findById(BusStopId.of(query.stopId()))
                             .map(StopData::fromDomain)
-                            .doOnSuccess(result -> log.debug("Retrieved stop: {}", result.stopName()))
-                            .onErrorMap(error -> {
-                                log.error("Failed to get stop by id {}: {}", query.stopId, error.getMessage());
-                                return new RuntimeException("Stop not found: " + query.stopId);
-                            });
+                            .switchIfEmpty(Mono.error(new BusStopNotFoundException(query.stopId(), "id")))
+                            .doOnSuccess(result -> log.debug("Retrieved stop: {}", result.stopName()));
                 });
     }
 
