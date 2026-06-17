@@ -373,6 +373,42 @@ class R2dbcRouteStopRepositoryIntegrationTest {
     }
 
     @Test
+    void backwardStops_numberedFromTerminalOppositeForwardStart_evenWhenBackwardGeometryDrawnLikeForward() {
+        String wkt = "LINESTRING(58.000 38.0000, 58.000 38.0090)";
+        databaseClient.sql("""
+                UPDATE bus_routes
+                   SET route_geometry_forward = :f, total_distance_forward_meters = :tf,
+                       route_geometry_backward = :b, total_distance_backward_meters = :tb
+                 WHERE id = :id
+                """)
+                .bind("id", ROUTE_ID)
+                .bind("f", wkt).bind("tf", 1002)
+                .bind("b", wkt).bind("tb", 1002)
+                .then()
+                .block();
+
+        databaseClient.sql("DELETE FROM route_stops WHERE route_id = :rid AND direction = 1")
+                .bind("rid", ROUTE_ID)
+                .then()
+                .block();
+
+        String nearForwardEnd = "near-fwd-end";
+        String nearForwardStart = "near-fwd-start";
+        insertStop(nearForwardEnd, "Near forward end", 38.0085, 58.000);
+        insertStop(nearForwardStart, "Near forward start", 38.0010, 58.000);
+
+        repository.insertRouteStop(ROUTE_ID, nearForwardStart, 1, 1).block();
+        repository.insertRouteStop(ROUTE_ID, nearForwardEnd, 2, 1).block();
+
+        StepVerifier.create(repository.resequenceStopsByDistance(ROUTE_ID)).verifyComplete();
+
+        assertThat(readSequence(nearForwardEnd))
+                .as("backward must start numbering from the terminal opposite forward's start (forward's end)")
+                .isEqualTo(1);
+        assertThat(readSequence(nearForwardStart)).isEqualTo(2);
+    }
+
+    @Test
     void insertRouteStop_writesDistanceProjectedOntoRouteGeometry() {
         setRouteWktGeometry(ROUTE_ID, "LINESTRING(58.000 38.0000, 58.000 38.0090)", 1002);
         String midpointStop = "mid-stop";
