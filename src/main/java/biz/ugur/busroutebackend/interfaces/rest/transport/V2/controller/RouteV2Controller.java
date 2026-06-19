@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.interfaces.rest.transport.V2.controller;
 
 import biz.ugur.busroutebackend.interfaces.rest.transport.V2.response.RouteDetailV2;
 import biz.ugur.busroutebackend.interfaces.rest.transport.V2.response.RouteSummaryV2;
+import biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BaseController;
 import biz.ugur.busroutebackend.transport.application.usecase.route.GetAllBusRoutesUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.route.GetRouteByIdUseCase;
@@ -16,7 +17,7 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v2/routes")
+@RequestMapping(ApiVersionConfig.V2_ROUTES)
 public class RouteV2Controller extends BaseController {
 
     private final GetRouteByIdUseCase getRouteByIdUseCase;

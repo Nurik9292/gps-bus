@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.shared.infrastructure.web;
 public class ApiVersionConfig {
 
     public static final String API_V1 = "/api/v1";
+    public static final String API_V2 = "/api/v2";
 
     public static final String MOBILE = "/mobile";
     public static final String ADMIN = "/admin";
@@ -36,6 +37,9 @@ public class ApiVersionConfig {
     public static final String V1_ROUTING = API_V1 + ROUTING;
     public static final String V1_ROUTES = API_V1 + ROUTES;
     public static final String V1_STOPS = API_V1 + STOPS;
+
+    public static final String V2_ROUTES = API_V2 + ROUTES;
+    public static final String V2_STOPS = API_V2 + STOPS;
 
     public static final String V1_MOBILE_BANNERS = V1_MOBILE + BANNERS;
     public static final String V1_MOBILE_CITIES = V1_MOBILE + CITIES;
