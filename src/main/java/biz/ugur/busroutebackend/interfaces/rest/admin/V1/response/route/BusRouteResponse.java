@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.response.route;
 
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
+import biz.ugur.busroutebackend.interfaces.rest.transport.V2.response.RouteStopV2;
 import biz.ugur.busroutebackend.transport.application.dto.RouteStopDTO;
 import biz.ugur.busroutebackend.transport.application.dto.route.RouteData;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -67,6 +68,12 @@ public class BusRouteResponse {
     @JsonProperty("backward_stops_ids")
     private List<String> backwardStopsIds;
 
+    @JsonProperty("forward_stops")
+    private List<RouteStopV2> forwardStops;
+
+    @JsonProperty("backward_stops")
+    private List<RouteStopV2> backwardStops;
+
     @JsonProperty("created_at")
     private LocalDateTime createdAt;
 
@@ -116,7 +123,7 @@ public class BusRouteResponse {
     }
 
     public static BusRouteResponse fromResult(RouteData result) {
-        return new  BusRouteResponse(
+        BusRouteResponse response = new BusRouteResponse(
                 result.id(),
                 result.routeNumber(),
                 result.routeName(),
@@ -138,5 +145,8 @@ public class BusRouteResponse {
                 result.createdAt(),
                 result.updatedAt()
         );
+        response.setForwardStops(result.forwardStops().stream().map(RouteStopV2::fromDto).toList());
+        response.setBackwardStops(result.backwardStops().stream().map(RouteStopV2::fromDto).toList());
+        return response;
     }
 }
