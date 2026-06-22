@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.advertising.application.usecase.admin;
 
 import biz.ugur.busroutebackend.advertising.application.dto.AdPlacementResponse;
+import biz.ugur.busroutebackend.advertising.application.dto.PlacementTargetSpec;
 import biz.ugur.busroutebackend.advertising.application.dto.UpdateEditorialAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.mapper.AdPlacementResponseMapper;
 import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
@@ -29,8 +30,11 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -83,6 +87,33 @@ class UpdateEditorialAdPlacementUseCaseTest {
                     assertEquals(1, resp.displayOrder());
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void update_persistsSelectedTargets_evenWhenSaveReturnsThemStripped() {
+        AdPlacement existing = AdPlacement.create(null, null, PlacementType.BANNER,
+                        PlacementKind.EDITORIAL, "t", "<p>x</p>", null, null, null, ContentType.CONTENT,
+                        PlacementWindow.unscheduled(), List.of(), 0)
+                .approve("admin").markAsScheduled().markAsActive();
+
+        when(placementRepository.findById(any(PlacementId.class))).thenReturn(Mono.just(existing));
+        when(placementRepository.save(any(AdPlacement.class)))
+                .thenAnswer(inv -> Mono.just(inv.<AdPlacement>getArgument(0).withTargets(List.of())));
+        when(targetRepository.replaceAll(any(PlacementId.class), any())).thenReturn(Mono.empty());
+        when(responseMapper.toResponse(any(AdPlacement.class)))
+                .thenAnswer(inv -> Mono.just(AdPlacementResponse.fromDomain(inv.getArgument(0))));
+
+        UpdateEditorialAdPlacementCommand cmd = new UpdateEditorialAdPlacementCommand(
+                existing.getId().getValue(), "t", "<p>x</p>", null, null, null,
+                LocalDateTime.now(), LocalDateTime.now().plusDays(7),
+                List.of(new PlacementTargetSpec("HOME", null)), 1, ContentType.CONTENT);
+
+        StepVerifier.create(useCase.execute(Mono.just(cmd)))
+                .assertNext(resp -> assertNotNull(resp))
+                .verifyComplete();
+
+        verify(targetRepository).replaceAll(any(PlacementId.class),
+                argThat(targets -> targets != null && targets.size() == 1));
     }
 
     @Test

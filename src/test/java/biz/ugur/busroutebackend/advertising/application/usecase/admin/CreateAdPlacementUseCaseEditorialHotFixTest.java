@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -50,6 +51,31 @@ class CreateAdPlacementUseCaseEditorialHotFixTest {
 
         assertEquals(PlacementStatus.ACTIVE, result.getStatus());
         verify(scheduled).markAsActive();
+    }
+
+    @Test
+    void editorial_with_starts_at_passed_in_ashgabat_goes_active() {
+        TimeZone original = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+        try {
+            AdPlacement approved = mock(AdPlacement.class);
+            when(approved.getKind()).thenReturn(PlacementKind.EDITORIAL);
+            when(approved.getStatus()).thenReturn(PlacementStatus.PENDING_PAYMENT);
+            AdPlacement scheduled = mock(AdPlacement.class);
+            LocalDateTime ashgabatPast = LocalDateTime.now(java.time.ZoneId.of("Asia/Ashgabat")).minusMinutes(10);
+            when(scheduled.getWindow()).thenReturn(PlacementWindow.of(ashgabatPast, null));
+            AdPlacement active = mock(AdPlacement.class);
+            when(active.getStatus()).thenReturn(PlacementStatus.ACTIVE);
+            when(approved.markAsScheduled()).thenReturn(scheduled);
+            when(scheduled.markAsActive()).thenReturn(active);
+
+            AdPlacement result = CreateAdPlacementUseCase.hotFixEditorialStatus(approved);
+
+            assertEquals(PlacementStatus.ACTIVE, result.getStatus());
+            verify(scheduled).markAsActive();
+        } finally {
+            TimeZone.setDefault(original);
+        }
     }
 
     @Test

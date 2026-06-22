@@ -204,6 +204,43 @@ class CreateAdPlacementUseCaseTest {
         assertEquals("advertising.admin", useCase.getBoundContext());
     }
 
+    @Test
+    void process_placementWithoutTargets_validationFails() {
+        AdPlacement targetless = AdPlacement.create(
+                BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
+                PlacementKind.EDITORIAL, "No targets", null, null, "https://target", null,
+                ContentType.LINK, null,
+                List.of(), 0);
+        CreateAdPlacementCommand cmd = editorialCommand(null);
+
+        when(placementFactory.create(cmd)).thenReturn(Mono.just(targetless));
+
+        StepVerifier.create(useCase.execute(Mono.just(cmd)))
+                .expectErrorSatisfies(err ->
+                        assertInstanceOf(AdvertisingValidationException.class, err))
+                .verify();
+
+        verify(placementRepository, never()).save(any());
+    }
+
+    @Test
+    void process_persistsSelectedTargets_evenWhenSaveReturnsThemStripped() {
+        AdPlacement withTarget = buildDraftPlacement(PlacementKind.EDITORIAL);
+        AdPlacement savedStripped = withTarget.withTargets(List.of());
+        CreateAdPlacementCommand cmd = editorialCommand(null);
+
+        when(placementFactory.create(cmd)).thenReturn(Mono.just(withTarget));
+        when(placementRepository.save(any(AdPlacement.class))).thenReturn(Mono.just(savedStripped));
+        when(targetRepository.replaceAll(any(), any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(useCase.execute(Mono.just(cmd)))
+                .assertNext(r -> assertNotNull(r.placement()))
+                .verifyComplete();
+
+        verify(targetRepository).replaceAll(eq(savedStripped.getId()),
+                argThat(targets -> targets != null && targets.size() == 1));
+    }
+
     private AdPlacement buildDraftPlacement(PlacementKind kind) {
         return AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,

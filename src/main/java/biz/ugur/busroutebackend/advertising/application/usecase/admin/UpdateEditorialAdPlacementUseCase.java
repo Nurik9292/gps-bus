@@ -71,9 +71,9 @@ public class UpdateEditorialAdPlacementUseCase
                             cmd.title(), cmd.content(), finalImageUrl, cmd.targetUrl(),
                             cmd.ctaText(), cmd.contentType(), window, domainTargets, cmd.displayOrder());
                     return placementRepository.save(updated)
-                            .flatMap(saved -> targetRepository.replaceAll(saved.getId(), saved.getTargets())
+                            .flatMap(saved -> targetRepository.replaceAll(saved.getId(), updated.getTargets())
                                     .then(publishEvents(saved))
-                                    .then(responseMapper.toResponse(saved)));
+                                    .then(responseMapper.toResponse(saved.withTargets(updated.getTargets()))));
                 });
     }
 

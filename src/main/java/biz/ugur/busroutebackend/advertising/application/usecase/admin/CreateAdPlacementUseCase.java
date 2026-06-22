@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig;
 import biz.ugur.busroutebackend.advertising.application.factory.AdPlacementFactory;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
+import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementTargetRepository;
@@ -29,6 +30,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 
 @Service
@@ -39,6 +41,7 @@ public class CreateAdPlacementUseCase
     private static final Duration BANK_PAYMENT_EXPIRY = Duration.ofMinutes(30);
     private static final Duration CASH_PAYMENT_EXPIRY = Duration.ofDays(7);
     private static final String CASH_RETURN_URL = "cash://no-redirect";
+    private static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
 
     private final AdPlacementRepository placementRepository;
     private final AdPlacementTargetRepository targetRepository;
@@ -74,18 +77,29 @@ public class CreateAdPlacementUseCase
             cmd.validateContentConsistency();
             return securityService.getCurrentUsername()
                     .flatMap(username -> placementFactory.create(cmd)
+                            .flatMap(CreateAdPlacementUseCase::requireTargets)
                             .map(placement -> placement.approve(username))
                             .map(CreateAdPlacementUseCase::hotFixEditorialStatus)
-                            .flatMap(placementRepository::save)
-                            .flatMap(saved -> persistTargets(saved)
-                                    .then(createPaymentIfCommercial(saved, cmd)
-                                            .map(Optional::of)
-                                            .defaultIfEmpty(Optional.empty()))
-                                    .map(paymentOpt -> CreateAdPlacementResponse.of(
-                                            saved, paymentOpt.orElse(null))))
+                            .flatMap(placement -> placementRepository.save(placement)
+                                    .flatMap(saved -> targetRepository.replaceAll(
+                                                    saved.getId(), placement.getTargets())
+                                            .then(createPaymentIfCommercial(saved, cmd)
+                                                    .map(Optional::of)
+                                                    .defaultIfEmpty(Optional.empty()))
+                                            .map(paymentOpt -> CreateAdPlacementResponse.of(
+                                                    saved.withTargets(placement.getTargets()),
+                                                    paymentOpt.orElse(null)))))
                             .doOnSuccess(r -> log.info("AdPlacement created and auto-approved: id={}",
                                     r.placement().id())));
         });
+    }
+
+    private static Mono<AdPlacement> requireTargets(AdPlacement placement) {
+        if (placement.getTargets() == null || placement.getTargets().isEmpty()) {
+            return Mono.error(new AdvertisingValidationException(
+                    "targets", "at least one placement target is required"));
+        }
+        return Mono.just(placement);
     }
 
     static AdPlacement hotFixEditorialStatus(AdPlacement p) {
@@ -95,15 +109,10 @@ public class CreateAdPlacementUseCase
         }
         AdPlacement scheduled = p.markAsScheduled();
         LocalDateTime startsAt = scheduled.getWindow() != null ? scheduled.getWindow().getStartsAt() : null;
-        if (startsAt == null || !startsAt.isAfter(LocalDateTime.now())) {
+        if (startsAt == null || !startsAt.isAfter(LocalDateTime.now(ASHGABAT_ZONE))) {
             return scheduled.markAsActive();
         }
         return scheduled;
-    }
-
-    private Mono<AdPlacement> persistTargets(AdPlacement placement) {
-        return targetRepository.replaceAll(placement.getId(), placement.getTargets())
-                .thenReturn(placement);
     }
 
     private Mono<Payment> createPaymentIfCommercial(AdPlacement placement, CreateAdPlacementCommand cmd) {

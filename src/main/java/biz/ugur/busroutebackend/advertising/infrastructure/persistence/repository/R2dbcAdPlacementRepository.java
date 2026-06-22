@@ -136,8 +136,8 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
                         SELECT %s FROM ad_placements
                         WHERE status = 'ACTIVE'
                           AND placement_type = :type
-                          AND (starts_at IS NULL OR starts_at <= NOW())
-                          AND (ends_at   IS NULL OR ends_at   >  NOW())
+                          AND (starts_at IS NULL OR starts_at <= (NOW() AT TIME ZONE 'Asia/Ashgabat'))
+                          AND (ends_at   IS NULL OR ends_at   >  (NOW() AT TIME ZONE 'Asia/Ashgabat'))
                         ORDER BY display_order ASC, created_at DESC
                         """, selectColumns());
         return databaseClient.sql(sql)
@@ -166,7 +166,7 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
         String sql = String.format("""
                         SELECT %s FROM ad_placements
                         WHERE status = 'SCHEDULED'
-                          AND (starts_at IS NULL OR starts_at <= NOW())
+                          AND (starts_at IS NULL OR starts_at <= (NOW() AT TIME ZONE 'Asia/Ashgabat'))
                         """, selectColumns());
         return databaseClient.sql(sql)
                 .map(getRowMapper())
@@ -179,7 +179,7 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
                         SELECT %s FROM ad_placements
                         WHERE status = 'ACTIVE'
                           AND ends_at IS NOT NULL
-                          AND ends_at <= NOW()
+                          AND ends_at <= (NOW() AT TIME ZONE 'Asia/Ashgabat')
                         """, selectColumns());
         return databaseClient.sql(sql)
                 .map(getRowMapper())
