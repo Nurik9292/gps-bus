@@ -96,7 +96,7 @@ class SnapCorrectorDirectionCooldownTest {
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                GPS_LAT, GPS_LON, softOppositeCourse, 1);
+                GPS_LAT, GPS_LON, softOppositeCourse, 1, java.time.Instant.now());
 
         assertThat(result.direction())
                 .as("during cooldown a soft heading delta (<150deg) must NOT flip direction back to forward")
@@ -114,7 +114,7 @@ class SnapCorrectorDirectionCooldownTest {
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                GPS_LAT, GPS_LON, softOppositeCourse, 1);
+                GPS_LAT, GPS_LON, softOppositeCourse, 1, java.time.Instant.now());
 
         assertThat(result.direction())
                 .as("after cooldown expires, normal heading-flip behaviour resumes")
@@ -132,7 +132,7 @@ class SnapCorrectorDirectionCooldownTest {
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                GPS_LAT, GPS_LON, hardOppositeCourse, 1);
+                GPS_LAT, GPS_LON, hardOppositeCourse, 1, java.time.Instant.now());
 
         assertThat(result.direction())
                 .as("hard heading delta (>=150deg) overrides cooldown and flips direction")
@@ -148,7 +148,7 @@ class SnapCorrectorDirectionCooldownTest {
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                GPS_LAT, GPS_LON, 90.0, 1);
+                GPS_LAT, GPS_LON, 90.0, 1, java.time.Instant.now());
 
         assertThat(result.direction())
                 .as("during cooldown the frac-based DIR_CORRECT_FRAC must not flip direction")
@@ -163,7 +163,7 @@ class SnapCorrectorDirectionCooldownTest {
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                GPS_LAT, GPS_LON, 270.0, 1);
+                GPS_LAT, GPS_LON, 270.0, 1, java.time.Instant.now());
 
         assertThat(result.direction())
                 .as("without cooldown set, heading-flip behaviour is unchanged")

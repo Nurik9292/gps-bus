@@ -76,7 +76,7 @@ class SnapCorrectorStationaryFracFlipTest {
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                FORWARD_LAT, FORWARD_LON, 0.0, 1);
+                FORWARD_LAT, FORWARD_LON, 0.0, 1, java.time.Instant.now());
 
         assertThat(result.direction())
                 .as("kalmanSpeedKmh=18 still high (slow Kalman convergence after stop), " +
@@ -113,7 +113,7 @@ class SnapCorrectorStationaryFracFlipTest {
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                FORWARD_LAT, FORWARD_LON, 0.0, 1);
+                FORWARD_LAT, FORWARD_LON, 0.0, 1, java.time.Instant.now());
 
         assertThat(result.direction())
                 .as("inMotion=true rawGpsSpeed=20 + primary snap 120m far + opposite snap 5m close — " +
@@ -144,7 +144,7 @@ class SnapCorrectorStationaryFracFlipTest {
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                FORWARD_LAT, FORWARD_LON, 0.0, 1);
+                FORWARD_LAT, FORWARD_LON, 0.0, 1, java.time.Instant.now());
 
         assertThat(result.direction())
                 .as("rawGpsSpeed=1 km/h falls below 5 km/h floor — treated as stationary " +

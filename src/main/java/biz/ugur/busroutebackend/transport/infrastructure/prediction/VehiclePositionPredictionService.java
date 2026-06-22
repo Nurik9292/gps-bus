@@ -358,7 +358,7 @@ public class VehiclePositionPredictionService {
 
         SnapCorrector.SnapResult snapResult = snapCorrector.applySnap(
                 existing, vehicleId, licensePlate, routeNumber,
-                latitude, longitude, course, direction);
+                latitude, longitude, course, direction, timestamp);
         double predictedLat = snapResult.predictedLatitude();
         double predictedLon = snapResult.predictedLongitude();
         double fraction = snapResult.fraction();
