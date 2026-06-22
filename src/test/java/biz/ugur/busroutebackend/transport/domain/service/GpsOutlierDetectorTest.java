@@ -57,11 +57,12 @@ class GpsOutlierDetectorTest {
         }
 
         @Test
-        void timeGapTooLargeAboveMaximum() {
+        void largeGapWithPlausibleMoveIsValid() {
             OutlierDetectionResult r = detector.detect(DEVICE,
                     37.96, 58.32, t(120),
                     37.97, 58.33, t(0));
-            assertEquals(OutlierType.TIME_GAP_TOO_LARGE, r.type());
+            assertEquals(OutlierType.VALID, r.type());
+            assertFalse(r.isOutlier());
         }
 
         @Test
@@ -87,6 +88,16 @@ class GpsOutlierDetectorTest {
         void outlierWhenImpliedSpeedExceedsMax() {
             OutlierDetectionResult r = detector.detect(DEVICE,
                     40.0, 60.0, t(10),
+                    37.96, 58.32, t(0));
+            assertEquals(OutlierType.SPEED_EXCEEDED, r.type());
+            assertTrue(r.isOutlier());
+            assertTrue(r.impliedSpeedKmh() > 150.0);
+        }
+
+        @Test
+        void largeGapWithImpossibleSpeedIsOutlier() {
+            OutlierDetectionResult r = detector.detect(DEVICE,
+                    40.0, 60.0, t(120),
                     37.96, 58.32, t(0));
             assertEquals(OutlierType.SPEED_EXCEEDED, r.type());
             assertTrue(r.isOutlier());

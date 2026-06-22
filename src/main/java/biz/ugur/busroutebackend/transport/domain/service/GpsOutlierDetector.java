@@ -77,9 +77,8 @@ public class GpsOutlierDetector {
         }
 
         if (timeDiffSeconds > maxTimeDifferenceSeconds) {
-            log.trace("Time gap too large for device {}: {}s > {}s",
+            log.trace("Large time gap for device {}: {}s > {}s — still validating implied speed (post-gap teleport guard)",
                     deviceId, timeDiffSeconds, maxTimeDifferenceSeconds);
-            return OutlierDetectionResult.timeGapTooLarge(deviceId, timeDiffSeconds, maxImpliedSpeedKmh);
         }
 
         double distanceMeters = DistanceCalculationService.haversineDistanceMeters(
