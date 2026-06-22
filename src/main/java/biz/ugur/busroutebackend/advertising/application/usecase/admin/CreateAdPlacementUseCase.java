@@ -30,6 +30,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 
 @Service
@@ -40,6 +41,7 @@ public class CreateAdPlacementUseCase
     private static final Duration BANK_PAYMENT_EXPIRY = Duration.ofMinutes(30);
     private static final Duration CASH_PAYMENT_EXPIRY = Duration.ofDays(7);
     private static final String CASH_RETURN_URL = "cash://no-redirect";
+    private static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
 
     private final AdPlacementRepository placementRepository;
     private final AdPlacementTargetRepository targetRepository;
@@ -107,7 +109,7 @@ public class CreateAdPlacementUseCase
         }
         AdPlacement scheduled = p.markAsScheduled();
         LocalDateTime startsAt = scheduled.getWindow() != null ? scheduled.getWindow().getStartsAt() : null;
-        if (startsAt == null || !startsAt.isAfter(LocalDateTime.now())) {
+        if (startsAt == null || !startsAt.isAfter(LocalDateTime.now(ASHGABAT_ZONE))) {
             return scheduled.markAsActive();
         }
         return scheduled;
