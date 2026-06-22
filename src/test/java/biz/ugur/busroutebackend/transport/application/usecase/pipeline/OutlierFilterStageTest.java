@@ -1,6 +1,8 @@
 package biz.ugur.busroutebackend.transport.application.usecase.pipeline;
 
 import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
+import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
+import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.service.GpsOutlierDetector;
 import biz.ugur.busroutebackend.transport.domain.valueobject.OutlierDetectionResult;
 import biz.ugur.busroutebackend.transport.infrastructure.config.GpsOutlierDetectionProperties;
@@ -10,6 +12,7 @@ import biz.ugur.busroutebackend.transport.infrastructure.redis.VehicleGpsHistory
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -36,6 +39,7 @@ class OutlierFilterStageTest {
     private GpsOutlierMetricsRecorder metricsRecorder;
     private GpsOutlierDetectionProperties properties;
     private VehicleGpsHistoryService historyService;
+    private VehicleRepository vehicleRepository;
     private PipelineTracer pipelineTracer;
     private OutlierFilterStage stage;
 
@@ -49,11 +53,15 @@ class OutlierFilterStageTest {
         properties.setRejectFrozenMotion(true);
         properties.setHistoryPointsToCheck(3);
         historyService = mock(VehicleGpsHistoryService.class);
+        vehicleRepository = mock(VehicleRepository.class);
         pipelineTracer = mock(PipelineTracer.class);
 
-        stage = new OutlierFilterStage(outlierDetector, metricsRecorder, properties, historyService, pipelineTracer);
+        stage = new OutlierFilterStage(outlierDetector, metricsRecorder, properties,
+                historyService, vehicleRepository, pipelineTracer);
 
         lenient().when(historyService.getHistoryBatch(anyList(), anyInt()))
+                .thenReturn(Mono.just(Map.of()));
+        lenient().when(vehicleRepository.findByDeviceIds(anyList()))
                 .thenReturn(Mono.just(Map.of()));
     }
 
@@ -175,6 +183,31 @@ class OutlierFilterStageTest {
                     org.assertj.core.api.Assertions.assertThat(result.get(0).getDeviceId()).isEqualTo("dev-1");
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void emptyHistoryUsesDbPositionAsBaseline() {
+        Vehicle v = Vehicle.builder()
+                .deviceId("dev-1")
+                .currentLatitude(37.90)
+                .currentLongitude(58.30)
+                .lastPositionUpdate(LocalDateTime.now().minusMinutes(40))
+                .build();
+        lenient().when(vehicleRepository.findByDeviceIds(anyList()))
+                .thenReturn(Mono.just(Map.of("dev-1", v)));
+        when(outlierDetector.detectWithHistory(anyString(), anyDouble(), anyDouble(), any(), anyList(), any()))
+                .thenReturn(OutlierDetectionResult.valid("dev-1", 30.0, 100.0, 10, 150.0));
+
+        stage.apply(List.of(position("dev-1"))).block();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<? extends GpsOutlierDetector.GpsHistoryPoint>> historyCaptor =
+                ArgumentCaptor.forClass(List.class);
+        verify(outlierDetector).detectWithHistory(eq("dev-1"), anyDouble(), anyDouble(), any(),
+                historyCaptor.capture(), any());
+        org.assertj.core.api.Assertions.assertThat(historyCaptor.getValue()).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(historyCaptor.getValue().get(0).getLatitude())
+                .isEqualTo(37.90);
     }
 
     @Test
