@@ -78,13 +78,15 @@ public class CreateAdPlacementUseCase
                             .flatMap(CreateAdPlacementUseCase::requireTargets)
                             .map(placement -> placement.approve(username))
                             .map(CreateAdPlacementUseCase::hotFixEditorialStatus)
-                            .flatMap(placementRepository::save)
-                            .flatMap(saved -> persistTargets(saved)
-                                    .then(createPaymentIfCommercial(saved, cmd)
-                                            .map(Optional::of)
-                                            .defaultIfEmpty(Optional.empty()))
-                                    .map(paymentOpt -> CreateAdPlacementResponse.of(
-                                            saved, paymentOpt.orElse(null))))
+                            .flatMap(placement -> placementRepository.save(placement)
+                                    .flatMap(saved -> targetRepository.replaceAll(
+                                                    saved.getId(), placement.getTargets())
+                                            .then(createPaymentIfCommercial(saved, cmd)
+                                                    .map(Optional::of)
+                                                    .defaultIfEmpty(Optional.empty()))
+                                            .map(paymentOpt -> CreateAdPlacementResponse.of(
+                                                    saved.withTargets(placement.getTargets()),
+                                                    paymentOpt.orElse(null)))))
                             .doOnSuccess(r -> log.info("AdPlacement created and auto-approved: id={}",
                                     r.placement().id())));
         });
@@ -109,11 +111,6 @@ public class CreateAdPlacementUseCase
             return scheduled.markAsActive();
         }
         return scheduled;
-    }
-
-    private Mono<AdPlacement> persistTargets(AdPlacement placement) {
-        return targetRepository.replaceAll(placement.getId(), placement.getTargets())
-                .thenReturn(placement);
     }
 
     private Mono<Payment> createPaymentIfCommercial(AdPlacement placement, CreateAdPlacementCommand cmd) {
