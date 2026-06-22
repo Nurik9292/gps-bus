@@ -204,6 +204,25 @@ class CreateAdPlacementUseCaseTest {
         assertEquals("advertising.admin", useCase.getBoundContext());
     }
 
+    @Test
+    void process_placementWithoutTargets_validationFails() {
+        AdPlacement targetless = AdPlacement.create(
+                BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
+                PlacementKind.EDITORIAL, "No targets", null, null, "https://target", null,
+                ContentType.LINK, null,
+                List.of(), 0);
+        CreateAdPlacementCommand cmd = editorialCommand(null);
+
+        when(placementFactory.create(cmd)).thenReturn(Mono.just(targetless));
+
+        StepVerifier.create(useCase.execute(Mono.just(cmd)))
+                .expectErrorSatisfies(err ->
+                        assertInstanceOf(AdvertisingValidationException.class, err))
+                .verify();
+
+        verify(placementRepository, never()).save(any());
+    }
+
     private AdPlacement buildDraftPlacement(PlacementKind kind) {
         return AdPlacement.create(
                 BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,

@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfig;
 import biz.ugur.busroutebackend.advertising.application.factory.AdPlacementFactory;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
+import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementTargetRepository;
@@ -74,6 +75,7 @@ public class CreateAdPlacementUseCase
             cmd.validateContentConsistency();
             return securityService.getCurrentUsername()
                     .flatMap(username -> placementFactory.create(cmd)
+                            .flatMap(CreateAdPlacementUseCase::requireTargets)
                             .map(placement -> placement.approve(username))
                             .map(CreateAdPlacementUseCase::hotFixEditorialStatus)
                             .flatMap(placementRepository::save)
@@ -86,6 +88,14 @@ public class CreateAdPlacementUseCase
                             .doOnSuccess(r -> log.info("AdPlacement created and auto-approved: id={}",
                                     r.placement().id())));
         });
+    }
+
+    private static Mono<AdPlacement> requireTargets(AdPlacement placement) {
+        if (placement.getTargets() == null || placement.getTargets().isEmpty()) {
+            return Mono.error(new AdvertisingValidationException(
+                    "targets", "at least one placement target is required"));
+        }
+        return Mono.just(placement);
     }
 
     static AdPlacement hotFixEditorialStatus(AdPlacement p) {
