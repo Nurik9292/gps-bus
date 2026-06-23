@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GpsValidationStage {
 
     private static final long MAX_GPS_AGE_SECONDS = 120;
+    private static final long MAX_GPS_FUTURE_SKEW_SECONDS = 60;
     private static final long IDEMPOTENCY_TTL_SECONDS = 60;
 
     private final VehicleValidationService validationService;
@@ -66,9 +67,13 @@ public class GpsValidationStage {
             return new ValidatedGpsBatch(List.of(), gpsPositions.size());
         }
 
-        LocalDateTime staleCutoff = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(MAX_GPS_AGE_SECONDS);
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime staleCutoff = now.minusSeconds(MAX_GPS_AGE_SECONDS);
+        LocalDateTime futureCutoff = now.plusSeconds(MAX_GPS_FUTURE_SKEW_SECONDS);
         List<GpsPositionDTO> freshPositions = validPositions.stream()
-                .filter(pos -> pos.getFixTime() != null && !pos.getFixTime().isBefore(staleCutoff))
+                .filter(pos -> pos.getFixTime() != null
+                        && !pos.getFixTime().isBefore(staleCutoff)
+                        && !pos.getFixTime().isAfter(futureCutoff))
                 .toList();
         if (freshPositions.size() < validPositions.size()) {
             log.debug("[GPS_PIPELINE] STALE_FILTER dropped={}/{} (age > {}s)",
