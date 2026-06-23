@@ -36,6 +36,11 @@ public class RouteSegment extends ValueObject {
     @lombok.Setter
     private String toLocationName;
 
+    @lombok.Setter
+    private String fromStopId;
+    @lombok.Setter
+    private String toStopId;
+
     public RouteSegment(SegmentType type, Coordinates fromLocation, Coordinates toLocation,
                         int durationMinutes, String routeNumber, String instruction) {
         this.type = type;

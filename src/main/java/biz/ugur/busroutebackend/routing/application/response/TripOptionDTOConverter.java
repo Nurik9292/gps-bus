@@ -143,7 +143,7 @@ public class TripOptionDTOConverter {
         return String.format("%.4f°, %.4f°", lat, lon);
     }
 
-    private RouteSegmentDTO convertSegmentToDTO(RouteSegment segment) {
+    RouteSegmentDTO convertSegmentToDTO(RouteSegment segment) {
         RouteSegmentDTO dto = new RouteSegmentDTO(
                 segment.getType().name().toLowerCase(),
                 segment.getDetailedDescription(),
@@ -152,8 +152,8 @@ public class TripOptionDTOConverter {
                 segment.getInstruction()
         );
 
-        dto.setFromLocation(createLocationPointDTO(segment.getFromLocation(), segment.getFromLocationName()));
-        dto.setToLocation(createLocationPointDTO(segment.getToLocation(), segment.getToLocationName()));
+        dto.setFromLocation(createLocationPointDTO(segment.getFromLocation(), segment.getFromLocationName(), segment.getFromStopId()));
+        dto.setToLocation(createLocationPointDTO(segment.getToLocation(), segment.getToLocationName(), segment.getToStopId()));
 
         addGeometryIfAvailable(dto, segment);
 
@@ -176,11 +176,12 @@ public class TripOptionDTOConverter {
         }
     }
 
-    private RouteSegmentDTO.LocationPointDTO createLocationPointDTO(Coordinates coordinates, String name) {
+    private RouteSegmentDTO.LocationPointDTO createLocationPointDTO(Coordinates coordinates, String name, String stopId) {
         return new RouteSegmentDTO.LocationPointDTO(
                 coordinates.getLatitudeAsDouble(),
                 coordinates.getLongitudeAsDouble(),
-                name
+                name,
+                stopId
         );
     }
 }

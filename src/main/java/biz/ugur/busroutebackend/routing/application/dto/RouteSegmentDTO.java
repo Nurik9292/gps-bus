@@ -65,10 +65,18 @@ public class RouteSegmentDTO {
         @JsonProperty("name")
         private String name;
 
+        @JsonProperty("stop_id")
+        private String stopId;
+
         public LocationPointDTO(Double latitude, Double longitude, String name) {
+            this(latitude, longitude, name, null);
+        }
+
+        public LocationPointDTO(Double latitude, Double longitude, String name, String stopId) {
             this.latitude = latitude;
             this.longitude = longitude;
             this.name = name;
+            this.stopId = stopId;
         }
     }
 
