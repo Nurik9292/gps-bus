@@ -117,6 +117,8 @@ public class DirectRouteOptionBuilder {
             RouteSegment busSeg = createBusSegmentWithGeometry(fromStopLocation, toStopLocation, busRideTime, routeNumber, trimmedGeometry, routeDistance);
             busSeg.setFromLocationName(fromStopName);
             busSeg.setToLocationName(toStopName);
+            busSeg.setFromStopId(directRoute.fromStop().getId().toString());
+            busSeg.setToStopId(directRoute.toStop().getId().toString());
 
             RouteSegment walkFromSeg = routeSegmentFactory.createWalkingSegment(toStopLocation, context.toLocation(), walkingFromStop, walkFromStop);
             walkFromSeg.setFromLocationName(toStopName);
