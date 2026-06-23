@@ -80,7 +80,7 @@ class SnapCorrectorOppositeFallbackTest {
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                GPS_LAT, GPS_LON, 126.0, 0);
+                GPS_LAT, GPS_LON, 126.0, 0, java.time.Instant.now());
 
         assertThat(result.predictedLatitude()).isEqualTo(PRED_LAT);
         assertThat(result.predictedLongitude()).isEqualTo(PRED_LON);
@@ -116,7 +116,7 @@ class SnapCorrectorOppositeFallbackTest {
 
         SnapCorrector.SnapResult result = snapCorrector.applySnap(
                 existing, VEHICLE_ID, PLATE, ROUTE,
-                GPS_LAT, GPS_LON, 126.0, 0);
+                GPS_LAT, GPS_LON, 126.0, 0, java.time.Instant.now());
 
         assertThat(result.predictedLatitude()).isEqualTo(nearPredictedLat);
         assertThat(result.predictedLongitude()).isEqualTo(nearPredictedLon);

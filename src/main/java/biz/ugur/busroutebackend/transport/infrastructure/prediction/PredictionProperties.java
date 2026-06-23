@@ -145,5 +145,7 @@ public class PredictionProperties {
 
     private double windowedSnapFractionWindow = 0.20;
 
+    private long staleAnchorMs = 1_800_000;
+
     private double fracFlipPlausibleJumpThreshold = 0.25;
 }

@@ -12,6 +12,8 @@ import biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.Plausib
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -56,6 +58,21 @@ class SnapCorrector {
         this.pipelineTracer = pipelineTracer;
     }
 
+    private boolean anchorTooStale(VehiclePredictionState existing, Instant gpsTimestamp,
+                                   String vehicleId, String licensePlate, String routeNumber) {
+        Instant anchorAt = existing.getLastGpsUpdate();
+        if (anchorAt == null || gpsTimestamp == null) {
+            return false;
+        }
+        long ageMs = Duration.between(anchorAt, gpsTimestamp).toMillis();
+        if (ageMs <= properties.getStaleAnchorMs()) {
+            return false;
+        }
+        log.info("[GPS_PIPELINE] SNAP_ANCHOR_STALE vehicle={} plate={} route={} anchorAgeMs={} threshold={} — cold whole-line re-projection",
+                vehicleId, licensePlate, routeNumber, ageMs, properties.getStaleAnchorMs());
+        return true;
+    }
+
     record SnapResult(
             double predictedLatitude,
             double predictedLongitude,
@@ -72,7 +89,8 @@ class SnapCorrector {
 
     SnapResult applySnap(VehiclePredictionState existing,
                          String vehicleId, String licensePlate, String routeNumber,
-                         double latitude, double longitude, double course, int direction) {
+                         double latitude, double longitude, double course, int direction,
+                         Instant gpsTimestamp) {
 
         final int inputDirection = direction;
         final double inputFraction = existing != null ? existing.getFractionOnRoute() : -1;
@@ -125,7 +143,10 @@ class SnapCorrector {
                 routeCoords.size() > 1 ? routeCoords.get(routeCoords.size()-2)[0] + "," + routeCoords.get(routeCoords.size()-2)[1] : "-",
                 routeCoords.size() > 0 ? routeCoords.get(routeCoords.size()-1)[0] + "," + routeCoords.get(routeCoords.size()-1)[1] : "-",
                 routeCoords.size());
-        MapMatchingService.SnappedResult snap = (existing != null && existing.getLastGpsFraction() >= 0)
+        boolean anchorUsable = existing != null
+                && existing.getLastGpsFraction() >= 0
+                && !anchorTooStale(existing, gpsTimestamp, vehicleId, licensePlate, routeNumber);
+        MapMatchingService.SnappedResult snap = anchorUsable
                 ? mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, cumDist, totalDist,
                         existing.getLastGpsFraction(), properties.getWindowedSnapFractionWindow())
                 : mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, totalDist);
