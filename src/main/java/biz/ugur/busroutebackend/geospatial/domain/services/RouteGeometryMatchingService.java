@@ -77,7 +77,7 @@ public class RouteGeometryMatchingService {
         double totalDistance = 0.0;
 
         for (GpsPoint gpsPoint : gpsPoints) {
-            Coordinates gpsCoord = Coordinates.of(gpsPoint.lat, gpsPoint.lat);
+            Coordinates gpsCoord = Coordinates.of(gpsPoint.lat, gpsPoint.lon);
             double minDistance = calculateMinDistanceToRoute(gpsCoord, routePoints);
 
             totalDistance += minDistance;
