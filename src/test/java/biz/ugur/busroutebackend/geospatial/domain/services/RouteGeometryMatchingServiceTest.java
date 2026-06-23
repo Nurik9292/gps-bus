@@ -79,6 +79,23 @@ class RouteGeometryMatchingServiceTest {
     }
 
     @Test
+    void gpsLongitudeIsUsedSoFarOffLongitudeScoresLowerThanOnRoute() {
+        List<GpsPoint> onRoute = List.of(
+                new GpsPoint(37.9601, 58.3261, 20.0, 1L),
+                new GpsPoint(37.9701, 58.3361, 22.0, 2L)
+        );
+        List<GpsPoint> sameLatFarLongitude = List.of(
+                new GpsPoint(37.9601, 68.3261, 20.0, 1L),
+                new GpsPoint(37.9701, 68.3361, 22.0, 2L)
+        );
+
+        int onRouteConfidence = service.calculateMatchScore(onRoute, route).confidence();
+        int farLongitudeConfidence = service.calculateMatchScore(sameLatFarLongitude, route).confidence();
+
+        assertTrue(onRouteConfidence > farLongitudeConfidence);
+    }
+
+    @Test
     void isDeviatingReturnsFalseWhenNoGps() {
         assertFalse(service.isDeviatingFromRoute(List.of(), route));
         assertFalse(service.isDeviatingFromRoute(null, route));

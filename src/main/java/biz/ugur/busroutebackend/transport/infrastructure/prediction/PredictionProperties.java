@@ -1,12 +1,15 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
+import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 @Getter
 @Setter
+@Slf4j
 @Component
 @ConfigurationProperties(prefix = "ugur.prediction")
 public class PredictionProperties {
@@ -148,4 +151,17 @@ public class PredictionProperties {
     private long staleAnchorMs = 1_800_000;
 
     private double fracFlipPlausibleJumpThreshold = 0.25;
+
+    public boolean isGhostBroadcastWindowConsistent() {
+        return stopAdvanceAfterMs >= maxAgeMs;
+    }
+
+    @PostConstruct
+    void warnIfGhostBroadcastWindowInconsistent() {
+        if (!isGhostBroadcastWindowConsistent()) {
+            log.warn("[PREDICTION] ghost-broadcast window inconsistent: stopAdvanceAfterMs={} < maxAgeMs={} "
+                            + "→ a frozen position is broadcast for up to {}ms after dead-reckoning stops",
+                    stopAdvanceAfterMs, maxAgeMs, maxAgeMs - stopAdvanceAfterMs);
+        }
+    }
 }

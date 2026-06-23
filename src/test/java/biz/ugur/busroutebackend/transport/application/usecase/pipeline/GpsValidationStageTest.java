@@ -86,6 +86,31 @@ class GpsValidationStageTest {
     }
 
     @Test
+    void futureFixTimeBeyondSkewToleranceIsDropped() {
+        LocalDateTime future = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5);
+        List<GpsPositionDTO> positions = List.of(
+                position("dev-future", future, 1.0, 8),
+                position("dev-ok", fresh(), 1.0, 8)
+        );
+
+        GpsValidationStage.ValidatedGpsBatch result = stage.apply(positions);
+
+        assertThat(result.accepted()).hasSize(1);
+        assertThat(result.accepted().get(0).getDeviceId()).isEqualTo("dev-ok");
+    }
+
+    @Test
+    void slightlyFutureFixTimeWithinSkewToleranceIsKept() {
+        LocalDateTime slightFuture = LocalDateTime.now(ZoneOffset.UTC).plusSeconds(5);
+
+        GpsValidationStage.ValidatedGpsBatch result = stage.apply(List.of(
+                position("dev-skew", slightFuture, 1.0, 8)
+        ));
+
+        assertThat(result.accepted()).hasSize(1);
+    }
+
+    @Test
     void qualityFilterDropsPositionsWithBadHdop() {
         List<GpsPositionDTO> positions = List.of(
                 position("dev-1", fresh(), 10.0, 8),
