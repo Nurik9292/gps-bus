@@ -152,6 +152,8 @@ public class PredictionProperties {
 
     private double fracFlipPlausibleJumpThreshold = 0.25;
 
+    private double maxBroadcastStepMeters = 150.0;
+
     public boolean isGhostBroadcastWindowConsistent() {
         return stopAdvanceAfterMs >= maxAgeMs;
     }

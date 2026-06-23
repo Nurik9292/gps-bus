@@ -129,6 +129,8 @@ public class PredictionBroadcaster {
         lastBroadcastDirection.put(state.getVehicleId(), state.getDirection());
 
         double[] prevBroadcast = lastBroadcastPosition.get(state.getVehicleId());
+        double broadcastLat = state.getPredictedLatitude();
+        double broadcastLon = state.getPredictedLongitude();
         double motionCourseDeg = Double.NaN;
         double distFromPrevBroadcast = Double.NaN;
         if (prevBroadcast != null) {
@@ -136,16 +138,20 @@ public class PredictionBroadcaster {
                     .haversineDistanceMeters(prevBroadcast[0], prevBroadcast[1],
                             state.getPredictedLatitude(), state.getPredictedLongitude());
             distFromPrevBroadcast = bDelta;
-            if (bDelta > 500.0) {
-                log.warn("[GPS_PIPELINE] WS_PRED_BROADCAST_JUMP vehicle={} plate={} delta={}m prev=({},{}) new=({},{}) coldStart={}",
+
+            double maxStep = properties.getMaxBroadcastStepMeters();
+            if (maxStep > 0 && bDelta > maxStep) {
+                double easeFactor = maxStep / bDelta;
+                broadcastLat = prevBroadcast[0] + easeFactor * (state.getPredictedLatitude() - prevBroadcast[0]);
+                broadcastLon = prevBroadcast[1] + easeFactor * (state.getPredictedLongitude() - prevBroadcast[1]);
+                log.warn("[GPS_PIPELINE] WS_PRED_GLIDE vehicle={} plate={} jump={}m cappedTo={}m target=({},{}) glided=({},{}) — easing toward target, not teleporting",
                         state.getVehicleId(), state.getLicensePlate(),
-                        String.format("%.0f", bDelta),
-                        String.format("%.5f", prevBroadcast[0]),
-                        String.format("%.5f", prevBroadcast[1]),
+                        String.format("%.0f", bDelta), String.format("%.0f", maxStep),
                         String.format("%.5f", state.getPredictedLatitude()),
                         String.format("%.5f", state.getPredictedLongitude()),
-                        isInColdStart(state));
+                        String.format("%.5f", broadcastLat), String.format("%.5f", broadcastLon));
             }
+
             if (bDelta >= COURSE_SOURCE_MIN_MOTION_METERS
                     && bDelta <= COURSE_SOURCE_MAX_MOTION_METERS) {
                 motionCourseDeg = bearingDegrees(
@@ -156,7 +162,7 @@ public class PredictionBroadcaster {
             }
         }
         lastBroadcastPosition.put(state.getVehicleId(),
-                new double[]{state.getPredictedLatitude(), state.getPredictedLongitude()});
+                new double[]{broadcastLat, broadcastLon});
 
         Double fractionValue = (state.getFractionOnRoute() >= 0) ? state.getFractionOnRoute() : null;
         List<NextStopEta> nextStops = computeNextStopsEta(state, 3);
@@ -193,8 +199,8 @@ public class PredictionBroadcaster {
                 state.getVehicleId(),
                 state.getLicensePlate(),
                 state.getRouteNumber(),
-                state.getPredictedLatitude(),
-                state.getPredictedLongitude(),
+                broadcastLat,
+                broadcastLon,
                 broadcastSpeedKmh,
                 broadcastInMotion,
                 LocalDateTime.now(),
