@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.routing.application.factory;
 
+import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
@@ -19,7 +20,12 @@ public class RouteSegmentFactory {
                     from, to, durationMinutes,
                     walkingRoute.coordinates(), walkingRoute.distanceMeters());
         }
-        return RouteSegment.walkingSegment(from, to, durationMinutes);
+        int straightLineDistanceMeters = (int) Math.round(DistanceCalculationService.haversineDistanceMeters(
+                from.getLatitudeAsDouble(), from.getLongitudeAsDouble(),
+                to.getLatitudeAsDouble(), to.getLongitudeAsDouble()));
+        return RouteSegment.walkingSegmentWithGeometry(
+                from, to, durationMinutes,
+                RouteSegment.straightLineGeometry(from, to), straightLineDistanceMeters);
     }
 
     public RouteSegment createBusRideSegment(Coordinates from, Coordinates to, int durationMinutes, String routeNumber) {

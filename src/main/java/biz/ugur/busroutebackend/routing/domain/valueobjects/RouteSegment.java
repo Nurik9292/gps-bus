@@ -95,6 +95,12 @@ public class RouteSegment extends ValueObject {
                 geometry, distanceMeters);
     }
 
+    public static List<List<Double>> straightLineGeometry(Coordinates from, Coordinates to) {
+        return List.of(
+                List.of(from.getLatitudeAsDouble(), from.getLongitudeAsDouble()),
+                List.of(to.getLatitudeAsDouble(), to.getLongitudeAsDouble()));
+    }
+
     public static RouteSegment busRideSegment(Coordinates from, Coordinates to, int minutes, String routeNumber) {
         String instruction = String.format("Take bus %s (%d min)", routeNumber, minutes);
         return new RouteSegment(SegmentType.BUS_RIDE, from, to, minutes, routeNumber, instruction);
