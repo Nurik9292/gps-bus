@@ -63,7 +63,7 @@ public class ResponseBuilder {
     private Mono<List<TripOptionDTO>> selectAndConvertBestOptions(TripPlan tripPlan) {
         TripOptionComparator comparator = new TripOptionComparator(tripPlan.getSearchCriteria());
         return Flux.fromIterable(tripPlan.getBestOptions(5, comparator))
-                .flatMap(dtoConverter::convertToDTO)
+                .concatMap(dtoConverter::convertToDTO)
                 .collectList();
     }
 
