@@ -13,25 +13,26 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class ResponseBuilderOrderTest {
+class ResponseBuilderDominanceTest {
 
     private static final Coordinates A = Coordinates.of(37.9601, 58.3261);
     private static final Coordinates B = Coordinates.of(37.9701, 58.3361);
+    private static final LocalDateTime T = LocalDateTime.of(2026, 5, 1, 10, 0);
 
     private final TripOptionDTOConverter converter = mock(TripOptionDTOConverter.class);
     private final ResponseBuilder responseBuilder = new ResponseBuilder(converter);
 
     private TripOption directOption(int busMinutes) {
         RouteSegment ride = RouteSegment.busRideSegment(A, B, busMinutes, "29A");
-        return new TripOption(TripType.DIRECT, List.of(ride), 0, LocalDateTime.of(2026, 5, 1, 10, 0));
+        return new TripOption(TripType.DIRECT, List.of(ride), 0, T);
     }
 
     private TripOption oneTransferOption(int totalMinutes) {
@@ -42,7 +43,12 @@ class ResponseBuilderOrderTest {
                 RouteSegment.busRideSegment(A, A, ride1, "1"),
                 RouteSegment.transferSegment(A, transferWait),
                 RouteSegment.busRideSegment(A, B, ride2, "2"));
-        return new TripOption(TripType.ONE_TRANSFER, segments, 0, LocalDateTime.of(2026, 5, 1, 10, 0));
+        return new TripOption(TripType.ONE_TRANSFER, segments, 0, T);
+    }
+
+    private TripOption walkingOnlyOption(int walkMinutes) {
+        RouteSegment walk = RouteSegment.walkingSegment(A, B, walkMinutes);
+        return new TripOption(TripType.WALKING_ONLY, List.of(walk), 0, T);
     }
 
     private TripOptionDTO dto(TripOption option) {
@@ -52,27 +58,28 @@ class ResponseBuilderOrderTest {
     }
 
     @Test
-    void preservesComparatorOrderEvenWhenEarlierOptionConvertsSlower() {
-        TripOption fewerTransfersSlow = directOption(50);
-        TripOption fasterWithTransfer = oneTransferOption(30);
+    void dropsDominatedTransfersButKeepsDirectAndWalking() {
+        when(converter.convertToDTO(any())).thenAnswer(inv -> Mono.just(dto(inv.getArgument(0))));
 
-        when(converter.convertToDTO(fewerTransfersSlow))
-                .thenReturn(Mono.just(dto(fewerTransfersSlow)).delayElement(Duration.ofMillis(150)));
-        when(converter.convertToDTO(fasterWithTransfer))
-                .thenReturn(Mono.just(dto(fasterWithTransfer)).delayElement(Duration.ofMillis(10)));
+        TripOption direct = directOption(35);
+        TripOption walking = walkingOnlyOption(36);
+        TripOption slowTransfer1 = oneTransferOption(52);
+        TripOption slowTransfer2 = oneTransferOption(69);
 
         TripSearchCriteria criteria = TripSearchCriteria.defaultCriteria();
         TripPlan plan = TripPlan.create(A, B, criteria);
         TripOptionComparator comparator = new TripOptionComparator(criteria);
-        plan.addTripOption(fasterWithTransfer, comparator);
-        plan.addTripOption(fewerTransfersSlow, comparator);
+        plan.addTripOption(slowTransfer1, comparator);
+        plan.addTripOption(direct, comparator);
+        plan.addTripOption(slowTransfer2, comparator);
+        plan.addTripOption(walking, comparator);
 
         SearchContext context = SearchContext.of(A, B, criteria);
 
         StepVerifier.create(responseBuilder.createSuccessResponse(plan, context))
                 .assertNext(response -> assertThat(response.getTripOptions())
                         .extracting(TripOptionDTO::getTotalTravelMinutes)
-                        .containsExactly(50, 30))
+                        .containsExactly(35, 36))
                 .verifyComplete();
     }
 }
