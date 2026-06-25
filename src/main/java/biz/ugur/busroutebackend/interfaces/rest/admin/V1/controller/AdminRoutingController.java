@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
+import biz.ugur.busroutebackend.routing.infrastructure.raptor.RaptorTimetableCache;
 import biz.ugur.busroutebackend.routing.infrastructure.raptor.RaptorTimetableGenerator;
 import biz.ugur.busroutebackend.routing.infrastructure.raptor.RaptorTransferGenerator;
 import org.springframework.http.MediaType;
@@ -16,11 +17,14 @@ public class AdminRoutingController {
 
     private final RaptorTimetableGenerator timetableGenerator;
     private final RaptorTransferGenerator transferGenerator;
+    private final RaptorTimetableCache timetableCache;
 
     public AdminRoutingController(RaptorTimetableGenerator timetableGenerator,
-                                   RaptorTransferGenerator transferGenerator) {
+                                   RaptorTransferGenerator transferGenerator,
+                                   RaptorTimetableCache timetableCache) {
         this.timetableGenerator = timetableGenerator;
         this.transferGenerator = transferGenerator;
+        this.timetableCache = timetableCache;
     }
 
     @PostMapping(path = "/regenerate-timetable", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -34,7 +38,7 @@ public class AdminRoutingController {
                 tuple.getT1().skippedGroups(),
                 tuple.getT2().rowsInserted(),
                 tuple.getT2().pairsFound()
-        ));
+        )).doOnSuccess(report -> timetableCache.invalidate());
     }
 
     public record RegenerationReport(int trips,

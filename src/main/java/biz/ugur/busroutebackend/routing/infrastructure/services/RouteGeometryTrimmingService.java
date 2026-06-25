@@ -64,6 +64,8 @@ public class RouteGeometryTrimmingService {
                 trimmedCoordinates.add(toPoint);
             }
 
+            trimmedCoordinates = removeConsecutiveDuplicates(trimmedCoordinates);
+
             if (trimmedCoordinates.size() < 2) {
                 return buildMinimalGeometry(fromStop, toStop);
             }
@@ -113,6 +115,20 @@ public class RouteGeometryTrimmingService {
         return coordinates;
     }
 
+
+    private List<double[]> removeConsecutiveDuplicates(List<double[]> coordinates) {
+        List<double[]> deduped = new ArrayList<>();
+        for (double[] point : coordinates) {
+            if (deduped.isEmpty() || !isSamePoint(deduped.get(deduped.size() - 1), point)) {
+                deduped.add(point);
+            }
+        }
+        return deduped;
+    }
+
+    private boolean isSamePoint(double[] a, double[] b) {
+        return Math.abs(a[0] - b[0]) < 1e-7 && Math.abs(a[1] - b[1]) < 1e-7;
+    }
 
     private String coordinatesToWkt(List<double[]> coordinates) {
         StringBuilder wkt = new StringBuilder("LINESTRING(");

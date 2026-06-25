@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.routing.infrastructure.services;
 
+import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService.DirectRouteResult;
 import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
@@ -13,6 +14,43 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DirectRouteSearchServiceTest {
+
+    @Test
+    void selectsAlightingStopMinimizingTotalTrip_includingEgressWalk() {
+        Coordinates origin = Coordinates.of(37.89360, 58.37598);
+        Coordinates destination = Coordinates.of(37.90981, 58.38504);
+
+        DirectRouteResult farEgressShortRide = route73(
+                "stop-legacy-556", 37.89528, 58.376541,
+                "stop-legacy-416", 37.909378, 58.381088, 12);
+        DirectRouteResult nearEgressLongerRide = route73(
+                "stop-legacy-556", 37.89528, 58.376541,
+                "stop-legacy-1162", 37.91044, 58.38515, 14);
+
+        List<DirectRouteResult> sorted = DirectRouteSearchService.sortByTotalCost(
+                List.of(farEgressShortRide, nearEgressLongerRide), origin, destination);
+        List<DirectRouteResult> best = DirectRouteSearchService.dedupeByRouteNumberAndLimit(sorted);
+
+        assertThat(best).hasSize(1);
+        assertThat(best.get(0).toStop().getId().getValue()).isEqualTo("stop-legacy-1162");
+    }
+
+    private DirectRouteResult route73(String fromStopId, double fromLat, double fromLon,
+                                      String toStopId, double toLat, double toLon, int travelMinutes) {
+        BusRoute route = BusRoute.restore(
+                BusRouteId.of("route-legacy-69"), "73", "Route 73",
+                null, null, "#1976D2", true, null, 20,
+                null, null, null, null, null, null, 0L);
+        BusStop fromStop = BusStop.restore(
+                BusStopId.of(fromStopId), fromStopId, null, null, null,
+                BigDecimal.valueOf(fromLat), BigDecimal.valueOf(fromLon),
+                true, false, null, null, null, 0L);
+        BusStop toStop = BusStop.restore(
+                BusStopId.of(toStopId), toStopId, null, null, null,
+                BigDecimal.valueOf(toLat), BigDecimal.valueOf(toLon),
+                true, false, null, null, null, 0L);
+        return new DirectRouteResult(route, fromStop, toStop, travelMinutes, 0.1, 0.1, 1);
+    }
 
     @Test
     void dedupeByRouteNumberAndLimit_returnsAllUniqueRoutes_whenManyDistinctRouteNumbers() {

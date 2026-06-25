@@ -43,6 +43,7 @@ CLAUDE.local.md
 
 # OSRM preprocessed data (large binary files, generated via make osrm-setup)
 docker/osrm/data/
+docker/osrm/data.bak/
 
 # OSRM data files
 *.osrm

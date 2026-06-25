@@ -95,15 +95,24 @@ public class RouteSegment extends ValueObject {
                 geometry, distanceMeters);
     }
 
+    public static List<List<Double>> straightLineGeometry(Coordinates from, Coordinates to) {
+        return List.of(
+                List.of(from.getLatitudeAsDouble(), from.getLongitudeAsDouble()),
+                List.of(to.getLatitudeAsDouble(), to.getLongitudeAsDouble()));
+    }
+
     public static RouteSegment busRideSegment(Coordinates from, Coordinates to, int minutes, String routeNumber) {
         String instruction = String.format("Take bus %s (%d min)", routeNumber, minutes);
         return new RouteSegment(SegmentType.BUS_RIDE, from, to, minutes, routeNumber, instruction);
     }
 
     public static RouteSegment transferSegment(Coordinates transferLocation, int waitMinutes) {
+        return transferSegment(transferLocation, transferLocation, waitMinutes);
+    }
+
+    public static RouteSegment transferSegment(Coordinates from, Coordinates to, int waitMinutes) {
         String instruction = String.format("Transfer (wait %d min)", waitMinutes);
-        return new RouteSegment(SegmentType.TRANSFER, transferLocation, transferLocation,
-                waitMinutes, null, instruction);
+        return new RouteSegment(SegmentType.TRANSFER, from, to, waitMinutes, null, instruction);
     }
 
     public static RouteSegment busRideSegmentWithGeometry(Coordinates from, Coordinates to,

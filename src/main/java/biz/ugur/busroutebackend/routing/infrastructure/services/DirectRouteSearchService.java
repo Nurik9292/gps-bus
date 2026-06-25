@@ -31,6 +31,7 @@ public class DirectRouteSearchService {
     private static final Duration OPTION_BUILD_TIMEOUT = Duration.ofSeconds(5);
     private static final int MAX_RESULTS = 5;
     private static final int BUILD_CONCURRENCY = 2;
+    private static final double WALK_SPEED_METERS_PER_MINUTE = 83.33;
 
     public DirectRouteSearchService(RouteCalculationService routeCalculationService, DirectRouteOptionBuilder optionBuilder) {
         this.routeCalculationService = routeCalculationService;
@@ -52,13 +53,36 @@ public class DirectRouteSearchService {
                 .filter(this::isRouteViable)
                 .collectList()
                 .map(routes -> dedupeByRouteNumberAndLimit(
-                        sortByProximity(routes, context.fromLocation())))
+                        sortByTotalCost(routes, context.fromLocation(), context.toLocation())))
                 .flatMapMany(Flux::fromIterable)
                 .flatMap(route -> optionBuilder.createOption(route, context)
                         .timeout(OPTION_BUILD_TIMEOUT, Mono.empty()), BUILD_CONCURRENCY)
                 .filter(Objects::nonNull)
                 .collectList()
                 .map(options -> SearchResult.successful("direct", options));
+    }
+
+    static List<RouteCalculationService.DirectRouteResult> sortByTotalCost(
+            List<RouteCalculationService.DirectRouteResult> routes,
+            Coordinates fromLocation, Coordinates toLocation) {
+        return routes.stream()
+                .sorted(Comparator.comparingDouble(route ->
+                        estimatedTotalMinutes(route, fromLocation, toLocation)))
+                .toList();
+    }
+
+    private static double estimatedTotalMinutes(RouteCalculationService.DirectRouteResult route,
+                                                Coordinates fromLocation, Coordinates toLocation) {
+        double boardingWalkMinutes = walkMinutes(fromLocation, route.fromStop());
+        double egressWalkMinutes = walkMinutes(toLocation, route.toStop());
+        return boardingWalkMinutes + route.estimatedTravelMinutes() + egressWalkMinutes;
+    }
+
+    private static double walkMinutes(Coordinates location, BusStop stop) {
+        double meters = DistanceCalculationService.haversineDistanceMeters(
+                location.getLatitudeAsDouble(), location.getLongitudeAsDouble(),
+                stop.getLatitude().doubleValue(), stop.getLongitude().doubleValue());
+        return meters / WALK_SPEED_METERS_PER_MINUTE;
     }
 
     static List<RouteCalculationService.DirectRouteResult> dedupeByRouteNumberAndLimit(
@@ -74,22 +98,6 @@ public class DirectRouteSearchService {
 
     private boolean isRouteViable(RouteCalculationService.DirectRouteResult route) {
         return route.estimatedTravelMinutes() >= 4 && route.estimatedTravelMinutes() <= 120;
-    }
-
-    private List<RouteCalculationService.DirectRouteResult> sortByProximity(
-            List<RouteCalculationService.DirectRouteResult> routes, Coordinates fromLocation) {
-        return routes.stream()
-                .sorted(Comparator
-                        .comparingDouble((RouteCalculationService.DirectRouteResult r) ->
-                                distanceToStop(r.fromStop(), fromLocation))
-                        .thenComparingInt(RouteCalculationService.DirectRouteResult::estimatedTravelMinutes))
-                .toList();
-    }
-
-    private double distanceToStop(BusStop stop, Coordinates fromLocation) {
-        return DistanceCalculationService.haversineDistanceMeters(
-                fromLocation.getLatitudeAsDouble(), fromLocation.getLongitudeAsDouble(),
-                stop.getLatitude().doubleValue(), stop.getLongitude().doubleValue());
     }
 
     private Mono<SearchResult> handleSearchError(Throwable error, SearchContext context, String type) {

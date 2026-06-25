@@ -90,11 +90,12 @@ public class WalkingOnlyRouteSearchService {
                                       List<List<Double>> geometry) {
         String instruction = String.format("Пешком %d мин (~%d м)", walkingMinutes, distanceMeters);
 
-        RouteSegment walkSegment = (geometry != null && !geometry.isEmpty())
-                ? new RouteSegment(SegmentType.WALKING, from, to, walkingMinutes, null, instruction,
-                        geometry, distanceMeters)
-                : new RouteSegment(SegmentType.WALKING, from, to, walkingMinutes, null, instruction,
-                        (String) null, distanceMeters);
+        List<List<Double>> effectiveGeometry = (geometry != null && !geometry.isEmpty())
+                ? geometry
+                : RouteSegment.straightLineGeometry(from, to);
+
+        RouteSegment walkSegment = new RouteSegment(SegmentType.WALKING, from, to, walkingMinutes, null, instruction,
+                effectiveGeometry, distanceMeters);
 
         TripOption walkingOption = tripOptionFactory.createWalkingOnlyOption(
                 List.of(walkSegment),

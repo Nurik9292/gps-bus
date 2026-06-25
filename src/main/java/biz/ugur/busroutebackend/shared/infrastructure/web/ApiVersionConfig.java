@@ -40,6 +40,7 @@ public class ApiVersionConfig {
 
     public static final String V2_ROUTES = API_V2 + ROUTES;
     public static final String V2_STOPS = API_V2 + STOPS;
+    public static final String V2_ROUTING = API_V2 + ROUTING;
 
     public static final String V1_MOBILE_BANNERS = V1_MOBILE + BANNERS;
     public static final String V1_MOBILE_CITIES = V1_MOBILE + CITIES;

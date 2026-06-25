@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<osm version="0.6" generator="bus-route-overlay">
+  <node id="9000000000001" version="1" lat="37.923160" lon="58.390310"/>
+  <node id="9000000000002" version="1" lat="37.922430" lon="58.390037"/>
+  <node id="9000000000003" version="1" lat="37.922671" lon="58.389230"/>
+  <node id="9000000000004" version="1" lat="37.922610" lon="58.388220"/>
+  <way id="9000000000010" version="1">
+    <nd ref="9000000000001"/>
+    <nd ref="9000000000002"/>
+    <nd ref="9000000000003"/>
+    <nd ref="9000000000004"/>
+    <tag k="highway" v="footway"/>
+    <tag k="footway" v="crossing"/>
+    <tag k="crossing" v="unmarked"/>
+    <tag k="note" v="manual overlay: pedestrian crossing north of Andalyb-Nyyazow circle (missing in OSM 2026-06)"/>
+  </way>
+</osm>

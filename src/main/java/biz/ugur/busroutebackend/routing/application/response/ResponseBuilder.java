@@ -5,7 +5,9 @@ import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.dto.TripOptionDTO;
 import biz.ugur.busroutebackend.routing.domain.exceptions.TripPlanningException;
 import biz.ugur.busroutebackend.routing.domain.model.TripPlan;
+import biz.ugur.busroutebackend.routing.domain.service.ParetoDominanceFilter;
 import biz.ugur.busroutebackend.routing.domain.service.TripOptionComparator;
+import biz.ugur.busroutebackend.routing.domain.valueobjects.TripOption;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -19,6 +21,7 @@ import java.util.List;
 public class ResponseBuilder {
 
     private final TripOptionDTOConverter dtoConverter;
+    private final ParetoDominanceFilter dominanceFilter = new ParetoDominanceFilter();
 
     public ResponseBuilder(TripOptionDTOConverter dtoConverter) {
         this.dtoConverter = dtoConverter;
@@ -62,8 +65,13 @@ public class ResponseBuilder {
 
     private Mono<List<TripOptionDTO>> selectAndConvertBestOptions(TripPlan tripPlan) {
         TripOptionComparator comparator = new TripOptionComparator(tripPlan.getSearchCriteria());
-        return Flux.fromIterable(tripPlan.getBestOptions(5, comparator))
-                .flatMap(dtoConverter::convertToDTO)
+        List<TripOption> nonDominated = dominanceFilter.filterDominated(tripPlan.getTripOptions());
+        List<TripOption> bestOptions = nonDominated.stream()
+                .sorted(comparator)
+                .limit(5)
+                .toList();
+        return Flux.fromIterable(bestOptions)
+                .concatMap(dtoConverter::convertToDTO)
                 .collectList();
     }
 
