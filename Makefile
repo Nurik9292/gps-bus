@@ -83,14 +83,22 @@ docker-prod-push:
 docker-prod-deploy:
 	./scripts/docker-prod.sh deploy
 
-osrm-setup: ## Download and preprocess Turkmenistan OSM data for OSRM foot routing
-	@mkdir -p docker/osrm/data
-	@if [ ! -f docker/osrm/data/turkmenistan.osm.pbf ]; then \
-		echo "Downloading Turkmenistan OSM data (~150MB)..."; \
-		curl -L --progress-bar -o docker/osrm/data/turkmenistan.osm.pbf \
+osrm-setup: ## Download OSM data, apply local crossing overlays, preprocess for OSRM foot routing
+	@mkdir -p docker/osrm/data docker/osrm/overlays
+	@if [ ! -f docker/osrm/data/turkmenistan-base.osm.pbf ]; then \
+		echo "Downloading Turkmenistan OSM data (~25MB)..."; \
+		curl -L --progress-bar -o docker/osrm/data/turkmenistan-base.osm.pbf \
 			https://download.geofabrik.de/asia/turkmenistan-latest.osm.pbf; \
 	else \
-		echo "PBF file already exists, skipping download"; \
+		echo "Base PBF exists, skipping download"; \
+	fi
+	@if ls docker/osrm/overlays/*.osm >/dev/null 2>&1 && command -v osmium >/dev/null 2>&1; then \
+		echo "Applying local overlays:"; ls docker/osrm/overlays/*.osm; \
+		osmium merge docker/osrm/data/turkmenistan-base.osm.pbf docker/osrm/overlays/*.osm \
+			-o docker/osrm/data/turkmenistan.osm.pbf --overwrite; \
+	else \
+		echo "No overlays (or osmium missing) - using base as-is"; \
+		cp docker/osrm/data/turkmenistan-base.osm.pbf docker/osrm/data/turkmenistan.osm.pbf; \
 	fi
 	@echo "Extracting graph for foot routing..."
 	docker run --rm -v $(PWD)/docker/osrm/data:/data osrm/osrm-backend:latest \
@@ -101,7 +109,7 @@ osrm-setup: ## Download and preprocess Turkmenistan OSM data for OSRM foot routi
 	@echo "Customizing..."
 	docker run --rm -v $(PWD)/docker/osrm/data:/data osrm/osrm-backend:latest \
 		osrm-customize /data/turkmenistan.osrm
-	@echo "OSRM data ready! Now run: docker-compose up -d osrm"
+	@echo "OSRM data ready! Now run: docker compose restart osrm"
 
 run: ## Run application with .env variables loaded
 	./mvnw spring-boot:run
