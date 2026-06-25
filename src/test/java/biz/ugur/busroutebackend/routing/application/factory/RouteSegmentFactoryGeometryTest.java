@@ -43,20 +43,17 @@ class RouteSegmentFactoryGeometryTest {
     }
 
     @Test
-    void walkSegmentFallsBackToStraightLineWhenOsrmDetourImplausible() {
+    void walkSegmentKeepsOsrmGeometryEvenForLongDetour() {
         List<List<Double>> osrm = List.of(
                 List.of(37.90395, 58.39808),
-                List.of(37.95000, 58.45000),
+                List.of(37.90600, 58.40400),
                 List.of(37.90971, 58.40225));
         WalkingRouteService.WalkingRouteResult result =
-                new WalkingRouteService.WalkingRouteResult(osrm, 5000);
+                new WalkingRouteService.WalkingRouteResult(osrm, 1600);
 
         RouteSegment segment = factory.createWalkingSegment(FROM, TO, 5, result);
 
-        assertThat(segment.getWalkingGeometry()).containsExactly(
-                List.of(FROM.getLatitudeAsDouble(), FROM.getLongitudeAsDouble()),
-                List.of(TO.getLatitudeAsDouble(), TO.getLongitudeAsDouble()));
-        assertThat(segment.getTotalDistanceMeters()).isLessThan(5000);
-        assertThat(segment.getTotalDistanceMeters()).isPositive();
+        assertThat(segment.getWalkingGeometry()).isEqualTo(osrm);
+        assertThat(segment.getTotalDistanceMeters()).isEqualTo(1600);
     }
 }

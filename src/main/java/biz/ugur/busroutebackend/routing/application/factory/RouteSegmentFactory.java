@@ -2,7 +2,6 @@ package biz.ugur.busroutebackend.routing.application.factory;
 
 import biz.ugur.busroutebackend.geospatial.domain.services.DistanceCalculationService;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
-import biz.ugur.busroutebackend.routing.domain.services.WalkingGeometryGuard;
 import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import org.springframework.stereotype.Component;
@@ -16,19 +15,17 @@ public class RouteSegmentFactory {
 
     public RouteSegment createWalkingSegment(Coordinates from, Coordinates to, int durationMinutes,
                                              WalkingRouteService.WalkingRouteResult walkingRoute) {
-        double straightLineMeters = DistanceCalculationService.haversineDistanceMeters(
-                from.getLatitudeAsDouble(), from.getLongitudeAsDouble(),
-                to.getLatitudeAsDouble(), to.getLongitudeAsDouble());
-
-        if (walkingRoute.hasGeometry()
-                && !WalkingGeometryGuard.isImplausibleDetour(straightLineMeters, walkingRoute.distanceMeters())) {
+        if (walkingRoute.hasGeometry()) {
             return RouteSegment.walkingSegmentWithGeometry(
                     from, to, durationMinutes,
                     walkingRoute.coordinates(), walkingRoute.distanceMeters());
         }
+        int straightLineDistanceMeters = (int) Math.round(DistanceCalculationService.haversineDistanceMeters(
+                from.getLatitudeAsDouble(), from.getLongitudeAsDouble(),
+                to.getLatitudeAsDouble(), to.getLongitudeAsDouble()));
         return RouteSegment.walkingSegmentWithGeometry(
                 from, to, durationMinutes,
-                RouteSegment.straightLineGeometry(from, to), (int) Math.round(straightLineMeters));
+                RouteSegment.straightLineGeometry(from, to), straightLineDistanceMeters);
     }
 
     public RouteSegment createBusRideSegment(Coordinates from, Coordinates to, int durationMinutes, String routeNumber) {
