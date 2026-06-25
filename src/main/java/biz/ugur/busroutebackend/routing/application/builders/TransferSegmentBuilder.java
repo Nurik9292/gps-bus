@@ -25,12 +25,9 @@ public class TransferSegmentBuilder {
 
     public List<RouteSegment> build(Coordinates alightLocation, String alightName,
                                     Coordinates boardLocation, String boardName,
-                                    int transferWaitMinutes) {
-        double transferWalkMeters = DistanceCalculationService.haversineDistanceMeters(
-                alightLocation.getLatitudeAsDouble(), alightLocation.getLongitudeAsDouble(),
-                boardLocation.getLatitudeAsDouble(), boardLocation.getLongitudeAsDouble());
-
-        if (transferWalkMeters < SAME_STOP_THRESHOLD_METERS) {
+                                    int transferWaitMinutes,
+                                    WalkingRouteService.WalkingRouteResult transferWalk) {
+        if (isSameStop(alightLocation, boardLocation)) {
             return List.of(transferAt(boardLocation, boardName, transferWaitMinutes));
         }
 
@@ -38,12 +35,18 @@ public class TransferSegmentBuilder {
         int waitMinutes = Math.max(0, transferWaitMinutes - walkMinutes);
 
         RouteSegment walk = routeSegmentFactory.createWalkingSegment(
-                alightLocation, boardLocation, walkMinutes,
-                WalkingRouteService.WalkingRouteResult.EMPTY);
+                alightLocation, boardLocation, walkMinutes, transferWalk);
         walk.setFromLocationName(alightName);
         walk.setToLocationName(boardName);
 
         return List.of(walk, transferAt(boardLocation, boardName, waitMinutes));
+    }
+
+    public static boolean isSameStop(Coordinates alightLocation, Coordinates boardLocation) {
+        double meters = DistanceCalculationService.haversineDistanceMeters(
+                alightLocation.getLatitudeAsDouble(), alightLocation.getLongitudeAsDouble(),
+                boardLocation.getLatitudeAsDouble(), boardLocation.getLongitudeAsDouble());
+        return meters < SAME_STOP_THRESHOLD_METERS;
     }
 
     private RouteSegment transferAt(Coordinates location, String name, int waitMinutes) {

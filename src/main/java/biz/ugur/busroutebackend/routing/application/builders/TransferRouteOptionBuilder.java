@@ -3,7 +3,6 @@ package biz.ugur.busroutebackend.routing.application.builders;
 import biz.ugur.busroutebackend.routing.application.dto.SearchContext;
 import biz.ugur.busroutebackend.routing.application.factory.RouteSegmentFactory;
 import biz.ugur.busroutebackend.routing.application.factory.TripOptionFactory;
-import biz.ugur.busroutebackend.routing.domain.enums.TripType;
 import biz.ugur.busroutebackend.routing.domain.services.ETACalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.RouteCalculationService;
 import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
@@ -89,14 +88,21 @@ public class TransferRouteOptionBuilder {
         String fromStopName = transferRoute.fromStop().getStopName();
         LocalDateTime departureTime = LocalDateTime.now();
 
+        Mono<WalkingRouteService.WalkingRouteResult> transferWalk =
+                TransferSegmentBuilder.isSameStop(transferStopLocation, secondBoardStopLocation)
+                        ? Mono.just(WalkingRouteService.WalkingRouteResult.EMPTY)
+                        : walkingRouteService.getWalkingRoute(transferStopLocation, secondBoardStopLocation);
+
         return Mono.zip(
                 etaCalculationService.calculateWaitingTimeMinutes(firstRouteNumber, fromStopName, departureTime),
                 walkingRouteService.getWalkingRoute(context.fromLocation(), firstStopLocation),
-                walkingRouteService.getWalkingRoute(lastStopLocation, context.toLocation())
+                walkingRouteService.getWalkingRoute(lastStopLocation, context.toLocation()),
+                transferWalk
         ).map(tuple -> {
             int initialWaitingMinutes = tuple.getT1();
             WalkingRouteService.WalkingRouteResult walkToFirst = tuple.getT2();
             WalkingRouteService.WalkingRouteResult walkFromLast = tuple.getT3();
+            WalkingRouteService.WalkingRouteResult transferWalkResult = tuple.getT4();
 
             String firstRouteGeometry = selectGeometryForDirection(
                     transferRoute.firstRoute(),
@@ -142,7 +148,7 @@ public class TransferRouteOptionBuilder {
             List<RouteSegment> transferSegments = transferSegmentBuilder.build(
                     transferStopLocation, transferStopName,
                     secondBoardStopLocation, secondBoardStopName,
-                    transferRoute.transferWaitMinutes());
+                    transferRoute.transferWaitMinutes(), transferWalkResult);
 
             RouteSegment secondBusSeg = createBusSegmentWithGeometry(secondBoardStopLocation, lastStopLocation, transferRoute.secondRouteTravelMinutes(), secondRouteNumber, secondRouteTrimmed, secondRouteDistance);
             secondBusSeg.setFromLocationName(secondBoardStopName);
@@ -190,14 +196,27 @@ public class TransferRouteOptionBuilder {
         String fromStopName = twoTransferRoute.fromStop().getStopName();
         LocalDateTime departureTime = LocalDateTime.now();
 
+        Mono<WalkingRouteService.WalkingRouteResult> transferWalk1 =
+                TransferSegmentBuilder.isSameStop(firstTransferLocation, secondBoardLocation)
+                        ? Mono.just(WalkingRouteService.WalkingRouteResult.EMPTY)
+                        : walkingRouteService.getWalkingRoute(firstTransferLocation, secondBoardLocation);
+        Mono<WalkingRouteService.WalkingRouteResult> transferWalk2 =
+                TransferSegmentBuilder.isSameStop(secondTransferLocation, thirdBoardLocation)
+                        ? Mono.just(WalkingRouteService.WalkingRouteResult.EMPTY)
+                        : walkingRouteService.getWalkingRoute(secondTransferLocation, thirdBoardLocation);
+
         return Mono.zip(
                 etaCalculationService.calculateWaitingTimeMinutes(firstRouteNumber, fromStopName, departureTime),
                 walkingRouteService.getWalkingRoute(context.fromLocation(), firstStopLocation),
-                walkingRouteService.getWalkingRoute(finalStopLocation, context.toLocation())
+                walkingRouteService.getWalkingRoute(finalStopLocation, context.toLocation()),
+                transferWalk1,
+                transferWalk2
         ).map(tuple -> {
             int initialWaitingMinutes = tuple.getT1();
             WalkingRouteService.WalkingRouteResult walkToFirst = tuple.getT2();
             WalkingRouteService.WalkingRouteResult walkFromFinal = tuple.getT3();
+            WalkingRouteService.WalkingRouteResult transferWalk1Result = tuple.getT4();
+            WalkingRouteService.WalkingRouteResult transferWalk2Result = tuple.getT5();
 
             String firstRouteGeometry = selectGeometryForDirection(
                     twoTransferRoute.firstRoute(),
@@ -259,7 +278,7 @@ public class TransferRouteOptionBuilder {
             List<RouteSegment> transfer1Segments = transferSegmentBuilder.build(
                     firstTransferLocation, firstTransferStopName,
                     secondBoardLocation, secondBoardStopName,
-                    twoTransferRoute.firstTransferWaitMinutes());
+                    twoTransferRoute.firstTransferWaitMinutes(), transferWalk1Result);
 
             RouteSegment secondBusSeg2 = createBusSegmentWithGeometry(secondBoardLocation, secondTransferLocation, twoTransferRoute.secondRouteTravelMinutes(), secondRouteNum, secondRouteTrimmed, secondRouteDistance2);
             secondBusSeg2.setFromLocationName(secondBoardStopName);
@@ -270,7 +289,7 @@ public class TransferRouteOptionBuilder {
             List<RouteSegment> transfer2Segments = transferSegmentBuilder.build(
                     secondTransferLocation, secondTransferStopName,
                     thirdBoardLocation, thirdBoardStopName,
-                    twoTransferRoute.secondTransferWaitMinutes());
+                    twoTransferRoute.secondTransferWaitMinutes(), transferWalk2Result);
 
             RouteSegment thirdBusSeg2 = createBusSegmentWithGeometry(thirdBoardLocation, finalStopLocation, twoTransferRoute.thirdRouteTravelMinutes(), thirdRouteNum, thirdRouteTrimmed, thirdRouteDistance2);
             thirdBusSeg2.setFromLocationName(thirdBoardStopName);

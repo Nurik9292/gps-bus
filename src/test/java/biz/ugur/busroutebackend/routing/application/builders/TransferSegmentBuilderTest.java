@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.routing.application.builders;
 import biz.ugur.busroutebackend.geospatial.domain.valueobjects.Coordinates;
 import biz.ugur.busroutebackend.routing.application.factory.RouteSegmentFactory;
 import biz.ugur.busroutebackend.routing.domain.enums.SegmentType;
+import biz.ugur.busroutebackend.routing.domain.services.WalkingRouteService;
 import biz.ugur.busroutebackend.routing.domain.valueobjects.RouteSegment;
 import org.junit.jupiter.api.Test;
 
@@ -23,17 +24,23 @@ class TransferSegmentBuilderTest {
             new TransferSegmentBuilder(walkingTimeCalculator, routeSegmentFactory);
 
     @Test
-    void differentStops_producesWalkWithGeometryThenTransferAtBoard() {
+    void differentStops_usesOsrmGeometryThenTransferAtBoard() {
         when(walkingTimeCalculator.calculateWalkingTime(ALIGHT, BOARD)).thenReturn(3);
+        List<List<Double>> osrm = List.of(
+                List.of(37.92316, 58.39031),
+                List.of(37.92290, 58.38930),
+                List.of(37.92261, 58.38822));
+        WalkingRouteService.WalkingRouteResult transferWalk =
+                new WalkingRouteService.WalkingRouteResult(osrm, 220);
 
-        List<RouteSegment> segments = builder.build(ALIGHT, "alight", BOARD, "board", 5);
+        List<RouteSegment> segments = builder.build(ALIGHT, "alight", BOARD, "board", 5, transferWalk);
 
         assertThat(segments).hasSize(2);
         RouteSegment walk = segments.get(0);
         RouteSegment transfer = segments.get(1);
 
         assertThat(walk.getType()).isEqualTo(SegmentType.WALKING);
-        assertThat(walk.getWalkingGeometry()).isNotNull();
+        assertThat(walk.getWalkingGeometry()).isEqualTo(osrm);
         assertThat(walk.getFromLocation()).isEqualTo(ALIGHT);
         assertThat(walk.getToLocation()).isEqualTo(BOARD);
         assertThat(walk.getDurationMinutes()).isEqualTo(3);
@@ -47,10 +54,17 @@ class TransferSegmentBuilderTest {
 
     @Test
     void sameStop_producesSingleTransfer() {
-        List<RouteSegment> segments = builder.build(ALIGHT, "stop", ALIGHT, "stop", 4);
+        List<RouteSegment> segments = builder.build(
+                ALIGHT, "stop", ALIGHT, "stop", 4, WalkingRouteService.WalkingRouteResult.EMPTY);
 
         assertThat(segments).hasSize(1);
         assertThat(segments.get(0).getType()).isEqualTo(SegmentType.TRANSFER);
         assertThat(segments.get(0).getDurationMinutes()).isEqualTo(4);
+    }
+
+    @Test
+    void isSameStop_trueForCoincidentStops_falseForApart() {
+        assertThat(TransferSegmentBuilder.isSameStop(ALIGHT, ALIGHT)).isTrue();
+        assertThat(TransferSegmentBuilder.isSameStop(ALIGHT, BOARD)).isFalse();
     }
 }
