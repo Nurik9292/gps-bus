@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -32,8 +31,7 @@ public class ResponseBuilderV2 {
     public Mono<TripSearchResponseV2> createSuccessResponse(TripPlan tripPlan, SearchContext context) {
         if (tripPlan.getTripOptions().isEmpty()) {
             log.warn("[{}] No routes found - returning error response", context.searchId());
-            return Mono.just(new TripSearchResponseV2(
-                    "error",
+            return Mono.just(TripSearchResponseV2.error(
                     TripPlanningException.PlanningErrorType.NO_ROUTE_FOUND.getDefaultMessage(),
                     TripPlanningException.PlanningErrorType.NO_ROUTE_FOUND.name()));
         }
@@ -46,22 +44,16 @@ public class ResponseBuilderV2 {
 
         return Flux.fromIterable(bestOptions)
                 .concatMap(option -> dtoConverter.convertToDTO(option)
-                        .map(dto -> new TripOptionV2DTO(dto, option.getInitialWaitingMinutes())))
+                        .map(dto -> TripOptionV2DTO.fromV1(dto, option.getInitialWaitingMinutes())))
                 .collectList()
-                .map(options -> {
-                    TripSearchResponseV2 response = new TripSearchResponseV2(
-                            "success",
-                            String.format("Found %d route options", options.size()),
-                            options);
-                    response.setSearchTime(LocalDateTime.now());
-                    return response;
-                });
+                .map(options -> TripSearchResponseV2.success(
+                        String.format("Found %d route options", options.size()), options));
     }
 
     public Mono<TripSearchResponseV2> createErrorResponse(
             TripPlanningException.PlanningErrorType errorType, String customMessage) {
         String message = customMessage != null ? customMessage : errorType.getDefaultMessage();
-        return Mono.just(new TripSearchResponseV2("error", message, errorType.name()));
+        return Mono.just(TripSearchResponseV2.error(message, errorType.name()));
     }
 
     public Mono<TripSearchResponseV2> createErrorResponseFromException(TripPlanningException ex) {

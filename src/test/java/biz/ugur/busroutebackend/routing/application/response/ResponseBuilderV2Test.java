@@ -51,12 +51,12 @@ class ResponseBuilderV2Test {
 
         StepVerifier.create(responseBuilder.createSuccessResponse(plan, context))
                 .assertNext(response -> {
-                    TripOptionV2DTO option = response.getTripOptions().getFirst();
+                    TripOptionV2DTO option = response.tripOptions().getFirst();
                     int segmentsSum = direct.getRouteSegments().stream()
                             .mapToInt(RouteSegment::getDurationMinutes).sum();
-                    assertThat(option.getInitialWaitingMinutes()).isEqualTo(15);
-                    assertThat(option.getOption().getTotalTravelMinutes())
-                            .isEqualTo(segmentsSum + option.getInitialWaitingMinutes());
+                    assertThat(option.initialWaitingMinutes()).isEqualTo(15);
+                    assertThat(option.totalTravelMinutes())
+                            .isEqualTo(segmentsSum + option.initialWaitingMinutes());
                 })
                 .verifyComplete();
     }

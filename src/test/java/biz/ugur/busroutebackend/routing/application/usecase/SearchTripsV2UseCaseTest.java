@@ -61,11 +61,11 @@ class SearchTripsV2UseCaseTest {
         when(contextFactory.createFromRequest(any(), any())).thenReturn(context);
         when(parallelSearchService.searchAllRoutes(any())).thenReturn(Mono.just(plan));
         when(responseBuilder.createSuccessResponse(any(), any()))
-                .thenReturn(Mono.just(new TripSearchResponseV2("success", "ok", List.of())));
+                .thenReturn(Mono.just(TripSearchResponseV2.success("ok", List.of())));
 
         StepVerifier.create(useCase.execute(Mono.just(request(37.9601, 58.3261))))
                 .assertNext(response -> {
-                    org.assertj.core.api.Assertions.assertThat(response.getStatus()).isEqualTo("success");
+                    org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("success");
                 })
                 .verifyComplete();
     }
@@ -74,12 +74,12 @@ class SearchTripsV2UseCaseTest {
     void returnsErrorResponseWhenOriginMissing() {
         when(responseBuilder.createErrorResponse(
                 TripPlanningException.PlanningErrorType.MISSING_LOCATION, null))
-                .thenReturn(Mono.just(new TripSearchResponseV2("error", "missing", "MISSING_LOCATION")));
+                .thenReturn(Mono.just(TripSearchResponseV2.error("missing", "MISSING_LOCATION")));
 
         StepVerifier.create(useCase.execute(Mono.just(request(null, null))))
                 .assertNext(response -> {
-                    org.assertj.core.api.Assertions.assertThat(response.getStatus()).isEqualTo("error");
-                    org.assertj.core.api.Assertions.assertThat(response.getErrorType()).isEqualTo("MISSING_LOCATION");
+                    org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("error");
+                    org.assertj.core.api.Assertions.assertThat(response.errorType()).isEqualTo("MISSING_LOCATION");
                 })
                 .verifyComplete();
     }

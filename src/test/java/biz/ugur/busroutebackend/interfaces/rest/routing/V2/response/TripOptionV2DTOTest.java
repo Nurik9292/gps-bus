@@ -13,15 +13,27 @@ class TripOptionV2DTOTest {
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Test
-    void exposesInitialWaitingAlongsideFlattenedBaseFields() throws Exception {
-        TripOptionDTO base = new TripOptionDTO("opt-1", "direct", "Прямой 35 мин",
-                35, 0, 0, List.of());
-        TripOptionV2DTO v2 = new TripOptionV2DTO(base, 15);
+    void serializesCamelCaseWithInitialWaiting() throws Exception {
+        TripOptionDTO v1 = new TripOptionDTO("opt-1", "direct", "Прямой 35 мин",
+                35, 4, 0, List.of());
+        TripOptionV2DTO v2 = TripOptionV2DTO.fromV1(v1, 15);
 
         String json = objectMapper.writeValueAsString(v2);
 
-        assertThat(json).contains("\"total_travel_minutes\":35");
-        assertThat(json).contains("\"initial_waiting_minutes\":15");
-        assertThat(json).doesNotContain("\"base\"");
+        assertThat(json).contains("\"totalTravelMinutes\":35");
+        assertThat(json).contains("\"totalWalkingMinutes\":4");
+        assertThat(json).contains("\"initialWaitingMinutes\":15");
+        assertThat(json).contains("\"tripType\":\"direct\"");
+        assertThat(json).doesNotContain("_");
+    }
+
+    @Test
+    void exposesInitialWaitingValue() {
+        TripOptionDTO v1 = new TripOptionDTO("opt-1", "direct", "summary", 35, 4, 0, List.of());
+
+        TripOptionV2DTO v2 = TripOptionV2DTO.fromV1(v1, 15);
+
+        assertThat(v2.initialWaitingMinutes()).isEqualTo(15);
+        assertThat(v2.totalTravelMinutes()).isEqualTo(35);
     }
 }
