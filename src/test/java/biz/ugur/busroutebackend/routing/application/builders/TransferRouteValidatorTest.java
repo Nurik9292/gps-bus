@@ -37,7 +37,7 @@ class TransferRouteValidatorTest {
     private TransferRouteResult oneTransfer(String firstRouteNumber, String secondRouteNumber,
                                             int firstMinutes, int waitMinutes, int secondMinutes) {
         return new TransferRouteResult(
-                route(firstRouteNumber), stop("from"), stop("transfer"),
+                route(firstRouteNumber), stop("from"), stop("transfer"), stop("transfer"),
                 route(secondRouteNumber), stop("to"),
                 firstMinutes, waitMinutes, secondMinutes,
                 100.0, 100.0,
@@ -47,8 +47,8 @@ class TransferRouteValidatorTest {
 
     private TwoTransferRouteResult twoTransfer(String r1, String r2, String r3) {
         return new TwoTransferRouteResult(
-                route(r1), stop("from"), stop("t1"),
-                route(r2), stop("t2"),
+                route(r1), stop("from"), stop("t1"), stop("t1"),
+                route(r2), stop("t2"), stop("t2"),
                 route(r3), stop("to"),
                 10, 5, 10, 5, 10,
                 100.0, 100.0,

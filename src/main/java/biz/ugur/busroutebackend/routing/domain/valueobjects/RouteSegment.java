@@ -107,9 +107,12 @@ public class RouteSegment extends ValueObject {
     }
 
     public static RouteSegment transferSegment(Coordinates transferLocation, int waitMinutes) {
+        return transferSegment(transferLocation, transferLocation, waitMinutes);
+    }
+
+    public static RouteSegment transferSegment(Coordinates from, Coordinates to, int waitMinutes) {
         String instruction = String.format("Transfer (wait %d min)", waitMinutes);
-        return new RouteSegment(SegmentType.TRANSFER, transferLocation, transferLocation,
-                waitMinutes, null, instruction);
+        return new RouteSegment(SegmentType.TRANSFER, from, to, waitMinutes, null, instruction);
     }
 
     public static RouteSegment busRideSegmentWithGeometry(Coordinates from, Coordinates to,

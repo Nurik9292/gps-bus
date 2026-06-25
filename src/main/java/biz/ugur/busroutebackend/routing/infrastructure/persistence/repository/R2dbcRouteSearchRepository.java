@@ -372,7 +372,7 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
         int transferWaitMinutes = calculateTransferWaitTime(isMajorStop, firstRouteVehicles, secondRouteVehicles);
 
         return new TransferRouteResult(
-                firstRoute, fromStop, transferStop,
+                firstRoute, fromStop, transferStop, transferStop,
                 secondRoute, toStop,
                 adjustedFirstMinutes, transferWaitMinutes, adjustedSecondMinutes,
                 0.0, 0.0,
@@ -880,8 +880,8 @@ public class R2dbcRouteSearchRepository implements RouteSearchRepository {
         int secondTransferWait = calculateTransferWaitTime(isSecondTransferMajor, secondRouteVehicles, thirdRouteVehicles);
 
         return new TwoTransferRouteResult(
-                firstRoute, fromStop, firstTransferStop,
-                secondRoute, secondTransferStop,
+                firstRoute, fromStop, firstTransferStop, firstTransferStop,
+                secondRoute, secondTransferStop, secondTransferStop,
                 thirdRoute, toStop,
                 adjustedFirstMinutes,
                 firstTransferWait,

@@ -69,6 +69,7 @@ public class TransferRouteOptionBuilder {
 
         Coordinates firstStopLocation = createCoordinatesFromStop(transferRoute.fromStop());
         Coordinates transferStopLocation = createCoordinatesFromStop(transferRoute.transferStop());
+        Coordinates secondBoardStopLocation = createCoordinatesFromStop(transferRoute.secondBoardStop());
         Coordinates lastStopLocation = createCoordinatesFromStop(transferRoute.toStop());
 
         int walkingToFirst = walkingTimeCalculator.calculateWalkingTime(
@@ -100,7 +101,7 @@ public class TransferRouteOptionBuilder {
             String secondRouteGeometry = selectGeometryForDirection(
                     transferRoute.secondRoute(),
                     transferRoute.secondDirection(),
-                    transferRoute.transferStop(), transferRoute.toStop());
+                    transferRoute.secondBoardStop(), transferRoute.toStop());
 
             String firstRouteTrimmed = trimRouteGeometry(
                     firstRouteGeometry,
@@ -110,7 +111,7 @@ public class TransferRouteOptionBuilder {
 
             String secondRouteTrimmed = trimRouteGeometry(
                     secondRouteGeometry,
-                    transferRoute.transferStop(),
+                    transferRoute.secondBoardStop(),
                     transferRoute.toStop()
             );
 
@@ -121,6 +122,7 @@ public class TransferRouteOptionBuilder {
             Integer secondRouteDistance = secondCalcDist > 0 ? secondCalcDist : null;
 
             String transferStopName = transferRoute.transferStop().getStopName();
+            String secondBoardStopName = transferRoute.secondBoardStop().getStopName();
             String lastStopName = transferRoute.toStop().getStopName();
             String secondRouteNumber = transferRoute.secondRoute().getRouteNumber();
 
@@ -133,14 +135,14 @@ public class TransferRouteOptionBuilder {
             firstBusSeg.setFromStopId(transferRoute.fromStop().getId().toString());
             firstBusSeg.setToStopId(transferRoute.transferStop().getId().toString());
 
-            RouteSegment transferSeg = routeSegmentFactory.createTransferSegment(transferStopLocation, transferRoute.transferWaitMinutes());
+            RouteSegment transferSeg = routeSegmentFactory.createTransferSegment(transferStopLocation, secondBoardStopLocation, transferRoute.transferWaitMinutes());
             transferSeg.setFromLocationName(transferStopName);
-            transferSeg.setToLocationName(transferStopName);
+            transferSeg.setToLocationName(secondBoardStopName);
 
-            RouteSegment secondBusSeg = createBusSegmentWithGeometry(transferStopLocation, lastStopLocation, transferRoute.secondRouteTravelMinutes(), secondRouteNumber, secondRouteTrimmed, secondRouteDistance);
-            secondBusSeg.setFromLocationName(transferStopName);
+            RouteSegment secondBusSeg = createBusSegmentWithGeometry(secondBoardStopLocation, lastStopLocation, transferRoute.secondRouteTravelMinutes(), secondRouteNumber, secondRouteTrimmed, secondRouteDistance);
+            secondBusSeg.setFromLocationName(secondBoardStopName);
             secondBusSeg.setToLocationName(lastStopName);
-            secondBusSeg.setFromStopId(transferRoute.transferStop().getId().toString());
+            secondBusSeg.setFromStopId(transferRoute.secondBoardStop().getId().toString());
             secondBusSeg.setToStopId(transferRoute.toStop().getId().toString());
 
             RouteSegment walkFromSeg = routeSegmentFactory.createWalkingSegment(lastStopLocation, context.toLocation(), walkingFromLast, walkFromLast);
@@ -160,7 +162,9 @@ public class TransferRouteOptionBuilder {
 
         Coordinates firstStopLocation = createCoordinatesFromStop(twoTransferRoute.fromStop());
         Coordinates firstTransferLocation = createCoordinatesFromStop(twoTransferRoute.firstTransferStop());
+        Coordinates secondBoardLocation = createCoordinatesFromStop(twoTransferRoute.secondBoardStop());
         Coordinates secondTransferLocation = createCoordinatesFromStop(twoTransferRoute.secondTransferStop());
+        Coordinates thirdBoardLocation = createCoordinatesFromStop(twoTransferRoute.thirdBoardStop());
         Coordinates finalStopLocation = createCoordinatesFromStop(twoTransferRoute.toStop());
 
         int walkingToFirst = walkingTimeCalculator.calculateWalkingTime(
@@ -192,11 +196,11 @@ public class TransferRouteOptionBuilder {
             String secondRouteGeometry = selectGeometryForDirection(
                     twoTransferRoute.secondRoute(),
                     twoTransferRoute.secondDirection(),
-                    twoTransferRoute.firstTransferStop(), twoTransferRoute.secondTransferStop());
+                    twoTransferRoute.secondBoardStop(), twoTransferRoute.secondTransferStop());
             String thirdRouteGeometry = selectGeometryForDirection(
                     twoTransferRoute.thirdRoute(),
                     twoTransferRoute.thirdDirection(),
-                    twoTransferRoute.secondTransferStop(), twoTransferRoute.toStop());
+                    twoTransferRoute.thirdBoardStop(), twoTransferRoute.toStop());
 
             String firstRouteTrimmed = trimRouteGeometry(
                     firstRouteGeometry,
@@ -206,13 +210,13 @@ public class TransferRouteOptionBuilder {
 
             String secondRouteTrimmed = trimRouteGeometry(
                     secondRouteGeometry,
-                    twoTransferRoute.firstTransferStop(),
+                    twoTransferRoute.secondBoardStop(),
                     twoTransferRoute.secondTransferStop()
             );
 
             String thirdRouteTrimmed = trimRouteGeometry(
                     thirdRouteGeometry,
-                    twoTransferRoute.secondTransferStop(),
+                    twoTransferRoute.thirdBoardStop(),
                     twoTransferRoute.toStop()
             );
 
@@ -226,7 +230,9 @@ public class TransferRouteOptionBuilder {
             Integer thirdRouteDistance2 = thirdCalcDist2 > 0 ? thirdCalcDist2 : null;
 
             String firstTransferStopName = twoTransferRoute.firstTransferStop().getStopName();
+            String secondBoardStopName = twoTransferRoute.secondBoardStop().getStopName();
             String secondTransferStopName = twoTransferRoute.secondTransferStop().getStopName();
+            String thirdBoardStopName = twoTransferRoute.thirdBoardStop().getStopName();
             String finalStopName = twoTransferRoute.toStop().getStopName();
             String secondRouteNum = twoTransferRoute.secondRoute().getRouteNumber();
             String thirdRouteNum = twoTransferRoute.thirdRoute().getRouteNumber();
@@ -240,24 +246,24 @@ public class TransferRouteOptionBuilder {
             firstBusSeg2.setFromStopId(twoTransferRoute.fromStop().getId().toString());
             firstBusSeg2.setToStopId(twoTransferRoute.firstTransferStop().getId().toString());
 
-            RouteSegment transfer1Seg = routeSegmentFactory.createTransferSegment(firstTransferLocation, twoTransferRoute.firstTransferWaitMinutes());
+            RouteSegment transfer1Seg = routeSegmentFactory.createTransferSegment(firstTransferLocation, secondBoardLocation, twoTransferRoute.firstTransferWaitMinutes());
             transfer1Seg.setFromLocationName(firstTransferStopName);
-            transfer1Seg.setToLocationName(firstTransferStopName);
+            transfer1Seg.setToLocationName(secondBoardStopName);
 
-            RouteSegment secondBusSeg2 = createBusSegmentWithGeometry(firstTransferLocation, secondTransferLocation, twoTransferRoute.secondRouteTravelMinutes(), secondRouteNum, secondRouteTrimmed, secondRouteDistance2);
-            secondBusSeg2.setFromLocationName(firstTransferStopName);
+            RouteSegment secondBusSeg2 = createBusSegmentWithGeometry(secondBoardLocation, secondTransferLocation, twoTransferRoute.secondRouteTravelMinutes(), secondRouteNum, secondRouteTrimmed, secondRouteDistance2);
+            secondBusSeg2.setFromLocationName(secondBoardStopName);
             secondBusSeg2.setToLocationName(secondTransferStopName);
-            secondBusSeg2.setFromStopId(twoTransferRoute.firstTransferStop().getId().toString());
+            secondBusSeg2.setFromStopId(twoTransferRoute.secondBoardStop().getId().toString());
             secondBusSeg2.setToStopId(twoTransferRoute.secondTransferStop().getId().toString());
 
-            RouteSegment transfer2Seg = routeSegmentFactory.createTransferSegment(secondTransferLocation, twoTransferRoute.secondTransferWaitMinutes());
+            RouteSegment transfer2Seg = routeSegmentFactory.createTransferSegment(secondTransferLocation, thirdBoardLocation, twoTransferRoute.secondTransferWaitMinutes());
             transfer2Seg.setFromLocationName(secondTransferStopName);
-            transfer2Seg.setToLocationName(secondTransferStopName);
+            transfer2Seg.setToLocationName(thirdBoardStopName);
 
-            RouteSegment thirdBusSeg2 = createBusSegmentWithGeometry(secondTransferLocation, finalStopLocation, twoTransferRoute.thirdRouteTravelMinutes(), thirdRouteNum, thirdRouteTrimmed, thirdRouteDistance2);
-            thirdBusSeg2.setFromLocationName(secondTransferStopName);
+            RouteSegment thirdBusSeg2 = createBusSegmentWithGeometry(thirdBoardLocation, finalStopLocation, twoTransferRoute.thirdRouteTravelMinutes(), thirdRouteNum, thirdRouteTrimmed, thirdRouteDistance2);
+            thirdBusSeg2.setFromLocationName(thirdBoardStopName);
             thirdBusSeg2.setToLocationName(finalStopName);
-            thirdBusSeg2.setFromStopId(twoTransferRoute.secondTransferStop().getId().toString());
+            thirdBusSeg2.setFromStopId(twoTransferRoute.thirdBoardStop().getId().toString());
             thirdBusSeg2.setToStopId(twoTransferRoute.toStop().getId().toString());
 
             RouteSegment walkFromSeg2 = routeSegmentFactory.createWalkingSegment(finalStopLocation, context.toLocation(), walkingFromFinal, walkFromFinal);

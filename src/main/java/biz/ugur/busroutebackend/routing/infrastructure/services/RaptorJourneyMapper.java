@@ -58,9 +58,10 @@ public class RaptorJourneyMapper {
         BusRoute secondRoute = timetable.busRouteOf(second.routeId());
         BusStop boarding = timetable.busStopOf(first.fromStop());
         BusStop transfer = timetable.busStopOf(first.toStop());
+        BusStop secondBoard = timetable.busStopOf(second.fromStop());
         BusStop alighting = timetable.busStopOf(second.toStop());
         if (firstRoute == null || secondRoute == null
-                || boarding == null || transfer == null || alighting == null) {
+                || boarding == null || transfer == null || secondBoard == null || alighting == null) {
             return Optional.empty();
         }
 
@@ -69,6 +70,7 @@ public class RaptorJourneyMapper {
                 firstRoute,
                 boarding,
                 transfer,
+                secondBoard,
                 secondRoute,
                 alighting,
                 Math.max(1, first.durationSec() / 60),
@@ -94,10 +96,13 @@ public class RaptorJourneyMapper {
         BusRoute r3 = timetable.busRouteOf(l3.routeId());
         BusStop boarding = timetable.busStopOf(l1.fromStop());
         BusStop t1 = timetable.busStopOf(l1.toStop());
+        BusStop secondBoard = timetable.busStopOf(l2.fromStop());
         BusStop t2 = timetable.busStopOf(l2.toStop());
+        BusStop thirdBoard = timetable.busStopOf(l3.fromStop());
         BusStop alighting = timetable.busStopOf(l3.toStop());
         if (r1 == null || r2 == null || r3 == null
-                || boarding == null || t1 == null || t2 == null || alighting == null) {
+                || boarding == null || t1 == null || secondBoard == null
+                || t2 == null || thirdBoard == null || alighting == null) {
             return Optional.empty();
         }
 
@@ -106,7 +111,9 @@ public class RaptorJourneyMapper {
 
         return Optional.of(new TwoTransferRouteResult(
                 r1, boarding, t1,
+                secondBoard,
                 r2, t2,
+                thirdBoard,
                 r3, alighting,
                 Math.max(1, l1.durationSec() / 60),
                 Math.max(1, wait1Sec / 60),
