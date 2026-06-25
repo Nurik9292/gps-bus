@@ -48,8 +48,4 @@ public class RouteSegmentFactory {
     public RouteSegment createTransferSegment(Coordinates transferLocation, int waitMinutes) {
         return RouteSegment.transferSegment(transferLocation, waitMinutes);
     }
-
-    public RouteSegment createTransferSegment(Coordinates from, Coordinates to, int waitMinutes) {
-        return RouteSegment.transferSegment(from, to, waitMinutes);
-    }
 }

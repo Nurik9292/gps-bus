@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -31,19 +32,22 @@ public class TransferRouteOptionBuilder {
     private final RouteSegmentFactory routeSegmentFactory;
     private final TripOptionFactory tripOptionFactory;
     private final WalkingRouteService walkingRouteService;
+    private final TransferSegmentBuilder transferSegmentBuilder;
 
     public TransferRouteOptionBuilder(ETACalculationService etaCalculationService,
                                       WalkingTimeCalculator walkingTimeCalculator,
                                       RouteGeometryTrimmingService geometryTrimmingService,
                                       RouteSegmentFactory routeSegmentFactory,
                                       TripOptionFactory tripOptionFactory,
-                                      WalkingRouteService walkingRouteService) {
+                                      WalkingRouteService walkingRouteService,
+                                      TransferSegmentBuilder transferSegmentBuilder) {
         this.etaCalculationService = etaCalculationService;
         this.walkingTimeCalculator = walkingTimeCalculator;
         this.geometryTrimmingService = geometryTrimmingService;
         this.routeSegmentFactory = routeSegmentFactory;
         this.tripOptionFactory = tripOptionFactory;
         this.walkingRouteService = walkingRouteService;
+        this.transferSegmentBuilder = transferSegmentBuilder;
     }
 
     public Mono<TripOption> createOneTransferOption(RouteCalculationService.TransferRouteResult transferRoute,
@@ -135,9 +139,10 @@ public class TransferRouteOptionBuilder {
             firstBusSeg.setFromStopId(transferRoute.fromStop().getId().toString());
             firstBusSeg.setToStopId(transferRoute.transferStop().getId().toString());
 
-            RouteSegment transferSeg = routeSegmentFactory.createTransferSegment(transferStopLocation, secondBoardStopLocation, transferRoute.transferWaitMinutes());
-            transferSeg.setFromLocationName(transferStopName);
-            transferSeg.setToLocationName(secondBoardStopName);
+            List<RouteSegment> transferSegments = transferSegmentBuilder.build(
+                    transferStopLocation, transferStopName,
+                    secondBoardStopLocation, secondBoardStopName,
+                    transferRoute.transferWaitMinutes());
 
             RouteSegment secondBusSeg = createBusSegmentWithGeometry(secondBoardStopLocation, lastStopLocation, transferRoute.secondRouteTravelMinutes(), secondRouteNumber, secondRouteTrimmed, secondRouteDistance);
             secondBusSeg.setFromLocationName(secondBoardStopName);
@@ -148,7 +153,12 @@ public class TransferRouteOptionBuilder {
             RouteSegment walkFromSeg = routeSegmentFactory.createWalkingSegment(lastStopLocation, context.toLocation(), walkingFromLast, walkFromLast);
             walkFromSeg.setFromLocationName(lastStopName);
 
-            List<RouteSegment> segments = List.of(walkToSeg, firstBusSeg, transferSeg, secondBusSeg, walkFromSeg);
+            List<RouteSegment> segments = new ArrayList<>();
+            segments.add(walkToSeg);
+            segments.add(firstBusSeg);
+            segments.addAll(transferSegments);
+            segments.add(secondBusSeg);
+            segments.add(walkFromSeg);
 
             log.debug("Creating one-transfer option for routes {}->{} with waiting time {} min",
                     firstRouteNumber, transferRoute.secondRoute().getRouteNumber(), initialWaitingMinutes);
@@ -246,9 +256,10 @@ public class TransferRouteOptionBuilder {
             firstBusSeg2.setFromStopId(twoTransferRoute.fromStop().getId().toString());
             firstBusSeg2.setToStopId(twoTransferRoute.firstTransferStop().getId().toString());
 
-            RouteSegment transfer1Seg = routeSegmentFactory.createTransferSegment(firstTransferLocation, secondBoardLocation, twoTransferRoute.firstTransferWaitMinutes());
-            transfer1Seg.setFromLocationName(firstTransferStopName);
-            transfer1Seg.setToLocationName(secondBoardStopName);
+            List<RouteSegment> transfer1Segments = transferSegmentBuilder.build(
+                    firstTransferLocation, firstTransferStopName,
+                    secondBoardLocation, secondBoardStopName,
+                    twoTransferRoute.firstTransferWaitMinutes());
 
             RouteSegment secondBusSeg2 = createBusSegmentWithGeometry(secondBoardLocation, secondTransferLocation, twoTransferRoute.secondRouteTravelMinutes(), secondRouteNum, secondRouteTrimmed, secondRouteDistance2);
             secondBusSeg2.setFromLocationName(secondBoardStopName);
@@ -256,9 +267,10 @@ public class TransferRouteOptionBuilder {
             secondBusSeg2.setFromStopId(twoTransferRoute.secondBoardStop().getId().toString());
             secondBusSeg2.setToStopId(twoTransferRoute.secondTransferStop().getId().toString());
 
-            RouteSegment transfer2Seg = routeSegmentFactory.createTransferSegment(secondTransferLocation, thirdBoardLocation, twoTransferRoute.secondTransferWaitMinutes());
-            transfer2Seg.setFromLocationName(secondTransferStopName);
-            transfer2Seg.setToLocationName(thirdBoardStopName);
+            List<RouteSegment> transfer2Segments = transferSegmentBuilder.build(
+                    secondTransferLocation, secondTransferStopName,
+                    thirdBoardLocation, thirdBoardStopName,
+                    twoTransferRoute.secondTransferWaitMinutes());
 
             RouteSegment thirdBusSeg2 = createBusSegmentWithGeometry(thirdBoardLocation, finalStopLocation, twoTransferRoute.thirdRouteTravelMinutes(), thirdRouteNum, thirdRouteTrimmed, thirdRouteDistance2);
             thirdBusSeg2.setFromLocationName(thirdBoardStopName);
@@ -269,7 +281,14 @@ public class TransferRouteOptionBuilder {
             RouteSegment walkFromSeg2 = routeSegmentFactory.createWalkingSegment(finalStopLocation, context.toLocation(), walkingFromFinal, walkFromFinal);
             walkFromSeg2.setFromLocationName(finalStopName);
 
-            List<RouteSegment> segments = List.of(walkToSeg2, firstBusSeg2, transfer1Seg, secondBusSeg2, transfer2Seg, thirdBusSeg2, walkFromSeg2);
+            List<RouteSegment> segments = new ArrayList<>();
+            segments.add(walkToSeg2);
+            segments.add(firstBusSeg2);
+            segments.addAll(transfer1Segments);
+            segments.add(secondBusSeg2);
+            segments.addAll(transfer2Segments);
+            segments.add(thirdBusSeg2);
+            segments.add(walkFromSeg2);
 
             log.debug("Creating two-transfer option for routes {}->{}->{}  with waiting time {} min",
                     firstRouteNumber, twoTransferRoute.secondRoute().getRouteNumber(),
