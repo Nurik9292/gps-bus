@@ -47,6 +47,8 @@ class GetIntegrationClientTokenUseCaseTest {
     private static final String EXISTING_REFRESH_TOKEN = "existing-refresh-jwt";
     private static final String NEW_ACCESS_TOKEN  = "fresh-access-jwt";
     private static final String NEW_REFRESH_TOKEN = "fresh-refresh-jwt";
+    private static final String REAL_PHONE_8 = "61520000";
+    private static final String CANON_PHONE  = "99361520000";
 
     @InjectMocks
     private GetIntegrationClientTokenUseCase useCase;
@@ -100,7 +102,51 @@ class GetIntegrationClientTokenUseCaseTest {
     }
 
     private IntegrationClientTokenRequest byExternalUser() {
-        return new IntegrationClientTokenRequest(null, EXTERNAL_USER_ID);
+        return new IntegrationClientTokenRequest(null, EXTERNAL_USER_ID, null);
+    }
+
+    private IntegrationClientTokenRequest byExternalUserWithPhone(String phone) {
+        return new IntegrationClientTokenRequest(null, EXTERNAL_USER_ID, phone);
+    }
+
+    private Client directClient(String phone, String access, String refresh) {
+        return Client.fromDatabase(
+                ClientId.generate(),
+                "Прямой",
+                phone,
+                null,
+                true,
+                Platform.ANDROID,
+                ClientStatus.ACTIVE,
+                LocalDateTime.now(),
+                access,
+                refresh,
+                LocalDateTime.now().minusDays(1),
+                LocalDateTime.now().minusDays(1),
+                1L,
+                null,
+                null
+        );
+    }
+
+    private Client syntheticIntegrationClient(String access, String refresh) {
+        return Client.fromDatabase(
+                ClientId.generate(),
+                "User " + EXTERNAL_USER_ID,
+                "+993INTABCDEF_12345678",
+                null,
+                true,
+                Platform.API,
+                ClientStatus.ACTIVE,
+                LocalDateTime.now(),
+                access,
+                refresh,
+                LocalDateTime.now().minusDays(1),
+                LocalDateTime.now().minusDays(1),
+                1L,
+                service.getId().getValue(),
+                EXTERNAL_USER_ID
+        );
     }
 
     @Test
@@ -330,7 +376,7 @@ class GetIntegrationClientTokenUseCaseTest {
     @Test
     void clientIdPathDoesNotAutoCreateWhenNotFound() {
         String missingClientId = ClientId.generate().getValue();
-        IntegrationClientTokenRequest byClientId = new IntegrationClientTokenRequest(missingClientId, null);
+        IntegrationClientTokenRequest byClientId = new IntegrationClientTokenRequest(missingClientId, null, null);
 
         when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
         when(clientRepository.findById(ClientId.of(missingClientId)))
@@ -343,5 +389,143 @@ class GetIntegrationClientTokenUseCaseTest {
                 .verify();
 
         verify(clientRepository, never()).save(any(Client.class));
+    }
+
+    @Test
+    void newClientStoresCanonicalRealPhoneWhenPhoneProvided() {
+        String serviceId = service.getId().getValue();
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(serviceId, EXTERNAL_USER_ID)).thenReturn(Mono.empty());
+        when(clientRepository.findByPhone(CANON_PHONE)).thenReturn(Mono.empty());
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(clientJwtTokenService.generateAccessToken(any())).thenReturn(Mono.just(NEW_ACCESS_TOKEN));
+        when(clientJwtTokenService.generateRefreshToken(any())).thenReturn(Mono.just(NEW_REFRESH_TOKEN));
+        when(externalServiceRepository.save(any(ExternalService.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(serviceId, byExternalUserWithPhone(REAL_PHONE_8)))
+                .assertNext(response -> assertEquals(EXTERNAL_USER_ID, response.externalUserId()))
+                .verifyComplete();
+
+        ArgumentCaptor<Client> saved = ArgumentCaptor.forClass(Client.class);
+        verify(clientRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        Client created = saved.getAllValues().get(0);
+        assertEquals(CANON_PHONE, created.getPhoneNumber());
+        assertEquals(EXTERNAL_USER_ID, created.getExternalUserId());
+    }
+
+    @Test
+    void mergesWithExistingDirectClientWhenRealPhoneMatches() {
+        String serviceId = service.getId().getValue();
+        Client direct = directClient(CANON_PHONE, EXISTING_ACCESS_TOKEN, EXISTING_REFRESH_TOKEN);
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(serviceId, EXTERNAL_USER_ID)).thenReturn(Mono.empty());
+        when(clientRepository.findByPhone(CANON_PHONE)).thenReturn(Mono.just(direct));
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(clientJwtTokenService.isTokenExpired(EXISTING_ACCESS_TOKEN)).thenReturn(Mono.just(false));
+        when(externalServiceRepository.save(any(ExternalService.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(serviceId, byExternalUserWithPhone(REAL_PHONE_8)))
+                .assertNext(response -> {
+                    assertEquals(EXISTING_ACCESS_TOKEN, response.accessToken());
+                    assertEquals(EXTERNAL_USER_ID, response.externalUserId());
+                })
+                .verifyComplete();
+
+        ArgumentCaptor<Client> saved = ArgumentCaptor.forClass(Client.class);
+        verify(clientRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        Client merged = saved.getAllValues().get(0);
+        assertEquals(direct.getId().getValue(), merged.getId().getValue());
+        assertEquals(EXTERNAL_USER_ID, merged.getExternalUserId());
+        assertEquals(serviceId, merged.getCreatedByServiceId());
+        assertEquals(CANON_PHONE, merged.getPhoneNumber());
+    }
+
+    @Test
+    void lazyUpgradesSyntheticPhoneWhenFoundByExternalUserIdAndPhoneFree() {
+        String serviceId = service.getId().getValue();
+        Client synthetic = syntheticIntegrationClient(EXISTING_ACCESS_TOKEN, EXISTING_REFRESH_TOKEN);
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(serviceId, EXTERNAL_USER_ID)).thenReturn(Mono.just(synthetic));
+        when(clientRepository.findByPhone(CANON_PHONE)).thenReturn(Mono.empty());
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(clientJwtTokenService.isTokenExpired(EXISTING_ACCESS_TOKEN)).thenReturn(Mono.just(false));
+        when(externalServiceRepository.save(any(ExternalService.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(serviceId, byExternalUserWithPhone(REAL_PHONE_8)))
+                .assertNext(response -> assertEquals(EXISTING_ACCESS_TOKEN, response.accessToken()))
+                .verifyComplete();
+
+        ArgumentCaptor<Client> saved = ArgumentCaptor.forClass(Client.class);
+        verify(clientRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        assertEquals(CANON_PHONE, saved.getValue().getPhoneNumber());
+    }
+
+    @Test
+    void keepsSyntheticPhoneWhenLazyUpgradeTargetTaken() {
+        String serviceId = service.getId().getValue();
+        Client synthetic = syntheticIntegrationClient(EXISTING_ACCESS_TOKEN, EXISTING_REFRESH_TOKEN);
+        Client otherOwner = directClient(CANON_PHONE, null, null);
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(serviceId, EXTERNAL_USER_ID)).thenReturn(Mono.just(synthetic));
+        when(clientRepository.findByPhone(CANON_PHONE)).thenReturn(Mono.just(otherOwner));
+        when(clientJwtTokenService.isTokenExpired(EXISTING_ACCESS_TOKEN)).thenReturn(Mono.just(false));
+        when(externalServiceRepository.save(any(ExternalService.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(serviceId, byExternalUserWithPhone(REAL_PHONE_8)))
+                .assertNext(response -> assertEquals(EXISTING_ACCESS_TOKEN, response.accessToken()))
+                .verifyComplete();
+
+        verify(clientRepository, never()).save(any(Client.class));
+    }
+
+    @Test
+    void lazyUpgradeRaceOnDuplicateKeyKeepsSyntheticInsteadOfFailing() {
+        String serviceId = service.getId().getValue();
+        Client synthetic = syntheticIntegrationClient(EXISTING_ACCESS_TOKEN, EXISTING_REFRESH_TOKEN);
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(serviceId, EXTERNAL_USER_ID)).thenReturn(Mono.just(synthetic));
+        when(clientRepository.findByPhone(CANON_PHONE)).thenReturn(Mono.empty());
+        when(clientRepository.save(any(Client.class)))
+                .thenReturn(Mono.error(new DuplicateKeyException("race on phone")));
+        when(clientJwtTokenService.isTokenExpired(EXISTING_ACCESS_TOKEN)).thenReturn(Mono.just(false));
+        when(externalServiceRepository.save(any(ExternalService.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(serviceId, byExternalUserWithPhone(REAL_PHONE_8)))
+                .assertNext(response -> assertEquals(EXISTING_ACCESS_TOKEN, response.accessToken()))
+                .verifyComplete();
+    }
+
+    @Test
+    void phoneCollisionDuplicateKeyMergesInsteadOfFailing() {
+        String serviceId = service.getId().getValue();
+        Client raceWinner = directClient(CANON_PHONE, EXISTING_ACCESS_TOKEN, EXISTING_REFRESH_TOKEN);
+
+        when(externalServiceRepository.findById(service.getId())).thenReturn(Mono.just(service));
+        when(clientRepository.findByServiceAndExternalUserId(serviceId, EXTERNAL_USER_ID))
+                .thenReturn(Mono.empty())
+                .thenReturn(Mono.empty());
+        when(clientRepository.findByPhone(CANON_PHONE))
+                .thenReturn(Mono.empty())
+                .thenReturn(Mono.just(raceWinner));
+        when(clientRepository.save(any(Client.class)))
+                .thenReturn(Mono.error(new DuplicateKeyException("duplicate phone")))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(clientJwtTokenService.isTokenExpired(EXISTING_ACCESS_TOKEN)).thenReturn(Mono.just(false));
+        when(externalServiceRepository.save(any(ExternalService.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(serviceId, byExternalUserWithPhone(REAL_PHONE_8)))
+                .assertNext(response -> assertEquals(EXISTING_ACCESS_TOKEN, response.accessToken()))
+                .verifyComplete();
     }
 }

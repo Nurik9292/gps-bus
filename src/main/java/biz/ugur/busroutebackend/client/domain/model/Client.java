@@ -75,6 +75,10 @@ public class Client extends AggregateRoot<Client, ClientId> {
     }
 
     public static Client createViaExternalService(String name, String serviceId, String externalUserId) {
+        return createViaExternalService(name, serviceId, externalUserId, null);
+    }
+
+    public static Client createViaExternalService(String name, String serviceId, String externalUserId, String realPhone) {
         if (serviceId == null || serviceId.isBlank()) {
             throw new ClientValidationException("serviceId", "Service ID cannot be null or empty");
         }
@@ -83,14 +87,14 @@ public class Client extends AggregateRoot<Client, ClientId> {
         }
 
         String validatedName = validateName(name);
-        String virtualPhone = generateIntegrationPhone(serviceId, externalUserId);
+        String phone = resolveIntegrationPhone(serviceId, externalUserId, realPhone);
 
         LocalDateTime now = LocalDateTime.now();
 
         Client client = Client.builder()
                 .id(ClientId.generate())
                 .name(validatedName)
-                .phoneNumber(virtualPhone)
+                .phoneNumber(phone)
                 .platform(Platform.API)
                 .status(ClientStatus.ACTIVE)
                 .otpVerify(true)
@@ -110,6 +114,49 @@ public class Client extends AggregateRoot<Client, ClientId> {
         ));
 
         return client;
+    }
+
+    public Client linkExternalService(String serviceId, String externalUserId) {
+        if (serviceId == null || serviceId.isBlank()) {
+            throw new ClientValidationException("serviceId", "Service ID cannot be null or empty");
+        }
+        if (externalUserId == null || externalUserId.isBlank()) {
+            throw new ClientValidationException("externalUserId", "External user ID cannot be null or empty");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        Client linked = this.toBuilder()
+                .createdByServiceId(serviceId)
+                .externalUserId(externalUserId)
+                .status(ClientStatus.ACTIVE)
+                .otpVerify(true)
+                .lastActivity(now)
+                .updatedAt(now)
+                .build();
+
+        linked.registerEvent(new ClientCreatedViaServiceEvent(
+                this.id.getValue(),
+                serviceId,
+                externalUserId
+        ));
+
+        return linked;
+    }
+
+    public Client upgradeIntegrationPhone(String realPhone) {
+        String phone = Phone.canonicalWithoutPlus(realPhone);
+        return this.toBuilder()
+                .phoneNumber(phone)
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
+
+    private static String resolveIntegrationPhone(String serviceId, String externalUserId, String realPhone) {
+        if (realPhone != null && !realPhone.isBlank()) {
+            return Phone.canonicalWithoutPlus(realPhone);
+        }
+        return generateIntegrationPhone(serviceId, externalUserId);
     }
 
 
