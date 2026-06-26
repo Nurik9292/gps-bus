@@ -59,3 +59,6 @@ deploy/.env
 
 # Generated route diagnostics overlay (regen via scripts/regen-routes-geojson.sh)
 src/main/resources/static/routes.geojson
+
+# Local DB migration drafts (not the Flyway migrations under src/main/resources/db/)
+/db/
