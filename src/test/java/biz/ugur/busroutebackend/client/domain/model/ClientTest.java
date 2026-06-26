@@ -105,6 +105,60 @@ class ClientTest {
             assertThrows(ClientValidationException.class,
                     () -> Client.createViaExternalService(NAME, "srv-1", null));
         }
+
+        @Test
+        void shouldStoreCanonicalRealPhoneWhenProvided() {
+            Client integration = Client.createViaExternalService("Integrator", "srv-123456", "user-abc", "61520000");
+
+            assertEquals("99361520000", integration.getPhoneNumber());
+            assertEquals(ClientStatus.ACTIVE, integration.getStatus());
+            assertEquals("user-abc", integration.getExternalUserId());
+            assertInstanceOf(ClientCreatedViaServiceEvent.class, integration.getDomainEvents().get(0));
+        }
+
+        @Test
+        void shouldFallBackToVirtualPhoneWhenRealPhoneNull() {
+            Client integration = Client.createViaExternalService("Integrator", "srv-123456", "user-abc", null);
+
+            assertTrue(integration.getPhoneNumber().startsWith("+993INT"));
+        }
+    }
+
+    @Nested
+    class ExternalServiceLinking {
+
+        @Test
+        void linkExternalServiceAttachesIdentityActivatesAndKeepsRealPhone() {
+            Client linked = freshClient.linkExternalService("srv-123456", "user-xyz");
+
+            assertEquals("srv-123456", linked.getCreatedByServiceId());
+            assertEquals("user-xyz", linked.getExternalUserId());
+            assertEquals(ClientStatus.ACTIVE, linked.getStatus());
+            assertTrue(linked.getOtpVerify());
+            assertEquals(VALID_PHONE, linked.getPhoneNumber());
+            assertTrue(linked.belongsToService("srv-123456"));
+            assertInstanceOf(ClientCreatedViaServiceEvent.class, linked.getDomainEvents().get(0));
+        }
+
+        @Test
+        void linkExternalServiceRejectsBlankArguments() {
+            assertThrows(ClientValidationException.class,
+                    () -> freshClient.linkExternalService("  ", "user-1"));
+            assertThrows(ClientValidationException.class,
+                    () -> freshClient.linkExternalService("srv-1", null));
+        }
+
+        @Test
+        void upgradeIntegrationPhoneReplacesVirtualWithCanonicalReal() {
+            Client integration = Client.createViaExternalService("Integrator", "srv-123456", "user-abc", null);
+            assertTrue(integration.getPhoneNumber().startsWith("+993INT"));
+
+            Client upgraded = integration.upgradeIntegrationPhone("61520000");
+
+            assertEquals("99361520000", upgraded.getPhoneNumber());
+            assertEquals("user-abc", upgraded.getExternalUserId());
+            assertEquals("srv-123456", upgraded.getCreatedByServiceId());
+        }
     }
 
     @Nested

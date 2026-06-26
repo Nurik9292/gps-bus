@@ -63,6 +63,46 @@ class ClientValueObjectsTest {
     }
 
     @Test
+    void canonicalWithoutPlusPrefixesCountryCodeForNationalNumber() {
+        assertEquals("99361520000", Phone.canonicalWithoutPlus("61520000"));
+    }
+
+    @Test
+    void canonicalWithoutPlusStripsPlusFromFullNumber() {
+        assertEquals("99361520000", Phone.canonicalWithoutPlus("+99361520000"));
+    }
+
+    @Test
+    void canonicalWithoutPlusKeepsAlreadyCanonicalNumber() {
+        assertEquals("99361520000", Phone.canonicalWithoutPlus("99361520000"));
+    }
+
+    @Test
+    void canonicalWithoutPlusTrimsSurroundingWhitespace() {
+        assertEquals("99361520000", Phone.canonicalWithoutPlus("  61520000 "));
+    }
+
+    @Test
+    void canonicalWithoutPlusRejectsInvalid() {
+        assertThrows(IllegalArgumentException.class, () -> Phone.canonicalWithoutPlus("12345"));
+        assertThrows(IllegalArgumentException.class, () -> Phone.canonicalWithoutPlus("abc"));
+        assertThrows(NullPointerException.class, () -> Phone.canonicalWithoutPlus(null));
+    }
+
+    @Test
+    void canonicalWithoutPlusOrNullReturnsCanonicalForValid() {
+        assertEquals("99361520000", Phone.canonicalWithoutPlusOrNull("61520000"));
+        assertEquals("99361520000", Phone.canonicalWithoutPlusOrNull("+99361520000"));
+    }
+
+    @Test
+    void canonicalWithoutPlusOrNullReturnsNullForBlankOrInvalid() {
+        assertNull(Phone.canonicalWithoutPlusOrNull(null));
+        assertNull(Phone.canonicalWithoutPlusOrNull("   "));
+        assertNull(Phone.canonicalWithoutPlusOrNull("not-a-phone"));
+    }
+
+    @Test
     void otpGenerateProducesFiveDigitUnverifiedCode() {
         Otp otp = Otp.generate();
         assertEquals(5, otp.getCode().length());

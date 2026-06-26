@@ -274,12 +274,29 @@ public class ExternalService extends AggregateRoot<ExternalService, ExternalServ
         if (pattern.equals(endpoint)) {
             return true;
         }
+        return Pattern.compile(globToRegex(pattern)).matcher(endpoint).matches();
+    }
 
-        String regex = pattern
-                .replace("**", ".*")
-                .replace("*", "[^/]*")
-                .replace("?", ".");
-
-        return Pattern.compile("^" + regex + "$").matcher(endpoint).matches();
+    private static String globToRegex(String glob) {
+        StringBuilder regex = new StringBuilder("^");
+        for (int i = 0; i < glob.length(); i++) {
+            char c = glob.charAt(i);
+            if (c == '*') {
+                boolean crossesSegments = i + 1 < glob.length() && glob.charAt(i + 1) == '*';
+                if (crossesSegments) {
+                    regex.append(".*");
+                    i++;
+                } else {
+                    regex.append("[^/]*");
+                }
+            } else if (c == '?') {
+                regex.append("[^/]");
+            } else if ("\\.[]{}()+-^$|".indexOf(c) >= 0) {
+                regex.append('\\').append(c);
+            } else {
+                regex.append(c);
+            }
+        }
+        return regex.append('$').toString();
     }
 }

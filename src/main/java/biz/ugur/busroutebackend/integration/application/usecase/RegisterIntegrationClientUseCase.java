@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.integration.application.usecase;
 
 import biz.ugur.busroutebackend.client.domain.model.Client;
 import biz.ugur.busroutebackend.client.domain.repository.ClientRepository;
+import biz.ugur.busroutebackend.client.domain.valueobject.Phone;
 import biz.ugur.busroutebackend.integration.application.dto.IntegrationClientDTO;
 import biz.ugur.busroutebackend.integration.application.dto.RegisterIntegrationClientRequest;
 import biz.ugur.busroutebackend.integration.domain.exceptions.ExternalServiceNotFoundException;
@@ -44,15 +45,31 @@ public class RegisterIntegrationClientUseCase {
                 .flatMap(existing -> Mono.<IntegrationClientDTO>error(
                         new IntegrationClientAlreadyExistsException(serviceId, request.externalUserId())
                 ))
-                .switchIfEmpty(Mono.defer(() -> createNewClient(serviceId, request)));
+                .switchIfEmpty(Mono.defer(() -> createOrMerge(serviceId, request)));
+    }
+
+    private Mono<IntegrationClientDTO> createOrMerge(String serviceId,
+                                                      RegisterIntegrationClientRequest request) {
+        String canonicalPhone = Phone.canonicalWithoutPlusOrNull(request.phone());
+        if (canonicalPhone == null) {
+            return createNewClient(serviceId, request, null);
+        }
+        return clientRepository.findByPhone(canonicalPhone)
+                .flatMap(existing -> existing.getExternalUserId() == null
+                        ? clientRepository.save(existing.linkExternalService(serviceId, request.externalUserId()))
+                                .map(this::toDTO)
+                        : createNewClient(serviceId, request, null))
+                .switchIfEmpty(Mono.defer(() -> createNewClient(serviceId, request, canonicalPhone)));
     }
 
     private Mono<IntegrationClientDTO> createNewClient(String serviceId,
-                                                        RegisterIntegrationClientRequest request) {
+                                                        RegisterIntegrationClientRequest request,
+                                                        String canonicalPhone) {
         Client client = Client.createViaExternalService(
                 request.name(),
                 serviceId,
-                request.externalUserId()
+                request.externalUserId(),
+                canonicalPhone
         );
 
         return clientRepository.save(client)

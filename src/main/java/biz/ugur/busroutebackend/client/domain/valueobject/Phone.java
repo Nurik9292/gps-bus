@@ -42,6 +42,22 @@ public class Phone extends ValueObject {
         return countryCode + number;
     }
 
+    public static String canonicalWithoutPlus(String phone) {
+        Objects.requireNonNull(phone, "Phone cannot be null");
+        return of(phone.trim()).getFormattedPhone().substring(1);
+    }
+
+    public static String canonicalWithoutPlusOrNull(String phone) {
+        if (phone == null || phone.isBlank()) {
+            return null;
+        }
+        try {
+            return canonicalWithoutPlus(phone);
+        } catch (RuntimeException invalid) {
+            return null;
+        }
+    }
+
     private void validateFormat(String phone) {
         if (!TURKMENISTAN_PHONE_PATTERN.matcher(phone).matches()) {
             throw new IllegalArgumentException(

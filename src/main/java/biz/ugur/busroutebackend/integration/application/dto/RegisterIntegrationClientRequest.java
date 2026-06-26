@@ -11,6 +11,9 @@ public record RegisterIntegrationClientRequest(
 
         @NotBlank(message = "External user ID is required")
         @Size(max = 255, message = "External user ID must not exceed 255 characters")
-        String externalUserId
+        String externalUserId,
+
+        @Size(max = 30, message = "Phone must not exceed 30 characters")
+        String phone
 ) {
 }

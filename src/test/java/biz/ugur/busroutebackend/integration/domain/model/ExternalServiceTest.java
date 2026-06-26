@@ -237,6 +237,16 @@ class ExternalServiceTest {
         }
 
         @Test
+        void doubleStarMatchesNestedMultiSegmentPaths() {
+            ExternalService restricted = ExternalService.create("Abc", null, adminId,
+                    List.of("/api/v1/integration/**"), null, true);
+            assertTrue(restricted.isEndpointAllowed("/api/v1/integration/clients"));
+            assertTrue(restricted.isEndpointAllowed("/api/v1/integration/clients/token"));
+            assertTrue(restricted.isEndpointAllowed("/api/v1/integration/clients/123/token"));
+            assertFalse(restricted.isEndpointAllowed("/api/v1/admin/clients"));
+        }
+
+        @Test
         void allowsSingleSegmentWildcard() {
             ExternalService restricted = ExternalService.create("Abc", null, adminId,
                     List.of("/api/*/clients"), null, true);

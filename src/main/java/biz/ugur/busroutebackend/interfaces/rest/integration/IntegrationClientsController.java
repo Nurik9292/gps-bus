@@ -70,7 +70,7 @@ public class IntegrationClientsController extends BasePaginatedController {
     public Mono<ResponseEntity<ApiResponse<IntegrationClientTokenResponse>>> getClientTokenById(
             @PathVariable String clientId) {
 
-        IntegrationClientTokenRequest request = new IntegrationClientTokenRequest(clientId, null);
+        IntegrationClientTokenRequest request = new IntegrationClientTokenRequest(clientId, null, null);
 
         return getServiceId()
                 .flatMap(serviceId -> getTokenUseCase.execute(serviceId, request))

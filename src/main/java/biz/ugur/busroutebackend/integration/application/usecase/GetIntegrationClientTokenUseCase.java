@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.integration.application.usecase;
 import biz.ugur.busroutebackend.client.domain.model.Client;
 import biz.ugur.busroutebackend.client.domain.repository.ClientRepository;
 import biz.ugur.busroutebackend.client.domain.valueobject.ClientId;
+import biz.ugur.busroutebackend.client.domain.valueobject.Phone;
 import biz.ugur.busroutebackend.client.infrastructure.security.ClientJwtProperties;
 import biz.ugur.busroutebackend.client.infrastructure.security.ClientJwtTokenService;
 import biz.ugur.busroutebackend.integration.application.dto.IntegrationClientTokenRequest;
@@ -81,14 +82,10 @@ public class GetIntegrationClientTokenUseCase {
                     ));
         } else if (request.externalUserId() != null && !request.externalUserId().isBlank()) {
             String externalUserId = request.externalUserId();
+            String canonicalPhone = canonicalizeOrNull(request.phone());
             clientMono = clientRepository.findByServiceAndExternalUserId(serviceId, externalUserId)
-                    .switchIfEmpty(Mono.defer(() -> autoCreate(service, externalUserId)
-                            .onErrorResume(DuplicateKeyException.class, dup -> {
-                                log.info("[INTEGRATION] concurrent auto-create for service={} externalUserId={} — reusing existing",
-                                        serviceId, externalUserId);
-                                return clientRepository.findByServiceAndExternalUserId(serviceId, externalUserId)
-                                        .switchIfEmpty(Mono.error(dup));
-                            })));
+                    .flatMap(existing -> upgradePhoneIfSynthetic(existing, canonicalPhone))
+                    .switchIfEmpty(Mono.defer(() -> resolveByPhoneOrCreate(serviceId, externalUserId, canonicalPhone)));
         } else {
             return Mono.error(new IllegalArgumentException(
                     "Either clientId or externalUserId must be provided"
@@ -109,16 +106,94 @@ public class GetIntegrationClientTokenUseCase {
         });
     }
 
-    private Mono<Client> autoCreate(ExternalService service, String externalUserId) {
-        String serviceId = service.getId().getValue();
+    private String canonicalizeOrNull(String rawPhone) {
+        if (rawPhone == null || rawPhone.isBlank()) {
+            return null;
+        }
+        try {
+            return Phone.canonicalWithoutPlus(rawPhone);
+        } catch (RuntimeException invalid) {
+            log.warn("[INTEGRATION] invalid phone '{}' — keeping synthetic identity", rawPhone);
+            return null;
+        }
+    }
+
+    private boolean isSyntheticPhone(String phone) {
+        return phone != null && phone.startsWith("+993INT");
+    }
+
+    private Mono<Client> upgradePhoneIfSynthetic(Client existing, String canonicalPhone) {
+        if (canonicalPhone == null || !isSyntheticPhone(existing.getPhoneNumber())) {
+            return Mono.just(existing);
+        }
+        return clientRepository.findByPhone(canonicalPhone)
+                .flatMap(other -> {
+                    log.warn("[INTEGRATION] real phone already taken by clientId={} — keeping synthetic for externalUserId={}",
+                            other.getId().getValue(), existing.getExternalUserId());
+                    return Mono.just(existing);
+                })
+                .switchIfEmpty(Mono.defer(() ->
+                        clientRepository.save(existing.upgradeIntegrationPhone(canonicalPhone))
+                                .onErrorResume(DuplicateKeyException.class, race -> {
+                                    log.warn("[INTEGRATION] race upgrading phone for externalUserId={} — keeping synthetic",
+                                            existing.getExternalUserId());
+                                    return Mono.just(existing);
+                                })));
+    }
+
+    private Mono<Client> resolveByPhoneOrCreate(String serviceId, String externalUserId, String canonicalPhone) {
+        if (canonicalPhone == null) {
+            return autoCreate(serviceId, externalUserId, null);
+        }
+        return clientRepository.findByPhone(canonicalPhone)
+                .flatMap(existing -> mergeOrFallback(existing, serviceId, externalUserId))
+                .switchIfEmpty(Mono.defer(() -> autoCreate(serviceId, externalUserId, canonicalPhone)));
+    }
+
+    private Mono<Client> mergeOrFallback(Client existing, String serviceId, String externalUserId) {
+        if (existing.getExternalUserId() == null) {
+            log.info("[INTEGRATION] merging externalUserId={} into existing clientId={} matched by phone",
+                    externalUserId, existing.getId().getValue());
+            return clientRepository.save(existing.linkExternalService(serviceId, externalUserId));
+        }
+        if (externalUserId.equals(existing.getExternalUserId())) {
+            return Mono.just(existing);
+        }
+        log.warn("[INTEGRATION] phone of externalUserId={} already belongs to externalUserId={} — creating separate client",
+                externalUserId, existing.getExternalUserId());
+        return autoCreate(serviceId, externalUserId, null);
+    }
+
+    private Mono<Client> autoCreate(String serviceId, String externalUserId, String canonicalPhone) {
         Client newClient = Client.createViaExternalService(
                 "User " + externalUserId,
                 serviceId,
-                externalUserId);
+                externalUserId,
+                canonicalPhone);
         return clientRepository.save(newClient)
+                .onErrorResume(DuplicateKeyException.class,
+                        dup -> recoverFromDuplicate(serviceId, externalUserId, canonicalPhone, dup))
                 .doOnSuccess(saved -> log.info(
                         "[INTEGRATION] auto-registered client for service={} externalUserId={} clientId={}",
                         serviceId, externalUserId, saved.getId().getValue()));
+    }
+
+    private Mono<Client> recoverFromDuplicate(String serviceId, String externalUserId,
+                                              String canonicalPhone, DuplicateKeyException dup) {
+        return clientRepository.findByServiceAndExternalUserId(serviceId, externalUserId)
+                .switchIfEmpty(Mono.defer(() -> {
+                    if (canonicalPhone == null) {
+                        return Mono.error(dup);
+                    }
+                    return clientRepository.findByPhone(canonicalPhone)
+                            .flatMap(existing -> existing.getExternalUserId() == null
+                                    ? clientRepository.save(existing.linkExternalService(serviceId, externalUserId))
+                                    : Mono.just(existing))
+                            .switchIfEmpty(Mono.error(dup));
+                }))
+                .doOnNext(reused -> log.info(
+                        "[INTEGRATION] recovered from duplicate-key for service={} externalUserId={} — reusing clientId={}",
+                        serviceId, externalUserId, reused.getId().getValue()));
     }
 
     private Mono<IntegrationClientTokenResponse> generateTokens(Client client,
