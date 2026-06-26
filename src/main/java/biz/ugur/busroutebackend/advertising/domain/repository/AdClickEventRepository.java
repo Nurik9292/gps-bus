@@ -16,4 +16,6 @@ public interface AdClickEventRepository {
     Mono<Map<LocalDate, Long>> countByDayBetween(PlacementId placementId, Instant from, Instant to);
 
     Mono<Long> countByOccurredAtBetween(Instant from, Instant to);
+
+    Mono<Void> deleteByPlacementId(PlacementId placementId);
 }

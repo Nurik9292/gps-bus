@@ -12,6 +12,7 @@ import biz.ugur.busroutebackend.advertising.application.dto.SalesReportResponse;
 import biz.ugur.busroutebackend.advertising.application.dto.UpdateEditorialAdPlacementCommand;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.ApproveAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.CancelAdPlacementUseCase;
+import biz.ugur.busroutebackend.advertising.application.usecase.admin.DeleteAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.PauseAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.ResumeAdPlacementUseCase;
 import biz.ugur.busroutebackend.advertising.application.usecase.admin.CreateAdPlacementUseCase;
@@ -31,6 +32,7 @@ import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedControlle
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -63,6 +65,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
     private final UpdateEditorialAdPlacementUseCase updateEditorialUseCase;
     private final PauseAdPlacementUseCase pauseAdPlacementUseCase;
     private final ResumeAdPlacementUseCase resumeAdPlacementUseCase;
+    private final DeleteAdPlacementUseCase deleteAdPlacementUseCase;
     private final SecurityContextService securityContextService;
 
     public AdminAdPlacementController(CreateAdPlacementUseCase createAdPlacementUseCase,
@@ -78,6 +81,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
                                        UpdateEditorialAdPlacementUseCase updateEditorialUseCase,
                                        PauseAdPlacementUseCase pauseAdPlacementUseCase,
                                        ResumeAdPlacementUseCase resumeAdPlacementUseCase,
+                                       DeleteAdPlacementUseCase deleteAdPlacementUseCase,
                                        SecurityContextService securityContextService,
                                        MessageSource messageSource) {
         super(messageSource);
@@ -94,6 +98,7 @@ public class AdminAdPlacementController extends BasePaginatedController {
         this.updateEditorialUseCase = updateEditorialUseCase;
         this.pauseAdPlacementUseCase = pauseAdPlacementUseCase;
         this.resumeAdPlacementUseCase = resumeAdPlacementUseCase;
+        this.deleteAdPlacementUseCase = deleteAdPlacementUseCase;
         this.securityContextService = securityContextService;
     }
 
@@ -172,6 +177,11 @@ public class AdminAdPlacementController extends BasePaginatedController {
     @PostMapping("/{placementId}/resume")
     public Mono<ResponseEntity<ApiResponse<AdPlacementResponse>>> resume(@PathVariable String placementId) {
         return ok(resumeAdPlacementUseCase.execute(placementId));
+    }
+
+    @DeleteMapping("/{placementId}")
+    public Mono<ResponseEntity<Void>> delete(@PathVariable String placementId) {
+        return deleteAdPlacementUseCase.execute(placementId).then(noContent());
     }
 
     @GetMapping("/{placementId}/analytics")

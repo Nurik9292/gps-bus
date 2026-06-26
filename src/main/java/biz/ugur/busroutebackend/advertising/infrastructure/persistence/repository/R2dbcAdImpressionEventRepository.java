@@ -93,4 +93,13 @@ public class R2dbcAdImpressionEventRepository implements AdImpressionEventReposi
                 .map(row -> row.get("cnt", Long.class))
                 .one();
     }
+
+    @Override
+    public Mono<Void> deleteByPlacementId(PlacementId placementId) {
+        return db.sql("DELETE FROM ad_impression_events WHERE placement_id = :placement_id")
+                .bind("placement_id", UUID.fromString(placementId.getValue()))
+                .fetch()
+                .rowsUpdated()
+                .then();
+    }
 }
