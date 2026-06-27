@@ -104,6 +104,7 @@ app:
     silent-threshold-minutes: ${FLEET_PRESENCE_SILENT_THRESHOLD_MINUTES:15}
     startup-grace-minutes: ${FLEET_PRESENCE_STARTUP_GRACE_MINUTES:20}
     min-resend-cooldown-minutes: ${FLEET_PRESENCE_MIN_RESEND_COOLDOWN_MINUTES:60}
+    max-rows-per-section: ${FLEET_PRESENCE_MAX_ROWS_PER_SECTION:50}
 
   scheduling:
     enabled: true
