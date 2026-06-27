@@ -59,6 +59,7 @@ class FleetPresenceAlertMonitorTest {
         when(vehicles.findActiveVehicles()).thenReturn(Flux.empty());
         when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FULL_DAY))).thenReturn(Flux.empty());
         when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND))).thenReturn(Flux.empty());
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST))).thenReturn(Flux.empty());
 
         monitor = new FleetPresenceAlertMonitor(email, props, gpsProps, assignments, vehicles, busRoutes, registry, clock);
     }
