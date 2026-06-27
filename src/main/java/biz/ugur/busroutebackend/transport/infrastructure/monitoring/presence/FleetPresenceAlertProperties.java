@@ -16,4 +16,5 @@ public class FleetPresenceAlertProperties {
     private int silentThresholdMinutes = 15;
     private int startupGraceMinutes = 20;
     private int minResendCooldownMinutes = 60;
+    private int maxRowsPerSection = 50;
 }

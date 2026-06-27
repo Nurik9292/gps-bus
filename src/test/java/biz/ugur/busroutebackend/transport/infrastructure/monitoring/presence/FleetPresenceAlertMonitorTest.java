@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.Gp
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
 import biz.ugur.busroutebackend.transport.domain.model.RouteAssignment;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
+import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteAssignmentRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
@@ -25,6 +26,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -33,6 +37,7 @@ class FleetPresenceAlertMonitorTest {
     private EmailNotificationService email;
     private RouteAssignmentRepository assignments;
     private VehicleRepository vehicles;
+    private BusRouteRepository busRoutes;
     private OffRouteStateRegistry registry;
     private GpsAlertProperties gpsProps;
     private FleetPresenceAlertProperties props;
@@ -52,9 +57,14 @@ class FleetPresenceAlertMonitorTest {
         gpsProps.setRecipients("ops@busroute.tm");
         props = new FleetPresenceAlertProperties();
 
+        busRoutes = mock(BusRouteRepository.class);
+        when(busRoutes.findActiveRoutes()).thenReturn(Flux.empty());
+        when(vehicles.findActiveVehicles()).thenReturn(Flux.empty());
         when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FULL_DAY))).thenReturn(Flux.empty());
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND))).thenReturn(Flux.empty());
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST))).thenReturn(Flux.empty());
 
-        monitor = new FleetPresenceAlertMonitor(email, props, gpsProps, assignments, vehicles, registry, clock);
+        monitor = new FleetPresenceAlertMonitor(email, props, gpsProps, assignments, vehicles, busRoutes, registry, clock);
     }
 
     private RouteAssignment assignment(String vehicleId) {
@@ -151,6 +161,76 @@ class FleetPresenceAlertMonitorTest {
         when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
                 .thenReturn(Flux.just(a1, a2));
         when(vehicles.findById(VehicleId.of("v2"))).thenReturn(Mono.just(v2));
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
+
+        verify(email, times(1)).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
+    }
+
+    private BusRoute route(String id, String number) {
+        BusRoute r = mock(BusRoute.class);
+        when(r.getId()).thenReturn(biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId.of(id));
+        when(r.getRouteNumber()).thenReturn(number);
+        return r;
+    }
+
+    private Vehicle activeVehicle(String id, String plate, String routeNumber, LocalDateTime lastUpdate) {
+        Vehicle v = mock(Vehicle.class);
+        when(v.getId()).thenReturn(VehicleId.of(id));
+        when(v.getIsActive()).thenReturn(true);
+        when(v.getLicensePlate()).thenReturn(plate);
+        when(v.getRouteNumber()).thenReturn(routeNumber);
+        when(v.getAssignedRouteId()).thenReturn(null);
+        when(v.getLastPositionUpdate()).thenReturn(lastUpdate);
+        return v;
+    }
+
+    @Test
+    void sendsSummaryWhenRouteHasNoLiveBus() {
+        BusRoute r1 = route("r1", "12");
+        when(busRoutes.findActiveRoutes()).thenReturn(Flux.just(r1));
+
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(email).sendGpsAlert(eq(List.of("ops@busroute.tm")), anyString(),
+                eq(AlertKind.ASSIGNED_NOT_ON_LINE), anyString(), body.capture());
+        assertThat(body.getValue()).contains("не назначен");
+    }
+
+    @Test
+    void sendsSummaryWhenActiveVehicleHasNoAssignment() {
+        Vehicle v9 = activeVehicle("v9", "AG-9", "7", LocalDateTime.of(2026, 6, 9, 9, 59));
+        when(vehicles.findActiveVehicles()).thenReturn(Flux.just(v9));
+
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(email).sendGpsAlert(anyList(), anyString(), eq(AlertKind.ASSIGNED_NOT_ON_LINE),
+                anyString(), body.capture());
+        assertThat(body.getValue()).contains("AG-9");
+    }
+
+    @Test
+    void capsRowsAndShowsOverflowCount() {
+        props.setMaxRowsPerSection(2);
+        BusRoute r1 = route("r1", "1");
+        BusRoute r2 = route("r2", "2");
+        BusRoute r3 = route("r3", "3");
+        when(busRoutes.findActiveRoutes()).thenReturn(Flux.just(r1, r2, r3));
+
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(email).sendGpsAlert(anyList(), anyString(), any(), anyString(), body.capture());
+        assertThat(body.getValue()).contains("… и ещё 1");
+    }
+
+    @Test
+    void doesNotResendSameEmptyRouteSetWithinCooldown() {
+        BusRoute r1 = route("r1", "12");
+        when(busRoutes.findActiveRoutes()).thenReturn(Flux.just(r1));
+
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
         StepVerifier.create(monitor.checkNow()).verifyComplete();
 
         verify(email, times(1)).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
