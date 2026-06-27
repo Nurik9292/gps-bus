@@ -13,9 +13,12 @@ import biz.ugur.busroutebackend.transport.domain.services.VehicleAssignmentExpir
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteSource;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -25,6 +28,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ProcessExpiredAssignmentsUseCase extends BaseUseCase<Mono<Void>, ProcessExpiredAssignmentsUseCase.Result> {
 
     private static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
+    private static final int MAX_OPTIMISTIC_LOCK_RETRIES = 3;
+    private static final Duration OPTIMISTIC_LOCK_RETRY_DELAY = Duration.ofMillis(100);
 
     private final RouteAssignmentRepository assignmentRepository;
     private final VehicleRepository vehicleRepository;
@@ -78,7 +83,8 @@ public class ProcessExpiredAssignmentsUseCase extends BaseUseCase<Mono<Void>, Pr
                 assignment.getVehicleId(), assignment.getRouteId(), assignment.getExpiresAt());
 
         return assignmentRepository.deactivateById(assignment.getId())
-                .then(revertToShiftAssignmentOrClear(assignment.getVehicleId()))
+                .then(revertToShiftAssignmentOrClear(assignment.getVehicleId())
+                        .retryWhen(retryOnOptimisticLock()))
                 .doOnSuccess(vehicle -> processedCount.incrementAndGet())
                 .doOnError(error -> {
                     errorCount.incrementAndGet();
@@ -124,6 +130,15 @@ public class ProcessExpiredAssignmentsUseCase extends BaseUseCase<Mono<Void>, Pr
         return vehicleRepository.save(clearedVehicle)
                 .doOnSuccess(v -> log.info("Cleared route assignment for vehicle {} (no active shift assignment)",
                         v.getLicensePlate()));
+    }
+
+    private Retry retryOnOptimisticLock() {
+        return Retry.fixedDelay(MAX_OPTIMISTIC_LOCK_RETRIES, OPTIMISTIC_LOCK_RETRY_DELAY)
+                .filter(OptimisticLockingFailureException.class::isInstance)
+                .doBeforeRetry(signal -> log.debug(
+                        "Re-reading vehicle after concurrent position update before re-applying route (attempt {})",
+                        signal.totalRetries() + 1))
+                .onRetryExhaustedThrow((spec, signal) -> signal.failure());
     }
 
     public record Result(int processedCount, int errorCount) {

@@ -98,6 +98,39 @@ class ProcessExpiredAssignmentsUseCaseTest {
     }
 
     @Test
+    void retriesOnOptimisticLockConflictThenSucceeds() {
+        VehicleId vehicleId = VehicleId.generate();
+        Vehicle vehicle = Vehicle.create("dev-2", "5678 AGH").toBuilder()
+                .assignedRouteId(BusRouteId.generate())
+                .routeNumber("12")
+                .build();
+        RouteAssignment expired = RouteAssignment.create(
+                vehicleId, BusRouteId.generate(),
+                LocalDate.now().plusDays(1), ShiftType.FIRST,
+                "admin", null, Instant.now().plusSeconds(3600));
+
+        when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
+        when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(assignmentRepository.findExpiredAssignments()).thenReturn(Flux.just(expired));
+        when(assignmentRepository.deactivateById(any(RouteAssignmentId.class))).thenReturn(Mono.empty());
+        when(vehicleRepository.findById(any(VehicleId.class))).thenReturn(Mono.just(vehicle));
+        when(assignmentRepository.findActiveByVehicleAndDateAndShift(any(VehicleId.class), any(LocalDate.class), any(ShiftType.class)))
+                .thenReturn(Mono.empty());
+        when(expirationService.clearExpiredAssignment(vehicle)).thenReturn(vehicle.clearRouteAssignment());
+        when(vehicleRepository.save(any(Vehicle.class)))
+                .thenReturn(Mono.error(new org.springframework.dao.OptimisticLockingFailureException("concurrent GPS update")))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(Mono.empty()))
+                .assertNext(result -> {
+                    assertEquals(1, result.processedCount());
+                    assertEquals(0, result.errorCount());
+                })
+                .verifyComplete();
+    }
+
+    @Test
     void resultHasProcessedIsTrueWhenProcessedCountPositive() {
         ProcessExpiredAssignmentsUseCase.Result r = new ProcessExpiredAssignmentsUseCase.Result(5, 0);
         assertEquals(true, r.hasProcessed());
