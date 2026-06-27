@@ -81,7 +81,7 @@ public class ClientJwtTokenService extends BaseJwtTokenService<ClientPrincipal> 
                         client.getStatus().name()
                 ))
                 .onErrorResume(e -> {
-                    log.error("Failed to extract client principal: {}", e.getMessage());
+                    log.warn("Client token rejected: {}", e.getMessage());
                     return Mono.error(new IllegalArgumentException("Invalid token or client not found"));
                 });
     }

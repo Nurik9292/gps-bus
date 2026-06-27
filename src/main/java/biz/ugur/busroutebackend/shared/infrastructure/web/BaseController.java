@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.shared.infrastructure.web;
 
+import biz.ugur.busroutebackend.shared.domain.exception.DomainException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
@@ -128,7 +129,11 @@ public abstract class BaseController {
     }
 
     private void logError(String operation, Throwable error) {
-        log.error("[{}] Error during {} operation", getControllerName(), operation, error);
+        if (error instanceof DomainException) {
+            log.warn("[{}] {} rejected: {}", getControllerName(), operation, error.getMessage());
+        } else {
+            log.error("[{}] Error during {} operation", getControllerName(), operation, error);
+        }
     }
 
 

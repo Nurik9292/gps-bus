@@ -170,8 +170,8 @@ public class PersistAndBroadcastStage {
             long callMicros = (System.nanoTime() - callT0) / 1000;
             dispatchedCount++;
             if (callMicros > maxCallMicros) maxCallMicros = callMicros;
-            if (callMicros > 5_000) {
-                log.warn("[GPS_PIPELINE] ON_GPS_UPDATE_SLOW vehicle={} plate={} route={} durationMicros={} — single call exceeded 5ms blocking budget on event-loop",
+            if (callMicros > 30_000) {
+                log.warn("[GPS_PIPELINE] ON_GPS_UPDATE_SLOW vehicle={} plate={} route={} durationMicros={} — snap/map-match cost > 30ms (off event-loop, on boundedElastic)",
                         v.getId().getValue(), v.getLicensePlate(), v.getRouteNumber(), callMicros);
             } else {
                 log.debug("[GPS_PIPELINE] ON_GPS_UPDATE_TIMING vehicle={} durationMicros={}",
