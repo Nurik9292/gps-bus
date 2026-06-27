@@ -33,6 +33,10 @@ public class WsInboundMessageDispatcher {
 
         try {
             String payload = message.getPayloadAsText();
+            if (payload == null || payload.isBlank()) {
+                log.debug("Ignoring empty inbound frame from session {}", sessionId);
+                return Mono.empty();
+            }
             WebSocketClientMessage clientMessage = objectMapper.readValue(payload, WebSocketClientMessage.class);
 
             String messageType = clientMessage.getType();
