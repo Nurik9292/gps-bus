@@ -4,8 +4,10 @@ import biz.ugur.busroutebackend.shared.infrastructure.email.EmailNotificationSer
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.AlertKind;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.GpsAlertProperties;
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
+import biz.ugur.busroutebackend.transport.domain.model.BusRoute;
 import biz.ugur.busroutebackend.transport.domain.model.RouteAssignment;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
+import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteAssignmentRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
@@ -32,10 +34,13 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -52,9 +57,12 @@ public class FleetPresenceAlertMonitor {
     private final GpsAlertProperties gpsAlertProperties;
     private final RouteAssignmentRepository assignmentRepository;
     private final VehicleRepository vehicleRepository;
+    private final BusRouteRepository busRouteRepository;
     private final OffRouteStateRegistry offRouteStateRegistry;
     private final Clock clock;
     private final String emailTemplate;
+    private final String emptyRoutesTemplate;
+    private final String unassignedTemplate;
 
     private final AtomicBoolean inProgress = new AtomicBoolean(false);
     private volatile String lastSentHash = null;
@@ -65,6 +73,7 @@ public class FleetPresenceAlertMonitor {
                                      GpsAlertProperties gpsAlertProperties,
                                      RouteAssignmentRepository assignmentRepository,
                                      VehicleRepository vehicleRepository,
+                                     BusRouteRepository busRouteRepository,
                                      OffRouteStateRegistry offRouteStateRegistry,
                                      Clock clock) {
         this.emailService = emailService;
@@ -72,9 +81,15 @@ public class FleetPresenceAlertMonitor {
         this.gpsAlertProperties = gpsAlertProperties;
         this.assignmentRepository = assignmentRepository;
         this.vehicleRepository = vehicleRepository;
+        this.busRouteRepository = busRouteRepository;
         this.offRouteStateRegistry = offRouteStateRegistry;
         this.clock = clock;
-        this.emailTemplate = loadTemplate();
+        this.emailTemplate = loadTemplate("/email-templates/assigned-not-on-line.txt",
+                "Назначенные автобусы не на линии:\n{rows}");
+        this.emptyRoutesTemplate = loadTemplate("/email-templates/empty-routes.txt",
+                "Маршруты без автобусов (всего {count}):\n{rows}");
+        this.unassignedTemplate = loadTemplate("/email-templates/unassigned-vehicles.txt",
+                "Автобусы без маршрута на сегодня (всего {count}):\n{rows}");
     }
 
     @Scheduled(fixedRateString = "${app.fleet-presence-alerts.check-interval-minutes:10}", timeUnit = TimeUnit.MINUTES)
@@ -103,10 +118,48 @@ public class FleetPresenceAlertMonitor {
         LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);
         LocalDateTime nowLocal = LocalDateTime.ofInstant(now, ZoneOffset.UTC);
 
-        return assignedVehicleIds(today, shift)
+        Mono<List<FleetProblem>> assignedProblems = assignedVehicleIds(today, shift)
                 .flatMap(vehicleId -> toProblem(vehicleId, today, shift, nowLocal, now), CONCURRENCY)
-                .collectList()
-                .flatMap(problems -> dispatchIfNeeded(problems, shift, now));
+                .collectList();
+        Mono<List<RouteAssignment>> todayAssignments = assignmentsToday(today)
+                .collectList().timeout(PER_ITEM_TIMEOUT);
+        Mono<List<BusRoute>> activeRoutes = busRouteRepository.findActiveRoutes()
+                .collectList().timeout(PER_ITEM_TIMEOUT);
+        Mono<List<Vehicle>> activeVehicles = vehicleRepository.findActiveVehicles()
+                .collectList().timeout(PER_ITEM_TIMEOUT);
+
+        return Mono.zip(assignedProblems, todayAssignments, activeRoutes, activeVehicles)
+                .flatMap(t -> {
+                    List<FleetProblem> problems = t.getT1();
+                    List<RouteAssignment> allAssignments = t.getT2();
+                    List<BusRoute> routes = t.getT3();
+                    List<Vehicle> vehicles = t.getT4();
+
+                    List<RouteAssignment> currentShiftAssignments = allAssignments.stream()
+                            .filter(a -> a.getShiftType() == shift || a.getShiftType() == ShiftType.FULL_DAY)
+                            .toList();
+                    Set<String> assignedTodayIds = new HashSet<>();
+                    for (RouteAssignment a : allAssignments) {
+                        assignedTodayIds.add(a.getVehicleId().getValue());
+                    }
+                    LocalDateTime graceCutoff = nowLocal.toLocalDate().atTime(shift.getStartTime())
+                            .plusMinutes(properties.getStartupGraceMinutes());
+
+                    List<EmptyRoute> emptyRoutes = EmptyRouteDetector.detect(routes, currentShiftAssignments,
+                            vehicles, nowLocal, properties.getSilentThresholdMinutes(), graceCutoff);
+                    List<UnassignedVehicle> unassigned = UnassignedVehicleDetector.detect(vehicles,
+                            assignedTodayIds, nowLocal, properties.getSilentThresholdMinutes());
+
+                    return dispatchIfNeeded(problems, emptyRoutes, unassigned, shift, now);
+                });
+    }
+
+    private Flux<RouteAssignment> assignmentsToday(LocalDate today) {
+        return Flux.concat(
+                        assignmentRepository.findActiveByDateAndShift(today, ShiftType.FIRST),
+                        assignmentRepository.findActiveByDateAndShift(today, ShiftType.SECOND),
+                        assignmentRepository.findActiveByDateAndShift(today, ShiftType.FULL_DAY))
+                .filter(RouteAssignment::isCurrentlyValid);
     }
 
     private Flux<VehicleId> assignedVehicleIds(LocalDate today, ShiftType shift) {
@@ -149,23 +202,24 @@ public class FleetPresenceAlertMonitor {
         return new FleetProblem(vehicleId.getValue(), plate, route, status, lastSignal, distance);
     }
 
-    private Mono<Void> dispatchIfNeeded(List<FleetProblem> problems, ShiftType shift, Instant now) {
-        if (problems.isEmpty()) {
+    private Mono<Void> dispatchIfNeeded(List<FleetProblem> problems, List<EmptyRoute> emptyRoutes,
+                                        List<UnassignedVehicle> unassigned, ShiftType shift, Instant now) {
+        if (problems.isEmpty() && emptyRoutes.isEmpty() && unassigned.isEmpty()) {
             return Mono.empty();
         }
-        String hash = hashOf(problems);
+        String hash = combinedHash(problems, emptyRoutes, unassigned);
         boolean changed = !hash.equals(lastSentHash);
         boolean cooldownPassed = lastSentAt == null
                 || Duration.between(lastSentAt, now).toMinutes() >= properties.getMinResendCooldownMinutes();
         if (!changed || !cooldownPassed) {
-            log.debug("[FLEET_PRESENCE] {} problems, suppressed (changed={}, cooldownPassed={})",
-                    problems.size(), changed, cooldownPassed);
+            log.debug("[FLEET_PRESENCE] suppressed (changed={}, cooldownPassed={})", changed, cooldownPassed);
             return Mono.empty();
         }
 
-        String subject = "[FLEET] " + problems.size() + " автобусов не на линии (смена " + shift.name() + ")";
-        String body = "<pre>" + renderBody(problems, shift, now) + "</pre>";
-        log.warn("[FLEET_PRESENCE] dispatching summary: {} vehicles, shift={}", problems.size(), shift);
+        String subject = buildSubject(problems, emptyRoutes, unassigned, shift);
+        String body = "<pre>" + renderBody(problems, emptyRoutes, unassigned, shift, now) + "</pre>";
+        log.warn("[FLEET_PRESENCE] dispatching: assigned={}, emptyRoutes={}, unassigned={}, shift={}",
+                problems.size(), emptyRoutes.size(), unassigned.size(), shift);
 
         return emailService.sendGpsAlert(gpsAlertProperties.recipientList(), "ASSIGNED_FLEET",
                         AlertKind.ASSIGNED_NOT_ON_LINE, subject, body)
@@ -179,6 +233,21 @@ public class FleetPresenceAlertMonitor {
                 });
     }
 
+    private String buildSubject(List<FleetProblem> problems, List<EmptyRoute> emptyRoutes,
+                                List<UnassignedVehicle> unassigned, ShiftType shift) {
+        List<String> parts = new ArrayList<>();
+        if (!problems.isEmpty()) {
+            parts.add("не на линии: " + problems.size());
+        }
+        if (!emptyRoutes.isEmpty()) {
+            parts.add("пустых маршрутов: " + emptyRoutes.size());
+        }
+        if (!unassigned.isEmpty()) {
+            parts.add("без маршрута: " + unassigned.size());
+        }
+        return "[FLEET] " + String.join(" | ", parts) + " (смена " + shift.name() + ")";
+    }
+
     private Optional<ShiftType> currentShift(LocalTime localTime) {
         return Arrays.stream(ShiftType.values())
                 .filter(s -> s != ShiftType.FULL_DAY)
@@ -186,14 +255,40 @@ public class FleetPresenceAlertMonitor {
                 .findFirst();
     }
 
-    private String hashOf(List<FleetProblem> problems) {
-        return problems.stream()
-                .map(p -> p.vehicleId() + ":" + p.status().name())
-                .sorted()
-                .reduce("", (a, b) -> a + "|" + b);
+    private String combinedHash(List<FleetProblem> problems, List<EmptyRoute> emptyRoutes,
+                                List<UnassignedVehicle> unassigned) {
+        String a = problems.stream().map(p -> "A:" + p.vehicleId() + ":" + p.status().name())
+                .sorted().collect(Collectors.joining("|"));
+        String b = emptyRoutes.stream().map(r -> "B:" + r.routeNumber() + ":" + r.reason().name())
+                .sorted().collect(Collectors.joining("|"));
+        String c = unassigned.stream().map(u -> "C:" + u.licensePlate() + ":" + u.live())
+                .sorted().collect(Collectors.joining("|"));
+        return a + "#" + b + "#" + c;
     }
 
-    private String renderBody(List<FleetProblem> problems, ShiftType shift, Instant now) {
+    private String renderBody(List<FleetProblem> problems, List<EmptyRoute> emptyRoutes,
+                             List<UnassignedVehicle> unassigned, ShiftType shift, Instant now) {
+        StringBuilder sb = new StringBuilder();
+        if (!problems.isEmpty()) {
+            sb.append(renderAssigned(problems, shift, now));
+        }
+        if (!emptyRoutes.isEmpty()) {
+            appendSection(sb, renderEmptyRoutes(emptyRoutes, shift, now));
+        }
+        if (!unassigned.isEmpty()) {
+            appendSection(sb, renderUnassigned(unassigned, shift, now));
+        }
+        return sb.toString();
+    }
+
+    private void appendSection(StringBuilder sb, String section) {
+        if (sb.length() > 0) {
+            sb.append("\n\n");
+        }
+        sb.append(section);
+    }
+
+    private String renderAssigned(List<FleetProblem> problems, ShiftType shift, Instant now) {
         List<String> rows = new ArrayList<>();
         for (FleetProblem p : problems) {
             rows.add(p.licensePlate() + " | " + p.routeNumber() + " | " + shift.name() + " | "
@@ -206,15 +301,57 @@ public class FleetPresenceAlertMonitor {
                 .replace("{rows}", String.join("\n", rows));
     }
 
-    private String loadTemplate() {
-        try (var is = getClass().getResourceAsStream("/email-templates/assigned-not-on-line.txt")) {
+    private String renderEmptyRoutes(List<EmptyRoute> routes, ShiftType shift, Instant now) {
+        int cap = properties.getMaxRowsPerSection();
+        List<String> rows = new ArrayList<>();
+        int shown = Math.min(cap, routes.size());
+        for (int i = 0; i < shown; i++) {
+            EmptyRoute r = routes.get(i);
+            rows.add(r.routeNumber() + " | " + reasonRu(r.reason()) + " | " + r.assignedCount());
+        }
+        if (routes.size() > cap) {
+            rows.add("… и ещё " + (routes.size() - cap));
+        }
+        return emptyRoutesTemplate
+                .replace("{shift}", shift.name())
+                .replace("{detectedAt}", formatInstant(now))
+                .replace("{count}", String.valueOf(routes.size()))
+                .replace("{rows}", String.join("\n", rows));
+    }
+
+    private String renderUnassigned(List<UnassignedVehicle> list, ShiftType shift, Instant now) {
+        int cap = properties.getMaxRowsPerSection();
+        List<String> rows = new ArrayList<>();
+        int shown = Math.min(cap, list.size());
+        for (int i = 0; i < shown; i++) {
+            UnassignedVehicle u = list.get(i);
+            String gps = u.gpsRouteNumber() != null ? u.gpsRouteNumber() : "—";
+            String status = u.live() ? "на линии" : "стоит";
+            rows.add(u.licensePlate() + " | " + gps + " | " + status + " | " + u.lastSignalAgo());
+        }
+        if (list.size() > cap) {
+            rows.add("… и ещё " + (list.size() - cap));
+        }
+        return unassignedTemplate
+                .replace("{shift}", shift.name())
+                .replace("{detectedAt}", formatInstant(now))
+                .replace("{count}", String.valueOf(list.size()))
+                .replace("{rows}", String.join("\n", rows));
+    }
+
+    private static String reasonRu(EmptyRouteReason reason) {
+        return reason == EmptyRouteReason.ASSIGNED_BUT_SILENT ? "назначен, но молчат" : "не назначен";
+    }
+
+    private String loadTemplate(String path, String fallback) {
+        try (var is = getClass().getResourceAsStream(path)) {
             if (is == null) {
-                return "Назначенные автобусы не на линии:\n{rows}";
+                return fallback;
             }
             return new String(is.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            log.error("[FLEET_PRESENCE] template load failed: {}", e.getMessage());
-            return "Назначенные автобусы не на линии:\n{rows}";
+            log.error("[FLEET_PRESENCE] template load failed {}: {}", path, e.getMessage());
+            return fallback;
         }
     }
 
