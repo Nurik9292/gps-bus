@@ -587,6 +587,10 @@ logging:
     biz.ugur.busroutebackend.shared.infrastructure.security: INFO
     biz.ugur.busroutebackend.admin.infrastructure.security: INFO
     biz.ugur.busroutebackend.interfaces.websocket: INFO
+    biz.ugur.busroutebackend.transport.infrastructure.metrics.GpsOutlierMetricsRecorder: ${GPS_PIPELINE_LOG_LEVEL:ERROR}
+    biz.ugur.busroutebackend.transport.infrastructure.prediction.GpsOutlierFilter: ${GPS_PIPELINE_LOG_LEVEL:ERROR}
+    biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.PlausibilityChecker: ${GPS_PIPELINE_LOG_LEVEL:ERROR}
+    biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.OppositeFallbackStrategy: ${GPS_PIPELINE_LOG_LEVEL:ERROR}
     org.springframework: WARN
     org.hibernate: WARN
     io.r2dbc: WARN
