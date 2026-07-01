@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.transport.application.dto.GpsPositionDTO;
 import biz.ugur.busroutebackend.transport.domain.event.VehiclePositionUpdatedEvent;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
+import biz.ugur.busroutebackend.transport.infrastructure.debug.GpsQuality;
 import biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.GatekeeperDecision;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.VehiclePositionPredictionService;
@@ -148,6 +149,10 @@ public class PersistAndBroadcastStage {
             }
 
             long callT0 = System.nanoTime();
+            GpsPositionDTO latestFix = ctx.latestPositionsByDevice().get(v.getDeviceId());
+            GpsQuality gpsQuality = latestFix != null
+                    ? new GpsQuality(latestFix.getHdop(), latestFix.getSatellites(), latestFix.getAccuracy())
+                    : GpsQuality.UNKNOWN;
             predictionService.onGpsUpdate(
                     v.getId().getValue(),
                     v.getLicensePlate(),
@@ -165,7 +170,8 @@ public class PersistAndBroadcastStage {
                     v.getCurrentDirection() != null ? v.getCurrentDirection() : 0,
                     v.getCurrentDirection() != null,
                     Boolean.TRUE.equals(v.getIsInGarage()),
-                    Boolean.TRUE.equals(ctx.bufferedByDeviceId().get(v.getDeviceId()))
+                    Boolean.TRUE.equals(ctx.bufferedByDeviceId().get(v.getDeviceId())),
+                    gpsQuality
             );
             long callMicros = (System.nanoTime() - callT0) / 1000;
             dispatchedCount++;

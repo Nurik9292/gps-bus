@@ -80,7 +80,10 @@ public class GpsRecorder {
                                 double course,
                                 boolean inMotion,
                                 Instant timestamp,
-                                int direction) {
+                                int direction,
+                                Double hdop,
+                                Integer satellites,
+                                Double accuracy) {
         ActiveSession session = activeSession.get();
         if (session == null) return;
 
@@ -101,6 +104,9 @@ public class GpsRecorder {
         event.put("inMotion", inMotion);
         event.put("timestamp", timestamp.toString());
         event.put("direction", direction);
+        event.put("hdop", hdop);
+        event.put("satellites", satellites);
+        event.put("accuracy", accuracy);
         event.put("wallClock", now.toString());
 
         try {

@@ -200,7 +200,8 @@ public class VehiclePositionPredictionService {
                             boolean directionConfirmed,
                             boolean inGarage) {
         onGpsUpdate(vehicleId, licensePlate, routeNumber, latitude, longitude, speedKmh,
-                course, inMotion, timestamp, direction, directionConfirmed, inGarage, false);
+                course, inMotion, timestamp, direction, directionConfirmed, inGarage, false,
+                biz.ugur.busroutebackend.transport.infrastructure.debug.GpsQuality.UNKNOWN);
     }
 
     public void onGpsUpdate(String vehicleId,
@@ -215,7 +216,8 @@ public class VehiclePositionPredictionService {
                             int direction,
                             boolean directionConfirmed,
                             boolean inGarage,
-                            boolean isBuffered) {
+                            boolean isBuffered,
+                            biz.ugur.busroutebackend.transport.infrastructure.debug.GpsQuality gpsQuality) {
         if (!properties.isEnabled()) {
             return;
         }
@@ -236,7 +238,8 @@ public class VehiclePositionPredictionService {
         GpsRecorder recorder = gpsRecorderProvider.getIfAvailable();
         if (recorder != null) {
             recorder.recordIfActive(vehicleId, licensePlate, routeNumber,
-                    latitude, longitude, speedKmh, course, inMotion, timestamp, direction);
+                    latitude, longitude, speedKmh, course, inMotion, timestamp, direction,
+                    gpsQuality.hdop(), gpsQuality.satellites(), gpsQuality.accuracy());
         }
 
         long gpsAgeMs = Instant.now().toEpochMilli() - timestamp.toEpochMilli();
