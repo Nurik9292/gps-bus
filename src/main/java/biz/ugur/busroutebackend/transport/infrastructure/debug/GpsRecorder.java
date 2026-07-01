@@ -121,6 +121,18 @@ public class GpsRecorder {
         }
     }
 
+    public void flush() {
+        ActiveSession session = activeSession.get();
+        if (session == null) return;
+        try {
+            synchronized (session.writer) {
+                session.writer.flush();
+            }
+        } catch (IOException e) {
+            log.warn("[GPS_RECORDER] flush failed: {}", e.getMessage());
+        }
+    }
+
     public RecorderStatus status() {
         ActiveSession session = activeSession.get();
         if (session == null) {
