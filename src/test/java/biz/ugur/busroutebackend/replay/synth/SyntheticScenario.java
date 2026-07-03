@@ -52,6 +52,60 @@ public final class SyntheticScenario {
         return new Track(fixes, truth);
     }
 
+    public static Track cruiseWithAccumulatingSnapDrift(GeometryFixture g, Params p,
+                                                        double startS, double cruiseSpeedMs,
+                                                        double driftRatePerFixMeters, double totalSec) {
+        Random rnd = new Random(p.seed());
+        List<GpsFix> fixes = new ArrayList<>();
+        List<double[]> truth = new ArrayList<>();
+        double s = startS;
+        int i = 0;
+        for (double t = 0; t <= totalSec; t += p.fixIntervalSec()) {
+            truth.add(new double[]{t, s, cruiseSpeedMs});
+            double drift = driftRatePerFixMeters * i;
+            double along = drift / Math.sqrt(2);
+            double perp = drift / Math.sqrt(2);
+            fixes.add(fixAtWithPerp(g, p, rnd, t, s, cruiseSpeedMs, along, perp));
+            s = Math.min(s + cruiseSpeedMs * p.fixIntervalSec(), g.totalMeters());
+            i++;
+        }
+        return new Track(fixes, truth);
+    }
+
+    public static Track cruiseClean(GeometryFixture g, Params p,
+                                    double startS, double cruiseSpeedMs, double totalSec) {
+        return cruiseWithForwardSnapBias(g, p, startS, cruiseSpeedMs, 0.0, totalSec);
+    }
+
+    public static Track cruiseWithGaps(GeometryFixture g, Params p,
+                                       double startS, double cruiseSpeedMs, double totalSec,
+                                       List<double[]> gapsStartDurSec) {
+        Track full = cruiseClean(g, p, startS, cruiseSpeedMs, totalSec);
+        List<GpsFix> kept = new ArrayList<>();
+        List<double[]> keptTruth = new ArrayList<>();
+        for (int i = 0; i < full.fixes().size(); i++) {
+            double t = full.truth().get(i)[0];
+            boolean inGap = gapsStartDurSec.stream().anyMatch(gd -> t >= gd[0] && t < gd[0] + gd[1]);
+            if (!inGap) {
+                kept.add(full.fixes().get(i));
+                keptTruth.add(full.truth().get(i));
+            }
+        }
+        return new Track(kept, keptTruth);
+    }
+
+    public static Track stationaryWithNoise(GeometryFixture g, Params p,
+                                            double atS, double totalSec) {
+        Random rnd = new Random(p.seed());
+        List<GpsFix> fixes = new ArrayList<>();
+        List<double[]> truth = new ArrayList<>();
+        for (double t = 0; t <= totalSec; t += p.fixIntervalSec()) {
+            truth.add(new double[]{t, atS, 0.0});
+            fixes.add(fixAt(g, p, rnd, t, atS, 0.0, 0.0));
+        }
+        return new Track(fixes, truth);
+    }
+
     public static Track cruiseWithForwardSnapBias(GeometryFixture g, Params p,
                                                   double startS, double cruiseSpeedMs,
                                                   double biasMeters, double totalSec) {
@@ -69,10 +123,23 @@ public final class SyntheticScenario {
 
     private static GpsFix fixAt(GeometryFixture g, Params p, Random rnd,
                                 double t, double trueS, double speedMs, double alongBiasMeters) {
+        return fixAtWithPerp(g, p, rnd, t, trueS, speedMs, alongBiasMeters, 0.0);
+    }
+
+    private static GpsFix fixAtWithPerp(GeometryFixture g, Params p, Random rnd,
+                                        double t, double trueS, double speedMs,
+                                        double alongBiasMeters, double perpBiasMeters) {
         double emittedS = Math.min(trueS + alongBiasMeters, g.totalMeters());
         double[] pt = g.pointAtS(emittedS);
         double mLat = 111320.0;
         double mLon = 111320.0 * Math.cos(Math.toRadians(pt[0]));
+        if (perpBiasMeters != 0.0) {
+            double course = Math.toRadians(courseAt(g, emittedS));
+            double perpLat = Math.cos(course + Math.PI / 2);
+            double perpLon = Math.sin(course + Math.PI / 2);
+            pt = new double[]{pt[0] + perpBiasMeters * perpLat / mLat,
+                              pt[1] + perpBiasMeters * perpLon / mLon};
+        }
         double lat = pt[0] + rnd.nextGaussian() * p.positionSigmaMeters() / mLat;
         double lon = pt[1] + rnd.nextGaussian() * p.positionSigmaMeters() / mLon;
         Instant ts = p.startTime().plusMillis((long) (t * 1000));

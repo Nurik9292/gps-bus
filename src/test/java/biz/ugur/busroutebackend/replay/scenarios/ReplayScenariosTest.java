@@ -49,6 +49,31 @@ class ReplayScenariosTest {
     }
 
     @Test
+    void scenario15RampBaselinesHonestPortraitOfN1() {
+        SyntheticScenario.Track track = SyntheticScenario.cruiseWithAccumulatingSnapDrift(
+                ROUTE_8_FWD, SyntheticScenario.Params.defaults(151, "8", 0),
+                1000, CRUISE_MS, 0.7, 2800);
+
+        ReplayHarness.Result snap = ReplayHarness.run(new GeometricSnapModel(), ROUTE_8_FWD,
+                track.fixes(), track.truth(), 300);
+        ReplayHarness.Result hold = ReplayHarness.run(new HoldLastModel(), ROUTE_8_FWD,
+                track.fixes(), track.truth(), 300);
+
+        int n = snap.samples().size();
+        double earlyErr = snap.samples().subList(0, n / 4).stream()
+                .mapToDouble(s -> Math.abs(s.sEst() - s.sTrue())).average().orElse(0);
+        double lateErr = snap.samples().subList(3 * n / 4, n).stream()
+                .mapToDouble(s -> Math.abs(s.sEst() - s.sTrue())).average().orElse(0);
+        assertThat(lateErr)
+                .as("портрет Н-1: у следящего снапа |x-s_true| растёт с рампой (early=%.1f)", earlyErr)
+                .isGreaterThan(earlyErr * 3);
+        System.out.printf("SC15-ramp baselines: snap early=%.1fm late=%.1fm (linear growth, N-1 portrait); "
+                        + "hold maxAbs=%.1fm; nis*=%.2f hash=%s%n",
+                earlyErr, lateErr, hold.position().maxAbsError(),
+                snap.consistency().meanNis(), snap.outputSha256().substring(0, 12));
+    }
+
+    @Test
     void scenario15SystematicBiasBaseline() {
         SyntheticScenario.Track track = SyntheticScenario.cruiseWithForwardSnapBias(
                 ROUTE_8_FWD, SyntheticScenario.Params.defaults(15, "8", 0),

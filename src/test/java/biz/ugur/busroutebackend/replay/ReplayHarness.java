@@ -13,7 +13,7 @@ public final class ReplayHarness {
     public record Sample(double tSec, double sEst, double sTrue, String mode, double varianceS) {}
 
     public record Result(List<Sample> samples, PositionMetrics position, ConsistencyMetrics consistency,
-                         String outputSha256) {}
+                         String outputSha256, String nisKind) {}
 
     private ReplayHarness() {}
 
@@ -24,6 +24,7 @@ public final class ReplayHarness {
         PositionMetrics pos = new PositionMetrics(teleportStepMeters);
         ConsistencyMetrics cons = new ConsistencyMetrics();
         List<Sample> samples = new ArrayList<>(fixes.size());
+        boolean trueNis = model instanceof biz.ugur.busroutebackend.replay.core.InnovationAware;
 
         Double prevS = null;
         for (int i = 0; i < fixes.size(); i++) {
@@ -36,13 +37,18 @@ public final class ReplayHarness {
             if (sTrue != null) {
                 cons.addNees(est.s() - sTrue, est.varianceS());
             }
-            if (prevS != null) {
+            if (trueNis) {
+                var ia = (biz.ugur.busroutebackend.replay.core.InnovationAware) model;
+                if (i > 0 && !Double.isNaN(ia.lastInnovation()) && ia.lastInnovationVariance() > 0) {
+                    cons.addNis(ia.lastInnovation(), ia.lastInnovationVariance());
+                }
+            } else if (prevS != null) {
                 cons.addNis(est.s() - prevS, Math.max(est.varianceS(), 1e-9));
             }
             prevS = est.s();
             samples.add(new Sample(tSec, est.s(), sTrue != null ? sTrue : Double.NaN, est.mode(), est.varianceS()));
         }
-        return new Result(samples, pos, cons, sha256(samples));
+        return new Result(samples, pos, cons, sha256(samples), trueNis ? "NIS" : "NIS*");
     }
 
     private static String sha256(List<Sample> samples) {
