@@ -63,6 +63,8 @@
 | Ре-привязка, ветка B (живой N_persist) | БЕЗ шага-разрыва: стягивание сериями R_max×recoveryPullFactor(=4) до сведения | `sc15RampAbsoluteDeviationControlledAndDetected` (assert «стягивание без шага-разрыва») |
 | NEES | **сырой одномерный позиционный**: err_s²/P₀₀, dim=1, ожидание 1.0 (НЕ dim=2 ANEES) | `sc16HonestNeesMonteCarloWithinChi2` (печатает формулу, q/R и профиль по времени) |
 | «Проезд вставшего» в gap>T_max | наблюдаемо через ветку A: сам факт re-init = прогноз был заморожен и отстал >D_reanchor | `sc02...` |
+| N_chatter (SC09) | **метрика дребезга = повторные входы DECEL_ENTER к одному стопу за визит (норма 0)**; сырое число смен mode — диагностическая печать, не критерий (ратификация A4) | `StopEtaScenariosTest.sc09SawNoModeChatter` |
+| Headline на синтетике | верификация **механики** стенда; реальная приёмка модели — replay живых логов после кампании записи (ратификация A4) | `headlineEtaVsFactByHorizon` |
 
 ## Отступления defaults() от Приложения спеки (явная секция)
 
