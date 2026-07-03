@@ -25,6 +25,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware {
     private int persistCounter;
     private int reanchorConfirms;
     private double reanchorCandidateS;
+    private boolean recoveringFromFreeze;
     private int slowTicks;
     private int movingTicks;
     private int decelTicks;
@@ -92,9 +93,25 @@ public class MotionFilterCore implements PredictionModel, InnovationAware {
 
         if (mode == Mode.NO_GPS) {
             mode = Mode.RECOVERING;
+            recoveringFromFreeze = true;
         }
 
         Snap snap = snapInWindow(fix, g, dTau);
+
+        if (recoveringFromFreeze && snap.snapped()
+                && Math.abs(snap.sOnLine() - x) > cfg.dReanchorMeters()) {
+            reinitAt(snap.sOnLine(), fix);
+            recoveringFromFreeze = false;
+            lastNu = 0;
+            lastS = cfg.pInitPos();
+            lastUpdateAccepted = true;
+            clampToLine(g);
+            return new Estimate(x, v, Mode.RECOVERING.name(), Math.max(p00, 1e-6));
+        }
+        if (recoveringFromFreeze && snap.snapped()) {
+            mode = Mode.TRACKING;
+            recoveringFromFreeze = false;
+        }
         double measSigma = measurementSigma(fix, snap.dSnap());
         double r = measSigma * measSigma;
 
@@ -243,7 +260,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware {
 
         x += dxApplied;
         v += dvApplied;
-        v = Math.max(0, Math.min(v, 25.0));
+        v = Math.max(0, Math.min(v, cfg.vMaxMs()));
 
         double onePkx = 1 - kx;
         double np00 = onePkx * p00;
@@ -261,6 +278,17 @@ public class MotionFilterCore implements PredictionModel, InnovationAware {
         v = v + cfg.weakZvWeight() * (zv - v);
     }
 
+    private void reinitAt(double sOnLine, GpsFix fix) {
+        x = sOnLine;
+        v = Math.max(0, fix.speedKmh() / 3.6);
+        p00 = cfg.pInitPos();
+        p01 = p10 = 0;
+        p11 = cfg.pInitVel();
+        mode = Mode.RECOVERING;
+        persistCounter = 0;
+        reanchorConfirms = 0;
+    }
+
     private void handleRejected(GpsFix fix, Snap snap) {
         if (!snap.snapped()) return;
         if (mode == Mode.RECOVERING) {
@@ -271,14 +299,20 @@ public class MotionFilterCore implements PredictionModel, InnovationAware {
                 reanchorConfirms = 1;
             }
             if (reanchorConfirms >= cfg.mReanchor()) {
-                x = snap.sOnLine();
-                v = Math.max(0, fix.speedKmh() / 3.6);
-                p00 = cfg.pInitPos();
-                p01 = p10 = 0;
-                p11 = cfg.pInitVel();
-                mode = Mode.TRACKING;
-                persistCounter = 0;
-                reanchorConfirms = 0;
+                double dTauEff = cfg.dtSec();
+                double pull = (cfg.rMaxRate() * Math.max(v, 1.0) * dTauEff + cfg.rMaxBaseMeters())
+                        * cfg.recoveryPullFactor();
+                double delta = snap.sOnLine() - x;
+                x += Math.max(-pull, Math.min(pull, delta));
+                if (Math.abs(snap.sOnLine() - x) < 1.0) {
+                    v = Math.max(0, fix.speedKmh() / 3.6);
+                    p00 = cfg.pInitPos();
+                    p01 = p10 = 0;
+                    p11 = cfg.pInitVel();
+                    mode = Mode.TRACKING;
+                    persistCounter = 0;
+                    reanchorConfirms = 0;
+                }
             }
         }
     }

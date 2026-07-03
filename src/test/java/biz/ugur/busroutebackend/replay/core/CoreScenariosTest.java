@@ -46,6 +46,14 @@ class CoreScenariosTest {
                 .as("INV-3: ни одного тика, где absDev>D_max и событие дрейфа не активно")
                 .isZero();
         assertThat(detected).as("устойчивое расхождение задетектировано").isTrue();
+
+        double pull = (CFG.rMaxRate() * 25.0 * 7.0 + CFG.rMaxBaseMeters()) * CFG.recoveryPullFactor();
+        for (int i = 1; i < r.samples().size(); i++) {
+            double step = Math.abs(r.samples().get(i).sEst() - r.samples().get(i - 1).sEst());
+            assertThat(step)
+                    .as("живая ветка (§5.5): стягивание без шага-разрыва (t=%.0f)", r.samples().get(i).tSec())
+                    .isLessThanOrEqualTo(CRUISE * 7.0 + pull + 20);
+        }
         System.out.printf("SC15-ramp core: meanAbs(truth)=%.1fm devEvents=%d nis=%s(%.2f) hash=%s%n",
                 r.position().meanAbsError(), core.absDeviationEvents(),
                 r.nisKind(), r.consistency().meanNis(), r.outputSha256().substring(0, 12));
@@ -117,7 +125,21 @@ class CoreScenariosTest {
             }
         }
         double mean = sumNees / count;
+        System.out.printf("SC16 honest NEES: RAW one-dimensional position NEES = err_s^2 / P00 "
+                + "(dim=1, expectation 1.0, NOT dim=2 ANEES); q=(%.2f,%.2f) R0=sigma^2=%.0f%n",
+                CFG.qPos(), CFG.qVel(), CFG.sigmaMeasDefaultMeters() * CFG.sigmaMeasDefaultMeters());
         System.out.printf("SC16 honest NEES(dim=1, MC x%d, steady): mean=%.2f n=%d%n", n, mean, count);
+        SyntheticScenario.Track profTrack = SyntheticScenario.departureRamp(
+                G, SyntheticScenario.Params.defaults(1600, "8", 0), 2000, CRUISE, ACCEL, 120, 900);
+        ReplayHarness.Result prof = ReplayHarness.run(core(), G, profTrack.fixes(), profTrack.truth(), 300);
+        for (int w = 0; w < 900; w += 150) {
+            final int from = w;
+            double wm = prof.samples().stream()
+                    .filter(s -> s.tSec() >= from && s.tSec() < from + 150 && !Double.isNaN(s.sTrue()))
+                    .mapToDouble(s -> Math.pow(s.sEst() - s.sTrue(), 2) / s.varianceS())
+                    .average().orElse(Double.NaN);
+            System.out.printf("  NEES-profile t=[%d..%d): %.2f%n", from, from + 150, wm);
+        }
         double half = 2.576 * Math.sqrt(2.0 / count);
         assertThat(mean)
                 .as("средний NEES в χ²-интервале (dim=1): [%.3f..%.3f]", 1 - half, 1 + half)
@@ -150,7 +172,8 @@ class CoreScenariosTest {
         ReplayHarness.Result r = ReplayHarness.run(core(), G, track.fixes(), track.truth(), 300);
 
         for (int i = 1; i < r.samples().size(); i++) {
-            boolean reanchorStep = r.samples().get(i - 1).mode().equals("RECOVERING");
+            boolean reanchorStep = r.samples().get(i - 1).mode().equals("RECOVERING")
+                    || r.samples().get(i).mode().equals("RECOVERING");
             if (reanchorStep) continue;
             double dTau = r.samples().get(i).tSec() - r.samples().get(i - 1).tSec();
             double step = Math.abs(r.samples().get(i).sEst() - r.samples().get(i - 1).sEst());
@@ -160,13 +183,17 @@ class CoreScenariosTest {
                         r.samples().get(i).tSec(), dTau)
                     .isLessThanOrEqualTo(allowance);
         }
-        double preGap = r.samples().stream().filter(s -> s.tSec() < 1300)
-                .reduce((a, b) -> b).orElseThrow().sEst();
-        double postGap = r.samples().stream().filter(s -> s.tSec() >= 1600)
-                .findFirst().orElseThrow().sEst();
-        assertThat(postGap - preGap)
-                .as("проезд в 300с-gap ограничен порядком v_target×T_max (×1.25 буфер на ход до входа в gap и докат)")
-                .isLessThanOrEqualTo(CFG.vTargetMs() * CFG.tMaxSec() * 1.25);
+        var post300 = r.samples().stream().filter(s -> s.tSec() >= 1600).findFirst().orElseThrow();
+        assertThat(post300.mode())
+                .as("300с-gap (>T_max): прогноз заморожен и отстал >D_reanchor → ветка A (§6) re-init")
+                .isEqualTo("RECOVERING");
+        assertThat(Math.abs(post300.sEst() - post300.sTrue()))
+                .as("ветка A: после re-init оценка у правды")
+                .isLessThanOrEqualTo(3 * 15.0);
+        var post60 = r.samples().stream().filter(s -> s.tSec() >= 660).findFirst().orElseThrow();
+        assertThat(post60.mode())
+                .as("60с-gap (<T_max): вливание обычным update, без re-init")
+                .isNotEqualTo("RECOVERING");
     }
 
     @Test
