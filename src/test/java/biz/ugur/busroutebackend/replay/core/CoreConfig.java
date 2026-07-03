@@ -37,7 +37,12 @@ public record CoreConfig(
         double epsStopMeters,
         double epsTermMeters,
         double dwellExpectedSec,
-        double dwellMaxSec) {
+        double dwellMaxSec,
+        int nTurnConfirm,
+        double dTurnConfirmMeters,
+        int kTurnRevert,
+        double wTurnWindowMeters,
+        int historyNMin) {
 
     public static CoreConfig defaults() {
         return new CoreConfig(
@@ -58,6 +63,8 @@ public record CoreConfig(
                 2, 3, 3,
                 10.0,
                 80.0, 60.0, 15.0, 30.0,
-                20.0, 600.0);
+                20.0, 600.0,
+                3, 40.0, 3, 300.0,
+                5);
     }
 }

@@ -34,12 +34,26 @@ public final class SyntheticScenario {
 
     public record MultiStopTrack(List<GpsFix> fixes, List<double[]> truth, List<StopVisit> visits) {}
 
+    public record TurnTrack(List<GpsFix> fixes, List<double[]> truth, double tFlipSec,
+                            List<StopVisit> returnVisits) {}
+
     private SyntheticScenario() {}
 
     public static MultiStopTrack multiStopRun(GeometryFixture g, Params p,
                                               double startS, double endS,
                                               double cruiseMs, double accelMs2,
                                               double dwellExpectedSec, double dwellJitter,
+                                              java.util.Set<String> skipStopIds,
+                                              boolean trafficSaw) {
+        return multiStopRun(g, p, startS, endS, cruiseMs, accelMs2,
+                stopId -> dwellExpectedSec, dwellJitter, skipStopIds, trafficSaw);
+    }
+
+    public static MultiStopTrack multiStopRun(GeometryFixture g, Params p,
+                                              double startS, double endS,
+                                              double cruiseMs, double accelMs2,
+                                              java.util.function.ToDoubleFunction<String> dwellExpectedFor,
+                                              double dwellJitter,
                                               java.util.Set<String> skipStopIds,
                                               boolean trafficSaw) {
         Random rnd = new Random(p.seed());
@@ -105,7 +119,8 @@ public final class SyntheticScenario {
                 if (target != null && !skip && target.sMeters() - s <= 0.5 && v < 1.0) {
                     s = target.sMeters();
                     v = 0;
-                    dwellLeft = dwellExpectedSec * (1 - dwellJitter + 2 * dwellJitter * dwellRnd.nextDouble());
+                    dwellLeft = dwellExpectedFor.applyAsDouble(target.stopId())
+                            * (1 - dwellJitter + 2 * dwellJitter * dwellRnd.nextDouble());
                     dwellStopId = target.stopId();
                     if (arrivalT == null) arrivalT = t;
                 }
@@ -122,6 +137,204 @@ public final class SyntheticScenario {
             t += simDt;
         }
         return new MultiStopTrack(fixes, truth, visits);
+    }
+
+    public static TurnTrack terminalTurnRun(GeometryFixture gOut, GeometryFixture gBack, Params p,
+                                            double approachStartS, double cruiseMs, double accelMs2,
+                                            double turnDwellSec, double returnEndS,
+                                            double stopDwellSec, double dwellJitter) {
+        Sim sim = new Sim(p);
+        Random dwellRnd = new Random(p.seed() * 31 + 7);
+        drive(sim, gOut, dwellRnd, approachStartS, gOut.totalMeters(),
+                cruiseMs, accelMs2, stopDwellSec, dwellJitter, 0, new ArrayList<>(), true);
+        double tTurn = turnDwellSec * (0.8 + 0.4 * dwellRnd.nextDouble());
+        stand(sim, gOut, gOut.totalMeters(), tTurn, 0);
+        double tFlip = sim.t;
+        List<StopVisit> backVisits = new ArrayList<>();
+        drive(sim, gBack, dwellRnd, 0, returnEndS,
+                cruiseMs, accelMs2, stopDwellSec, dwellJitter, 1, backVisits, false);
+        return new TurnTrack(sim.fixes, sim.truth, tFlip, backVisits);
+    }
+
+    public static TurnTrack terminalStandstillRun(GeometryFixture gOut, Params p,
+                                                  double approachStartS, double cruiseMs, double accelMs2,
+                                                  double stopDwellSec, double standSec) {
+        Sim sim = new Sim(p);
+        Random dwellRnd = new Random(p.seed() * 31 + 7);
+        drive(sim, gOut, dwellRnd, approachStartS, gOut.totalMeters(),
+                cruiseMs, accelMs2, stopDwellSec, 0.3, 0, new ArrayList<>(), true);
+        stand(sim, gOut, gOut.totalMeters(), standSec, 0);
+        return new TurnTrack(sim.fixes, sim.truth, Double.NaN, List.of());
+    }
+
+    public static MultiStopTrack loopRun(GeometryFixture g, Params p,
+                                         double startS, int laps,
+                                         double cruiseMs, double accelMs2,
+                                         double stopDwellSec, double dwellJitter) {
+        Random rnd = new Random(p.seed());
+        Random dwellRnd = new Random(p.seed() * 31 + 7);
+        double l = g.totalMeters();
+        record ContTarget(String stopId, double sCont) {}
+        List<ContTarget> targets = new ArrayList<>();
+        for (int lap = 0; lap < laps; lap++) {
+            for (GeometryFixture.StopPoint sp : g.stops()) {
+                double sCont = sp.sMeters() + lap * l;
+                if (sCont > startS + 1) targets.add(new ContTarget(sp.stopId(), sCont));
+            }
+        }
+        targets.sort(java.util.Comparator.comparingDouble(ContTarget::sCont));
+        double endS = startS + laps * l;
+
+        List<GpsFix> fixes = new ArrayList<>();
+        List<double[]> truth = new ArrayList<>();
+        List<StopVisit> visits = new ArrayList<>();
+        double s = startS;
+        double v = 0;
+        double t = 0;
+        double nextEmit = 0;
+        int stopIdx = 0;
+        double dwellLeft = 0;
+        Double arrivalT = null;
+        String dwellStopId = null;
+        double simDt = 0.5;
+        double arrZone = 50.0;
+        double arrSpeedMs = 5.0 / 3.6;
+
+        while (s < endS - 0.5 && t < 36000) {
+            ContTarget target = stopIdx < targets.size() ? targets.get(stopIdx) : null;
+            if (dwellLeft > 0) {
+                dwellLeft -= simDt;
+                v = 0;
+                if (dwellLeft <= 0) {
+                    visits.add(new StopVisit(dwellStopId, arrivalT, t));
+                    arrivalT = null;
+                    dwellStopId = null;
+                    stopIdx++;
+                }
+            } else {
+                double vLimit = cruiseMs;
+                if (target != null) {
+                    double brakeDist = v * v / (2 * accelMs2);
+                    if (target.sCont() - s <= brakeDist + 1) {
+                        vLimit = Math.min(vLimit,
+                                Math.sqrt(2 * accelMs2 * Math.max(0.3, target.sCont() - s)));
+                    }
+                }
+                if (v < vLimit) v = Math.min(v + accelMs2 * simDt, vLimit);
+                else v = Math.max(v - accelMs2 * simDt, vLimit);
+                s += v * simDt;
+                if (target != null && arrivalT == null
+                        && Math.abs(target.sCont() - s) <= arrZone && v < arrSpeedMs) {
+                    arrivalT = t;
+                }
+                if (target != null && target.sCont() - s <= 0.5 && v < 1.0) {
+                    s = target.sCont();
+                    v = 0;
+                    dwellLeft = stopDwellSec * (1 - dwellJitter + 2 * dwellJitter * dwellRnd.nextDouble());
+                    dwellStopId = target.stopId();
+                    if (arrivalT == null) arrivalT = t;
+                }
+            }
+            if (t >= nextEmit) {
+                double sMod = s % l;
+                truth.add(new double[]{t, sMod, v, Math.floor(s / l)});
+                fixes.add(fixAtWithPerp(g, p, rnd, t, sMod, v, 0.0, 0.0));
+                nextEmit += p.fixIntervalSec();
+            }
+            t += simDt;
+        }
+        return new MultiStopTrack(fixes, truth, visits);
+    }
+
+    private static final class Sim {
+        final Params p;
+        final Random rnd;
+        double t = 0;
+        double nextEmit = 0;
+        final List<GpsFix> fixes = new ArrayList<>();
+        final List<double[]> truth = new ArrayList<>();
+
+        Sim(Params p) {
+            this.p = p;
+            this.rnd = new Random(p.seed());
+        }
+
+        void emitIfDue(GeometryFixture g, int dir, double s, double v) {
+            if (t >= nextEmit) {
+                truth.add(new double[]{t, s, v, dir});
+                fixes.add(fixAtWithPerp(g, p, rnd, t, s, v, 0.0, 0.0));
+                nextEmit += p.fixIntervalSec();
+            }
+        }
+    }
+
+    private static void drive(Sim sim, GeometryFixture g, Random dwellRnd,
+                              double fromS, double toS,
+                              double cruiseMs, double accelMs2,
+                              double stopDwellSec, double dwellJitter,
+                              int dir, List<StopVisit> visits, boolean brakeIntoEnd) {
+        var stops = g.stops().stream()
+                .filter(sp -> sp.sMeters() > fromS + 1 && sp.sMeters() < toS - 1)
+                .toList();
+        double s = fromS;
+        double v = 0;
+        int stopIdx = 0;
+        double dwellLeft = 0;
+        Double arrivalT = null;
+        String dwellStopId = null;
+        double simDt = 0.5;
+        double arrZone = 50.0;
+        double arrSpeedMs = 5.0 / 3.6;
+
+        while (s < toS - 0.5 && sim.t < 36000) {
+            GeometryFixture.StopPoint target = stopIdx < stops.size() ? stops.get(stopIdx) : null;
+            if (dwellLeft > 0) {
+                dwellLeft -= simDt;
+                v = 0;
+                if (dwellLeft <= 0) {
+                    visits.add(new StopVisit(dwellStopId, arrivalT, sim.t));
+                    arrivalT = null;
+                    dwellStopId = null;
+                    stopIdx++;
+                }
+            } else {
+                double vLimit = cruiseMs;
+                double brakeTarget = target != null ? target.sMeters()
+                        : (brakeIntoEnd ? toS : Double.MAX_VALUE);
+                if (brakeTarget < Double.MAX_VALUE) {
+                    double brakeDist = v * v / (2 * accelMs2);
+                    if (brakeTarget - s <= brakeDist + 1) {
+                        vLimit = Math.min(vLimit,
+                                Math.sqrt(2 * accelMs2 * Math.max(0.3, brakeTarget - s)));
+                    }
+                }
+                if (v < vLimit) v = Math.min(v + accelMs2 * simDt, vLimit);
+                else v = Math.max(v - accelMs2 * simDt, vLimit);
+                s = Math.min(s + v * simDt, g.totalMeters());
+                if (target != null && arrivalT == null
+                        && Math.abs(target.sMeters() - s) <= arrZone && v < arrSpeedMs) {
+                    arrivalT = sim.t;
+                }
+                if (target != null && target.sMeters() - s <= 0.5 && v < 1.0) {
+                    s = target.sMeters();
+                    v = 0;
+                    dwellLeft = stopDwellSec * (1 - dwellJitter + 2 * dwellJitter * dwellRnd.nextDouble());
+                    dwellStopId = target.stopId();
+                    if (arrivalT == null) arrivalT = sim.t;
+                }
+            }
+            sim.emitIfDue(g, dir, s, v);
+            sim.t += simDt;
+        }
+    }
+
+    private static void stand(Sim sim, GeometryFixture g, double atS, double durationSec, int dir) {
+        double until = sim.t + durationSec;
+        double simDt = 0.5;
+        while (sim.t < until) {
+            sim.emitIfDue(g, dir, atS, 0.0);
+            sim.t += simDt;
+        }
     }
 
     public static Track departureRamp(GeometryFixture g, Params p,

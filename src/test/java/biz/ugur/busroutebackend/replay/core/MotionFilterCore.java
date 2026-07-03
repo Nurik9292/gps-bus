@@ -3,8 +3,11 @@ package biz.ugur.busroutebackend.replay.core;
 import biz.ugur.busroutebackend.replay.GeometryFixture;
 import biz.ugur.busroutebackend.replay.GpsFix;
 import biz.ugur.busroutebackend.replay.PredictionModel;
+import biz.ugur.busroutebackend.replay.RouteTopology;
+import biz.ugur.busroutebackend.replay.history.SegmentDwellHistory;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
 
 public class MotionFilterCore implements PredictionModel, InnovationAware, StopAware {
 
@@ -15,7 +18,13 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     private final CoreConfig cfg;
 
+    private SegmentDwellHistory history = SegmentDwellHistory.empty();
+
     private boolean initialized;
+    private boolean loop;
+    private int direction;
+    private long tripId = 1;
+    private int lapCount;
     private double x;
     private double v;
     private double p00, p01, p10, p11;
@@ -32,6 +41,13 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private double dwellSec;
     private long absDeviationEvents;
 
+    private int turnStreak;
+    private double turnFirstZx;
+    private double turnLastZx;
+    private int revertStreak;
+    private double heldTurnS;
+    private double currentVTarget;
+
     private double lastNu = Double.NaN;
     private double lastS = Double.NaN;
     private boolean lastUpdateAccepted;
@@ -46,11 +62,21 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     public MotionFilterCore(CoreConfig cfg) {
         this.cfg = cfg;
+        this.currentVTarget = cfg.vTargetMs();
+    }
+
+    public MotionFilterCore withHistory(SegmentDwellHistory readOnlyHistory) {
+        this.history = readOnlyHistory;
+        return this;
     }
 
     @Override
     public void reset() {
         initialized = false;
+        loop = false;
+        direction = 0;
+        tripId = 1;
+        lapCount = 0;
         mode = Mode.ACQUIRING;
         lastFixTime = null;
         persistCounter = 0;
@@ -58,6 +84,10 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         slowTicks = movingTicks = decelTicks = 0;
         dwellSec = 0;
         absDeviationEvents = 0;
+        turnStreak = 0;
+        revertStreak = 0;
+        heldTurnS = Double.NaN;
+        currentVTarget = cfg.vTargetMs();
         lastNu = Double.NaN;
         lastS = Double.NaN;
         recoveringFromFreeze = false;
@@ -74,6 +104,18 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     public Mode mode() {
         return mode;
+    }
+
+    public int direction() {
+        return direction;
+    }
+
+    public long tripId() {
+        return tripId;
+    }
+
+    public int lapCount() {
+        return lapCount;
     }
 
     public boolean driftEventActive() {
@@ -97,9 +139,15 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     @Override
     public Estimate onFix(GpsFix fix, GeometryFixture g) {
+        return onFix(fix, RouteTopology.of(g));
+    }
+
+    public Estimate onFix(GpsFix fix, RouteTopology topo) {
+        this.loop = topo.isLoop();
         if (!initialized) {
-            return initialize(fix, g);
+            return initialize(fix, topo.first());
         }
+        GeometryFixture g = topo.geom(direction);
         double dTau = Math.max(0.0,
                 (fix.timestamp().toEpochMilli() - lastFixTime.toEpochMilli()) / 1000.0);
         predictOver(dTau, g);
@@ -111,10 +159,17 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             recoveringFromFreeze = true;
         }
 
+        if ((mode == Mode.AT_TERMINAL || mode == Mode.TURNING) && topo.hasOpposite(direction)) {
+            Estimate handled = terminalTurnStep(fix, topo);
+            if (handled != null) return handled;
+            g = topo.geom(direction);
+        }
+
+        currentVTarget = resolveVTarget(fix, g);
         Snap snap = snapInWindow(fix, g, dTau);
 
         if (recoveringFromFreeze && snap.snapped()
-                && Math.abs(snap.sOnLine() - x) > cfg.dReanchorMeters()) {
+                && Math.abs(forwardDelta(snap.sOnLine(), x, g)) > cfg.dReanchorMeters()) {
             reinitAt(snap.sOnLine(), fix);
             recoveringFromFreeze = false;
             lastNu = 0;
@@ -132,13 +187,13 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         double measSigma = measurementSigma(fix, snap.dSnap());
         double r = measSigma * measSigma;
 
-        double nu = snap.sOnLine() - x;
+        double nu = forwardDelta(snap.sOnLine(), x, g);
         double s = p00 + r;
         lastNu = nu;
         lastS = s;
         boolean gatePassed = snap.snapped() && Math.abs(nu) <= cfg.gammaGate() * Math.sqrt(s);
 
-        if (gatePassed && mode == Mode.RECOVERING) {
+        if (gatePassed && (mode == Mode.RECOVERING || mode == Mode.NEW_TRIP)) {
             mode = Mode.TRACKING;
             reanchorConfirms = 0;
         }
@@ -150,7 +205,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             lastUpdateAccepted = true;
         } else {
             lastUpdateAccepted = false;
-            handleRejected(fix, snap);
+            handleRejected(fix, snap, g);
         }
 
         clampToLine(g);
@@ -177,6 +232,79 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         return out;
     }
 
+    private Estimate terminalTurnStep(GpsFix fix, RouteTopology topo) {
+        GeometryFixture gOpp = topo.opposite(direction);
+        Snap opp = snapBetween(fix, gOpp, 0, cfg.wTurnWindowMeters());
+        boolean advancing = opp.snapped()
+                && (turnStreak == 0 || opp.sOnLine() > turnLastZx + 0.5);
+        if (advancing) {
+            if (turnStreak == 0) turnFirstZx = opp.sOnLine();
+            turnLastZx = opp.sOnLine();
+            turnStreak++;
+        } else if (opp.snapped()) {
+            turnStreak = 1;
+            turnFirstZx = turnLastZx = opp.sOnLine();
+        } else {
+            turnStreak = 0;
+        }
+
+        if (mode == Mode.AT_TERMINAL) {
+            boolean confirmed = turnStreak >= cfg.nTurnConfirm()
+                    && turnLastZx - turnFirstZx >= cfg.dTurnConfirmMeters();
+            if (confirmed) {
+                mode = Mode.TURNING;
+                heldTurnS = x;
+                revertStreak = 0;
+                return new Estimate(heldTurnS, 0.0, Mode.TURNING.name(), Math.max(p00, 1e-6));
+            }
+            return null;
+        }
+
+        if (advancing) {
+            return startNewTrip(fix, gOpp);
+        }
+        GeometryFixture g = topo.geom(direction);
+        Snap back = snapBetween(fix, g,
+                g.totalMeters() - cfg.wTurnWindowMeters(), g.totalMeters());
+        revertStreak = back.snapped() ? revertStreak + 1 : 0;
+        if (revertStreak >= cfg.kTurnRevert()) {
+            mode = Mode.AT_TERMINAL;
+            turnStreak = 0;
+            revertStreak = 0;
+        }
+        return new Estimate(heldTurnS, 0.0, mode.name(), Math.max(p00, 1e-6));
+    }
+
+    private Estimate startNewTrip(GpsFix fix, GeometryFixture gNew) {
+        direction = gNew.direction();
+        x = turnFirstZx;
+        v = Math.max(0, fix.speedKmh() / 3.6);
+        p00 = cfg.pInitPos();
+        p01 = p10 = 0;
+        p11 = cfg.pInitVel();
+        tripId++;
+        mode = Mode.NEW_TRIP;
+        turnStreak = 0;
+        revertStreak = 0;
+        persistCounter = 0;
+        reanchorConfirms = 0;
+        slowTicks = movingTicks = decelTicks = 0;
+        dwellSec = 0;
+        dwellOutlierFlagged = false;
+        lastAcceptedZx = Double.NaN;
+        resyncNextStop(gNew);
+        lastEtas = java.util.List.of();
+        lastNu = 0;
+        lastS = cfg.pInitPos();
+        lastUpdateAccepted = true;
+        return new Estimate(x, v, Mode.NEW_TRIP.name(), Math.max(p00, 1e-6));
+    }
+
+    private boolean terminalOwned(GeometryFixture.StopPoint stop, GeometryFixture g) {
+        return !loop && (stop.sMeters() >= g.totalMeters() - cfg.epsTermMeters()
+                || stop.sMeters() <= cfg.epsTermMeters());
+    }
+
     private void stepStopLayer(GpsFix fix, GeometryFixture g, double dTau) {
         if (mode == Mode.RECOVERING || mode == Mode.NO_GPS || mode == Mode.GPS_LOST) {
             if (mode == Mode.GPS_LOST) mode = Mode.TRACKING;
@@ -184,26 +312,43 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             return;
         }
         var stops = g.stops();
-        if (x >= g.totalMeters() - cfg.epsTermMeters() && mode != Mode.AT_TERMINAL) {
+        if (!loop && x >= g.totalMeters() - cfg.epsTermMeters()
+                && mode != Mode.AT_TERMINAL && mode != Mode.TURNING
+                && mode != Mode.NEW_TRIP && mode != Mode.DWELL) {
             mode = Mode.AT_TERMINAL;
+            turnStreak = 0;
             events.add(new StopEvent(StopEventType.AT_TERMINAL, "terminal", fix.timestamp()));
             return;
         }
-        if (mode == Mode.AT_TERMINAL) return;
+        if (mode == Mode.AT_TERMINAL) {
+            x = g.totalMeters();
+            v = 0;
+            return;
+        }
+        if (mode == Mode.TURNING || mode == Mode.NEW_TRIP) return;
 
-        if (nextStopIdx >= stops.size()) return;
+        while (nextStopIdx < stops.size() && terminalOwned(stops.get(nextStopIdx), g)) nextStopIdx++;
+        if (nextStopIdx >= stops.size()) {
+            if (loop && !stops.isEmpty()) nextStopIdx = 0;
+            else return;
+        }
         var stop = stops.get(nextStopIdx);
         double sStop = stop.sMeters();
-        double dist = sStop - x;
+        double dist = forwardDelta(sStop, x, g);
         double rawKmh = fix.speedKmh();
+        double distMeas = lastUpdateAccepted && !Double.isNaN(lastAcceptedZx)
+                ? forwardDelta(sStop, lastAcceptedZx, g)
+                : Double.NaN;
+        boolean inZoneByMeas = !Double.isNaN(distMeas)
+                && distMeas >= -cfg.epsStopMeters() && distMeas <= cfg.epsArrMeters();
 
-        if (dist >= -cfg.epsStopMeters() && dist <= cfg.epsArrMeters()) {
+        if ((dist >= -cfg.epsStopMeters() && dist <= cfg.epsArrMeters()) || inZoneByMeas) {
             minSpeedKmhInZone = Math.min(minSpeedKmhInZone, rawKmh);
         }
 
         switch (mode) {
             case TRACKING -> {
-                if (dist <= cfg.epsArrMeters() && dist >= 0) {
+                if ((dist <= cfg.epsArrMeters() && dist >= 0) || inZoneByMeas) {
                     decelTicks++;
                     if (decelTicks >= 1) {
                         mode = Mode.DECELERATING;
@@ -215,7 +360,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                 checkSkip(g, fix, stop, sStop);
             }
             case DECELERATING -> {
-                if (Math.abs(sStop - x) <= cfg.epsStopMeters() && rawKmh < cfg.vStopKmh()) {
+                if (Math.abs(forwardDelta(sStop, x, g)) <= cfg.epsStopMeters() && rawKmh < cfg.vStopKmh()) {
                     slowTicks++;
                     if (slowTicks >= cfg.hStop()) {
                         mode = Mode.DWELL;
@@ -237,12 +382,12 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                     dwellOutlierFlagged = true;
                     events.add(new StopEvent(StopEventType.DWELL_OUTLIER, stop.stopId(), fix.timestamp()));
                 }
-                boolean expired = dwellSec >= cfg.dwellExpectedSec();
+                boolean expired = dwellSec >= dwellExpectedFor(stop.stopId());
                 boolean moving = rawKmh >= cfg.vMoveKmh();
                 if ((expired || moving) && dwellSec >= cfg.dwellMinSec()) {
                     mode = Mode.DEPARTING;
                     events.add(new StopEvent(StopEventType.DWELL_EXIT, stop.stopId(), fix.timestamp()));
-                    advanceNextStop(stops.size());
+                    advanceNextStop(g);
                 }
             }
             case DEPARTING -> {
@@ -257,19 +402,31 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     }
 
     private void checkSkip(GeometryFixture g, GpsFix fix, GeometryFixture.StopPoint stop, double sStop) {
-        double progress = Double.isNaN(lastAcceptedZx) ? x : Math.max(x, lastAcceptedZx);
-        if (progress > sStop + cfg.epsStopMeters()) {
+        double progress;
+        if (Double.isNaN(lastAcceptedZx)) {
+            progress = x;
+        } else if (loop) {
+            progress = forwardDelta(lastAcceptedZx, x, g) > 0 ? lastAcceptedZx : x;
+        } else {
+            progress = Math.max(x, lastAcceptedZx);
+        }
+        if (forwardDelta(sStop, progress, g) < -cfg.epsStopMeters()) {
             if (minSpeedKmhInZone >= cfg.vMoveKmh()) {
                 events.add(new StopEvent(StopEventType.SKIP, stop.stopId(), fix.timestamp()));
                 v = Math.max(v, fix.speedKmh() / 3.6 * 0.8);
             }
             mode = Mode.TRACKING;
-            advanceNextStop(g.stops().size());
+            advanceNextStop(g);
         }
     }
 
-    private void advanceNextStop(int total) {
-        nextStopIdx = Math.min(nextStopIdx + 1, total);
+    private void advanceNextStop(GeometryFixture g) {
+        int total = g.stops().size();
+        if (loop && total > 0) {
+            nextStopIdx = (nextStopIdx + 1) % total;
+        } else {
+            nextStopIdx = Math.min(nextStopIdx + 1, total);
+        }
         minSpeedKmhInZone = Double.MAX_VALUE;
         slowTicks = 0;
         decelTicks = 0;
@@ -278,10 +435,44 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     private void resyncNextStop(GeometryFixture g) {
         var stops = g.stops();
-        int i = 0;
-        while (i < stops.size() && stops.get(i).sMeters() < x - cfg.epsStopMeters()) i++;
-        nextStopIdx = i;
+        if (loop) {
+            double l = g.totalMeters();
+            int best = 0;
+            double bestFwd = Double.MAX_VALUE;
+            for (int i = 0; i < stops.size(); i++) {
+                double fwd = (((stops.get(i).sMeters() - x + cfg.epsStopMeters()) % l) + l) % l;
+                if (fwd < bestFwd) {
+                    bestFwd = fwd;
+                    best = i;
+                }
+            }
+            nextStopIdx = best;
+        } else {
+            int i = 0;
+            while (i < stops.size() && stops.get(i).sMeters() < x - cfg.epsStopMeters()) i++;
+            nextStopIdx = i;
+        }
         minSpeedKmhInZone = Double.MAX_VALUE;
+    }
+
+    private double dwellExpectedFor(String stopId) {
+        return history.dwellSec(stopId, cfg.historyNMin()).orElse(cfg.dwellExpectedSec());
+    }
+
+    private double resolveVTarget(GpsFix fix, GeometryFixture g) {
+        var stops = g.stops();
+        if (stops.isEmpty() || nextStopIdx >= stops.size()) return cfg.vTargetMs();
+        int prevIdx = nextStopIdx == 0 ? (loop ? stops.size() - 1 : -1) : nextStopIdx - 1;
+        if (prevIdx < 0) return cfg.vTargetMs();
+        var prev = stops.get(prevIdx);
+        var next = stops.get(nextStopIdx);
+        var zdt = fix.timestamp().atZone(ZoneOffset.UTC);
+        var hist = history.segTravelSec(prev.stopId(), next.stopId(),
+                zdt.getHour(), zdt.getDayOfWeek().getValue() >= 6, cfg.historyNMin());
+        if (hist.isEmpty()) return cfg.vTargetMs();
+        double segLen = legDistance(next.sMeters(), prev.sMeters(), g, false);
+        double vSeg = segLen / Math.max(1.0, hist.getAsDouble());
+        return Math.max(2.0, Math.min(vSeg, cfg.vMaxMs()));
     }
 
     private void recomputeEtas(GpsFix fix, GeometryFixture g) {
@@ -294,27 +485,51 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         double vNow = v >= cfg.vMoveKmh() / 3.6 ? v : 0.0;
         double vCruise = cfg.vTargetMs();
         double a = cfg.aDepMs2();
+        var zdt = fix.timestamp().atZone(ZoneOffset.UTC);
+        int hourBin = zdt.getHour();
+        boolean weekend = zdt.getDayOfWeek().getValue() >= 6;
         var out = new java.util.ArrayList<Eta>();
         double t = 0;
         double from = x;
-        for (int i = Math.max(nextStopIdx, 0); i < stops.size() && out.size() < 5; i++) {
-            double sStop = stops.get(i).sMeters();
-            if (sStop < x - cfg.epsStopMeters()) continue;
-            double dist = Math.max(0, sStop - from);
-            if (i == nextStopIdx && mode != Mode.DWELL) {
+        String prevStopId = null;
+        for (int k = 0; k < stops.size() && out.size() < 5; k++) {
+            int i;
+            if (loop) {
+                i = (nextStopIdx % stops.size() + k) % stops.size();
+            } else {
+                i = nextStopIdx + k;
+                if (i >= stops.size()) break;
+            }
+            var sp = stops.get(i);
+            double sStop = sp.sMeters();
+            if (!loop && sStop < x - cfg.epsStopMeters()) continue;
+            double dist = legDistance(sStop, from, g, prevStopId == null);
+            if (prevStopId != null) {
+                var hist = history.segTravelSec(prevStopId, sp.stopId(), hourBin, weekend, cfg.historyNMin());
+                t += hist.isPresent() ? hist.getAsDouble() : segmentTimeStopToStop(dist, vCruise, a);
+            } else if (k == 0 && mode != Mode.DWELL) {
                 t += timeToStopKinematic(dist, vNow, vCruise, a);
             } else {
                 t += segmentTimeStopToStop(dist, vCruise, a);
             }
-            out.add(new Eta(stops.get(i).stopId(), t, reliable));
-            if (mode == Mode.DWELL && i == nextStopIdx) {
-                t += Math.max(0, cfg.dwellExpectedSec() - dwellSec);
+            out.add(new Eta(sp.stopId(), t, reliable));
+            if (mode == Mode.DWELL && k == 0) {
+                t += Math.max(0, dwellExpectedFor(sp.stopId()) - dwellSec);
             } else {
-                t += cfg.dwellExpectedSec();
+                t += dwellExpectedFor(sp.stopId());
             }
             from = sStop;
+            prevStopId = sp.stopId();
         }
         lastEtas = java.util.List.copyOf(out);
+    }
+
+    private double legDistance(double toS, double fromS, GeometryFixture g, boolean firstLeg) {
+        if (!loop) return Math.max(0, toS - fromS);
+        double l = g.totalMeters();
+        double d = (((toS - fromS) % l) + l) % l;
+        if (firstLeg && d > l - cfg.epsStopMeters()) return 0;
+        return d;
     }
 
     private static double timeToStopKinematic(double dist, double vNow, double vCruise, double a) {
@@ -336,6 +551,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     }
 
     private Estimate initialize(GpsFix fix, GeometryFixture g) {
+        direction = g.direction();
         Snap snap = wholeLineSnap(fix, g);
         x = snap.sOnLine();
         v = Math.max(0, fix.speedKmh() / 3.6);
@@ -366,18 +582,27 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                 mode = Mode.GPS_LOST;
             }
             if (mode == Mode.DEPARTING) {
-                v = Math.min(v + cfg.aDepMs2() * dt, cfg.vTargetMs());
+                v = Math.min(v + cfg.aDepMs2() * dt, currentVTarget);
             }
             if (mode == Mode.DECELERATING && nextStopIdx < g.stops().size()
                     && tauSinceFix > 2 * cfg.dtSec()
                     && !Double.isNaN(lastRawSpeedKmh)
-                    && lastRawSpeedKmh < cfg.vTargetMs() * 3.6 * 0.95) {
-                double delta = Math.max(0, g.stops().get(nextStopIdx).sMeters() - x);
+                    && lastRawSpeedKmh < currentVTarget * 3.6 * 0.95) {
+                double delta = Math.max(0, forwardDelta(g.stops().get(nextStopIdx).sMeters(), x, g));
                 double fDecel = delta < cfg.dDecelMeters() ? delta / cfg.dDecelMeters() : 1.0;
-                v = Math.min(v, Math.max(0.5, cfg.vTargetMs() * fDecel));
+                v = Math.min(v, Math.max(0.5, currentVTarget * fDecel));
             }
-            if (mode != Mode.DWELL && mode != Mode.NO_GPS) {
-                x = Math.min(x + v * dt, g.totalMeters());
+            if (mode != Mode.DWELL && mode != Mode.NO_GPS && mode != Mode.TURNING) {
+                x = x + v * dt;
+                if (loop) {
+                    double l = g.totalMeters();
+                    while (x >= l) {
+                        x -= l;
+                        lapCount++;
+                    }
+                } else {
+                    x = Math.min(x, g.totalMeters());
+                }
             }
             p00 += 2 * p01 * dt + p11 * dt * dt + cfg.qPos() * dt;
             p01 += p11 * dt;
@@ -392,13 +617,40 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                 || mode == Mode.DEPARTING || mode == Mode.DWELL;
     }
 
+    private double forwardDelta(double toS, double fromS, GeometryFixture g) {
+        double d = toS - fromS;
+        if (!loop) return d;
+        double l = g.totalMeters();
+        d = d % l;
+        if (d > l / 2) d -= l;
+        if (d < -l / 2) d += l;
+        return d;
+    }
+
     private record Snap(double sOnLine, double dSnap, boolean snapped) {}
 
     private Snap snapInWindow(GpsFix fix, GeometryFixture g, double dTau) {
         double window = cfg.w0Meters() + cfg.kWindowPerSpeed() * Math.max(v, 1.0) * Math.max(dTau, cfg.dtSec());
-        Snap windowed = snapBetween(fix, g, x - window, x + window);
+        Snap windowed;
+        if (loop) {
+            windowed = snapAroundLoop(fix, g, x, window);
+        } else {
+            windowed = snapBetween(fix, g, x - window, x + window);
+        }
         if (windowed.snapped()) return windowed;
         return wholeLineSnap(fix, g);
+    }
+
+    private Snap snapAroundLoop(GpsFix fix, GeometryFixture g, double center, double window) {
+        double l = g.totalMeters();
+        double lo = center - window;
+        double hi = center + window;
+        if (lo >= 0 && hi <= l) return snapBetween(fix, g, lo, hi);
+        Snap a = snapBetween(fix, g, Math.max(0, lo), Math.min(l, hi));
+        Snap b = lo < 0
+                ? snapBetween(fix, g, l + lo, l)
+                : snapBetween(fix, g, 0, hi - l);
+        return a.dSnap() <= b.dSnap() ? a : b;
     }
 
     private Snap wholeLineSnap(GpsFix fix, GeometryFixture g) {
@@ -491,10 +743,10 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         reanchorConfirms = 0;
     }
 
-    private void handleRejected(GpsFix fix, Snap snap) {
+    private void handleRejected(GpsFix fix, Snap snap, GeometryFixture g) {
         if (!snap.snapped()) return;
         if (mode == Mode.RECOVERING) {
-            if (Math.abs(snap.sOnLine() - reanchorCandidateS) <= 150.0) {
+            if (Math.abs(forwardDelta(snap.sOnLine(), reanchorCandidateS, g)) <= 150.0) {
                 reanchorConfirms++;
             } else {
                 reanchorCandidateS = snap.sOnLine();
@@ -504,9 +756,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                 double dTauEff = cfg.dtSec();
                 double pull = (cfg.rMaxRate() * Math.max(v, 1.0) * dTauEff + cfg.rMaxBaseMeters())
                         * cfg.recoveryPullFactor();
-                double delta = snap.sOnLine() - x;
+                double delta = forwardDelta(snap.sOnLine(), x, g);
                 x += Math.max(-pull, Math.min(pull, delta));
-                if (Math.abs(snap.sOnLine() - x) < 1.0) {
+                if (Math.abs(forwardDelta(snap.sOnLine(), x, g)) < 1.0) {
                     v = Math.max(0, fix.speedKmh() / 3.6);
                     p00 = cfg.pInitPos();
                     p01 = p10 = 0;
@@ -520,7 +772,19 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     }
 
     private void clampToLine(GeometryFixture g) {
-        x = Math.max(0, Math.min(x, g.totalMeters()));
+        if (loop) {
+            double l = g.totalMeters();
+            while (x >= l) {
+                x -= l;
+                lapCount++;
+            }
+            while (x < 0) {
+                x += l;
+                lapCount = Math.max(0, lapCount - 1);
+            }
+        } else {
+            x = Math.max(0, Math.min(x, g.totalMeters()));
+        }
     }
 
     private void controlAbsoluteDeviation(GpsFix fix, GeometryFixture g, Snap snap) {
@@ -529,7 +793,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         if (absDev > cfg.dMaxMeters()) {
             persistCounter++;
             absDeviationEvents++;
-            if (persistCounter >= cfg.nPersist() && mode != Mode.RECOVERING) {
+            boolean terminalBranchOwns = mode == Mode.AT_TERMINAL || mode == Mode.TURNING;
+            if (!terminalBranchOwns && persistCounter >= cfg.nPersist() && mode != Mode.RECOVERING) {
                 mode = Mode.RECOVERING;
                 reanchorCandidateS = snap.sOnLine();
                 reanchorConfirms = 1;

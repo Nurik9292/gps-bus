@@ -15,14 +15,26 @@ public record GeometryFixture(
         double totalMeters,
         List<double[]> points,
         double[] cumDist,
-        List<StopPoint> stops) {
+        List<StopPoint> stops,
+        String topology) {
+
+    public static final String TOPOLOGY_THERE_AND_BACK = "there-and-back";
+    public static final String TOPOLOGY_LOOP = "loop";
 
     public record StopPoint(String stopId, int seq, double sMeters) {}
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public GeometryFixture withStops(List<StopPoint> newStops) {
-        return new GeometryFixture(routeNumber, direction, totalMeters, points, cumDist, newStops);
+        return new GeometryFixture(routeNumber, direction, totalMeters, points, cumDist, newStops, topology);
+    }
+
+    public GeometryFixture withTopology(String newTopology) {
+        return new GeometryFixture(routeNumber, direction, totalMeters, points, cumDist, stops, newTopology);
+    }
+
+    public boolean isLoop() {
+        return TOPOLOGY_LOOP.equals(topology);
     }
 
     public static GeometryFixture fromPolyline(String routeNumber, int direction, List<double[]> latLonPoints) {
@@ -33,7 +45,8 @@ public record GeometryFixture(
                     latLonPoints.get(i - 1)[0], latLonPoints.get(i - 1)[1],
                     latLonPoints.get(i)[0], latLonPoints.get(i)[1]);
         }
-        return new GeometryFixture(routeNumber, direction, cum[cum.length - 1], latLonPoints, cum, List.of());
+        return new GeometryFixture(routeNumber, direction, cum[cum.length - 1], latLonPoints, cum,
+                List.of(), TOPOLOGY_THERE_AND_BACK);
     }
 
     public double sAtFraction(double fraction) {
@@ -56,6 +69,7 @@ public record GeometryFixture(
             var dto = new java.util.LinkedHashMap<String, Object>();
             dto.put("routeNumber", routeNumber);
             dto.put("direction", direction);
+            dto.put("topology", topology);
             dto.put("totalMeters", totalMeters);
             dto.put("points", points);
             dto.put("cumDist", cumDist);
@@ -102,8 +116,9 @@ public record GeometryFixture(
             n.get("stops").forEach(s -> stops.add(new StopPoint(
                     s.get("stopId").asText(), s.get("seq").asInt(), s.get("sMeters").asDouble())));
         }
+        String topology = n.has("topology") ? n.get("topology").asText() : TOPOLOGY_THERE_AND_BACK;
         return new GeometryFixture(n.get("routeNumber").asText(), n.get("direction").asInt(),
-                n.get("totalMeters").asDouble(), pts, cum, List.copyOf(stops));
+                n.get("totalMeters").asDouble(), pts, cum, List.copyOf(stops), topology);
     }
 
     public static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
