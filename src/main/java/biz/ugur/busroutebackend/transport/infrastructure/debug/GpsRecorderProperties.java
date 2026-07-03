@@ -24,4 +24,6 @@ public class GpsRecorderProperties {
     private String sessionPrefix = "campaign";
 
     private int rollCheckIntervalSec = 30;
+
+    private java.util.List<String> routes = java.util.List.of();
 }

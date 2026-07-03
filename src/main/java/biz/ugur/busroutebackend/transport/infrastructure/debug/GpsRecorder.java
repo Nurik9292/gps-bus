@@ -87,6 +87,8 @@ public class GpsRecorder {
         ActiveSession session = activeSession.get();
         if (session == null) return;
 
+        if (!routePassesFilter(routeNumber)) return;
+
         Instant now = Instant.now();
         if (now.isAfter(session.stopAt)) {
             stop();
@@ -119,6 +121,12 @@ public class GpsRecorder {
         } catch (IOException e) {
             log.warn("[GPS_RECORDER] failed to write event: {}", e.getMessage());
         }
+    }
+
+    private boolean routePassesFilter(String routeNumber) {
+        java.util.List<String> routes = properties.getRoutes();
+        if (routes == null || routes.isEmpty()) return true;
+        return routeNumber != null && routes.contains(routeNumber);
     }
 
     public void flush() {

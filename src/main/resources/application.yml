@@ -672,7 +672,12 @@ gps:
   recorder:
     enabled: ${GPS_RECORDER_ENABLED:false}
     output-dir: ${GPS_RECORDER_OUTPUT_DIR:logs/fixtures}
-    max-duration-sec: ${GPS_RECORDER_MAX_DURATION_SEC:300}
+    max-duration-sec: ${GPS_RECORDER_MAX_DURATION_SEC:3600}
+    campaign-enabled: ${GPS_RECORDER_CAMPAIGN_ENABLED:false}
+    session-duration-sec: ${GPS_RECORDER_SESSION_DURATION_SEC:3600}
+    session-prefix: ${GPS_RECORDER_SESSION_PREFIX:campaign}
+    roll-check-interval-sec: ${GPS_RECORDER_ROLL_CHECK_INTERVAL_SEC:30}
+    routes: ${GPS_RECORDER_ROUTES:}
 
 payment:
   scheduler:
