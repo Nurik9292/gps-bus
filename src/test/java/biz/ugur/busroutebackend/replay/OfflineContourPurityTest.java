@@ -40,4 +40,26 @@ class OfflineContourPurityTest {
                     .isEmpty();
         }
     }
+
+    @Test
+    void onlineCoreReadsHistoryButNeverWritesIt() throws IOException {
+        Path corePkg = REPLAY_SRC.resolve("core");
+        try (Stream<Path> files = Files.walk(corePkg)) {
+            List<Path> offenders = files
+                    .filter(p -> p.toString().endsWith(".java"))
+                    .filter(p -> !p.getFileName().toString().endsWith("Test.java"))
+                    .filter(p -> {
+                        try {
+                            return Files.readString(p).contains("HistoryAccumulator");
+                        } catch (IOException e) {
+                            throw new java.io.UncheckedIOException(e);
+                        }
+                    })
+                    .toList();
+            assertThat(offenders)
+                    .as("онлайн-контур ядра видит только read-only SegmentDwellHistory; "
+                            + "писатель HistoryAccumulator — исключительно батч между прогонами")
+                    .isEmpty();
+        }
+    }
 }
