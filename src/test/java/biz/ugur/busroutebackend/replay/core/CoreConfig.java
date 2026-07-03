@@ -31,7 +31,13 @@ public record CoreConfig(
         int hStop,
         int hDep,
         int hDec,
-        double dwellMinSec) {
+        double dwellMinSec,
+        double dDecelMeters,
+        double epsArrMeters,
+        double epsStopMeters,
+        double epsTermMeters,
+        double dwellExpectedSec,
+        double dwellMaxSec) {
 
     public static CoreConfig defaults() {
         return new CoreConfig(
@@ -50,6 +56,8 @@ public record CoreConfig(
                 22.0, 200.0, 4.0,
                 1.0, 5.0,
                 2, 3, 3,
-                10.0);
+                10.0,
+                80.0, 60.0, 15.0, 30.0,
+                20.0, 600.0);
     }
 }

@@ -30,7 +30,99 @@ public final class SyntheticScenario {
 
     public record Track(List<GpsFix> fixes, List<double[]> truth) {}
 
+    public record StopVisit(String stopId, double tArrivalSec, double tDepartSec) {}
+
+    public record MultiStopTrack(List<GpsFix> fixes, List<double[]> truth, List<StopVisit> visits) {}
+
     private SyntheticScenario() {}
+
+    public static MultiStopTrack multiStopRun(GeometryFixture g, Params p,
+                                              double startS, double endS,
+                                              double cruiseMs, double accelMs2,
+                                              double dwellExpectedSec, double dwellJitter,
+                                              java.util.Set<String> skipStopIds,
+                                              boolean trafficSaw) {
+        Random rnd = new Random(p.seed());
+        Random dwellRnd = new Random(p.seed() * 31 + 7);
+        List<GpsFix> fixes = new ArrayList<>();
+        List<double[]> truth = new ArrayList<>();
+        List<StopVisit> visits = new ArrayList<>();
+
+        var stops = g.stops().stream()
+                .filter(sp -> sp.sMeters() > startS + 1 && sp.sMeters() < endS - 1)
+                .toList();
+
+        double s = startS;
+        double v = 0;
+        double t = 0;
+        double nextEmit = 0;
+        int stopIdx = 0;
+        double dwellLeft = 0;
+        Double arrivalT = null;
+        String dwellStopId = null;
+        double sawPhase = 0;
+
+        double simDt = 0.5;
+        double arrZone = 50.0;
+        double arrSpeedMs = 5.0 / 3.6;
+
+        while (s < endS - 0.5 && t < 36000) {
+            GeometryFixture.StopPoint target = stopIdx < stops.size() ? stops.get(stopIdx) : null;
+            boolean skip = target != null && skipStopIds.contains(target.stopId());
+
+            if (dwellLeft > 0) {
+                dwellLeft -= simDt;
+                v = 0;
+                if (dwellLeft <= 0) {
+                    visits.add(new StopVisit(dwellStopId, arrivalT, t));
+                    arrivalT = null;
+                    dwellStopId = null;
+                    stopIdx++;
+                }
+            } else {
+                double vLimit = cruiseMs;
+                if (trafficSaw) {
+                    sawPhase += simDt;
+                    if (sawPhase % 60 < 25) vLimit = cruiseMs;
+                    else if (sawPhase % 60 < 40) vLimit = 0.0;
+                    else vLimit = cruiseMs * 0.5;
+                }
+                if (target != null && !skip) {
+                    double brakeDist = v * v / (2 * accelMs2);
+                    if (target.sMeters() - s <= brakeDist + 1) {
+                        vLimit = Math.min(vLimit, Math.sqrt(2 * accelMs2 * Math.max(0.3, target.sMeters() - s)));
+                    }
+                }
+                if (v < vLimit) v = Math.min(v + accelMs2 * simDt, vLimit);
+                else v = Math.max(v - accelMs2 * simDt, vLimit);
+                s = Math.min(s + v * simDt, g.totalMeters());
+
+                if (target != null && !skip
+                        && arrivalT == null
+                        && Math.abs(target.sMeters() - s) <= arrZone && v < arrSpeedMs) {
+                    arrivalT = t;
+                }
+                if (target != null && !skip && target.sMeters() - s <= 0.5 && v < 1.0) {
+                    s = target.sMeters();
+                    v = 0;
+                    dwellLeft = dwellExpectedSec * (1 - dwellJitter + 2 * dwellJitter * dwellRnd.nextDouble());
+                    dwellStopId = target.stopId();
+                    if (arrivalT == null) arrivalT = t;
+                }
+                if (target != null && skip && s > target.sMeters() + 1) {
+                    stopIdx++;
+                }
+            }
+
+            if (t >= nextEmit) {
+                truth.add(new double[]{t, s, v});
+                fixes.add(fixAtWithPerp(g, p, rnd, t, s, v, 0.0, 0.0));
+                nextEmit += p.fixIntervalSec();
+            }
+            t += simDt;
+        }
+        return new MultiStopTrack(fixes, truth, visits);
+    }
 
     public static Track departureRamp(GeometryFixture g, Params p,
                                       double startS, double cruiseSpeedMs, double accelMs2,
