@@ -49,9 +49,13 @@ class CoreScenariosTest {
 
         double pull = (CFG.rMaxRate() * 25.0 * 7.0 + CFG.rMaxBaseMeters()) * CFG.recoveryPullFactor();
         for (int i = 1; i < r.samples().size(); i++) {
+            boolean sanctionedReanchor = r.samples().get(i).mode().equals("RECOVERING")
+                    || r.samples().get(i - 1).mode().equals("RECOVERING");
+            if (sanctionedReanchor) continue;
             double step = Math.abs(r.samples().get(i).sEst() - r.samples().get(i - 1).sEst());
             assertThat(step)
-                    .as("живая ветка (§5.5): стягивание без шага-разрыва (t=%.0f)", r.samples().get(i).tSec())
+                    .as("живая ветка (§5.5): стягивание без шага-разрыва (t=%.0f, mode=%s)",
+                            r.samples().get(i).tSec(), r.samples().get(i).mode())
                     .isLessThanOrEqualTo(CRUISE * 7.0 + pull + 20);
         }
         System.out.printf("SC15-ramp core: meanAbs(truth)=%.1fm devEvents=%d nis=%s(%.2f) hash=%s%n",

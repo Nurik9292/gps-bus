@@ -103,13 +103,16 @@ class TerminalTopologyScenariosTest {
             double[] pHeld = G10_0.pointAtS(r.ticks().get(newTripIdx - 1).est().s());
             double[] pNew = G10_1.pointAtS(r.ticks().get(newTripIdx).est().s());
             double dp = GeometryFixture.haversineMeters(pHeld[0], pHeld[1], pNew[0], pNew[1]);
+            double terminalGap = terminalGapMeters(G10_0, G10_1);
             double tNewTrip = (track.fixes().get(newTripIdx).timestamp().toEpochMilli()
                     - track.fixes().get(0).timestamp().toEpochMilli()) / 1000.0;
             System.out.printf(
-                    "SC04 route10 seed=%d turnDwell=%.0fs: |dp| chain=%.1fm; t(NEW_TRIP)=%.0fs vs t_flip=%.0fs (lag=%.0fs)%n",
-                    seed, turnDwell, dp, tNewTrip, track.tFlipSec(), tNewTrip - track.tFlipSec());
-            assertThat(dp).as("непрерывность метки через цепочку, ориентир 50 м (seed=%d)", seed)
-                    .isLessThanOrEqualTo(50.0);
+                    "SC04 route10 seed=%d turnDwell=%.0fs: |dp| chain=%.1fm (terminal_gap=%.1fm + допуск 50); "
+                            + "t(NEW_TRIP)=%.0fs vs t_flip=%.0fs (lag=%.0fs)%n",
+                    seed, turnDwell, dp, terminalGap, tNewTrip, track.tFlipSec(), tNewTrip - track.tFlipSec());
+            assertThat(dp).as("непрерывность метки: |Δp| ≤ terminal_gap + 50 м (seed=%d)", seed)
+                    .isLessThanOrEqualTo(terminalGap + 50.0);
+            assertThat(dp).as("санити-кап 150 м (seed=%d)", seed).isLessThanOrEqualTo(150.0);
 
             var flipAt = track.fixes().get(newTripIdx).timestamp();
             long returnDwells = r.events().stream()
@@ -142,9 +145,59 @@ class TerminalTopologyScenariosTest {
         double[] pHeld = G8_0.pointAtS(r.ticks().get(newTripIdx - 1).est().s());
         double[] pNew = G8_1.pointAtS(r.ticks().get(newTripIdx).est().s());
         double dp = GeometryFixture.haversineMeters(pHeld[0], pHeld[1], pNew[0], pNew[1]);
-        System.out.printf("SC04 route8 (конечные разнесены на ~77 м по фикстурам): |dp| chain=%.1fm — "
-                + "факт печатается, порог калибровочный 150 м%n", dp);
-        assertThat(dp).isLessThanOrEqualTo(150.0);
+        double terminalGap = terminalGapMeters(G8_0, G8_1);
+        System.out.printf("SC04 route8: |dp| chain=%.1fm; terminal_gap=%.1fm (вклад данных) + допуск 50 м%n",
+                dp, terminalGap);
+        assertThat(dp).as("|Δp| ≤ terminal_gap + допуск модели")
+                .isLessThanOrEqualTo(terminalGap + 50.0);
+        assertThat(dp).as("санити-кап 150 м").isLessThanOrEqualTo(150.0);
+    }
+
+    private static double terminalGapMeters(GeometryFixture gOut, GeometryFixture gBack) {
+        double[] endOut = gOut.pointAtS(gOut.totalMeters());
+        double[] startBack = gBack.pointAtS(0);
+        return GeometryFixture.haversineMeters(endOut[0], endOut[1], startBack[0], startBack[1]);
+    }
+
+    @Test
+    void turningGpsLossFallsToGpsLostWithoutFalseNewTrip() {
+        RouteTopology topo = RouteTopology.thereAndBack(G10_0, G10_1);
+        SyntheticScenario.TurnTrack track = SyntheticScenario.terminalTurnRun(
+                G10_0, G10_1, SyntheticScenario.Params.defaults(96, "10", 0),
+                G10_0.totalMeters() - 2000, CRUISE, 1.0, 300, 2100, 20, 0.3);
+
+        MotionFilterCore core = new MotionFilterCore(CFG);
+        core.reset();
+        double gapUntil = -1;
+        boolean gapDone = false;
+        int ticksAfterGap = 0;
+        long tripIdAfterGapWindow = -1;
+        List<String> modesAfterGap = new ArrayList<>();
+        for (int i = 0; i < track.fixes().size(); i++) {
+            GpsFix fx = track.fixes().get(i);
+            double t = (fx.timestamp().toEpochMilli()
+                    - track.fixes().get(0).timestamp().toEpochMilli()) / 1000.0;
+            if (gapUntil >= 0 && t < gapUntil) continue;
+            PredictionModel.Estimate est = core.onFix(fx, topo);
+            if (!gapDone && est.mode().equals("TURNING")) {
+                gapUntil = t + 40;
+                gapDone = true;
+                continue;
+            }
+            if (gapDone && gapUntil >= 0 && t >= gapUntil && ticksAfterGap < 3) {
+                modesAfterGap.add(est.mode());
+                ticksAfterGap++;
+                if (ticksAfterGap == 3) tripIdAfterGapWindow = core.tripId();
+            }
+        }
+        System.out.printf("A6.6: gap 40с посреди TURNING; режимы после возврата сигнала=%s; "
+                + "trip_id после окна=%d (финально=%d)%n", modesAfterGap, tripIdAfterGapWindow, core.tripId());
+        assertThat(gapDone).as("gap врезан именно посреди TURNING").isTrue();
+        assertThat(modesAfterGap)
+                .as("после потери GPS посреди разворота NEW_TRIP не срабатывает по до-gap подтверждениям")
+                .doesNotContain("NEW_TRIP", "TURNING");
+        assertThat(tripIdAfterGapWindow)
+                .as("ложного trip_id++ в окне после gap нет").isEqualTo(1);
     }
 
     @Test

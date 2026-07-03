@@ -7,9 +7,11 @@ import biz.ugur.busroutebackend.replay.RouteTopology;
 import biz.ugur.busroutebackend.replay.history.SegmentDwellHistory;
 
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 
 public class MotionFilterCore implements PredictionModel, InnovationAware, StopAware {
+
+    public static final ZoneId HISTORY_ZONE = ZoneId.of("Asia/Ashgabat");
 
     public enum Mode {
         ACQUIRING, TRACKING, DECELERATING, DWELL, DEPARTING, GPS_LOST, NO_GPS, RECOVERING,
@@ -47,6 +49,11 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private int revertStreak;
     private double heldTurnS;
     private double currentVTarget;
+
+    private int offRouteMisses;
+    private double offRouteSec;
+    private long offRouteTransitions;
+    private Mode prevTravelMode = Mode.TRACKING;
 
     private double lastNu = Double.NaN;
     private double lastS = Double.NaN;
@@ -88,6 +95,10 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         revertStreak = 0;
         heldTurnS = Double.NaN;
         currentVTarget = cfg.vTargetMs();
+        offRouteMisses = 0;
+        offRouteSec = 0;
+        offRouteTransitions = 0;
+        prevTravelMode = Mode.TRACKING;
         lastNu = Double.NaN;
         lastS = Double.NaN;
         recoveringFromFreeze = false;
@@ -118,8 +129,12 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         return lapCount;
     }
 
+    public long offRouteTransitions() {
+        return offRouteTransitions;
+    }
+
     public boolean driftEventActive() {
-        return persistCounter > 0 || mode == Mode.RECOVERING;
+        return persistCounter > 0 || mode == Mode.RECOVERING || mode == Mode.OFF_ROUTE;
     }
 
     @Override
@@ -165,8 +180,14 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             g = topo.geom(direction);
         }
 
+        if (mode == Mode.OFF_ROUTE) {
+            Estimate handled = offRouteStep(fix, g, dTau);
+            if (handled != null) return handled;
+        }
+
         currentVTarget = resolveVTarget(fix, g);
         Snap snap = snapInWindow(fix, g, dTau);
+        offRouteMisses = snap.snapped() ? 0 : offRouteMisses + 1;
 
         if (recoveringFromFreeze && snap.snapped()
                 && Math.abs(forwardDelta(snap.sOnLine(), x, g)) > cfg.dReanchorMeters()) {
@@ -210,6 +231,15 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
         clampToLine(g);
         controlAbsoluteDeviation(fix, g, snap);
+        if (offRouteMisses >= cfg.kOffRoute() && isTravelMode()) {
+            prevTravelMode = mode;
+            mode = Mode.OFF_ROUTE;
+            offRouteTransitions++;
+            offRouteSec = 0;
+            lastUpdateAccepted = false;
+            recomputeEtas(fix, g);
+            return new Estimate(x, v, Mode.OFF_ROUTE.name(), Math.max(p00, 1e-6));
+        }
         if (g.stops().isEmpty()) {
             stepModeBySpeed(fix, dTau);
         } else {
@@ -218,6 +248,38 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         recomputeEtas(fix, g);
 
         return new Estimate(x, v, mode.name(), Math.max(p00, 1e-6));
+    }
+
+    private boolean isTravelMode() {
+        return mode == Mode.TRACKING || mode == Mode.DECELERATING || mode == Mode.DEPARTING;
+    }
+
+    private Estimate offRouteStep(GpsFix fix, GeometryFixture g, double dTau) {
+        offRouteSec += dTau;
+        double wBack = cfg.w0Meters();
+        double wFwd = cfg.w0Meters() + cfg.vTargetMs() * offRouteSec;
+        Snap corridor = snapBetween(fix, g, x - wBack, x + wFwd);
+        if (!corridor.snapped()) {
+            lastUpdateAccepted = false;
+            recomputeEtas(fix, g);
+            return new Estimate(x, v, Mode.OFF_ROUTE.name(), Math.max(p00, 1e-6));
+        }
+        offRouteTransitions++;
+        offRouteMisses = 0;
+        offRouteSec = 0;
+        double gap = Math.abs(forwardDelta(corridor.sOnLine(), x, g));
+        if (gap > cfg.dReanchorMeters()) {
+            reinitAt(corridor.sOnLine(), fix);
+            lastNu = 0;
+            lastS = cfg.pInitPos();
+            lastUpdateAccepted = true;
+            clampToLine(g);
+            resyncNextStop(g);
+            lastEtas = java.util.List.of();
+            return new Estimate(x, v, Mode.RECOVERING.name(), Math.max(p00, 1e-6));
+        }
+        mode = prevTravelMode;
+        return null;
     }
 
     @Override
@@ -288,6 +350,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         revertStreak = 0;
         persistCounter = 0;
         reanchorConfirms = 0;
+        offRouteMisses = 0;
+        offRouteSec = 0;
         slowTicks = movingTicks = decelTicks = 0;
         dwellSec = 0;
         dwellOutlierFlagged = false;
@@ -325,7 +389,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             v = 0;
             return;
         }
-        if (mode == Mode.TURNING || mode == Mode.NEW_TRIP) return;
+        if (mode == Mode.TURNING || mode == Mode.NEW_TRIP || mode == Mode.OFF_ROUTE) return;
 
         while (nextStopIdx < stops.size() && terminalOwned(stops.get(nextStopIdx), g)) nextStopIdx++;
         if (nextStopIdx >= stops.size()) {
@@ -466,7 +530,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         if (prevIdx < 0) return cfg.vTargetMs();
         var prev = stops.get(prevIdx);
         var next = stops.get(nextStopIdx);
-        var zdt = fix.timestamp().atZone(ZoneOffset.UTC);
+        var zdt = fix.timestamp().atZone(HISTORY_ZONE);
         var hist = history.segTravelSec(prev.stopId(), next.stopId(),
                 zdt.getHour(), zdt.getDayOfWeek().getValue() >= 6, cfg.historyNMin());
         if (hist.isEmpty()) return cfg.vTargetMs();
@@ -481,11 +545,12 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             lastEtas = java.util.List.of();
             return;
         }
-        boolean reliable = mode != Mode.NO_GPS && mode != Mode.GPS_LOST && mode != Mode.RECOVERING;
+        boolean reliable = mode != Mode.NO_GPS && mode != Mode.GPS_LOST
+                && mode != Mode.RECOVERING && mode != Mode.OFF_ROUTE;
         double vNow = v >= cfg.vMoveKmh() / 3.6 ? v : 0.0;
         double vCruise = cfg.vTargetMs();
         double a = cfg.aDepMs2();
-        var zdt = fix.timestamp().atZone(ZoneOffset.UTC);
+        var zdt = fix.timestamp().atZone(HISTORY_ZONE);
         int hourBin = zdt.getHour();
         boolean weekend = zdt.getDayOfWeek().getValue() >= 6;
         var out = new java.util.ArrayList<Eta>();
@@ -578,6 +643,10 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             if (frozen) {
                 if (mode != Mode.NO_GPS) mode = Mode.NO_GPS;
                 v = 0;
+            } else if (lost && mode == Mode.TURNING) {
+                mode = Mode.GPS_LOST;
+                turnStreak = 0;
+                revertStreak = 0;
             } else if (lost && isTrackingLike()) {
                 mode = Mode.GPS_LOST;
             }
@@ -592,7 +661,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                 double fDecel = delta < cfg.dDecelMeters() ? delta / cfg.dDecelMeters() : 1.0;
                 v = Math.min(v, Math.max(0.5, currentVTarget * fDecel));
             }
-            if (mode != Mode.DWELL && mode != Mode.NO_GPS && mode != Mode.TURNING) {
+            if (mode != Mode.DWELL && mode != Mode.NO_GPS && mode != Mode.TURNING
+                    && mode != Mode.OFF_ROUTE) {
                 x = x + v * dt;
                 if (loop) {
                     double l = g.totalMeters();
@@ -741,6 +811,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         mode = Mode.RECOVERING;
         persistCounter = 0;
         reanchorConfirms = 0;
+        offRouteMisses = 0;
+        offRouteSec = 0;
     }
 
     private void handleRejected(GpsFix fix, Snap snap, GeometryFixture g) {
@@ -794,7 +866,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             persistCounter++;
             absDeviationEvents++;
             boolean terminalBranchOwns = mode == Mode.AT_TERMINAL || mode == Mode.TURNING;
-            if (!terminalBranchOwns && persistCounter >= cfg.nPersist() && mode != Mode.RECOVERING) {
+            boolean corridorMiss = !snap.snapped();
+            if (!terminalBranchOwns && !corridorMiss
+                    && persistCounter >= cfg.nPersist() && mode != Mode.RECOVERING) {
                 mode = Mode.RECOVERING;
                 reanchorCandidateS = snap.sOnLine();
                 reanchorConfirms = 1;

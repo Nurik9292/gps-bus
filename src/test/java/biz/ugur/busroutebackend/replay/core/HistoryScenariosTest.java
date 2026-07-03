@@ -146,6 +146,33 @@ class HistoryScenariosTest {
                 .isGreaterThanOrEqualTo(3);
     }
 
+    @Test
+    void hourBinAssignedInLocalAshgabatZoneAcrossMidnight() {
+        var lateEvening = new SyntheticScenario.Params(560, 7.0, 5.0, 5.0,
+                java.time.Instant.parse("2026-07-03T18:40:00Z"), "veh-syn-560", "SYN 560", "8", 0);
+        SyntheticScenario.MultiStopTrack track = SyntheticScenario.multiStopRun(G,
+                lateEvening, 2000, 9000, CRUISE, 1.0, HETEROGENEOUS_DWELL, 0.3, Set.of(), false);
+        HistoryAccumulator acc = new HistoryAccumulator(HistoryAccumulator.Config.p2Defaults());
+        acc.addRun(track.fixes(), G);
+        var keys = acc.build().segTravelByKey().keySet();
+        assertThat(keys).as("18:40Z = 23:40 Asia/Ashgabat → бин локального часа 23, пятница")
+                .isNotEmpty()
+                .allMatch(k -> k.contains("|h23|") && k.endsWith("|wd"));
+        assertThat(keys).as("UTC-бин 18 не присваивается").noneMatch(k -> k.contains("|h18|"));
+
+        var pastMidnightLocal = new SyntheticScenario.Params(561, 7.0, 5.0, 5.0,
+                java.time.Instant.parse("2026-07-03T20:30:00Z"), "veh-syn-561", "SYN 561", "8", 0);
+        SyntheticScenario.MultiStopTrack track2 = SyntheticScenario.multiStopRun(G,
+                pastMidnightLocal, 2000, 9000, CRUISE, 1.0, HETEROGENEOUS_DWELL, 0.3, Set.of(), false);
+        HistoryAccumulator acc2 = new HistoryAccumulator(HistoryAccumulator.Config.p2Defaults());
+        acc2.addRun(track2.fixes(), G);
+        var keys2 = acc2.build().segTravelByKey().keySet();
+        assertThat(keys2)
+                .as("20:30Z пятницы = 01:30 субботы локально → weekend по локальной дате, бин 1")
+                .isNotEmpty()
+                .allMatch(k -> k.contains("|h1|") && k.endsWith("|we"));
+    }
+
     private static double p95(List<Double> xs) {
         if (xs.isEmpty()) return Double.NaN;
         List<Double> s = xs.stream().sorted().toList();

@@ -337,6 +337,55 @@ public final class SyntheticScenario {
         }
     }
 
+    public record OffRouteTrack(List<GpsFix> fixes, List<double[]> truth,
+                                double tOffSec, double tReturnSec,
+                                double sOffMeters, double sReturnMeters) {}
+
+    public static OffRouteTrack offRouteRun(GeometryFixture g, Params p,
+                                            double startS, double cruiseMs,
+                                            double preRunSec, double detourSec, double postRunSec,
+                                            double perpOffsetMeters, double returnAdvanceMeters,
+                                            java.util.Set<Integer> corridorTouchDetourFixIdx,
+                                            double stopMidDetourSec) {
+        Random rnd = new Random(p.seed());
+        List<GpsFix> fixes = new ArrayList<>();
+        List<double[]> truth = new ArrayList<>();
+        double sOff = startS + cruiseMs * preRunSec;
+        double sReturn = sOff + returnAdvanceMeters;
+        double driveSec = Math.max(1.0, detourSec - stopMidDetourSec);
+        double vDetour = returnAdvanceMeters / driveSec;
+        double stopFrom = preRunSec + driveSec / 2;
+        double stopTo = stopFrom + stopMidDetourSec;
+        double tReturn = preRunSec + detourSec;
+        double total = tReturn + postRunSec;
+        int detourFixIdx = 0;
+        for (double t = 0; t <= total; t += p.fixIntervalSec()) {
+            double s;
+            double v;
+            double perp = 0;
+            if (t < preRunSec) {
+                s = startS + cruiseMs * t;
+                v = cruiseMs;
+            } else if (t < tReturn) {
+                double td = t - preRunSec;
+                double driven = td <= stopFrom - preRunSec ? td
+                        : td <= stopTo - preRunSec ? stopFrom - preRunSec
+                        : td - stopMidDetourSec;
+                s = sOff + vDetour * Math.min(driven, driveSec);
+                v = (t >= stopFrom && t < stopTo) ? 0.0 : vDetour;
+                perp = corridorTouchDetourFixIdx.contains(detourFixIdx) ? 30.0 : perpOffsetMeters;
+                detourFixIdx++;
+            } else {
+                s = sReturn + cruiseMs * (t - tReturn);
+                v = cruiseMs;
+            }
+            s = Math.min(s, g.totalMeters());
+            truth.add(new double[]{t, s, v, perp > 50 ? 1 : 0});
+            fixes.add(fixAtWithPerp(g, p, rnd, t, s, v, 0.0, perp));
+        }
+        return new OffRouteTrack(fixes, truth, preRunSec, tReturn, sOff, sReturn);
+    }
+
     public static Track departureRamp(GeometryFixture g, Params p,
                                       double startS, double cruiseSpeedMs, double accelMs2,
                                       double standstillSec, double totalSec) {

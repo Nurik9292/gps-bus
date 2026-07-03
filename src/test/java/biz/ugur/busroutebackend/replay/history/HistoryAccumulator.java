@@ -4,13 +4,15 @@ import biz.ugur.busroutebackend.replay.GeometryFixture;
 import biz.ugur.busroutebackend.replay.GpsFix;
 
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class HistoryAccumulator {
+
+    public static final ZoneId HISTORY_ZONE = ZoneId.of("Asia/Ashgabat");
 
     public record Config(double arrZoneMeters, double arrSpeedKmh, double departSpeedKmh, double dwellMaxSec) {
 
@@ -63,7 +65,7 @@ public class HistoryAccumulator {
             if (prevDepart != null && prevStopId != null) {
                 double segSec = (arrivedAt.toEpochMilli() - prevDepart.toEpochMilli()) / 1000.0;
                 if (segSec > 0) {
-                    var zdt = arrivedAt.atZone(ZoneOffset.UTC);
+                    var zdt = arrivedAt.atZone(HISTORY_ZONE);
                     String key = SegmentDwellHistory.segKey(prevStopId, sp.stopId(),
                             zdt.getHour(), zdt.getDayOfWeek().getValue() >= 6);
                     segSamples.computeIfAbsent(key, k -> new ArrayList<>()).add(segSec);

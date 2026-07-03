@@ -42,7 +42,8 @@ public record CoreConfig(
         double dTurnConfirmMeters,
         int kTurnRevert,
         double wTurnWindowMeters,
-        int historyNMin) {
+        int historyNMin,
+        int kOffRoute) {
 
     public static CoreConfig defaults() {
         return new CoreConfig(
@@ -65,6 +66,7 @@ public record CoreConfig(
                 80.0, 60.0, 15.0, 30.0,
                 20.0, 600.0,
                 3, 40.0, 3, 300.0,
+                5,
                 5);
     }
 }
