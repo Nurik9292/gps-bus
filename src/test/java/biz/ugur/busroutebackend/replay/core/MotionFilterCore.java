@@ -53,6 +53,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private int offRouteMisses;
     private double offRouteSec;
     private long offRouteTransitions;
+    private int offRouteExitStreak;
+    private double offRouteExitLastZx = Double.NaN;
     private Mode prevTravelMode = Mode.TRACKING;
 
     private double lastNu = Double.NaN;
@@ -67,9 +69,17 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private final java.util.List<StopEvent> events = new java.util.ArrayList<>();
     private java.util.List<Eta> lastEtas = java.util.List.of();
 
+    private HypothesisBank bank;
+    private HypothesisBank.Hypothesis pendingDirectionSwitch;
+
     public MotionFilterCore(CoreConfig cfg) {
         this.cfg = cfg;
         this.currentVTarget = cfg.vTargetMs();
+        this.bank = new HypothesisBank(cfg);
+    }
+
+    public HypothesisBank bank() {
+        return bank;
     }
 
     public MotionFilterCore withHistory(SegmentDwellHistory readOnlyHistory) {
@@ -98,7 +108,11 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         offRouteMisses = 0;
         offRouteSec = 0;
         offRouteTransitions = 0;
+        offRouteExitStreak = 0;
+        offRouteExitLastZx = Double.NaN;
         prevTravelMode = Mode.TRACKING;
+        bank = new HypothesisBank(cfg);
+        pendingDirectionSwitch = null;
         lastNu = Double.NaN;
         lastS = Double.NaN;
         recoveringFromFreeze = false;
@@ -159,10 +173,13 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     public Estimate onFix(GpsFix fix, RouteTopology topo) {
         this.loop = topo.isLoop();
+        bank.ensureBuilt(topo);
         if (!initialized) {
-            return initialize(fix, topo.first());
+            Estimate first = initialize(fix, topo.first());
+            bank.alignLeaderTo(direction);
+            return first;
         }
-        GeometryFixture g = topo.geom(direction);
+        GeometryFixture g = bank.leader().geom();
         double dTau = Math.max(0.0,
                 (fix.timestamp().toEpochMilli() - lastFixTime.toEpochMilli()) / 1000.0);
         predictOver(dTau, g);
@@ -172,6 +189,19 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         if (mode == Mode.NO_GPS) {
             mode = Mode.RECOVERING;
             recoveringFromFreeze = true;
+        }
+
+        bank.onFix(fix, dTau);
+        if (pendingDirectionSwitch != null) {
+            return applyPendingDirectionSwitch(fix);
+        }
+        if (bankSwitchAllowed()) {
+            HypothesisBank.Hypothesis cand = bank.pollConfirmedSwitch();
+            if (cand != null) {
+                Estimate switched = applyLeaderSwitch(cand, fix, g);
+                if (switched != null) return switched;
+                g = bank.leader().geom();
+            }
         }
 
         if ((mode == Mode.AT_TERMINAL || mode == Mode.TURNING) && topo.hasOpposite(direction)) {
@@ -187,12 +217,14 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
         currentVTarget = resolveVTarget(fix, g);
         Snap snap = snapInWindow(fix, g, dTau);
-        offRouteMisses = snap.snapped() ? 0 : offRouteMisses + 1;
+        boolean allHypothesesMissed = !snap.snapped() && bank.noneSnapped();
+        offRouteMisses = allHypothesesMissed ? offRouteMisses + 1 : 0;
 
         if (recoveringFromFreeze && snap.snapped()
                 && Math.abs(forwardDelta(snap.sOnLine(), x, g)) > cfg.dReanchorMeters()) {
             reinitAt(snap.sOnLine(), fix);
             recoveringFromFreeze = false;
+            bank.reseedAll();
             lastNu = 0;
             lastS = cfg.pInitPos();
             lastUpdateAccepted = true;
@@ -204,6 +236,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         if (recoveringFromFreeze && snap.snapped()) {
             mode = Mode.TRACKING;
             recoveringFromFreeze = false;
+            bank.reseedAll();
         }
         double measSigma = measurementSigma(fix, snap.dSnap());
         double r = measSigma * measSigma;
@@ -254,12 +287,96 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         return mode == Mode.TRACKING || mode == Mode.DECELERATING || mode == Mode.DEPARTING;
     }
 
+    private boolean bankSwitchAllowed() {
+        return isTravelMode() || mode == Mode.AT_TERMINAL
+                || (mode == Mode.RECOVERING && !recoveringFromFreeze);
+    }
+
+    private Estimate applyLeaderSwitch(HypothesisBank.Hypothesis cand, GpsFix fix, GeometryFixture gOld) {
+        double[] pOld = gOld.pointAtS(x);
+        double[] pNew = cand.geom().pointAtS(cand.x());
+        double dp = GeometryFixture.haversineMeters(pOld[0], pOld[1], pNew[0], pNew[1]);
+        if (cand.direction() != direction) {
+            bank.commitSwitch();
+            pendingDirectionSwitch = cand;
+            mode = Mode.RECOVERING;
+            System.out.printf("банк: смена лидера со сменой d → %s, |dp|=%.1fм (RECOVERING→NEW_TRIP)%n",
+                    cand.variantId(), dp);
+            lastUpdateAccepted = false;
+            lastEtas = java.util.List.of();
+            return new Estimate(x, v, Mode.RECOVERING.name(), Math.max(p00, 1e-6));
+        }
+        bank.commitSwitch();
+        double dpArc = Math.abs(cand.x() - x);
+        if (dpArc <= cfg.dSwitchSmoothMeters()) {
+            System.out.printf("банк: ранняя смена лидера → %s, |dp|дуга=%.1fм, |dp|гео=%.1fм "
+                            + "(дуга согласована — стягивание серией R_max; гео-переход на верную ветку)%n",
+                    cand.variantId(), dpArc, dp);
+            resyncNextStop(cand.geom());
+            return null;
+        }
+        System.out.printf("банк: поздняя смена лидера → %s, скачок |dp|дуга=%.1fм, |dp|гео=%.1fм "
+                        + "(П-3: измерен, не замаскирован)%n",
+                cand.variantId(), dpArc, dp);
+        reinitAt(cand.x(), fix);
+        clampToLine(cand.geom());
+        resyncNextStop(cand.geom());
+        lastNu = 0;
+        lastS = cfg.pInitPos();
+        lastUpdateAccepted = true;
+        lastEtas = java.util.List.of();
+        return new Estimate(x, v, Mode.RECOVERING.name(), Math.max(p00, 1e-6));
+    }
+
+    private Estimate applyPendingDirectionSwitch(GpsFix fix) {
+        HypothesisBank.Hypothesis target = pendingDirectionSwitch;
+        pendingDirectionSwitch = null;
+        direction = target.direction();
+        x = target.x();
+        v = Math.max(0, fix.speedKmh() / 3.6);
+        p00 = cfg.pInitPos();
+        p01 = p10 = 0;
+        p11 = cfg.pInitVel();
+        tripId++;
+        mode = Mode.NEW_TRIP;
+        turnStreak = 0;
+        revertStreak = 0;
+        persistCounter = 0;
+        reanchorConfirms = 0;
+        offRouteMisses = 0;
+        offRouteSec = 0;
+        slowTicks = movingTicks = decelTicks = 0;
+        dwellSec = 0;
+        dwellOutlierFlagged = false;
+        lastAcceptedZx = Double.NaN;
+        resyncNextStop(target.geom());
+        lastEtas = java.util.List.of();
+        lastNu = 0;
+        lastS = cfg.pInitPos();
+        lastUpdateAccepted = true;
+        return new Estimate(x, v, Mode.NEW_TRIP.name(), Math.max(p00, 1e-6));
+    }
+
     private Estimate offRouteStep(GpsFix fix, GeometryFixture g, double dTau) {
         offRouteSec += dTau;
         double wBack = cfg.w0Meters();
         double wFwd = cfg.w0Meters() + cfg.vTargetMs() * offRouteSec;
         Snap corridor = snapBetween(fix, g, x - wBack, x + wFwd);
-        if (!corridor.snapped()) {
+        boolean advancing = corridor.snapped()
+                && (offRouteExitStreak == 0
+                    || (corridor.sOnLine() - offRouteExitLastZx > 0
+                        && corridor.sOnLine() - offRouteExitLastZx
+                           <= cfg.vMaxMs() * Math.max(dTau, cfg.dtSec()) + 15.0));
+        if (advancing) {
+            offRouteExitStreak++;
+            offRouteExitLastZx = corridor.sOnLine();
+        } else if (corridor.snapped()) {
+            offRouteExitStreak = 1;
+            offRouteExitLastZx = corridor.sOnLine();
+        } else {
+            offRouteExitStreak = 0;
+        }
+        if (offRouteExitStreak < cfg.mOffRouteExit()) {
             lastUpdateAccepted = false;
             recomputeEtas(fix, g);
             return new Estimate(x, v, Mode.OFF_ROUTE.name(), Math.max(p00, 1e-6));
@@ -267,6 +384,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         offRouteTransitions++;
         offRouteMisses = 0;
         offRouteSec = 0;
+        offRouteExitStreak = 0;
         double gap = Math.abs(forwardDelta(corridor.sOnLine(), x, g));
         if (gap > cfg.dReanchorMeters()) {
             reinitAt(corridor.sOnLine(), fix);
@@ -357,6 +475,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         dwellOutlierFlagged = false;
         lastAcceptedZx = Double.NaN;
         resyncNextStop(gNew);
+        bank.alignLeaderTo(direction);
         lastEtas = java.util.List.of();
         lastNu = 0;
         lastS = cfg.pInitPos();

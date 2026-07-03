@@ -63,8 +63,9 @@ class TerminalTopologyScenariosTest {
                     .as("запрещённый переход DWELL→AT_TERMINAL напрямую (tick %d)", i)
                     .isFalse();
             boolean entersNewTrip = cur.equals("NEW_TRIP") && !prev.equals("NEW_TRIP");
-            assertThat(entersNewTrip && !prev.equals("TURNING"))
-                    .as("запрещённый переход %s→NEW_TRIP без TURNING (tick %d)", prev, i)
+            assertThat(entersNewTrip && !prev.equals("TURNING") && !prev.equals("RECOVERING"))
+                    .as("запрещённый переход %s→NEW_TRIP (допустимы TURNING и RECOVERING — аддендум №22) (tick %d)",
+                            prev, i)
                     .isFalse();
         }
     }

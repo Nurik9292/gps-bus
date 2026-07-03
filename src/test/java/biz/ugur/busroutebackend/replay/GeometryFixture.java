@@ -121,6 +121,37 @@ public record GeometryFixture(
                 n.get("totalMeters").asDouble(), pts, cum, List.copyOf(stops), topology);
     }
 
+    public record Projection(double s, double distMeters) {}
+
+    public Projection projectOntoRange(double lat, double lon, double sFrom, double sTo, double sDefault) {
+        double best = Double.MAX_VALUE;
+        double bestS = sDefault;
+        for (int i = 0; i < points.size() - 1; i++) {
+            if (cumDist[i + 1] < sFrom || cumDist[i] > sTo) continue;
+            double[] a = points.get(i);
+            double[] b = points.get(i + 1);
+            double mLat = 111320.0;
+            double mLon = 111320.0 * Math.cos(Math.toRadians((a[0] + b[0]) / 2));
+            double dx = (b[1] - a[1]) * mLon;
+            double dy = (b[0] - a[0]) * mLat;
+            double l2 = dx * dx + dy * dy;
+            double t = 0;
+            if (l2 > 0) {
+                double px = (lon - a[1]) * mLon;
+                double py = (lat - a[0]) * mLat;
+                t = Math.max(0, Math.min(1, (px * dx + py * dy) / l2));
+            }
+            double projLat = a[0] + t * (b[0] - a[0]);
+            double projLon = a[1] + t * (b[1] - a[1]);
+            double d = haversineMeters(lat, lon, projLat, projLon);
+            if (d < best) {
+                best = d;
+                bestS = cumDist[i] + t * (cumDist[i + 1] - cumDist[i]);
+            }
+        }
+        return new Projection(bestS, best);
+    }
+
     public static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
         double r = 6371000.0;
         double dLat = Math.toRadians(lat2 - lat1);

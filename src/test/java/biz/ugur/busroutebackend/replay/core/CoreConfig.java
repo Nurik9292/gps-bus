@@ -43,7 +43,15 @@ public record CoreConfig(
         int kTurnRevert,
         double wTurnWindowMeters,
         int historyNMin,
-        int kOffRoute) {
+        int kOffRoute,
+        int mOffRouteExit,
+        double scoreLambda,
+        double scoreRejectPenalty,
+        double scoreProgressBonus,
+        double sSwitch,
+        int hSwitch,
+        double dSwitchSmoothMeters,
+        int maxHypotheses) {
 
     public static CoreConfig defaults() {
         return new CoreConfig(
@@ -67,6 +75,10 @@ public record CoreConfig(
                 20.0, 600.0,
                 3, 40.0, 3, 300.0,
                 5,
-                5);
+                5,
+                2,
+                0.9, 1.0, 0.5,
+                0.25, 3, 150.0,
+                6);
     }
 }

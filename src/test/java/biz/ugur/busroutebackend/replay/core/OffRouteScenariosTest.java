@@ -156,25 +156,72 @@ class OffRouteScenariosTest {
     }
 
     @Test
-    void sc06CorridorTouchFlapMeasuredNotFixed() {
+    void sc06CorridorTouchNoFalseExitWithDebounce() {
         SyntheticScenario.OffRouteTrack track = SyntheticScenario.offRouteRun(
                 G, SyntheticScenario.Params.defaults(94, "8", 0),
                 2000, CRUISE, 120, 180, 200, 150, 900, Set.of(8, 15), 0);
         Run r = run(track.fixes());
 
-        long offTicks = r.ticks().stream().filter(t -> t.est().mode().equals("OFF_ROUTE")).count();
-        System.out.printf("SC06-флап: переходов OFF↔ходовой=%d, OFF_ROUTE тиков=%d "
-                        + "(возврат по спеке = 1 валидный фикс; вердикт по флапу — флаг, не правка)%n",
-                r.core().offRouteTransitions(), offTicks);
-        assertThat(offTicks).as("объезд детектирован").isPositive();
+        int entry = firstIdx(r, "OFF_ROUTE", 0);
+        double frozenS = r.ticks().get(entry).est().s();
+        long falseExits = 0;
+        long offTicks = 0;
+        for (int i = entry; i < r.ticks().size(); i++) {
+            double t = track.truth().get(i)[0];
+            if (t >= track.tReturnSec()) break;
+            if (r.ticks().get(i).est().mode().equals("OFF_ROUTE")) {
+                offTicks++;
+                assertThat(r.ticks().get(i).est().s())
+                        .as("x̂ побитово заморожен весь объезд, касание не размораживает (tick %d)", i)
+                        .isCloseTo(frozenS, org.assertj.core.data.Offset.offset(1e-6));
+            } else {
+                falseExits++;
+            }
+        }
+        System.out.printf("SC06-дебаунс (M=%d): касания=2, ложных выходов=%d, "
+                        + "переходов OFF↔ходовой=%d, OFF-тиков=%d%n",
+                CFG.mOffRouteExit(), falseExits, r.core().offRouteTransitions(), offTicks);
+        assertThat(falseExits)
+                .as("A7.1: одиночное касание коридора не выпускает из OFF_ROUTE").isZero();
+        assertThat(r.core().offRouteTransitions())
+                .as("переходов ≤ 2 (вход + финальный выход)").isLessThanOrEqualTo(2);
 
         int lastN = 5;
         for (int i = r.ticks().size() - lastN; i < r.ticks().size(); i++) {
             double sTrue = track.truth().get(i)[1];
             assertThat(Math.abs(r.ticks().get(i).est().s() - sTrue))
-                    .as("после объезда с касаниями система в итоге восстанавливается (tick %d)", i)
+                    .as("после объезда с касаниями система восстанавливается (tick %d)", i)
                     .isLessThanOrEqualTo(150.0);
         }
+    }
+
+    @Test
+    void a70ConfidenceDegradesMonotonicallyDuringRejectSeries() {
+        SyntheticScenario.OffRouteTrack track = SyntheticScenario.offRouteRun(
+                G, SyntheticScenario.Params.defaults(96, "8", 0),
+                2000, CRUISE, 120, 60, 120, 150, 400, Set.of(), 0);
+        Run r = run(track.fixes());
+
+        int firstDetour = firstDetourFixIdx(track);
+        int entry = firstIdx(r, "OFF_ROUTE", 0);
+        double prevVar = -1;
+        for (int i = firstDetour; i < r.ticks().size(); i++) {
+            String m = r.ticks().get(i).est().mode();
+            if (!m.equals("OFF_ROUTE") && i >= entry) break;
+            assertThat(m)
+                    .as("факт τ_valid: фиксы идут (пусть и отвергнутые) → GPS_LOST/NO_GPS не наступают (tick %d)", i)
+                    .isNotIn("GPS_LOST", "NO_GPS");
+            double varNow = r.ticks().get(i).est().varianceS();
+            if (prevVar >= 0) {
+                assertThat(varNow)
+                        .as("A7.0: conf монотонно невозрастает (P₀₀ неубывает) в серии подряд отказов (tick %d)", i)
+                        .isGreaterThanOrEqualTo(prevVar - 1e-9);
+            }
+            prevVar = varNow;
+        }
+        System.out.printf("A7.0: τ_valid сбрасывается любым фиксом (факт кода: lastFixTime безусловно); "
+                + "деградация conf — P-ростом predict-без-update: P₀₀ %.0f → %.0f за серию отказов%n",
+                r.ticks().get(firstDetour).est().varianceS(), prevVar);
     }
 
     @Test
