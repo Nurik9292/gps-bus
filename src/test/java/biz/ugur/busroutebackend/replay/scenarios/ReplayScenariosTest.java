@@ -2,12 +2,10 @@ package biz.ugur.busroutebackend.replay.scenarios;
 
 import biz.ugur.busroutebackend.replay.GeometryFixture;
 import biz.ugur.busroutebackend.replay.InvariantAssertions;
-import biz.ugur.busroutebackend.replay.PredictionModel;
 import biz.ugur.busroutebackend.replay.ReplayHarness;
 import biz.ugur.busroutebackend.replay.models.GeometricSnapModel;
 import biz.ugur.busroutebackend.replay.models.HoldLastModel;
 import biz.ugur.busroutebackend.replay.synth.SyntheticScenario;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -123,7 +121,4 @@ class ReplayScenariosTest {
                 .isGreaterThan(1000.0);
     }
 
-    @Disabled("Scenario-01..14: нужен реальный сегмент корпуса кампании записи и/или ядро модели v3.1")
-    @Test
-    void scenario01IdealRoute() {}
 }

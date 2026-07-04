@@ -73,7 +73,12 @@ class VariantBankScenariosTest {
     }
 
     private record ForkResult(Run run, int divergeIdx, int switchIdx, double switchStepMeters,
-                              String switchMode, SyntheticScenario.MultiStopTrack track) {}
+                              String switchMode, double forkGapMeters,
+                              SyntheticScenario.MultiStopTrack track) {}
+
+    private static double switchAllowanceMeters() {
+        return (CFG.rMaxRate() * CRUISE * 7 + CFG.rMaxBaseMeters()) * (CFG.hSwitch() + 3);
+    }
 
     private ForkResult runFork(SyntheticGeometries.ForkPair fork, long seed) {
         RouteTopology topo = RouteTopology.of(fork.full()).withVariants(List.of(fork.shortVariant()));
@@ -101,6 +106,7 @@ class VariantBankScenariosTest {
             }
         }
         double step = -1;
+        double forkGap = -1;
         String switchMode = "";
         if (switchIdx > 0) {
             GeometryFixture gOld = fork.full();
@@ -108,9 +114,10 @@ class VariantBankScenariosTest {
             double[] pPrev = gOld.pointAtS(r.ticks().get(switchIdx - 1).est().s());
             double[] pCur = gNew.pointAtS(r.ticks().get(switchIdx).est().s());
             step = GeometryFixture.haversineMeters(pPrev[0], pPrev[1], pCur[0], pCur[1]);
+            forkGap = gOld.projectOntoRange(pCur[0], pCur[1], 0, gOld.totalMeters(), 0).distMeters();
             switchMode = r.ticks().get(switchIdx).est().mode();
         }
-        return new ForkResult(r, divergeIdx, switchIdx, step, switchMode, track);
+        return new ForkResult(r, divergeIdx, switchIdx, step, switchMode, forkGap, track);
     }
 
     @Test
@@ -123,8 +130,12 @@ class VariantBankScenariosTest {
         assertThat(fr.divergeIdx()).isPositive();
         int lag = fr.switchIdx() - fr.divergeIdx();
         System.out.printf("SC14-ранняя: расхождение tick=%d, смена tick=%d (лаг=%d фиксов), "
-                        + "|dp|=%.1fм, mode=%s%n",
-                fr.divergeIdx(), fr.switchIdx(), lag, fr.switchStepMeters(), fr.switchMode());
+                        + "|dp|=%.1fм, fork_gap=%.1fм, mode=%s%n",
+                fr.divergeIdx(), fr.switchIdx(), lag, fr.switchStepMeters(), fr.forkGapMeters(),
+                fr.switchMode());
+        assertThat(fr.switchStepMeters())
+                .as("A8.3: гео-скачок ≤ fork_gap + допуск сглаживания (%.0fм)", switchAllowanceMeters())
+                .isLessThanOrEqualTo(fr.forkGapMeters() + switchAllowanceMeters());
         assertThat(lag).as("смена ≤ 3 фиксов после физического расхождения").isLessThanOrEqualTo(3);
         assertThat(fr.switchMode())
                 .as("ранняя дизамбигуация: дуговое расхождение в допуске сглаживания — смена тихая, "
@@ -157,9 +168,12 @@ class VariantBankScenariosTest {
         ForkResult fr = runFork(fork, 111);
 
         assertThat(fr.switchIdx()).as("поздняя смена состоялась").isPositive();
-        System.out.printf("SC14-поздняя (параллель 40м/500м): смена tick=%d, гео-скачок |dp|=%.1fм, mode=%s "
-                        + "(атомарная смена с печатью ядра — не тихое сползание)%n",
-                fr.switchIdx(), fr.switchStepMeters(), fr.switchMode());
+        System.out.printf("SC14-поздняя (параллель 40м/500м): смена tick=%d, гео-скачок |dp|=%.1fм, "
+                        + "fork_gap=%.1fм, mode=%s (атомарная смена с печатью ядра — не тихое сползание)%n",
+                fr.switchIdx(), fr.switchStepMeters(), fr.forkGapMeters(), fr.switchMode());
+        assertThat(fr.switchStepMeters())
+                .as("A8.3: гео-скачок ≤ fork_gap + допуск сглаживания (%.0fм)", switchAllowanceMeters())
+                .isLessThanOrEqualTo(fr.forkGapMeters() + switchAllowanceMeters());
         assertThat(fr.switchStepMeters())
                 .as("величина скачка измерена (не NaN/не нулевой сдвиг между ветками)")
                 .isGreaterThan(0.0);
@@ -241,6 +255,58 @@ class VariantBankScenariosTest {
                 .filter(e -> e.type() == StopAware.StopEventType.SKIP)
                 .filter(e -> terminalOwnedIds.contains(e.stopId())).count();
         assertThat(terminalSkips).as("ложных SKIP терминальных стопов нет (правило OQ5)").isZero();
+    }
+
+    @Test
+    void cascadeDetourThenTerminalStandThenReturnFixedAsFact() {
+        RouteTopology topo = RouteTopology.thereAndBack(G10_0, G10_1);
+        SyntheticScenario.TurnTrack track = SyntheticScenario.detourThenTerminalStandThenReturn(
+                G10_0, G10_1, SyntheticScenario.Params.defaults(140, "10", 0),
+                G10_0.totalMeters() - 2500, CRUISE, 1.0,
+                G10_0.totalMeters() - 900, 150, 180, 2400);
+
+        MotionFilterCore core = new MotionFilterCore(CFG);
+        core.reset();
+        List<String> modes = new ArrayList<>();
+        List<StopAware.StopEvent> events = new ArrayList<>();
+        int firstOff = -1;
+        int newTripIdx = -1;
+        for (int i = 0; i < track.fixes().size(); i++) {
+            var est = core.onFix(track.fixes().get(i), topo);
+            modes.add(est.mode());
+            events.addAll(core.drainEvents());
+            if (firstOff < 0 && est.mode().equals("OFF_ROUTE")) firstOff = i;
+            if (newTripIdx < 0 && est.mode().equals("NEW_TRIP")) newTripIdx = i;
+        }
+        double tOff = firstOff >= 0 ? track.truth().get(firstOff)[0] : Double.NaN;
+        double tNewTrip = newTripIdx >= 0 ? track.truth().get(newTripIdx)[0] : Double.NaN;
+        long offTicks = modes.stream().filter(m -> m.equals("OFF_ROUTE")).count();
+        System.out.printf("КАСКАД (A8.4, фиксация фактом): вход OFF t=%.0fс (объезд с t=%.0fс), "
+                        + "OFF-тиков=%d, NEW_TRIP t=%.0fс (t_flip=%.0fс), trip_id=%d, dir=%d, "
+                        + "переходов OFF=%d, смен банка=%d%n",
+                tOff, track.truth().get(0)[0], offTicks, tNewTrip, track.tFlipSec(),
+                core.tripId(), core.direction(), core.offRouteTransitions(), core.bank().switchCount());
+
+        if (newTripIdx > 0) {
+            assertThat(modes.get(newTripIdx - 1))
+                    .as("восстановление санкционированным путём: TURNING (терминальная ветка) "
+                            + "или RECOVERING (банк, №22) — факт: %s", modes.get(newTripIdx - 1))
+                    .isIn("TURNING", "RECOVERING");
+        }
+        assertThat(core.tripId()).as("trip_id не растёт хаотично").isLessThanOrEqualTo(2);
+        Set<String> terminalOwnedIds = new java.util.HashSet<>();
+        for (var g : List.of(G10_0, G10_1)) {
+            for (var sp : g.stops()) {
+                if (sp.sMeters() <= CFG.epsTermMeters()
+                        || sp.sMeters() >= g.totalMeters() - CFG.epsTermMeters()) {
+                    terminalOwnedIds.add(sp.stopId());
+                }
+            }
+        }
+        long terminalSkips = events.stream()
+                .filter(e -> e.type() == StopAware.StopEventType.SKIP)
+                .filter(e -> terminalOwnedIds.contains(e.stopId())).count();
+        assertThat(terminalSkips).as("ложных SKIP терминальных стопов нет").isZero();
     }
 
     @Test

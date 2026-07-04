@@ -288,7 +288,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     }
 
     private boolean bankSwitchAllowed() {
-        return isTravelMode() || mode == Mode.AT_TERMINAL
+        return isTravelMode() || mode == Mode.AT_TERMINAL || mode == Mode.OFF_ROUTE
                 || (mode == Mode.RECOVERING && !recoveringFromFreeze);
     }
 
@@ -296,6 +296,15 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         double[] pOld = gOld.pointAtS(x);
         double[] pNew = cand.geom().pointAtS(cand.x());
         double dp = GeometryFixture.haversineMeters(pOld[0], pOld[1], pNew[0], pNew[1]);
+        double forkGap = gOld.projectOntoRange(pNew[0], pNew[1], 0, gOld.totalMeters(), 0).distMeters();
+        System.out.printf("банк: fork_gap в точке смены = %.1fм%n", forkGap);
+        boolean wasOffRoute = mode == Mode.OFF_ROUTE;
+        if (wasOffRoute) {
+            offRouteTransitions++;
+            offRouteMisses = 0;
+            offRouteSec = 0;
+            offRouteExitStreak = 0;
+        }
         if (cand.direction() != direction) {
             bank.commitSwitch();
             pendingDirectionSwitch = cand;
@@ -312,6 +321,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             System.out.printf("банк: ранняя смена лидера → %s, |dp|дуга=%.1fм, |dp|гео=%.1fм "
                             + "(дуга согласована — стягивание серией R_max; гео-переход на верную ветку)%n",
                     cand.variantId(), dpArc, dp);
+            if (wasOffRoute) mode = prevTravelMode;
             resyncNextStop(cand.geom());
             return null;
         }
@@ -565,9 +575,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                     dwellOutlierFlagged = true;
                     events.add(new StopEvent(StopEventType.DWELL_OUTLIER, stop.stopId(), fix.timestamp()));
                 }
-                boolean expired = dwellSec >= dwellExpectedFor(stop.stopId());
                 boolean moving = rawKmh >= cfg.vMoveKmh();
-                if ((expired || moving) && dwellSec >= cfg.dwellMinSec()) {
+                if (moving && dwellSec >= cfg.dwellMinSec()) {
                     mode = Mode.DEPARTING;
                     events.add(new StopEvent(StopEventType.DWELL_EXIT, stop.stopId(), fix.timestamp()));
                     advanceNextStop(g);

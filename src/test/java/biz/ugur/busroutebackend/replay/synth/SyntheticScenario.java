@@ -475,6 +475,50 @@ public final class SyntheticScenario {
         return new Track(fixes, truth);
     }
 
+    public static GpsFix emitFix(GeometryFixture g, Params p, Random rnd,
+                                 double t, double trueS, double speedMs) {
+        return fixAtWithPerp(g, p, rnd, t, trueS, speedMs, 0.0, 0.0);
+    }
+
+    public static TurnTrack detourThenTerminalStandThenReturn(GeometryFixture gOut, GeometryFixture gBack,
+                                                              Params p, double startS,
+                                                              double cruiseMs, double accelMs2,
+                                                              double detourStartS, double perpMeters,
+                                                              double standAtTerminalSec, double returnEndS) {
+        Sim sim = new Sim(p);
+        Random dwellRnd = new Random(p.seed() * 31 + 7);
+        drive(sim, gOut, dwellRnd, startS, detourStartS, cruiseMs, accelMs2, 20, 0.3, 0,
+                new ArrayList<>(), false);
+        drivePerp(sim, gOut, detourStartS, gOut.totalMeters(), cruiseMs, accelMs2, 0, perpMeters);
+        stand(sim, gOut, gOut.totalMeters(), standAtTerminalSec, 0);
+        double tFlip = sim.t;
+        List<StopVisit> backVisits = new ArrayList<>();
+        drive(sim, gBack, dwellRnd, 0, returnEndS, cruiseMs, accelMs2, 20, 0.3, 1, backVisits, false);
+        return new TurnTrack(sim.fixes, sim.truth, tFlip, backVisits);
+    }
+
+    private static void drivePerp(Sim sim, GeometryFixture g, double fromS, double toS,
+                                  double cruiseMs, double accelMs2, int dir, double perpMeters) {
+        double simDt = 0.5;
+        double s = fromS;
+        double v = 0;
+        while (s < toS - 0.5 && sim.t < 36000) {
+            double brakeDist = v * v / (2 * accelMs2);
+            double vLimit = toS - s <= brakeDist + 1
+                    ? Math.sqrt(2 * accelMs2 * Math.max(0.3, toS - s))
+                    : cruiseMs;
+            if (v < vLimit) v = Math.min(v + accelMs2 * simDt, vLimit);
+            else v = Math.max(v - accelMs2 * simDt, vLimit);
+            s = Math.min(s + v * simDt, g.totalMeters());
+            if (sim.t >= sim.nextEmit) {
+                sim.truth.add(new double[]{sim.t, s, v, dir});
+                sim.fixes.add(fixAtWithPerp(g, sim.p, sim.rnd, sim.t, s, v, 0.0, perpMeters));
+                sim.nextEmit += sim.p.fixIntervalSec();
+            }
+            sim.t += simDt;
+        }
+    }
+
     private static GpsFix fixAt(GeometryFixture g, Params p, Random rnd,
                                 double t, double trueS, double speedMs, double alongBiasMeters) {
         return fixAtWithPerp(g, p, rnd, t, trueS, speedMs, alongBiasMeters, 0.0);
