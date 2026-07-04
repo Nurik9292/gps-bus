@@ -139,6 +139,22 @@ public final class SyntheticScenario {
         return new MultiStopTrack(fixes, truth, visits);
     }
 
+    public record Leg(GeometryFixture g, double fromS, double toS, int dir, double standAfterSec) {}
+
+    public static TurnTrack journey(Params p, double cruiseMs, double accelMs2, List<Leg> legs) {
+        Sim sim = new Sim(p);
+        Random dwellRnd = new Random(p.seed() * 31 + 7);
+        List<StopVisit> visits = new ArrayList<>();
+        for (Leg leg : legs) {
+            drive(sim, leg.g(), dwellRnd, leg.fromS(), leg.toS(),
+                    cruiseMs, accelMs2, 20, 0.3, leg.dir(), visits, true);
+            if (leg.standAfterSec() > 0) {
+                stand(sim, leg.g(), leg.toS(), leg.standAfterSec(), leg.dir());
+            }
+        }
+        return new TurnTrack(sim.fixes, sim.truth, Double.NaN, visits);
+    }
+
     public static TurnTrack terminalTurnRun(GeometryFixture gOut, GeometryFixture gBack, Params p,
                                             double approachStartS, double cruiseMs, double accelMs2,
                                             double turnDwellSec, double returnEndS,

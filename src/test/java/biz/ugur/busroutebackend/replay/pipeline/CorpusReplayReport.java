@@ -18,11 +18,12 @@ public final class CorpusReplayReport {
                 .append("; пропущено без геометрии: ").append(skippedNoGeometry.size()).append("\n\n");
 
         sb.append("| Борт | Маршрут | Фиксы (дроп) | Длит., с | null-acc | ETA p95 60/120/300с (n) | "
-                + "События A/S/D | Ре-привязки | Смены лидера | OFF/LOST доля | \\|ν\\| p50/p95 | NIS (n) | Рейсы |\n");
-        sb.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+                + "События A/S/D | Ре-привязки | Смены лидера | OFF/LOST доля | \\|ν\\| p50/p95 | NIS (n) | Рейсы | "
+                + "Полёт max/наруш. (санкц.) |\n");
+        sb.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
         for (var s : stats) {
             sb.append(String.format(Locale.ROOT,
-                    "| %s | %s | %d (%d) | %.0f | %.0f%% | %s / %s / %s | %d/%d/%d | %d | %d | %.0f%%/%.0f%% | %.1f/%.1f | %.2f (%d) | %d |%n",
+                    "| %s | %s | %d (%d) | %.0f | %.0f%% | %s / %s / %s | %d/%d/%d | %d | %d | %.0f%%/%.0f%% | %.1f/%.1f | %.2f (%d) | %d | %.2f/%d (%d) |%n",
                     s.vehicleId(), s.routeNumber(), s.fixesTotal(), s.fixesDropped(),
                     s.durationSec(), s.nullAccuracyShare() * 100,
                     fmtBucket(s.eta60()), fmtBucket(s.eta120()), fmtBucket(s.eta300()),
@@ -32,12 +33,16 @@ public final class CorpusReplayReport {
                     s.recoveringSpells(), s.leaderSwitches(),
                     s.offRouteShare() * 100, s.gpsLostFrozenShare() * 100,
                     s.p50AbsInnovation(), s.p95AbsInnovation(),
-                    s.meanNis(), s.nisN(), s.tripsCompleted()));
+                    s.meanNis(), s.nisN(), s.tripsCompleted(),
+                    s.flightMaxRatio(), s.flightViolations(), s.sanctionedJumps()));
         }
         sb.append("\nСобытия: A=DWELL_ENTER (прибытия), S=SKIP, D=DECEL_ENTER. ")
                 .append("NIS — средний по принятым снапам (ожидание ~1 при согласованных q/R). ")
                 .append("Headline считается только на эпизодах с геометрией со стопами; ")
-                .append("факт прибытия — П-2-детектор по сырым фиксам.\n");
+                .append("факт прибытия — П-2-детектор по сырым фиксам. ")
+                .append("«Полёт» = max |Δp вещания|/(Δt·v_max) вне санкционированных событий ")
+                .append("(ре-привязка/NEW_TRIP/смена лидера); нарушение при > k=1.5 — прямая метрика ")
+                .append("дефекта «летающих маркеров».\n");
         if (!skippedNoGeometry.isEmpty()) {
             sb.append("\nПропущены (нет фикстуры геометрии — добавить экспортёром): ");
             for (Episode ep : skippedNoGeometry) {

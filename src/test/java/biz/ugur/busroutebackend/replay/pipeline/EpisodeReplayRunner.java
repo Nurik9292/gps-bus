@@ -40,7 +40,10 @@ public final class EpisodeReplayRunner {
             EtaBucket eta60,
             EtaBucket eta120,
             EtaBucket eta300,
-            long tripsCompleted) {}
+            long tripsCompleted,
+            double flightMaxRatio,
+            long flightViolations,
+            long sanctionedJumps) {}
 
     private EpisodeReplayRunner() {}
 
@@ -65,6 +68,10 @@ public final class EpisodeReplayRunner {
         List<Double> e60 = new ArrayList<>();
         List<Double> e120 = new ArrayList<>();
         List<Double> e300 = new ArrayList<>();
+        List<double[]> broadcastGeo = new ArrayList<>();
+        List<Double> broadcastT = new ArrayList<>();
+        List<Boolean> sanctioned = new ArrayList<>();
+        String prevLeader = null;
 
         for (GpsFix fx : ep.fixes()) {
             if (!validator.validate(fx).accepted()) {
@@ -72,6 +79,12 @@ public final class EpisodeReplayRunner {
                 continue;
             }
             PredictionModel.Estimate est = core.onFix(fx, topo);
+            String leader = core.bank().leader().variantId();
+            broadcastGeo.add(core.bank().leader().geom().pointAtS(est.s()));
+            broadcastT.add((fx.timestamp().toEpochMilli() - t0.toEpochMilli()) / 1000.0);
+            sanctioned.add(est.mode().equals("RECOVERING") || est.mode().equals("NEW_TRIP")
+                    || (prevLeader != null && !prevLeader.equals(leader)));
+            prevLeader = leader;
             for (StopAware.StopEvent e : core.drainEvents()) {
                 events.merge(e.type().name(), 1L, Long::sum);
             }
@@ -100,6 +113,8 @@ public final class EpisodeReplayRunner {
             }
         }
         int processed = ep.fixes().size() - dropped;
+        var flight = biz.ugur.busroutebackend.replay.metrics.MarkerFlightMetric.compute(
+                broadcastGeo, broadcastT, sanctioned, cfg.vMaxMs(), 1.5);
         return new EpisodeStats(
                 ep.vehicleId(), ep.routeNumber(), ep.fixes().size(), dropped,
                 ep.durationSec(), ep.nullAccuracyShare(),
@@ -108,7 +123,8 @@ public final class EpisodeReplayRunner {
                 percentile(absInnovations, 0.50), percentile(absInnovations, 0.95),
                 nisN > 0 ? nisSum / nisN : Double.NaN, nisN,
                 bucket(e60), bucket(e120), bucket(e300),
-                core.tripId());
+                core.tripId(),
+                flight.maxRatio(), flight.violations(), flight.sanctionedJumps());
     }
 
     private static Map<String, Double> detectArrivals(Episode ep, GeometryFixture g) {

@@ -39,7 +39,27 @@ class SpecScenarioContractTest {
         MotionFilterCore core = new MotionFilterCore(CFG);
         core.reset();
         List<PredictionModel.Estimate> ests = new ArrayList<>();
-        for (GpsFix fx : fixes) ests.add(core.onFix(fx, topo));
+        List<double[]> geo = new ArrayList<>();
+        List<Double> tSec = new ArrayList<>();
+        List<Boolean> sanctioned = new ArrayList<>();
+        String prevLeader = null;
+        long t0 = fixes.isEmpty() ? 0 : fixes.get(0).timestamp().toEpochMilli();
+        for (GpsFix fx : fixes) {
+            PredictionModel.Estimate est = core.onFix(fx, topo);
+            ests.add(est);
+            String leader = core.bank().leader().variantId();
+            geo.add(core.bank().leader().geom().pointAtS(est.s()));
+            tSec.add((fx.timestamp().toEpochMilli() - t0) / 1000.0);
+            sanctioned.add(est.mode().equals("RECOVERING") || est.mode().equals("NEW_TRIP")
+                    || (prevLeader != null && !prevLeader.equals(leader)));
+            prevLeader = leader;
+        }
+        var flight = biz.ugur.busroutebackend.replay.metrics.MarkerFlightMetric.compute(
+                geo, tSec, sanctioned, CFG.vMaxMs(), 1.5);
+        org.assertj.core.api.Assertions.assertThat(flight.violations())
+                .as("A9.3: «полёт маркера» вне санкционированных событий (maxRatio=%.2f при k=1.5)",
+                        flight.maxRatio())
+                .isZero();
         return new R(ests, core);
     }
 
