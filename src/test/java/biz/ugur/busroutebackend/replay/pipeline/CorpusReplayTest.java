@@ -34,7 +34,10 @@ class CorpusReplayTest {
 
     private static final Map<String, RouteTopology> GEOMETRY_BY_ROUTE = Map.of(
             "8", RouteTopology.thereAndBack(G8_0, G8_1),
-            "10", RouteTopology.thereAndBack(G10_0, G10_1));
+            "10", RouteTopology.thereAndBack(G10_0, G10_1),
+            "25", RouteTopology.thereAndBack(
+                    GeometryFixture.loadClasspath("/fixtures/geometry/route-25-dir0.json"),
+                    GeometryFixture.loadClasspath("/fixtures/geometry/route-25-dir1.json")));
 
     @Test
     void corpusReplayEndToEndSingleCommandDeterministic() throws IOException {
