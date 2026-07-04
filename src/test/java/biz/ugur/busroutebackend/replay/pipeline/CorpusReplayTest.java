@@ -32,12 +32,19 @@ class CorpusReplayTest {
     private static final CoreConfig CFG = CoreConfig.defaults();
     private static final double CRUISE = 12.5;
 
-    private static final Map<String, RouteTopology> GEOMETRY_BY_ROUTE = Map.of(
-            "8", RouteTopology.thereAndBack(G8_0, G8_1),
-            "10", RouteTopology.thereAndBack(G10_0, G10_1),
-            "25", RouteTopology.thereAndBack(
-                    GeometryFixture.loadClasspath("/fixtures/geometry/route-25-dir0.json"),
-                    GeometryFixture.loadClasspath("/fixtures/geometry/route-25-dir1.json")));
+    private static final Map<String, RouteTopology> GEOMETRY_BY_ROUTE = buildGeometryMap();
+
+    private static Map<String, RouteTopology> buildGeometryMap() {
+        Map<String, RouteTopology> map = new java.util.TreeMap<>();
+        map.put("8", RouteTopology.thereAndBack(G8_0, G8_1));
+        map.put("10", RouteTopology.thereAndBack(G10_0, G10_1));
+        for (String route : List.of("25", "61", "62", "63", "27", "48", "74", "80", "12", "97")) {
+            map.put(route, RouteTopology.thereAndBack(
+                    GeometryFixture.loadClasspath("/fixtures/geometry/route-" + route + "-dir0.json"),
+                    GeometryFixture.loadClasspath("/fixtures/geometry/route-" + route + "-dir1.json")));
+        }
+        return map;
+    }
 
     @Test
     void corpusReplayEndToEndSingleCommandDeterministic() throws IOException {

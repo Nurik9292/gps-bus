@@ -312,6 +312,68 @@ class SpecScenarioContractTest {
         return est.s() - predicted;
     }
 
+    @Test
+    void scenario10HdopBranchWithZeroAccuracyLiveFeedShape() {
+        double sdLowHdop = trackingErrorStdHdop(0.7);
+        double sdHighHdop = trackingErrorStdHdop(5.0);
+        System.out.printf("SC10-hdop (живой профиль Tugdk: accuracy=0): std при hdop=0.7: %.2fм; "
+                + "при hdop=5: %.2fм (демпфирование hdop-веткой)%n", sdLowHdop, sdHighHdop);
+        assertThat(sdHighHdop)
+                .as("Р-8 hdop-ветка: маркер не дёргается за низкокачественным (hdop↑) фиксом")
+                .isLessThan(sdLowHdop);
+
+        List<Double> contributions = new ArrayList<>();
+        for (double hdop : List.of(0.5, 1.0, 2.0, 5.0, 10.0)) {
+            contributions.add(singleUpdateContributionHdop(hdop));
+        }
+        System.out.printf("SC10-hdop: K-вклад инновации 35м по hdop {0.5,1,2,5,10}: %s "
+                + "(факт кода: R = (max(accRef, accRef·hdop)·(1+d_snap/D_snap))², accuracy=0 → hdop-ветка)%n",
+                contributions.stream().map(c -> String.format(java.util.Locale.ROOT, "%.1f", c)).toList());
+        for (int i = 1; i < contributions.size(); i++) {
+            assertThat(contributions.get(i))
+                    .as("монотонность веса по hdop (Р-8/INV-14), шаг %d", i)
+                    .isLessThanOrEqualTo(contributions.get(i - 1) + 1e-9);
+        }
+        assertThat(singleUpdateContributionHdop(5.0))
+                .as("hdop=0.7 и hdop=5 дают разный K-вклад")
+                .isLessThan(singleUpdateContributionHdop(0.7));
+    }
+
+    private double trackingErrorStdHdop(double hdop) {
+        var p = new SyntheticScenario.Params(891, 7.0, 15.0, 5.0,
+                Instant.parse("2026-07-03T06:00:00Z"), "veh", "P", "SCLINE", 0);
+        SyntheticScenario.Track track = SyntheticScenario.cruiseClean(LINE, p, 500, CRUISE, 500);
+        List<GpsFix> reshaped = track.fixes().stream().map(f -> withQuality(f, hdop, 0.0)).toList();
+        MotionFilterCore core = new MotionFilterCore(CFG);
+        core.reset();
+        List<Double> errs = new ArrayList<>();
+        for (int i = 0; i < reshaped.size(); i++) {
+            PredictionModel.Estimate est = core.onFix(reshaped.get(i), LINE);
+            if (i >= 20) errs.add(est.s() - track.truth().get(i)[1]);
+        }
+        double mean = errs.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        return Math.sqrt(errs.stream().mapToDouble(e -> (e - mean) * (e - mean)).average().orElse(0));
+    }
+
+    private double singleUpdateContributionHdop(double hdop) {
+        var p = new SyntheticScenario.Params(892, 7.0, 0.0, 5.0,
+                Instant.parse("2026-07-03T06:00:00Z"), "veh", "P", "SCLINE", 0);
+        Random rnd = new Random(p.seed());
+        MotionFilterCore core = new MotionFilterCore(CFG);
+        core.reset();
+        core.onFix(withQuality(SyntheticScenario.emitFix(LINE, p, rnd, 0, 1000, CRUISE), hdop, 0.0), LINE);
+        PredictionModel.Estimate est = core.onFix(
+                withQuality(SyntheticScenario.emitFix(LINE, p, rnd, 7, 1000 + CRUISE * 7 + 35, CRUISE),
+                        hdop, 0.0), LINE);
+        return est.s() - (1000 + CRUISE * 7);
+    }
+
+    private static GpsFix withQuality(GpsFix f, double hdop, double accuracy) {
+        return new GpsFix(f.vehicleId(), f.licensePlate(), f.routeNumber(),
+                f.latitude(), f.longitude(), f.speedKmh(), f.course(), f.inMotion(),
+                f.timestamp(), f.direction(), hdop, f.satellites(), accuracy, f.wallClock());
+    }
+
     private double trackingErrorStd(SyntheticScenario.Params p) {
         SyntheticScenario.Track track = SyntheticScenario.cruiseClean(LINE, p, 500, CRUISE, 500);
         R r = run(track.fixes(), LINE);
