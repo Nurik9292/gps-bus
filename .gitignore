@@ -13,7 +13,11 @@ target/
 .sts4-cache
 .claude
 .superpowers/
-scripts/
+scripts/*
+!scripts/ws_pred_extract.py
+!scripts/ws-pred-daily-extract.sh
+!scripts/a10_short_trip_detector.py
+!scripts/campaign-healthcheck.py
 deployment/
 .idea
 *.iws
