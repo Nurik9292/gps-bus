@@ -548,6 +548,24 @@ class A10Point4DiagnosticTest {
         }
     }
 
+    private void dumpNisTicksIfRequested(RunOut out) throws Exception {
+        String dumpPath = System.getProperty("nis.dump");
+        if (dumpPath == null || dumpPath.isBlank()) return;
+        try (var w = java.nio.file.Files.newBufferedWriter(Path.of(dumpPath))) {
+            w.write("epKey|ts|nis|leaderPinned|mode|leader\n");
+            for (int e = 0; e < out.episodes().size(); e++) {
+                String epKey = out.episodeKeys().get(e);
+                for (Tick t : out.episodes().get(e)) {
+                    w.write(String.format(Locale.ROOT, "%s|%s|%s|%s|%s|%s%n",
+                            epKey, t.ts(),
+                            Double.isNaN(t.nis()) ? "NaN" : String.format(Locale.ROOT, "%.6f", t.nis()),
+                            t.leaderPinned() ? "Y" : "n", t.mode(), t.leader()));
+                }
+            }
+        }
+        System.out.printf("NIS-дамп записан: %s%n", dumpPath);
+    }
+
     @Test
     @EnabledIfSystemProperty(named = "a11.p3diag", matches = "true")
     void a11PhaseBDumpBankInternalsAroundPad() throws Exception {
@@ -614,6 +632,7 @@ class A10Point4DiagnosticTest {
         RunOut c2 = run(corpusDir, topoCPrime);
         System.out.printf("П.3/П.4: SHA потока C' = %s (эпизодов 25 = %d)%n",
                 c2.streamSha(), c2.episodes().size());
+        dumpNisTicksIfRequested(c2);
 
         int target = -1;
         for (int i = 0; i < c2.episodeKeys().size(); i++) {
