@@ -114,4 +114,93 @@ class A10DeltaSAttributionTest {
     private static double pct(long part, long total) {
         return total > 0 ? 100.0 * part / total : 0;
     }
+
+    @Test
+    @EnabledIfSystemProperty(named = "a10.f1rerun", matches = "true")
+    void f1Rerun25WithVariantBank() throws Exception {
+        String corpusDir = System.getProperty("corpus.dir");
+        assertThat(corpusDir).isNotBlank();
+        RouteTopology topo = RouteTopology.thereAndBack(
+                        Variant25FixturesTest.FULL_0, Variant25FixturesTest.FULL_1)
+                .withVariants(List.of(Variant25FixturesTest.short0().shortVariant(),
+                        Variant25FixturesTest.short1().shortVariant()));
+        System.out.println("=== П.5 перепрогон Ф1 (эпизоды 25, банк с вариантами) ===");
+        System.out.println("состав банка: " + topo.allGeometries().stream()
+                .map(g -> g.routeNumber() + "#d" + g.direction()
+                        + String.format(Locale.ROOT, "→%.2fкм", g.totalMeters() / 1000))
+                .toList());
+
+        var digest = java.security.MessageDigest.getInstance("SHA-256");
+        long shortLeaderTicks = 0;
+        String shortFirst = null;
+        String shortLast = null;
+        List<Double> nisAll = new ArrayList<>();
+        long nisOver = 0;
+        long switches = 0;
+        long switchesToShort = 0;
+        long flightViolations = 0;
+        double flightMax = 0;
+        int episodes = 0;
+
+        for (Episode ep : CorpusLoader.load(Path.of(corpusDir), CFG.tMaxSec(), 10)) {
+            if (!ep.routeNumber().equals("25")) continue;
+            episodes++;
+            MotionFilterCore core = new MotionFilterCore(CFG);
+            core.reset();
+            String prevLeader = null;
+            double[] prevGeo = null;
+            double prevT = 0;
+            long t0 = ep.fixes().get(0).timestamp().toEpochMilli();
+            for (GpsFix fx : ep.fixes()) {
+                var est = core.onFix(fx, topo);
+                double t = (fx.timestamp().toEpochMilli() - t0) / 1000.0;
+                String leader = core.bank().leader().variantId();
+                double[] geo = core.bank().leader().geom().pointAtS(est.s());
+                digest.update(String.format(Locale.ROOT, "%s|%s|%.1f|%s%n",
+                        fx.timestamp(), leader, est.s(), est.mode()).getBytes());
+                boolean switched = prevLeader != null && !prevLeader.equals(leader);
+                if (switched) {
+                    switches++;
+                    if (leader.contains("-short")) switchesToShort++;
+                }
+                if (leader.contains("-short")) {
+                    shortLeaderTicks++;
+                    String local = fx.timestamp().plusSeconds(5 * 3600).toString().substring(0, 16);
+                    if (shortFirst == null) shortFirst = local;
+                    shortLast = local;
+                }
+                boolean sanctioned = est.mode().equals("RECOVERING") || est.mode().equals("NEW_TRIP")
+                        || switched;
+                if (prevGeo != null && !sanctioned) {
+                    double dt = Math.max(t - prevT, 1);
+                    double ratio = biz.ugur.busroutebackend.replay.GeometryFixture.haversineMeters(
+                            prevGeo[0], prevGeo[1], geo[0], geo[1]) / (dt * CFG.vMaxMs());
+                    flightMax = Math.max(flightMax, ratio);
+                    if (ratio > 1.5) flightViolations++;
+                }
+                if (core.lastUpdateAccepted() && core.lastInnovationVariance() > 0) {
+                    double nis = core.lastInnovation() * core.lastInnovation()
+                            / core.lastInnovationVariance();
+                    nisAll.add(nis);
+                    if (nis > 3.84) nisOver++;
+                }
+                prevLeader = leader;
+                prevGeo = geo;
+                prevT = t;
+            }
+        }
+        String streamSha = java.util.HexFormat.of().formatHex(digest.digest()).substring(0, 12);
+        double nisMedian = nisAll.isEmpty() ? Double.NaN
+                : nisAll.stream().sorted().toList().get(nisAll.size() / 2);
+        System.out.printf(Locale.ROOT,
+                "(а) выходной поток: эпизодов 25 = %d, SHA-256(t|leader|s|mode) = %s%n"
+                        + "(б) тики лидерства short: n=%d, окно local: %s → %s%n"
+                        + "(в) смен лидера: %d, из них на short: %d%n"
+                        + "(г) NIS: n=%d, median=%.2f, >3.84: %.1f%%%n"
+                        + "полёт: max=%.2f, нарушений=%d%n",
+                episodes, streamSha, shortLeaderTicks,
+                shortFirst, shortLast, switches, switchesToShort,
+                nisAll.size(), nisMedian, pct(nisOver, nisAll.size()),
+                flightMax, flightViolations);
+    }
 }

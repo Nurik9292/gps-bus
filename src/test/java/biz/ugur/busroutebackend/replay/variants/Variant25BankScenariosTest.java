@@ -64,10 +64,13 @@ class Variant25BankScenariosTest {
 
     @Test
     void shortTripTurnAtZoneBorderCaughtByBankNoMarkerFlight() {
+        double[] turnPoint = SHORT_1.pointAtS(SHORT_1.totalMeters() - 50);
+        double backFromS = SHORT_0.projectOntoRange(
+                turnPoint[0], turnPoint[1], 0, SHORT_0.totalMeters(), 0).s();
         SyntheticScenario.TurnTrack track = SyntheticScenario.journey(
                 SyntheticScenario.Params.defaults(900, "25", 1), CRUISE, 1.0,
                 List.of(new SyntheticScenario.Leg(SHORT_1, 200, SHORT_1.totalMeters() - 50, 1, 120),
-                        new SyntheticScenario.Leg(SHORT_0, 0, 6000, 0, 0)));
+                        new SyntheticScenario.Leg(SHORT_0, backFromS, backFromS + 6000, 0, 0)));
         Run r = run(track.fixes(), topo25FirstDir1());
 
         int backStart = -1;

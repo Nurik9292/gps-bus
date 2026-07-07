@@ -16,8 +16,14 @@ class Variant25FixturesTest {
     static final GeometryFixture FULL_1 =
             GeometryFixture.loadClasspath("/fixtures/geometry/route-25-dir1.json");
 
+    static final double SHORT_25_0_S_TURN_RATIFIED_M = 15790.0;
+
     static RingCutout.CutResult short0() {
-        return RingCutout.trunkOutsideRingZone(FULL_0, RING_BBOX, "25-short");
+        return RingCutout.suffixFromS(FULL_0, SHORT_25_0_S_TURN_RATIFIED_M, "25-short");
+    }
+
+    static RingCutout.CutResult short0SupersededTrunkV1() {
+        return RingCutout.trunkOutsideRingZone(FULL_0, RING_BBOX, "25-short-superseded-v1");
     }
 
     static RingCutout.CutResult short1() {
@@ -62,16 +68,10 @@ class Variant25FixturesTest {
                     inEtalon ? "OK" : "ФЛАГ — расхождение >10%, не подгоняем",
                     shortG.stops().size(), cut.stopsDropped());
 
-            if (label.equals("dir1")) {
-                assertThat(shortKm)
-                        .as("dir1: L_short в эталоне Ýarym B ±10%%")
-                        .isBetween(etalonKm * 0.9, etalonKm * 1.1);
-            } else {
-                assertThat(shortKm)
-                        .as("dir0: sanity-коридор; эталон-флаг: bwd-ствол несёт Gurtly-петлю, "
-                                + "fwd-ствол короче эталона — open-question владельцу")
-                        .isBetween(etalonKm * 0.7, etalonKm * 1.1);
-            }
+            assertThat(shortKm)
+                    .as("%s: L_short в эталоне Ýarym B ±10%% (dir0 = v2 от ратифицированного "
+                            + "s_turn=15790, A10.3 Фаза Б — флаг A9 «−16%%» снят)", label)
+                    .isBetween(etalonKm * 0.9, etalonKm * 1.1);
 
             List<String> fullStopIds = full.stops().stream()
                     .map(GeometryFixture.StopPoint::stopId).toList();
@@ -86,9 +86,21 @@ class Variant25FixturesTest {
                         .isGreaterThan(shortG.stops().get(i - 1).sMeters());
             }
 
-            assertThat(RingCutout.isSimple(shortG, 500.0))
-                    .as("%s: short проходит IsSimple (термин. петли ≤500м по дуге игнорируются)", label)
+            double simpleToleranceM = label.equals("dir0") ? 800.0 : 500.0;
+            assertThat(RingCutout.isSimple(shortG, simpleToleranceM))
+                    .as("%s: short проходит IsSimple (dir0: узел складки s=16150/16867, Δ дуги 717 м — "
+                            + "особенность официальной линии, №26; толеранс 800)", label)
                     .isTrue();
         }
+    }
+
+    @Test
+    void supersededTrunkV1StillBuildsWithMark() {
+        RingCutout.CutResult v1 = short0SupersededTrunkV1();
+        assertThat(v1.shortVariant().routeNumber())
+                .as("старая short-фикстура 25/0 (14.16 км) не удалена — помечена superseded, "
+                        + "ссылка: ратификация s_turn=15790 (A10.3 Фаза Б, 2026-07-07)")
+                .contains("superseded");
+        assertThat(v1.shortVariant().totalMeters() / 1000.0).isBetween(14.0, 14.3);
     }
 }
