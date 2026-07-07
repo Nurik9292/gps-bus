@@ -16,21 +16,31 @@ public record GeometryFixture(
         List<double[]> points,
         double[] cumDist,
         List<StopPoint> stops,
-        String topology) {
+        String topology,
+        TerminalZone terminalZone) {
 
     public static final String TOPOLOGY_THERE_AND_BACK = "there-and-back";
     public static final String TOPOLOGY_LOOP = "loop";
 
     public record StopPoint(String stopId, int seq, double sMeters) {}
 
+    public record TerminalZone(double lat, double lon, double radiusMeters) {}
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public GeometryFixture withStops(List<StopPoint> newStops) {
-        return new GeometryFixture(routeNumber, direction, totalMeters, points, cumDist, newStops, topology);
+        return new GeometryFixture(routeNumber, direction, totalMeters, points, cumDist, newStops,
+                topology, terminalZone);
     }
 
     public GeometryFixture withTopology(String newTopology) {
-        return new GeometryFixture(routeNumber, direction, totalMeters, points, cumDist, stops, newTopology);
+        return new GeometryFixture(routeNumber, direction, totalMeters, points, cumDist, stops,
+                newTopology, terminalZone);
+    }
+
+    public GeometryFixture withTerminalZone(TerminalZone zone) {
+        return new GeometryFixture(routeNumber, direction, totalMeters, points, cumDist, stops,
+                topology, zone);
     }
 
     public boolean isLoop() {
@@ -46,7 +56,7 @@ public record GeometryFixture(
                     latLonPoints.get(i)[0], latLonPoints.get(i)[1]);
         }
         return new GeometryFixture(routeNumber, direction, cum[cum.length - 1], latLonPoints, cum,
-                List.of(), TOPOLOGY_THERE_AND_BACK);
+                List.of(), TOPOLOGY_THERE_AND_BACK, null);
     }
 
     public double sAtFraction(double fraction) {
@@ -82,6 +92,13 @@ public record GeometryFixture(
                 stopDtos.add(m);
             }
             dto.put("stops", stopDtos);
+            if (terminalZone != null) {
+                var z = new java.util.LinkedHashMap<String, Object>();
+                z.put("lat", terminalZone.lat());
+                z.put("lon", terminalZone.lon());
+                z.put("radiusMeters", terminalZone.radiusMeters());
+                dto.put("terminalZone", z);
+            }
             Files.createDirectories(file.toAbsolutePath().getParent());
             MAPPER.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), dto);
         } catch (IOException e) {
@@ -117,8 +134,14 @@ public record GeometryFixture(
                     s.get("stopId").asText(), s.get("seq").asInt(), s.get("sMeters").asDouble())));
         }
         String topology = n.has("topology") ? n.get("topology").asText() : TOPOLOGY_THERE_AND_BACK;
+        TerminalZone zone = null;
+        if (n.has("terminalZone")) {
+            var z = n.get("terminalZone");
+            zone = new TerminalZone(z.get("lat").asDouble(), z.get("lon").asDouble(),
+                    z.get("radiusMeters").asDouble());
+        }
         return new GeometryFixture(n.get("routeNumber").asText(), n.get("direction").asInt(),
-                n.get("totalMeters").asDouble(), pts, cum, List.copyOf(stops), topology);
+                n.get("totalMeters").asDouble(), pts, cum, List.copyOf(stops), topology, zone);
     }
 
     public record Projection(double s, double distMeters) {}

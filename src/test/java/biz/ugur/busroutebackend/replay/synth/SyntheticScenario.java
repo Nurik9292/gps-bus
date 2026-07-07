@@ -496,6 +496,21 @@ public final class SyntheticScenario {
         return fixAtWithPerp(g, p, rnd, t, trueS, speedMs, 0.0, 0.0);
     }
 
+    public static GpsFix rawFix(Params p, Random rnd, double tSec,
+                                double lat, double lon, double speedKmh, double course) {
+        double mLat = 111320.0;
+        double mLon = 111320.0 * Math.cos(Math.toRadians(lat));
+        double nLat = lat + rnd.nextGaussian() * p.positionSigmaMeters() / mLat;
+        double nLon = lon + rnd.nextGaussian() * p.positionSigmaMeters() / mLon;
+        java.time.Instant ts = p.startTime().plusMillis((long) (tSec * 1000));
+        double hdop = Math.max(0.6, 1.0 + rnd.nextGaussian() * 0.2);
+        int sats = Math.max(5, 9 + (int) Math.round(rnd.nextGaussian()));
+        return new GpsFix(p.vehicleId(), p.plate(), p.route(),
+                round7(nLat), round7(nLon), speedKmh, course,
+                speedKmh >= 1.0, ts, p.direction(),
+                round2(hdop), sats, p.tugdkAccuracyMeters(), ts);
+    }
+
     public static TurnTrack detourThenTerminalStandThenReturn(GeometryFixture gOut, GeometryFixture gBack,
                                                               Params p, double startS,
                                                               double cruiseMs, double accelMs2,

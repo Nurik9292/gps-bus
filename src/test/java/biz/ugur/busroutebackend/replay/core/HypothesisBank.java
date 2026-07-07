@@ -22,6 +22,18 @@ public class HypothesisBank {
         private boolean snappedLast;
         private int missStreak;
         private double lastZ = Double.NaN;
+        private boolean pinnedAtVariantTerminal;
+        private double cumStandSec;
+        private boolean variant;
+        private int unpinAgeTicks = Integer.MAX_VALUE;
+
+        public boolean pinnedAtVariantTerminal() {
+            return pinnedAtVariantTerminal;
+        }
+
+        public double cumStandSec() {
+            return cumStandSec;
+        }
 
         private Hypothesis(GeometryFixture geom) {
             this.variantId = geom.routeNumber() + "#d" + geom.direction();
@@ -65,6 +77,22 @@ public class HypothesisBank {
     private int candidateIdx = -1;
     private int candidateStreak;
     private long switchCount;
+    private double tTermSec = 150.0;
+    private double bTerm = 0.5;
+    private long bTermActiveTicks;
+
+    public void configureTerminalSignal(double tTermSec, double bTerm) {
+        this.tTermSec = tTermSec;
+        this.bTerm = bTerm;
+    }
+
+    public long bTermActiveTicks() {
+        return bTermActiveTicks;
+    }
+
+    private double effectiveScore(Hypothesis h) {
+        return h.score + (h.pinnedAtVariantTerminal && h.cumStandSec >= tTermSec ? bTerm : 0);
+    }
 
     public HypothesisBank(CoreConfig cfg) {
         this.cfg = cfg;
@@ -73,13 +101,16 @@ public class HypothesisBank {
     public void ensureBuilt(RouteTopology topo) {
         if (topo.equals(builtFrom) && !hyps.isEmpty()) return;
         hyps.clear();
+        int base = topo.second() != null ? 2 : 1;
         for (GeometryFixture g : topo.allGeometries()) {
             if (hyps.size() >= cfg.maxHypotheses()) {
                 System.out.printf("банк гипотез: превышен N_hyp=%d, вариант %s не подключён%n",
                         cfg.maxHypotheses(), g.routeNumber());
                 break;
             }
-            hyps.add(new Hypothesis(g));
+            Hypothesis h = new Hypothesis(g);
+            h.variant = hyps.size() >= base;
+            hyps.add(h);
         }
         builtFrom = topo;
         leaderIdx = 0;
@@ -122,6 +153,28 @@ public class HypothesisBank {
             if (h.snappedLast) h.lastZ = p.s();
             return;
         }
+        GeometryFixture.TerminalZone zone = h.geom.terminalZone();
+        if (zone != null) {
+            boolean nearEnd = h.x >= h.geom.totalMeters() - cfg.epsArrMeters();
+            boolean inZone = GeometryFixture.haversineMeters(
+                    fix.latitude(), fix.longitude(), zone.lat(), zone.lon()) <= zone.radiusMeters();
+            if (nearEnd && inZone) {
+                h.pinnedAtVariantTerminal = true;
+                h.unpinAgeTicks = 0;
+                h.x = h.geom.totalMeters();
+                h.v = 0;
+                if (fix.speedKmh() < cfg.vMoveKmh()) h.cumStandSec += dTau;
+                h.snappedLast = true;
+                h.missStreak = 0;
+                if (h.cumStandSec >= tTermSec) bTermActiveTicks++;
+                return;
+            }
+            if (h.pinnedAtVariantTerminal) {
+                h.pinnedAtVariantTerminal = false;
+                h.cumStandSec = 0;
+            }
+            if (h.unpinAgeTicks < Integer.MAX_VALUE) h.unpinAgeTicks++;
+        }
         h.x = Math.max(0, Math.min(h.x + h.v * dTau, h.geom.totalMeters()));
         double window = cfg.w0Meters() + cfg.kWindowPerSpeed() * Math.max(h.v, 1.0) * dt;
         var p = h.geom.projectOntoRange(fix.latitude(), fix.longitude(),
@@ -161,13 +214,26 @@ public class HypothesisBank {
         if (hyps.size() < 2) return null;
         int best = leaderIdx;
         for (int i = 0; i < hyps.size(); i++) {
-            if (hyps.get(i).score > hyps.get(best).score) best = i;
+            if (effectiveScore(hyps.get(i)) > effectiveScore(hyps.get(best))) best = i;
         }
         if (best == leaderIdx
-                || hyps.get(best).score - hyps.get(leaderIdx).score < cfg.sSwitch()) {
+                || effectiveScore(hyps.get(best)) - effectiveScore(hyps.get(leaderIdx)) < cfg.sSwitch()) {
             candidateIdx = -1;
             candidateStreak = 0;
             return null;
+        }
+        boolean leaderAtOrJustLeftPin = hyps.get(leaderIdx).pinnedAtVariantTerminal
+                || hyps.get(leaderIdx).unpinAgeTicks <= cfg.hSwitch() + 2;
+        if (leaderAtOrJustLeftPin
+                && hyps.get(best).direction != hyps.get(leaderIdx).direction) {
+            for (int i = 0; i < hyps.size(); i++) {
+                Hypothesis h = hyps.get(i);
+                if (h.variant && h.direction == hyps.get(best).direction
+                        && effectiveScore(h) >= effectiveScore(hyps.get(best)) - cfg.sSwitch()) {
+                    best = i;
+                    break;
+                }
+            }
         }
         if (candidateIdx != best) {
             candidateIdx = best;
@@ -211,6 +277,8 @@ public class HypothesisBank {
             h.seeded = false;
             h.missStreak = 0;
             h.lastZ = Double.NaN;
+            h.pinnedAtVariantTerminal = false;
+            h.cumStandSec = 0;
         }
     }
 }

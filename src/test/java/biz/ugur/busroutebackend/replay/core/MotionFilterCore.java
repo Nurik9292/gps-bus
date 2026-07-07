@@ -315,9 +315,18 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             lastEtas = java.util.List.of();
             return new Estimate(x, v, Mode.RECOVERING.name(), Math.max(p00, 1e-6));
         }
+        boolean exitFromVariantTerminal = bank.leader().pinnedAtVariantTerminal()
+                && bank.leader().geom().terminalZone() != null;
+        double quietThreshold = exitFromVariantTerminal
+                ? bank.leader().geom().terminalZone().radiusMeters() + cfg.dReanchorMeters()
+                : cfg.dSwitchSmoothMeters();
         bank.commitSwitch();
         double dpArc = Math.abs(cand.x() - x);
-        if (dpArc <= cfg.dSwitchSmoothMeters()) {
+        if (exitFromVariantTerminal) {
+            System.out.printf("банк: выход из терминальной зоны варианта (№28г): гео-скачок=%.1fм "
+                    + "(гейт R_term+D_reanchor=%.0fм)%n", dp, quietThreshold);
+        }
+        if (dpArc <= quietThreshold) {
             System.out.printf("банк: ранняя смена лидера → %s, |dp|дуга=%.1fм, |dp|гео=%.1fм "
                             + "(дуга согласована — стягивание серией R_max; гео-переход на верную ветку)%n",
                     cand.variantId(), dpArc, dp);
