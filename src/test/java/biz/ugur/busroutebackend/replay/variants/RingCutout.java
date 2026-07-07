@@ -59,6 +59,42 @@ public final class RingCutout {
                 full.cumDist()[bestStart], full.cumDist()[bestEnd - 1], dropped);
     }
 
+    public static CutResult prefixToS(GeometryFixture full, double sTurnMeters,
+                                      String shortRouteNumber) {
+        List<double[]> pts = full.points();
+        double[] cum = full.cumDist();
+        List<double[]> outPts = new ArrayList<>();
+        for (int i = 0; i < pts.size(); i++) {
+            if (cum[i] < sTurnMeters) outPts.add(pts.get(i));
+        }
+        outPts.add(full.pointAtS(sTurnMeters));
+        List<double[]> densified = new ArrayList<>();
+        densified.add(outPts.get(0));
+        for (int i = 1; i < outPts.size(); i++) {
+            double[] a = outPts.get(i - 1);
+            double[] b = outPts.get(i);
+            double segLen = GeometryFixture.haversineMeters(a[0], a[1], b[0], b[1]);
+            int parts = (int) Math.ceil(segLen / 50.0);
+            for (int p = 1; p <= parts; p++) {
+                densified.add(new double[]{a[0] + (b[0] - a[0]) * p / parts,
+                        a[1] + (b[1] - a[1]) * p / parts});
+            }
+        }
+        GeometryFixture cut = GeometryFixture.fromPolyline(shortRouteNumber, full.direction(), densified);
+
+        List<GeometryFixture.StopPoint> stops = new ArrayList<>();
+        int seq = 1;
+        int dropped = 0;
+        for (GeometryFixture.StopPoint sp : full.stops()) {
+            if (sp.sMeters() <= sTurnMeters) {
+                stops.add(new GeometryFixture.StopPoint(sp.stopId(), seq++, sp.sMeters()));
+            } else {
+                dropped++;
+            }
+        }
+        return new CutResult(cut.withStops(List.copyOf(stops)), 0, sTurnMeters, dropped);
+    }
+
     public static CutResult suffixFromS(GeometryFixture full, double sTurnMeters,
                                         String shortRouteNumber) {
         List<double[]> pts = full.points();

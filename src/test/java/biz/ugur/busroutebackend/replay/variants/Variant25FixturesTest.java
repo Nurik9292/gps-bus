@@ -19,7 +19,11 @@ class Variant25FixturesTest {
     static final double SHORT_25_0_S_TURN_RATIFIED_M = 15790.0;
 
     static RingCutout.CutResult short0() {
-        return RingCutout.suffixFromS(FULL_0, SHORT_25_0_S_TURN_RATIFIED_M, "25-short");
+        return RingCutout.prefixToS(FULL_0, SHORT_25_0_S_TURN_RATIFIED_M, "25-short");
+    }
+
+    static RingCutout.CutResult short0TailInactiveCandidate() {
+        return RingCutout.suffixFromS(FULL_0, SHORT_25_0_S_TURN_RATIFIED_M, "25-short-tail-candidate");
     }
 
     static RingCutout.CutResult short0SupersededTrunkV1() {
@@ -59,18 +63,17 @@ class Variant25FixturesTest {
             GeometryFixture shortG = cut.shortVariant();
 
             double shortKm = shortG.totalMeters() / 1000.0;
-            boolean inEtalon = shortKm >= etalonKm * 0.9 && shortKm <= etalonKm * 1.1;
-            System.out.printf("A9.1 %s: full=%.1fкм, ствол вне кольцевой зоны s=[%.0f..%.0f], "
-                            + "short=%.2fкм (эталон Ýarym B %.0f±10%%: %s), стопов short=%d "
-                            + "(в кольцевой зоне отброшено %d)%n",
+            double deltaPct = (shortKm - etalonKm) / etalonKm * 100;
+            System.out.printf("A9.1 %s: full=%.1fкм, short-вариант s=[%.0f..%.0f], "
+                            + "L=%.2fкм, Δ vs Ýarym B %.0f км = %+.1f%% (допуск ±10%%), "
+                            + "стопов short=%d (отброшено %d)%n",
                     label, full.totalMeters() / 1000.0, cut.trunkStartS(), cut.trunkEndS(),
-                    shortKm, etalonKm,
-                    inEtalon ? "OK" : "ФЛАГ — расхождение >10%, не подгоняем",
+                    shortKm, etalonKm, deltaPct,
                     shortG.stops().size(), cut.stopsDropped());
 
             assertThat(shortKm)
-                    .as("%s: L_short в эталоне Ýarym B ±10%% (dir0 = v2 от ратифицированного "
-                            + "s_turn=15790, A10.3 Фаза Б — флаг A9 «−16%%» снят)", label)
+                    .as("%s: L_short в эталоне Ýarym B ±10%% (dir0 = ПРЕФИКС [0; 15790] "
+                            + "по ратификации A10.3-fix, №27)", label)
                     .isBetween(etalonKm * 0.9, etalonKm * 1.1);
 
             List<String> fullStopIds = full.stops().stream()
@@ -86,12 +89,34 @@ class Variant25FixturesTest {
                         .isGreaterThan(shortG.stops().get(i - 1).sMeters());
             }
 
-            double simpleToleranceM = label.equals("dir0") ? 800.0 : 500.0;
-            assertThat(RingCutout.isSimple(shortG, simpleToleranceM))
-                    .as("%s: short проходит IsSimple (dir0: узел складки s=16150/16867, Δ дуги 717 м — "
-                            + "особенность официальной линии, №26; толеранс 800)", label)
+            assertThat(RingCutout.isSimple(shortG, 500.0))
+                    .as("%s: short проходит IsSimple строгим (префикс узла 16150/16867 не содержит)",
+                            label)
                     .isTrue();
         }
+    }
+
+    @Test
+    void activeCatalog25ContainsExactlyFullAndShortPrefix() {
+        var topo = biz.ugur.busroutebackend.replay.RouteTopology
+                .thereAndBack(FULL_1, FULL_0)
+                .withVariants(java.util.List.of(short1().shortVariant(), short0().shortVariant()));
+        var bank = new biz.ugur.busroutebackend.replay.core.HypothesisBank(
+                biz.ugur.busroutebackend.replay.core.CoreConfig.defaults());
+        bank.ensureBuilt(topo);
+        var ids = bank.hypotheses().stream()
+                .map(biz.ugur.busroutebackend.replay.core.HypothesisBank.Hypothesis::variantId)
+                .sorted().toList();
+        assertThat(ids)
+                .as("активный банк 25 = РОВНО {full×dir, short-префикс×dir}; "
+                        + "tail-candidate и superseded-v1 не заводятся (№27)")
+                .containsExactly("25#d0", "25#d1", "25-short#d0", "25-short#d1");
+        assertThat(ids).noneMatch(id -> id.contains("tail-candidate") || id.contains("superseded"));
+        assertThat(short0TailInactiveCandidate().shortVariant().routeNumber())
+                .as("суффикс-сборка сохранена неактивным кандидатом")
+                .isEqualTo("25-short-tail-candidate");
+        assertThat(short0TailInactiveCandidate().shortVariant().totalMeters() / 1000.0)
+                .isBetween(17.0, 17.2);
     }
 
     @Test
