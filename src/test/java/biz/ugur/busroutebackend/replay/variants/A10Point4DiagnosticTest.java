@@ -270,6 +270,123 @@ class A10Point4DiagnosticTest {
         }
     }
 
+    @Test
+    @EnabledIfSystemProperty(named = "a10.p5dump", matches = "true")
+    void dumpEp62TurnWindowTicks() throws Exception {
+        String corpusDir = System.getProperty("corpus.dir");
+        assertThat(corpusDir).isNotBlank();
+        RouteTopology topoB = RouteTopology.thereAndBack(
+                        Variant25FixturesTest.FULL_0, Variant25FixturesTest.FULL_1)
+                .withVariants(List.of(Variant25FixturesTest.short0().shortVariant(),
+                        Variant25FixturesTest.short1().shortVariant()));
+        Instant winFrom = Instant.parse("2026-07-06T01:20:00Z");
+        Instant winTo = Instant.parse("2026-07-06T01:50:00Z");
+
+        for (Episode ep : CorpusLoader.load(Path.of(corpusDir), CFG.tMaxSec(), 10)) {
+            if (!ep.routeNumber().equals("25")
+                    || !ep.vehicleId().startsWith(TARGET_VID)
+                    || !ep.fixes().get(0).timestamp().toString().startsWith(TARGET_START.substring(0, 19))) {
+                continue;
+            }
+            MotionFilterCore core = new MotionFilterCore(CFG);
+            core.reset();
+            List<String> rows = new ArrayList<>();
+            List<Object[]> win = new ArrayList<>();
+            String prevLeader = null;
+            java.util.Map<String, Double> prevScores = new java.util.HashMap<>();
+            java.util.Map<String, Integer> challengerStreak = new java.util.HashMap<>();
+            List<String> switchNotes = new ArrayList<>();
+            for (GpsFix fx : ep.fixes()) {
+                var est = core.onFix(fx, topoB);
+                var leaderHyp = core.bank().leader();
+                String leader = leaderHyp.variantId();
+                double dSnap = leaderHyp.geom().projectOntoRange(
+                        fx.latitude(), fx.longitude(), 0, leaderHyp.geom().totalMeters(), 0).distMeters();
+                double leaderScore = leaderHyp.score();
+                for (var h : core.bank().hypotheses()) {
+                    if (h.variantId().equals(leader)) continue;
+                    if (h.score() > leaderScore - CFG.sSwitch()) {
+                        challengerStreak.merge(h.variantId(), 1, Integer::sum);
+                    } else {
+                        challengerStreak.put(h.variantId(), 0);
+                    }
+                }
+                boolean inWin = !fx.timestamp().isBefore(winFrom) && !fx.timestamp().isAfter(winTo);
+                if (inWin) {
+                    rows.add(String.format(Locale.ROOT, "| %s | %.6f | %.6f | %.0f | %s | %.0f | %.0f |",
+                            local(fx.timestamp()).substring(11), fx.latitude(), fx.longitude(),
+                            fx.speedKmh(), leader, est.s(), dSnap));
+                    win.add(new Object[]{fx.timestamp(), fx.speedKmh(),
+                            GeometryFixture.haversineMeters(fx.latitude(), fx.longitude(), PAD[0], PAD[1]),
+                            leader, est.s(), core.direction()});
+                    if (prevLeader != null && !prevLeader.equals(leader)) {
+                        switchNotes.add(String.format(Locale.ROOT,
+                                "смена %s → %s @ %s local; ΔS-серия претендента до смены: %d тиков",
+                                prevLeader, leader, local(fx.timestamp()),
+                                challengerStreak.getOrDefault(leader, 0)));
+                        challengerStreak.clear();
+                    }
+                }
+                prevLeader = leader;
+                prevScores.put(leader, leaderScore);
+            }
+            java.nio.file.Path out = Path.of("docs", "data", "a10_5_ep62cb1460_ticks.md");
+            List<String> md = new ArrayList<>();
+            md.add("# A10.5 П.0 — тик-таблица эпизода 62cb1460, окно 06:20–06:50 local");
+            md.add("");
+            md.add("Каталог банка: {full#d0, full#d1, short-prefix#d0 15.79, short#d1 17.34}. "
+                    + "Источник: A10Point4DiagnosticTest#dumpEp62TurnWindowTicks (D3-манифест).");
+            md.add("");
+            md.add("| t local | lat | lon | speed | leader | s_leader, м | d_snap_leader, м |");
+            md.add("|---|---|---|---|---|---|---|");
+            md.addAll(rows);
+            java.nio.file.Files.write(out, md);
+            System.out.println("тик-файл: " + out + " (" + rows.size() + " тиков)");
+
+            System.out.println("(а) стоянки (speed<3 длительностью >60с):");
+            Instant standStart = null;
+            double standDist = 0;
+            Object[] prev = null;
+            for (Object[] w : win) {
+                double sp = (double) w[1];
+                if (sp < 3) {
+                    if (standStart == null) {
+                        standStart = (Instant) w[0];
+                        standDist = (double) w[2];
+                    }
+                } else if (standStart != null) {
+                    long dur = java.time.Duration.between(standStart, (Instant) prev[0]).getSeconds();
+                    if (dur > 60) {
+                        System.out.printf(Locale.ROOT,
+                                "  %s → %s (%d с), место: %.0f м до площадки%n",
+                                local(standStart), local((Instant) prev[0]), dur, standDist);
+                    }
+                    standStart = null;
+                }
+                prev = w;
+            }
+            if (standStart != null && prev != null) {
+                long dur = java.time.Duration.between(standStart, (Instant) prev[0]).getSeconds();
+                if (dur > 60) {
+                    System.out.printf(Locale.ROOT, "  %s → конец окна (%d с), место: %.0f м до площадки%n",
+                            local(standStart), dur, standDist);
+                }
+            }
+            System.out.println("(б) смены лидера окна:");
+            switchNotes.forEach(s -> System.out.println("  " + s));
+            double minS = Double.MAX_VALUE;
+            double maxS = 0;
+            for (Object[] w : win) {
+                if (((Instant) w[0]).isAfter(PHYS_TURN.minusSeconds(0))) continue;
+                if ((int) w[5] != 0) continue;
+                minS = Math.min(minS, (double) w[4]);
+                maxS = Math.max(maxS, (double) w[4]);
+            }
+            System.out.printf(Locale.ROOT, "(в) s_full окна до 06:43 (тики dir=0): min=%.0f, max=%.0f%n",
+                    minS, maxS);
+        }
+    }
+
     private void reportP4(GeometryFixture full1) {
         System.out.println("=== П.4 инвентаризация 25-short#d1 (A9, read-only) ===");
         var cut = Variant25FixturesTest.short1();
