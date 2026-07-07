@@ -387,6 +387,164 @@ class A10Point4DiagnosticTest {
         }
     }
 
+    @Test
+    @EnabledIfSystemProperty(named = "a10.p5c", matches = "true")
+    void phaseBRunCVersusAB() throws Exception {
+        String corpusDir = System.getProperty("corpus.dir");
+        assertThat(corpusDir).isNotBlank();
+        GeometryFixture f0 = Variant25FixturesTest.FULL_0;
+        GeometryFixture f1 = Variant25FixturesTest.FULL_1;
+        RouteTopology topoA = RouteTopology.thereAndBack(f0, f1);
+        RouteTopology topoB = topoA.withVariants(List.of(
+                Variant25FixturesTest.short0().shortVariant(),
+                Variant25FixturesTest.short1ParkedCandidate().shortVariant()));
+        RouteTopology topoC = topoA.withVariants(List.of(
+                Variant25FixturesTest.short0().shortVariant(),
+                Variant25FixturesTest.short1().shortVariant()));
+
+        System.out.println("(ж) семантика ΔS-серии причинного счётчика: число ПОДРЯД тиков, "
+                + "в которых претендент имел score > score(лидера) − sSwitch(0.25) — "
+                + "т.е. держался в пределах порога смены от лидера или выше (не ΔS>0 и не строго ΔS≥0.25).");
+
+        RunOut a = run(corpusDir, topoA);
+        RunOut b = run(corpusDir, topoB);
+        RunOut c = run(corpusDir, topoC);
+        System.out.printf("П.5: SHA потока C = %s (A = %s, B[parked-17.34] = %s)%n",
+                c.streamSha(), a.streamSha(), b.streamSha());
+
+        int target = -1;
+        for (int i = 0; i < c.episodeKeys().size(); i++) {
+            if (c.episodeKeys().get(i).startsWith(TARGET_VID)
+                    && c.episodeKeys().get(i).contains(TARGET_START)) target = i;
+        }
+        List<Tick> tc = c.episodes().get(target);
+
+        long shortFam = tc.stream().filter(t -> isShort(t.leader())).count();
+        Instant firstSh = null;
+        Instant lastSh = null;
+        for (Tick t : tc) {
+            if (isShort(t.leader())) {
+                if (firstSh == null) firstSh = t.ts();
+                lastSh = t.ts();
+            }
+        }
+        Tick atTurn = tc.stream().filter(t -> !t.ts().isBefore(PHYS_TURN)).findFirst().orElse(null);
+        System.out.printf("эпизод 62cb1460, прогон C: тики short-семейства=%d (окно %s → %s); "
+                        + "лидер на 06:43:44 = %s%n",
+                shortFam, firstSh == null ? "—" : local(firstSh),
+                lastSh == null ? "—" : local(lastSh),
+                atTurn == null ? "—" : atTurn.leader());
+        List<Tick> newTrips = tc.stream().filter(Tick::newTrip).toList();
+        for (Tick nt : newTrips) {
+            int idx = tc.indexOf(nt);
+            int dirBefore = idx > 0 ? tc.get(idx - 1).dir() : nt.dir();
+            long lag = java.time.Duration.between(PHYS_TURN, nt.ts()).getSeconds();
+            System.out.printf("  NEW_TRIP@%s local, dir %d→%d, лаг к 06:43:44 = %+d с%n",
+                    local(nt.ts()), dirBefore, nt.dir(), lag);
+        }
+
+        for (String label : List.of("C", "A", "B")) {
+            RunOut r = label.equals("C") ? c : label.equals("A") ? a : b;
+            List<Tick> ticks = r.episodes().get(target);
+            double maxImpl = 0;
+            long over100 = 0;
+            long nonMono = 0;
+            for (int i = 1; i < ticks.size(); i++) {
+                Tick p = ticks.get(i - 1);
+                Tick t = ticks.get(i);
+                if (t.ts().isBefore(TURN_WIN_FROM) || t.ts().isAfter(TURN_WIN_TO)) continue;
+                double dt = Math.max(t.t() - p.t(), 1);
+                double vImpl = GeometryFixture.haversineMeters(
+                        p.geo()[0], p.geo()[1], t.geo()[0], t.geo()[1]) / dt * 3.6;
+                maxImpl = Math.max(maxImpl, vImpl);
+                if (vImpl > 100) over100++;
+                if (t.s() < p.s() && t.rawSpeedKmh() > 5) nonMono++;
+            }
+            System.out.printf("окно 06:40–06:50, прогон %s: max v_impl=%.0f км/ч; >100: %d; "
+                    + "немонотонностей: %d%n", label, maxImpl, over100, nonMono);
+        }
+
+        int firstNt = -1;
+        for (int i = 0; i < tc.size(); i++) {
+            if (tc.get(i).newTrip() && tc.get(i).ts().isAfter(Instant.parse("2026-07-06T01:40:00Z"))) {
+                firstNt = i;
+                break;
+            }
+        }
+        if (firstNt >= 0) {
+            List<Tick> back = tc.subList(firstNt, tc.size());
+            long tailTicks = back.stream().filter(t -> t.leader().contains("short-tail")).count();
+            List<Double> dSnaps = new ArrayList<>();
+            long within = 0;
+            for (Tick t : back) {
+                var leaderGeom = t.leader().equals("25#d0") ? f0
+                        : t.leader().equals("25#d1") ? f1
+                        : t.leader().contains("tail")
+                                ? Variant25FixturesTest.short1().shortVariant()
+                                : Variant25FixturesTest.short0().shortVariant();
+                double d = leaderGeom.projectOntoRange(t.rawLatLon()[0], t.rawLatLon()[1],
+                        0, leaderGeom.totalMeters(), 0).distMeters();
+                dSnaps.add(d);
+                if (d <= CFG.dSnapMeters()) within++;
+            }
+            var sorted = dSnaps.stream().sorted().toList();
+            System.out.printf(Locale.ROOT, "(д) обратный ход (%d тиков после NEW_TRIP): "
+                            + "доля лидера short-tail#d1-v2 = %.1f%%; d_snap лидера: median=%.1f м, "
+                            + "p95=%.1f м; доля d_snap≤D_snap(80): %.1f%%%n",
+                    back.size(), 100.0 * tailTicks / back.size(),
+                    sorted.get(sorted.size() / 2), sorted.get((int) (0.95 * (sorted.size() - 1))),
+                    100.0 * within / back.size());
+        }
+
+        for (String label : List.of("B", "C")) {
+            RunOut r = label.equals("B") ? b : c;
+            double flightMax = 0;
+            long flightViol = 0;
+            List<Double> nis = new ArrayList<>();
+            long shortTicks = 0;
+            long total = 0;
+            long switchesToShort = 0;
+            long newTripsAll = 0;
+            long[] zones = new long[3];
+            for (List<Tick> ticks : r.episodes()) {
+                for (int i = 0; i < ticks.size(); i++) {
+                    Tick t = ticks.get(i);
+                    total++;
+                    if (t.newTrip()) newTripsAll++;
+                    if (isShort(t.leader())) {
+                        shortTicks++;
+                        double s = t.s();
+                        if (s < 15000) zones[0]++;
+                        else if (s < 17200) zones[1]++;
+                        else zones[2]++;
+                        if (i > 0 && !isShort(ticks.get(i - 1).leader())) switchesToShort++;
+                    }
+                    if (!Double.isNaN(t.nis())) nis.add(t.nis());
+                    if (i == 0) continue;
+                    Tick p = ticks.get(i - 1);
+                    boolean sanctioned = t.mode().equals("RECOVERING") || t.mode().equals("NEW_TRIP")
+                            || !t.leader().equals(p.leader());
+                    if (sanctioned) continue;
+                    double dt = Math.max(t.t() - p.t(), 1);
+                    double ratio = GeometryFixture.haversineMeters(
+                            p.geo()[0], p.geo()[1], t.geo()[0], t.geo()[1]) / (dt * CFG.vMaxMs());
+                    flightMax = Math.max(flightMax, ratio);
+                    if (ratio > 1.5) flightViol++;
+                }
+            }
+            double med = nis.isEmpty() ? Double.NaN
+                    : nis.stream().sorted().toList().get(nis.size() / 2);
+            long over = nis.stream().filter(v -> v > 3.84).count();
+            System.out.printf(Locale.ROOT, "сводка %s: полёт %.2f/%d; NIS n=%d median=%.2f >3.84=%.1f%%; "
+                            + "доля short-семейства=%.2f%%; зоны кольцо/складка/хвост=%d/%d/%d; "
+                            + "смен на short=%d; NEW_TRIP=%d%n",
+                    label, flightMax, flightViol, nis.size(), med,
+                    nis.isEmpty() ? 0 : 100.0 * over / nis.size(),
+                    total > 0 ? 100.0 * shortTicks / total : 0,
+                    zones[0], zones[1], zones[2], switchesToShort, newTripsAll);
+        }
+    }
+
     private void reportP4(GeometryFixture full1) {
         System.out.println("=== П.4 инвентаризация 25-short#d1 (A9, read-only) ===");
         var cut = Variant25FixturesTest.short1();

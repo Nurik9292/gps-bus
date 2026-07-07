@@ -30,8 +30,14 @@ class Variant25FixturesTest {
         return RingCutout.trunkOutsideRingZone(FULL_0, RING_BBOX, "25-short-superseded-v1");
     }
 
+    static final double SHORT_25_1_S_PAD_RATIFIED_M = 18950.0;
+
     static RingCutout.CutResult short1() {
-        return RingCutout.trunkOutsideRingZone(FULL_1, RING_BBOX, "25-short");
+        return RingCutout.suffixFromS(FULL_1, SHORT_25_1_S_PAD_RATIFIED_M, "25-short-tail");
+    }
+
+    static RingCutout.CutResult short1ParkedCandidate() {
+        return RingCutout.trunkOutsideRingZone(FULL_1, RING_BBOX, "25-short-d1-parked-candidate");
     }
 
     @Test
@@ -71,10 +77,18 @@ class Variant25FixturesTest {
                     shortKm, etalonKm, deltaPct,
                     shortG.stops().size(), cut.stopsDropped());
 
-            assertThat(shortKm)
-                    .as("%s: L_short в эталоне Ýarym B ±10%% (dir0 = ПРЕФИКС [0; 15790] "
-                            + "по ратификации A10.3-fix, №27)", label)
-                    .isBetween(etalonKm * 0.9, etalonKm * 1.1);
+            if (label.equals("dir0")) {
+                assertThat(shortKm)
+                        .as("dir0: L_short в эталоне Ýarym B ±10%% (ПРЕФИКС [0; 15790], A10.3-fix, №27)")
+                        .isBetween(etalonKm * 0.9, etalonKm * 1.1);
+            } else {
+                double expectedKm = (FULL_1.totalMeters() - SHORT_25_1_S_PAD_RATIFIED_M) / 1000.0;
+                assertThat(shortKm)
+                        .as("dir1: L_short-tail-v2 = клип [18950; L] точно (A10.5 ратификация; "
+                                + "Ýarym-сверка не применяется — хвост ≠ приказное плечо, "
+                                + "сегментная методика №26; Δ vs Ýarym печатается справкой)")
+                        .isCloseTo(expectedKm, org.assertj.core.data.Offset.offset(0.05));
+            }
 
             List<String> fullStopIds = full.stops().stream()
                     .map(GeometryFixture.StopPoint::stopId).toList();
@@ -108,15 +122,20 @@ class Variant25FixturesTest {
                 .map(biz.ugur.busroutebackend.replay.core.HypothesisBank.Hypothesis::variantId)
                 .sorted().toList();
         assertThat(ids)
-                .as("активный банк 25 = РОВНО {full×dir, short-префикс×dir}; "
-                        + "tail-candidate и superseded-v1 не заводятся (№27)")
-                .containsExactly("25#d0", "25#d1", "25-short#d0", "25-short#d1");
-        assertThat(ids).noneMatch(id -> id.contains("tail-candidate") || id.contains("superseded"));
+                .as("активный банк 25 (A10.5) = РОВНО {full#d0, full#d1, short-prefix#d0, "
+                        + "short-tail#d1-v2}; parked/superseded вне банка")
+                .containsExactly("25#d0", "25#d1", "25-short#d0", "25-short-tail#d1");
+        assertThat(ids).noneMatch(id -> id.contains("candidate") || id.contains("superseded")
+                || id.contains("parked"));
         assertThat(short0TailInactiveCandidate().shortVariant().routeNumber())
-                .as("суффикс-сборка сохранена неактивным кандидатом")
+                .as("суффикс d0 (17.09) остаётся неактивным кандидатом")
                 .isEqualTo("25-short-tail-candidate");
-        assertThat(short0TailInactiveCandidate().shortVariant().totalMeters() / 1000.0)
-                .isBetween(17.0, 17.2);
+        assertThat(short1ParkedCandidate().shortVariant().routeNumber())
+                .as("старый short d1 (17.34, клип [0;17338]) запаркован по №27 "
+                        + "(конец в 1533 м от площадки)")
+                .isEqualTo("25-short-d1-parked-candidate");
+        assertThat(short1ParkedCandidate().shortVariant().totalMeters() / 1000.0)
+                .isBetween(17.2, 17.5);
     }
 
     @Test

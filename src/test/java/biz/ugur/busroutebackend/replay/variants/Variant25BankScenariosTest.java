@@ -63,41 +63,40 @@ class Variant25BankScenariosTest {
     }
 
     @Test
-    void shortTripTurnAtZoneBorderCaughtByBankNoMarkerFlight() {
-        double[] turnPoint = SHORT_1.pointAtS(SHORT_1.totalMeters() - 50);
-        double backFromS = FULL_0.projectOntoRange(
-                turnPoint[0], turnPoint[1], 0, FULL_0.totalMeters(), 0).s();
+    void shortTripTurnAtPadCaughtByBankNoMarkerFlight() {
         SyntheticScenario.TurnTrack track = SyntheticScenario.journey(
-                SyntheticScenario.Params.defaults(900, "25", 1), CRUISE, 1.0,
-                List.of(new SyntheticScenario.Leg(SHORT_1, 200, SHORT_1.totalMeters() - 50, 1, 120),
-                        new SyntheticScenario.Leg(FULL_0, backFromS, backFromS + 6000, 0, 0)));
-        Run r = run(track.fixes(), topo25FirstDir1());
+                SyntheticScenario.Params.defaults(900, "25", 0), CRUISE, 1.0,
+                List.of(new SyntheticScenario.Leg(SHORT_0, 200, SHORT_0.totalMeters() - 50, 0, 120),
+                        new SyntheticScenario.Leg(SHORT_1, 0, 6000, 1, 0)));
+        Run r = run(track.fixes(), RouteTopology.thereAndBack(FULL_0, FULL_1)
+                .withVariants(List.of(SHORT_0, SHORT_1)));
 
         int backStart = -1;
         int newTripIdx = -1;
         for (int i = 0; i < r.ticks().size(); i++) {
-            if (backStart < 0 && track.truth().get(i)[3] == 0 && track.truth().get(i)[2] > 1.0) {
+            if (backStart < 0 && track.truth().get(i)[3] == 1 && track.truth().get(i)[2] > 1.0) {
                 backStart = i;
             }
             if (newTripIdx < 0 && r.ticks().get(i).est().mode().equals("NEW_TRIP")) {
                 newTripIdx = i;
             }
         }
-        assertThat(newTripIdx).as("разворот short-рейса на границе зоны пойман").isPositive();
+        assertThat(newTripIdx).as("разворот short-рейса на площадке пойман").isPositive();
         int n = newTripIdx - backStart;
-        System.out.printf("A9.2-П1 (short-рейс, разворот на границе — вне терминалов full): "
-                        + "N=%d фиксов от начала обратного хода до NEW_TRIP; путь=%s→NEW_TRIP; "
+        System.out.printf("A9.2-П1 (short-рейс 25: префикс d0 → разворот на площадке Büzmeýin "
+                        + "(вне терминалов full) → хвост d1): N=%d фиксов до NEW_TRIP; путь=%s→NEW_TRIP; "
                         + "лидер=%s; полёт max=%.2f, нарушений=%d (санкц. скачков=%d)%n",
                 n, r.ticks().get(newTripIdx - 1).est().mode(), r.ticks().get(newTripIdx).leaderId(),
                 r.flight().maxRatio(), r.flight().violations(), r.flight().sanctionedJumps());
         assertThat(r.ticks().get(newTripIdx - 1).est().mode())
-                .as("банковский путь RECOVERING→NEW_TRIP (№22)").isEqualTo("RECOVERING");
+                .as("банковский путь RECOVERING→NEW_TRIP (№22): площадка — не терминал full")
+                .isEqualTo("RECOVERING");
         assertThat(n).as("перехват за разумное число фиксов").isLessThanOrEqualTo(25);
         assertThat(r.core().tripId()).isEqualTo(2);
-        assertThat(r.ticks().get(r.ticks().size() - 1).direction()).as("направление сменилось").isEqualTo(0);
+        assertThat(r.ticks().get(r.ticks().size() - 1).direction()).as("направление сменилось").isEqualTo(1);
         assertThat(r.flight().violations()).as("«полёта маркера» нет").isZero();
         long offRoute = r.ticks().stream().filter(t -> t.est().mode().equals("OFF_ROUTE")).count();
-        assertThat(offRoute).as("short-рейс без OFF_ROUTE (геометрия ⊂ full)").isZero();
+        assertThat(offRoute).as("short-рейс без OFF_ROUTE (обе фикстуры ⊂ full-линий)").isZero();
     }
 
     @Test
