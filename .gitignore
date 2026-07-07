@@ -18,6 +18,7 @@ scripts/*
 !scripts/ws-pred-daily-extract.sh
 !scripts/a10_short_trip_detector.py
 !scripts/a10_48_polygon_dir_test.py
+!scripts/a10_3_derive.py
 !scripts/campaign-healthcheck.py
 deployment/
 .idea
