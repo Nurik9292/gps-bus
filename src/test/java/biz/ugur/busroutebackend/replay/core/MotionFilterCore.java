@@ -204,6 +204,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             }
         }
 
+        if (leaderPinnedAtVariantTerminal()) {
+            return broadcastVariantTerminal(fix);
+        }
         if ((mode == Mode.AT_TERMINAL || mode == Mode.TURNING) && topo.hasOpposite(direction)) {
             Estimate handled = terminalTurnStep(fix, topo);
             if (handled != null) return handled;
@@ -283,6 +286,28 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         return new Estimate(x, v, mode.name(), Math.max(p00, 1e-6));
     }
 
+    private boolean leaderPinnedAtVariantTerminal() {
+        return bank.leader().pinnedAtVariantTerminal()
+                && bank.leader().geom().terminalZone() != null;
+    }
+
+    private Estimate broadcastVariantTerminal(GpsFix fix) {
+        GeometryFixture gLeader = bank.leader().geom();
+        x = gLeader.totalMeters();
+        v = 0;
+        if (mode != Mode.AT_TERMINAL) {
+            mode = Mode.AT_TERMINAL;
+            turnStreak = 0;
+            revertStreak = 0;
+            persistCounter = 0;
+            reanchorConfirms = 0;
+            events.add(new StopEvent(StopEventType.AT_TERMINAL, "variant-terminal", fix.timestamp()));
+        }
+        lastUpdateAccepted = false;
+        recomputeEtas(fix, gLeader);
+        return new Estimate(x, v, Mode.AT_TERMINAL.name(), Math.max(p00, 1e-6));
+    }
+
     private boolean isTravelMode() {
         return mode == Mode.TRACKING || mode == Mode.DECELERATING || mode == Mode.DEPARTING;
     }
@@ -315,8 +340,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             lastEtas = java.util.List.of();
             return new Estimate(x, v, Mode.RECOVERING.name(), Math.max(p00, 1e-6));
         }
-        boolean exitFromVariantTerminal = bank.leader().pinnedAtVariantTerminal()
-                && bank.leader().geom().terminalZone() != null;
+        boolean exitFromVariantTerminal = leaderPinnedAtVariantTerminal();
         double quietThreshold = exitFromVariantTerminal
                 ? bank.leader().geom().terminalZone().radiusMeters() + cfg.dReanchorMeters()
                 : cfg.dSwitchSmoothMeters();
@@ -331,6 +355,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                             + "(дуга согласована — стягивание серией R_max; гео-переход на верную ветку)%n",
                     cand.variantId(), dpArc, dp);
             if (wasOffRoute) mode = prevTravelMode;
+            else if (mode == Mode.AT_TERMINAL || mode == Mode.TURNING) mode = Mode.TRACKING;
             resyncNextStop(cand.geom());
             return null;
         }
@@ -404,6 +429,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         offRouteMisses = 0;
         offRouteSec = 0;
         offRouteExitStreak = 0;
+        bank.reseedAll();
         double gap = Math.abs(forwardDelta(corridor.sOnLine(), x, g));
         if (gap > cfg.dReanchorMeters()) {
             reinitAt(corridor.sOnLine(), fix);

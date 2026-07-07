@@ -17,9 +17,14 @@ class Variant25FixturesTest {
             GeometryFixture.loadClasspath("/fixtures/geometry/route-25-dir1.json");
 
     static final double SHORT_25_0_S_TURN_RATIFIED_M = 15790.0;
+    static final GeometryFixture.TerminalZone SHORT_25_0_TERMINAL_ZONE_RATIFIED =
+            new GeometryFixture.TerminalZone(38.046798, 58.200888, 750.0);
 
     static RingCutout.CutResult short0() {
-        return RingCutout.prefixToS(FULL_0, SHORT_25_0_S_TURN_RATIFIED_M, "25-short");
+        RingCutout.CutResult cut = RingCutout.prefixToS(FULL_0, SHORT_25_0_S_TURN_RATIFIED_M, "25-short");
+        return new RingCutout.CutResult(
+                cut.shortVariant().withTerminalZone(SHORT_25_0_TERMINAL_ZONE_RATIFIED),
+                cut.trunkStartS(), cut.trunkEndS(), cut.stopsDropped());
     }
 
     static RingCutout.CutResult short0TailInactiveCandidate() {

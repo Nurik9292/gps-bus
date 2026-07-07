@@ -26,6 +26,8 @@ public class HypothesisBank {
         private double cumStandSec;
         private boolean variant;
         private int unpinAgeTicks = Integer.MAX_VALUE;
+        private int progressStreak;
+        private double streakStartZ = Double.NaN;
 
         public boolean pinnedAtVariantTerminal() {
             return pinnedAtVariantTerminal;
@@ -88,6 +90,10 @@ public class HypothesisBank {
 
     public long bTermActiveTicks() {
         return bTermActiveTicks;
+    }
+
+    public double effectiveScoreOf(Hypothesis h) {
+        return effectiveScore(h);
     }
 
     private double effectiveScore(Hypothesis h) {
@@ -185,10 +191,18 @@ public class HypothesisBank {
             h.x += 0.5 * residual;
             h.v = Math.max(0, Math.min(h.v + 0.2 * residual / dt, cfg.vMaxMs()));
             boolean progress = !Double.isNaN(h.lastZ)
+                    && fix.speedKmh() >= cfg.vMoveKmh()
                     && p.s() - h.lastZ > 0.5
                     && p.s() - h.lastZ <= cfg.vMaxMs() * dt + 15.0;
             double norm = p.distMeters() / cfg.dSnapMeters();
             w = -(norm * norm) + (progress ? cfg.scoreProgressBonus() : 0.0);
+            if (progress) {
+                if (h.progressStreak == 0) h.streakStartZ = h.lastZ;
+                h.progressStreak++;
+            } else {
+                h.progressStreak = 0;
+                h.streakStartZ = Double.NaN;
+            }
             h.lastZ = p.s();
             h.snappedLast = true;
             h.missStreak = 0;
@@ -196,6 +210,8 @@ public class HypothesisBank {
             w = -1.0 - cfg.scoreRejectPenalty();
             h.snappedLast = false;
             h.missStreak++;
+            h.progressStreak = 0;
+            h.streakStartZ = Double.NaN;
             if (h.missStreak >= RESEED_AFTER_CONSECUTIVE_MISSES) {
                 h.seeded = false;
             }
@@ -212,6 +228,8 @@ public class HypothesisBank {
 
     public Hypothesis pollConfirmedSwitch() {
         if (hyps.size() < 2) return null;
+        Hypothesis pairedTailExit = pollPairedTailBackwardExit();
+        if (pairedTailExit != null) return pairedTailExit;
         int best = leaderIdx;
         for (int i = 0; i < hyps.size(); i++) {
             if (effectiveScore(hyps.get(i)) > effectiveScore(hyps.get(best))) best = i;
@@ -243,6 +261,28 @@ public class HypothesisBank {
         }
         if (candidateStreak < cfg.hSwitch()) return null;
         return hyps.get(candidateIdx);
+    }
+
+    private Hypothesis pollPairedTailBackwardExit() {
+        Hypothesis leader = hyps.get(leaderIdx);
+        boolean leaderAtOrJustLeftVariantTerminal = leader.geom.terminalZone() != null
+                && (leader.pinnedAtVariantTerminal || leader.unpinAgeTicks <= cfg.hSwitch() + 2);
+        if (!leaderAtOrJustLeftVariantTerminal) return null;
+        for (int i = 0; i < hyps.size(); i++) {
+            Hypothesis h = hyps.get(i);
+            if (h.variant && h.direction != leader.direction
+                    && h.progressStreak >= cfg.nTurnConfirm()
+                    && !Double.isNaN(h.streakStartZ)
+                    && h.lastZ - h.streakStartZ >= cfg.dTurnConfirmMeters()) {
+                candidateIdx = i;
+                candidateStreak = cfg.hSwitch();
+                System.out.printf("банк: выход назад из терминала варианта (№28в): "
+                                + "парный хвост %s подтверждён (%d тиков прогресса, +%.0fм)%n",
+                        h.variantId, h.progressStreak, h.lastZ - h.streakStartZ);
+                return h;
+            }
+        }
+        return null;
     }
 
     public void commitSwitch() {
@@ -279,6 +319,8 @@ public class HypothesisBank {
             h.lastZ = Double.NaN;
             h.pinnedAtVariantTerminal = false;
             h.cumStandSec = 0;
+            h.progressStreak = 0;
+            h.streakStartZ = Double.NaN;
         }
     }
 }
