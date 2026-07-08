@@ -53,8 +53,15 @@ class A10Phase15Test {
         for (String route : List.of("25", "61")) {
             GeometryFixture f0 = GeometryFixture.loadClasspath("/fixtures/geometry/route-" + route + "-dir0.json");
             GeometryFixture f1 = GeometryFixture.loadClasspath("/fixtures/geometry/route-" + route + "-dir1.json");
-            GeometryFixture s0 = RingCutout.trunkOutsideRingZone(f0, RING_BBOX, route + "-short").shortVariant();
-            GeometryFixture s1 = RingCutout.trunkOutsideRingZone(f1, RING_BBOX, route + "-short").shortVariant();
+            GeometryFixture s0;
+            GeometryFixture s1;
+            if (route.equals("61")) {
+                s0 = biz.ugur.busroutebackend.replay.variants.Variant61FixturesTest.gokje0().shortVariant();
+                s1 = biz.ugur.busroutebackend.replay.variants.Variant61FixturesTest.gokjeTail1().shortVariant();
+            } else {
+                s0 = RingCutout.trunkOutsideRingZone(f0, RING_BBOX, route + "-short").shortVariant();
+                s1 = RingCutout.trunkOutsideRingZone(f1, RING_BBOX, route + "-short").shortVariant();
+            }
             FULL.put(route, new GeometryFixture[]{f0, f1});
             BANKED.put(route, RouteTopology.thereAndBack(f0, f1).withVariants(List.of(s0, s1)));
             L_SHORT.put(route, new double[]{s0.totalMeters(), s1.totalMeters()});
