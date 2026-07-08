@@ -56,6 +56,7 @@ class B121CorpusGatedTest {
                           int windowsLeaderGokjeAtApex, List<Double> exitJumps) {}
 
     private RunOut run(Path corpusDir, boolean withPair) {
+        StringBuilder nisDump = new StringBuilder();
         RouteTopology topo = withPair
                 ? RouteTopology.thereAndBack(Variant61FixturesTest.FULL_0, Variant61FixturesTest.FULL_1)
                     .withVariants(List.of(Variant61FixturesTest.gokje0().shortVariant(),
@@ -156,6 +157,11 @@ class B121CorpusGatedTest {
                         nisSum += nis;
                         nisN++;
                     }
+                    if (System.getProperty("b12_1.dumpRegistry") != null) {
+                        nisDump.append(veh8).append('|').append(fx.timestamp().toEpochMilli())
+                                .append('|').append(pinned ? "PIN" : "STD").append('|')
+                                .append(String.format(Locale.ROOT, "%.6f", nis)).append('\n');
+                    }
                 }
                 prevLeader = leader;
                 prevMode = est.mode();
@@ -170,6 +176,17 @@ class B121CorpusGatedTest {
                     .digest(registry.toString().getBytes(StandardCharsets.UTF_8))).substring(0, 12);
         } catch (Exception e) {
             throw new IllegalStateException(e);
+        }
+        String dumpBase = System.getProperty("b12_1.dumpRegistry");
+        if (dumpBase != null) {
+            String suffix = withPair ? ".gprime" : ".base";
+            try {
+                Files.writeString(Path.of(dumpBase + suffix), registry.toString());
+                Files.writeString(Path.of(dumpBase + suffix + ".nis"), nisDump.toString());
+                System.out.printf("registry-дамп (%s, после SHA %s): %s%n", suffix, sha, dumpBase + suffix);
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
         }
         int hasData = 0;
         int leaderOk = 0;
