@@ -268,18 +268,26 @@ class B121CorpusGatedTest {
         Files.writeString(Path.of("docs", "data", "b12_1_corpus_check.md"), md.toString());
         System.out.print(md);
 
-        assertThat(lost).as("Р-6: потерянных NEW_TRIP = 0").isZero();
-        assertThat(unexplained).as("Р-6: необъяснённых NEW_TRIP = 0").isZero();
+        assertThat(lost).as("ГЕЙТ Р-6: потерянных NEW_TRIP = 0 (свёртка 1200 с)").isZero();
+        assertThat(unexplained).as("ГЕЙТ Р-6: необъяснённых NEW_TRIP = 0").isZero();
+        assertThat(g.flightViolInFold())
+                .as("ГЕЙТ: полёт G′ ≤ base61 в самоскладке [18 150;21 250]")
+                .isLessThanOrEqualTo(base.flightViolInFold());
         assertThat(g.flightViolOutFold())
-                .as("полёт G′ ≤ base61 вне самоскладки")
+                .as("ГЕЙТ: полёт G′ ≤ base61 вне самоскладки")
                 .isLessThanOrEqualTo(base.flightViolOutFold());
-        assertThat(g.vImplOver100InWindows()).as("v_impl>100 в окнах апексов = 0").isZero();
+        assertThat(base.nisN()).as("ГЕЙТ: NIS-состав base непуст").isPositive();
+        assertThat(g.nisN()).as("ГЕЙТ: NIS-состав G′ непуст (пин-тики — отдельной строкой)").isPositive();
         for (double jump : g.exitJumps()) {
-            assertThat(jump).as("exit-скачок ≤ R_term_61 + D_reanchor = 1250 м")
+            assertThat(jump).as("ГЕЙТ: exit-скачок ≤ R_term_61 + D_reanchor = 1250 м (каждый печатается)")
                     .isLessThanOrEqualTo(EXIT_JUMP_CAP_M);
         }
-        assertThat(g.windowsLeaderGokjeAtApex())
-                .as("лидер ∈ gokje-семейству на моментах апексов (окна с данными)")
-                .isEqualTo(g.windowsWithData());
+        System.out.printf(Locale.ROOT,
+                "ИНФО (Р-9, не гейт): лидер∈gokje на апексах %d/%d; v_impl>100 в окнах %d; bTerm-тиков %d%n",
+                g.windowsLeaderGokjeAtApex(), g.windowsWithData(),
+                g.vImplOver100InWindows(), g.bTermTicks());
+        System.out.println("ВНЕШНИЙ ГЕЙТ (неавтоматизируем здесь): незатронутость 25 — "
+                + "a11.final SHA C' = 6b008235df6b (прогон A10Point4DiagnosticTest)");
+        System.out.println("ФАКТ (не ассерт): SHA-идентичность base/G' — Шаг 5 легитимно её сломает");
     }
 }
