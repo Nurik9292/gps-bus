@@ -18,12 +18,17 @@ public class Variant61FixturesTest {
             GeometryFixture.loadClasspath("/fixtures/geometry/route-61-dir1.json");
 
     static final double GOKJE_S_TURN_61_0_RATIFIED_M = 9844.0;
+    static final GeometryFixture.TerminalZone GOKJE_TERMINAL_ZONE_RATIFIED =
+            new GeometryFixture.TerminalZone(37.981209, 58.232796, 1050.0);
     static final double GOKJE_S_TURN_61_1_RATIFIED_M = 16990.0;
     static final double[] GOKJE_BN_STOP = {37.98154696278676, 58.23298394680023};
     static final double RATIFIED_LOOP_M = 19687.0;
 
     public static RingCutout.CutResult gokje0() {
-        return RingCutout.prefixToS(FULL_0, GOKJE_S_TURN_61_0_RATIFIED_M, "61-gokje");
+        RingCutout.CutResult cut = RingCutout.prefixToS(FULL_0, GOKJE_S_TURN_61_0_RATIFIED_M, "61-gokje");
+        return new RingCutout.CutResult(
+                cut.shortVariant().withTerminalZone(GOKJE_TERMINAL_ZONE_RATIFIED),
+                cut.trunkStartS(), cut.trunkEndS(), cut.stopsDropped());
     }
 
     public static RingCutout.CutResult gokjeTail1() {
@@ -107,8 +112,9 @@ public class Variant61FixturesTest {
             double dStartToGokje = GeometryFixture.haversineMeters(
                     vStart[0], vStart[1], GOKJE_BN_STOP[0], GOKJE_BN_STOP[1]);
             assertThat(dStartToGokje)
-                    .as("гипотеза %s с концом на терминале родителя обязана стартовать " +
-                            "с разворота в теле (Gökje) — иначе вложенный близнец (№27)",
+                    .as("№27 (guard, ратиф. 08.07): конец на терминале родителя допустим ⇔ старт " +
+                            "гипотезы = ратифицированная точка разворота в теле из реестра " +
+                            "(для 61 = Gökje; прецедент 25-short-tail#d1)",
                             h.variantId())
                     .isLessThanOrEqualTo(150.0);
         }

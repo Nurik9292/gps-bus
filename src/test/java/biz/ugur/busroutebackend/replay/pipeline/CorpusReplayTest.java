@@ -38,7 +38,13 @@ class CorpusReplayTest {
         Map<String, RouteTopology> map = new java.util.TreeMap<>();
         map.put("8", RouteTopology.thereAndBack(G8_0, G8_1));
         map.put("10", RouteTopology.thereAndBack(G10_0, G10_1));
-        for (String route : List.of("25", "61", "62", "63", "27", "48", "74", "80", "12", "97")) {
+        map.put("61", RouteTopology.thereAndBack(
+                        GeometryFixture.loadClasspath("/fixtures/geometry/route-61-dir0.json"),
+                        GeometryFixture.loadClasspath("/fixtures/geometry/route-61-dir1.json"))
+                .withVariants(List.of(
+                        biz.ugur.busroutebackend.replay.variants.Variant61FixturesTest.gokje0().shortVariant(),
+                        biz.ugur.busroutebackend.replay.variants.Variant61FixturesTest.gokjeTail1().shortVariant())));
+        for (String route : List.of("25", "62", "63", "27", "48", "74", "80", "12", "97")) {
             map.put(route, RouteTopology.thereAndBack(
                     GeometryFixture.loadClasspath("/fixtures/geometry/route-" + route + "-dir0.json"),
                     GeometryFixture.loadClasspath("/fixtures/geometry/route-" + route + "-dir1.json")));

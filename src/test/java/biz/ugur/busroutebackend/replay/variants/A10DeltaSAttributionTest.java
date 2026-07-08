@@ -39,8 +39,10 @@ class A10DeltaSAttributionTest {
                 .withVariants(List.of(Variant25FixturesTest.short0().shortVariant(),
                         Variant25FixturesTest.short1().shortVariant())));
         topoByRoute.put("61", RouteTopology.thereAndBack(
-                GeometryFixture.loadClasspath("/fixtures/geometry/route-61-dir0.json"),
-                GeometryFixture.loadClasspath("/fixtures/geometry/route-61-dir1.json")));
+                        GeometryFixture.loadClasspath("/fixtures/geometry/route-61-dir0.json"),
+                        GeometryFixture.loadClasspath("/fixtures/geometry/route-61-dir1.json"))
+                .withVariants(List.of(Variant61FixturesTest.gokje0().shortVariant(),
+                        Variant61FixturesTest.gokjeTail1().shortVariant())));
 
         Map<String, long[]> counters = new TreeMap<>();
         Map<String, List<String>> shortOutsideEpisodes = new TreeMap<>();
