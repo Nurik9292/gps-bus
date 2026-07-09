@@ -29,6 +29,7 @@ scripts/*
 !scripts/step5_w21_before_after.py
 !scripts/step5_w22_tables.py
 !scripts/step5_w23_tables.py
+!scripts/step5_w24_offaudit.py
 !scripts/campaign-healthcheck.py
 deployment/
 .idea

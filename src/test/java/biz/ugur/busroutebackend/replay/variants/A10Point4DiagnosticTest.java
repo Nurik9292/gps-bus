@@ -23,7 +23,7 @@ class A10Point4DiagnosticTest {
     private static final CoreConfig CFG = CoreConfig.defaults();
     private static final double[] PAD = {38.046798, 58.200888};
     private static final Instant PHYS_TURN = Instant.parse("2026-07-06T01:43:44Z");
-    private static final String TARGET_VID = "62cb1460";
+    private static final String TARGET_VID = System.getProperty("p3diag.targetVid", "62cb1460");
     private static final String TARGET_START = "2026-07-06T01:09:39Z";
     private static final Instant TURN_WIN_FROM = Instant.parse("2026-07-06T01:40:00Z");
     private static final Instant TURN_WIN_TO = Instant.parse("2026-07-06T01:50:00Z");

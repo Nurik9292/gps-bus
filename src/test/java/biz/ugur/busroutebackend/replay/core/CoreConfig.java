@@ -40,6 +40,7 @@ public record CoreConfig(
         double dwellMaxSec,
         int nTurnConfirm,
         double dTurnConfirmMeters,
+        int unpinWindowTicks,
         int kTurnRevert,
         double wTurnWindowMeters,
         int historyNMin,
@@ -78,7 +79,9 @@ public record CoreConfig(
                 10.0,
                 80.0, 60.0, 15.0, 30.0,
                 20.0, 600.0,
-                3, 40.0, 3, 300.0,
+                3, 40.0,
+                5, // unpinWindowTicks: память unpin №28(в); эмпирически H_sw+2 на bring-up A11 — связь не формульная, калибруется отдельно (Шаг 5)
+                3, 300.0,
                 5,
                 5,
                 2,

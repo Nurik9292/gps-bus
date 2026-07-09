@@ -159,7 +159,7 @@ public final class A10Support {
                 c.recoveryPullFactor(), c.vStopKmh(), c.vMoveKmh(), c.hStop(), c.hDep(), c.hDec(),
                 c.dwellMinSec(), c.dDecelMeters(), c.epsArrMeters(), c.epsStopMeters(),
                 c.epsTermMeters(), c.dwellExpectedSec(), c.dwellMaxSec(), c.nTurnConfirm(),
-                c.dTurnConfirmMeters(), c.kTurnRevert(), c.wTurnWindowMeters(), c.historyNMin(),
+                c.dTurnConfirmMeters(), c.unpinWindowTicks(), c.kTurnRevert(), c.wTurnWindowMeters(), c.historyNMin(),
                 c.kOffRoute(), c.mOffRouteExit(),
                 lambda, cRej, c.scoreProgressBonus(),
                 c.sSwitch(), hSw, c.dSwitchSmoothMeters(), c.maxHypotheses(),

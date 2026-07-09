@@ -241,7 +241,7 @@ public class HypothesisBank {
             return null;
         }
         boolean leaderAtOrJustLeftPin = hyps.get(leaderIdx).pinnedAtVariantTerminal
-                || hyps.get(leaderIdx).unpinAgeTicks <= cfg.hSwitch() + 2;
+                || hyps.get(leaderIdx).unpinAgeTicks <= cfg.unpinWindowTicks();
         if (leaderAtOrJustLeftPin
                 && hyps.get(best).direction != hyps.get(leaderIdx).direction) {
             for (int i = 0; i < hyps.size(); i++) {
@@ -266,7 +266,7 @@ public class HypothesisBank {
     private Hypothesis pollPairedTailBackwardExit() {
         Hypothesis leader = hyps.get(leaderIdx);
         boolean leaderAtOrJustLeftVariantTerminal = leader.geom.terminalZone() != null
-                && (leader.pinnedAtVariantTerminal || leader.unpinAgeTicks <= cfg.hSwitch() + 2);
+                && (leader.pinnedAtVariantTerminal || leader.unpinAgeTicks <= cfg.unpinWindowTicks());
         if (!leaderAtOrJustLeftVariantTerminal) return null;
         for (int i = 0; i < hyps.size(); i++) {
             Hypothesis h = hyps.get(i);
