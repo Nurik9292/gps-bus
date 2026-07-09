@@ -571,42 +571,89 @@ class A10Point4DiagnosticTest {
     void a11PhaseBDumpBankInternalsAroundPad() throws Exception {
         String corpusDir = System.getProperty("corpus.dir");
         assertThat(corpusDir).isNotBlank();
-        RouteTopology topo = RouteTopology.thereAndBack(
-                        Variant25FixturesTest.FULL_0, Variant25FixturesTest.FULL_1)
-                .withVariants(List.of(Variant25FixturesTest.short0().shortVariant(),
-                        Variant25FixturesTest.short1().shortVariant()));
-        Instant from = Instant.parse("2026-07-06T01:20:00Z");
-        Instant to = Instant.parse("2026-07-06T01:52:00Z");
+        String route = System.getProperty("p3diag.route", "25");
+        RouteTopology topo = route.equals("61")
+                ? RouteTopology.thereAndBack(Variant61FixturesTest.FULL_0, Variant61FixturesTest.FULL_1)
+                    .withVariants(List.of(Variant61FixturesTest.gokje0().shortVariant(),
+                            Variant61FixturesTest.gokjeTail1().shortVariant()))
+                : RouteTopology.thereAndBack(Variant25FixturesTest.FULL_0, Variant25FixturesTest.FULL_1)
+                    .withVariants(List.of(Variant25FixturesTest.short0().shortVariant(),
+                            Variant25FixturesTest.short1().shortVariant()));
+        Instant from = Instant.parse(System.getProperty("p3diag.from", "2026-07-06T01:20:00Z"));
+        Instant to = Instant.parse(System.getProperty("p3diag.to", "2026-07-06T01:52:00Z"));
+        String dumpAll = System.getProperty("p3diag.dumpAll");
+        java.io.BufferedWriter w = dumpAll == null ? null
+                : java.nio.file.Files.newBufferedWriter(Path.of(dumpAll));
+        if (w != null) {
+            w.write("vid8|ts|mode|leader|s|hyps(id:S:eff:pin:cum:prog)\n");
+        }
         for (Episode ep : CorpusLoader.load(Path.of(corpusDir), CFG.tMaxSec(), 10)) {
-            if (!ep.routeNumber().equals("25")) continue;
-            if (!ep.vehicleId().startsWith(TARGET_VID)) continue;
-            System.out.printf("DIAG-эпизод: %s@%s, фиксов=%d%n",
-                    ep.vehicleId().substring(0, 8), ep.fixes().get(0).timestamp(), ep.fixes().size());
-            if (ep.fixes().get(ep.fixes().size() - 1).timestamp().isBefore(from)) continue;
-            if (ep.fixes().get(0).timestamp().isAfter(to)) continue;
+            if (!ep.routeNumber().equals(route)) continue;
+            if (dumpAll == null && !ep.vehicleId().startsWith(TARGET_VID)) continue;
+            if (dumpAll == null) {
+                System.out.printf("DIAG-эпизод: %s@%s, фиксов=%d%n",
+                        ep.vehicleId().substring(0, 8), ep.fixes().get(0).timestamp(),
+                        ep.fixes().size());
+                if (ep.fixes().get(ep.fixes().size() - 1).timestamp().isBefore(from)) continue;
+                if (ep.fixes().get(0).timestamp().isAfter(to)) continue;
+            }
             MotionFilterCore core = new MotionFilterCore(CFG);
             core.reset();
+            var validator = route.equals("61")
+                    ? biz.ugur.busroutebackend.replay.InputValidator.spec9Defaults() : null;
+            int dsStreak = 0;
             for (GpsFix fx : ep.fixes()) {
+                if (validator != null && !validator.validate(fx).accepted()) continue;
                 var est = core.onFix(fx, topo);
+                var bank = core.bank();
+                var leader = bank.leader();
+                int dTrue = 1 - leader.direction();
+                biz.ugur.busroutebackend.replay.core.HypothesisBank.Hypothesis bestTrue = null;
+                for (var h : bank.hypotheses()) {
+                    if (h.direction() == dTrue
+                            && (bestTrue == null || h.score() > bestTrue.score())) bestTrue = h;
+                }
+                double dS = bestTrue == null ? Double.NaN : bestTrue.score() - leader.score();
+                dsStreak = !Double.isNaN(dS) && dS >= 0.25 ? dsStreak + 1 : 0;
+                if (w != null) {
+                    StringBuilder hs = new StringBuilder();
+                    for (var h : bank.hypotheses()) {
+                        hs.append(String.format(Locale.ROOT, "%s:%.3f:%.3f:%s:%.0f:%d;",
+                                h.variantId(), h.score(), bank.effectiveScoreOf(h),
+                                h.pinnedAtVariantTerminal() ? "Y" : "n", h.cumStandSec(),
+                                h.progressStreak()));
+                    }
+                    w.write(String.format(Locale.ROOT, "%s|%s|%s|%s|%.1f|%s%n",
+                            ep.vehicleId().substring(0, 8), fx.timestamp(), est.mode(),
+                            leader.variantId(), est.s(), hs));
+                    continue;
+                }
                 if (fx.timestamp().isBefore(from) || fx.timestamp().isAfter(to)) continue;
-                double dPad = GeometryFixture.haversineMeters(
-                        fx.latitude(), fx.longitude(), PAD[0], PAD[1]);
+                var pl = leader.geom().projectOntoRange(
+                        fx.latitude(), fx.longitude(), 0, leader.geom().totalMeters(), 0);
+                double dOpp = bestTrue == null ? Double.NaN
+                        : bestTrue.geom().projectOntoRange(fx.latitude(), fx.longitude(),
+                                0, bestTrue.geom().totalMeters(), 0).distMeters();
                 StringBuilder sb = new StringBuilder();
                 sb.append(String.format(Locale.ROOT,
-                        "%s v=%4.1f dPad=%5.0f mode=%-10s lead=%-14s dir=%d",
-                        local(fx.timestamp()).substring(11), fx.speedKmh(), dPad,
-                        est.mode(), core.bank().leader().variantId(), core.direction()));
-                for (var h : core.bank().hypotheses()) {
-                    if (!h.variantId().equals("25#d0") && !h.variantId().equals("25-short#d0")) {
-                        continue;
-                    }
+                        "%s v=%4.1f mode=%-11s lead=%-16s s=%7.1f dSnapL=%6.0f dOpp=%6.0f "
+                                + "dS=%+6.2f strk=%d polls=%d fires=%d",
+                        fx.timestamp().toString().substring(11, 19), fx.speedKmh(), est.mode(),
+                        leader.variantId(), est.s(), pl.distMeters(), dOpp, dS, dsStreak,
+                        bank.pairedTailPolls(), bank.pairedTailFires()));
+                for (var h : bank.hypotheses()) {
                     sb.append(String.format(Locale.ROOT,
-                            " | %s x=%.0f S=%.2f eff=%.2f pin=%s cum=%.0f",
-                            h.variantId(), h.x(), h.score(), core.bank().effectiveScoreOf(h),
-                            h.pinnedAtVariantTerminal() ? "Y" : "n", h.cumStandSec()));
+                            " | %s S=%.2f eff=%.2f pin=%s cum=%.0f miss=%d prog=%d snap=%s",
+                            h.variantId(), h.score(), bank.effectiveScoreOf(h),
+                            h.pinnedAtVariantTerminal() ? "Y" : "n", h.cumStandSec(),
+                            h.missStreak(), h.progressStreak(), h.snappedLast() ? "Y" : "n"));
                 }
                 System.out.println(sb);
             }
+        }
+        if (w != null) {
+            w.close();
+            System.out.printf("p3diag dumpAll: %s%n", dumpAll);
         }
     }
 

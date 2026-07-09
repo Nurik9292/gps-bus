@@ -70,6 +70,18 @@ public class HypothesisBank {
         public boolean snappedLast() {
             return snappedLast;
         }
+
+        public int missStreak() {
+            return missStreak;
+        }
+
+        public int progressStreak() {
+            return progressStreak;
+        }
+
+        public double progressRunMeters() {
+            return Double.isNaN(streakStartZ) ? 0.0 : lastZ - streakStartZ;
+        }
     }
 
     private final CoreConfig cfg;
@@ -263,11 +275,23 @@ public class HypothesisBank {
         return hyps.get(candidateIdx);
     }
 
+    private long pairedTailPolls;
+    private long pairedTailFires;
+
+    public long pairedTailPolls() {
+        return pairedTailPolls;
+    }
+
+    public long pairedTailFires() {
+        return pairedTailFires;
+    }
+
     private Hypothesis pollPairedTailBackwardExit() {
         Hypothesis leader = hyps.get(leaderIdx);
         boolean leaderAtOrJustLeftVariantTerminal = leader.geom.terminalZone() != null
                 && (leader.pinnedAtVariantTerminal || leader.unpinAgeTicks <= cfg.unpinWindowTicks());
         if (!leaderAtOrJustLeftVariantTerminal) return null;
+        pairedTailPolls++;
         for (int i = 0; i < hyps.size(); i++) {
             Hypothesis h = hyps.get(i);
             if (h.variant && h.direction != leader.direction
@@ -276,6 +300,7 @@ public class HypothesisBank {
                     && h.lastZ - h.streakStartZ >= cfg.dTurnConfirmMeters()) {
                 candidateIdx = i;
                 candidateStreak = cfg.hSwitch();
+                pairedTailFires++;
                 System.out.printf("банк: выход назад из терминала варианта (№28в): "
                                 + "парный хвост %s подтверждён (%d тиков прогресса, +%.0fм)%n",
                         h.variantId, h.progressStreak, h.lastZ - h.streakStartZ);
