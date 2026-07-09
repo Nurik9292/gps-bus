@@ -1,7 +1,9 @@
 package biz.ugur.busroutebackend.replay.history;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
-import biz.ugur.busroutebackend.replay.GpsFix;
+import biz.ugur.busroutebackend.prediction.core.history.SegmentDwellHistory;
+
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.GpsFix;
 
 import java.time.Instant;
 import java.time.ZoneId;

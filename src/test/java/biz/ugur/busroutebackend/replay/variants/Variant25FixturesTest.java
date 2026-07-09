@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.replay.variants;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -117,14 +117,14 @@ class Variant25FixturesTest {
 
     @Test
     void activeCatalog25ContainsExactlyFullAndShortPrefix() {
-        var topo = biz.ugur.busroutebackend.replay.RouteTopology
+        var topo = biz.ugur.busroutebackend.prediction.core.RouteTopology
                 .thereAndBack(FULL_1, FULL_0)
                 .withVariants(java.util.List.of(short1().shortVariant(), short0().shortVariant()));
-        var bank = new biz.ugur.busroutebackend.replay.core.HypothesisBank(
-                biz.ugur.busroutebackend.replay.core.CoreConfig.defaults());
+        var bank = new biz.ugur.busroutebackend.prediction.core.HypothesisBank(
+                biz.ugur.busroutebackend.prediction.core.CoreConfig.defaults());
         bank.ensureBuilt(topo);
         var ids = bank.hypotheses().stream()
-                .map(biz.ugur.busroutebackend.replay.core.HypothesisBank.Hypothesis::variantId)
+                .map(biz.ugur.busroutebackend.prediction.core.HypothesisBank.Hypothesis::variantId)
                 .sorted().toList();
         assertThat(ids)
                 .as("активный банк 25 (A10.5) = РОВНО {full#d0, full#d1, short-prefix#d0, "

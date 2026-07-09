@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.replay.scenarios;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
 import biz.ugur.busroutebackend.replay.InvariantAssertions;
 import biz.ugur.busroutebackend.replay.ReplayHarness;
 import biz.ugur.busroutebackend.replay.models.GeometricSnapModel;

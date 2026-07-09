@@ -1,13 +1,13 @@
 package biz.ugur.busroutebackend.replay.pipeline;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
-import biz.ugur.busroutebackend.replay.GpsFix;
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.GpsFix;
 import biz.ugur.busroutebackend.replay.InputValidator;
-import biz.ugur.busroutebackend.replay.PredictionModel;
-import biz.ugur.busroutebackend.replay.RouteTopology;
-import biz.ugur.busroutebackend.replay.core.CoreConfig;
-import biz.ugur.busroutebackend.replay.core.MotionFilterCore;
-import biz.ugur.busroutebackend.replay.core.StopAware;
+import biz.ugur.busroutebackend.prediction.core.PredictionModel;
+import biz.ugur.busroutebackend.prediction.core.RouteTopology;
+import biz.ugur.busroutebackend.prediction.core.CoreConfig;
+import biz.ugur.busroutebackend.prediction.core.MotionFilterCore;
+import biz.ugur.busroutebackend.prediction.core.StopAware;
 import biz.ugur.busroutebackend.replay.metrics.ArrivalDetector;
 
 import java.time.Instant;

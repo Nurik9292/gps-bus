@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.replay.metrics;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
 
 import java.util.List;
 

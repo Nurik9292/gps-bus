@@ -1,8 +1,12 @@
 package biz.ugur.busroutebackend.replay.core;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.CoreConfig;
+import biz.ugur.busroutebackend.prediction.core.MotionFilterCore;
+import biz.ugur.busroutebackend.prediction.core.StopAware;
+
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
 import biz.ugur.busroutebackend.replay.history.HistoryAccumulator;
-import biz.ugur.busroutebackend.replay.history.SegmentDwellHistory;
+import biz.ugur.busroutebackend.prediction.core.history.SegmentDwellHistory;
 import biz.ugur.busroutebackend.replay.synth.SyntheticScenario;
 import org.junit.jupiter.api.Test;
 

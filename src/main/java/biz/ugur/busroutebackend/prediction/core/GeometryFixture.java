@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.replay;
+package biz.ugur.busroutebackend.prediction.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 

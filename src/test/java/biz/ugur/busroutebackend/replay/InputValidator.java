@@ -1,5 +1,7 @@
 package biz.ugur.busroutebackend.replay;
 
+import biz.ugur.busroutebackend.prediction.core.GpsFix;
+
 import java.time.Instant;
 
 public class InputValidator {

@@ -1,5 +1,10 @@
 package biz.ugur.busroutebackend.replay;
 
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.GpsFix;
+import biz.ugur.busroutebackend.prediction.core.InnovationAware;
+import biz.ugur.busroutebackend.prediction.core.PredictionModel;
+
 import biz.ugur.busroutebackend.replay.metrics.ConsistencyMetrics;
 import biz.ugur.busroutebackend.replay.metrics.PositionMetrics;
 
@@ -24,7 +29,7 @@ public final class ReplayHarness {
         PositionMetrics pos = new PositionMetrics(teleportStepMeters);
         ConsistencyMetrics cons = new ConsistencyMetrics();
         List<Sample> samples = new ArrayList<>(fixes.size());
-        boolean trueNis = model instanceof biz.ugur.busroutebackend.replay.core.InnovationAware;
+        boolean trueNis = model instanceof biz.ugur.busroutebackend.prediction.core.InnovationAware;
 
         Double prevS = null;
         for (int i = 0; i < fixes.size(); i++) {
@@ -38,7 +43,7 @@ public final class ReplayHarness {
                 cons.addNees(est.s() - sTrue, est.varianceS());
             }
             if (trueNis) {
-                var ia = (biz.ugur.busroutebackend.replay.core.InnovationAware) model;
+                var ia = (biz.ugur.busroutebackend.prediction.core.InnovationAware) model;
                 if (i > 0 && !Double.isNaN(ia.lastInnovation()) && ia.lastInnovationVariance() > 0) {
                     cons.addNis(ia.lastInnovation(), ia.lastInnovationVariance());
                 }

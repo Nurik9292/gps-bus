@@ -1,9 +1,9 @@
 package biz.ugur.busroutebackend.replay.variants;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
-import biz.ugur.busroutebackend.replay.RouteTopology;
-import biz.ugur.busroutebackend.replay.core.CoreConfig;
-import biz.ugur.busroutebackend.replay.core.HypothesisBank;
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.RouteTopology;
+import biz.ugur.busroutebackend.prediction.core.CoreConfig;
+import biz.ugur.busroutebackend.prediction.core.HypothesisBank;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

@@ -1,8 +1,8 @@
 package biz.ugur.busroutebackend.replay.a10;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
-import biz.ugur.busroutebackend.replay.RouteTopology;
-import biz.ugur.busroutebackend.replay.core.CoreConfig;
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.RouteTopology;
+import biz.ugur.busroutebackend.prediction.core.CoreConfig;
 import biz.ugur.busroutebackend.replay.pipeline.CorpusLoader;
 import biz.ugur.busroutebackend.replay.pipeline.Episode;
 import biz.ugur.busroutebackend.replay.variants.RingCutout;

@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.replay.core;
+package biz.ugur.busroutebackend.prediction.core;
 
 public record CoreConfig(
         double dtSec,

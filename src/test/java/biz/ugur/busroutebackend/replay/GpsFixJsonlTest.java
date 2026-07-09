@@ -1,5 +1,7 @@
 package biz.ugur.busroutebackend.replay;
 
+import biz.ugur.busroutebackend.prediction.core.GpsFix;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

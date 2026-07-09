@@ -1,8 +1,8 @@
-package biz.ugur.busroutebackend.replay.core;
+package biz.ugur.busroutebackend.prediction.core;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
-import biz.ugur.busroutebackend.replay.GpsFix;
-import biz.ugur.busroutebackend.replay.RouteTopology;
+
+
+
 
 import java.util.ArrayList;
 import java.util.List;

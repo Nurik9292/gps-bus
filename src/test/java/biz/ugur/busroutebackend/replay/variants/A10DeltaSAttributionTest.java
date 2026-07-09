@@ -1,11 +1,11 @@
 package biz.ugur.busroutebackend.replay.variants;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
-import biz.ugur.busroutebackend.replay.GpsFix;
-import biz.ugur.busroutebackend.replay.RouteTopology;
-import biz.ugur.busroutebackend.replay.core.CoreConfig;
-import biz.ugur.busroutebackend.replay.core.HypothesisBank;
-import biz.ugur.busroutebackend.replay.core.MotionFilterCore;
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.GpsFix;
+import biz.ugur.busroutebackend.prediction.core.RouteTopology;
+import biz.ugur.busroutebackend.prediction.core.CoreConfig;
+import biz.ugur.busroutebackend.prediction.core.HypothesisBank;
+import biz.ugur.busroutebackend.prediction.core.MotionFilterCore;
 import biz.ugur.busroutebackend.replay.pipeline.CorpusLoader;
 import biz.ugur.busroutebackend.replay.pipeline.Episode;
 import org.junit.jupiter.api.Test;
@@ -175,7 +175,7 @@ class A10DeltaSAttributionTest {
                         || switched;
                 if (prevGeo != null && !sanctioned) {
                     double dt = Math.max(t - prevT, 1);
-                    double ratio = biz.ugur.busroutebackend.replay.GeometryFixture.haversineMeters(
+                    double ratio = biz.ugur.busroutebackend.prediction.core.GeometryFixture.haversineMeters(
                             prevGeo[0], prevGeo[1], geo[0], geo[1]) / (dt * CFG.vMaxMs());
                     flightMax = Math.max(flightMax, ratio);
                     if (ratio > 1.5) flightViolations++;

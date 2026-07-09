@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.replay.core;
+package biz.ugur.busroutebackend.prediction.core;
 
 import java.time.Instant;
 import java.util.List;

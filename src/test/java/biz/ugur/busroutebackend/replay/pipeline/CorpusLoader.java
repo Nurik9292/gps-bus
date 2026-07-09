@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.replay.pipeline;
 
-import biz.ugur.busroutebackend.replay.GpsFix;
+import biz.ugur.busroutebackend.prediction.core.GpsFix;
 import biz.ugur.busroutebackend.replay.GpsFixJsonl;
 
 import java.io.IOException;

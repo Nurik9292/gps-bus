@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.replay.tools;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 

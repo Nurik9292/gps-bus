@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.replay.history;
+package biz.ugur.busroutebackend.prediction.core.history;
 
 import java.util.Map;
 import java.util.OptionalDouble;

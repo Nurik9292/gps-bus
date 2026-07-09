@@ -1,5 +1,7 @@
 package biz.ugur.busroutebackend.replay;
 
+import biz.ugur.busroutebackend.prediction.core.history.SegmentDwellHistory;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

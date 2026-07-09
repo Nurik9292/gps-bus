@@ -1,4 +1,4 @@
-package biz.ugur.busroutebackend.replay;
+package biz.ugur.busroutebackend.prediction.core;
 
 import java.util.ArrayList;
 import java.util.List;

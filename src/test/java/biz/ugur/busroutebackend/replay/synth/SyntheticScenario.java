@@ -1,7 +1,7 @@
 package biz.ugur.busroutebackend.replay.synth;
 
-import biz.ugur.busroutebackend.replay.GeometryFixture;
-import biz.ugur.busroutebackend.replay.GpsFix;
+import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.GpsFix;
 
 import java.time.Instant;
 import java.util.ArrayList;
