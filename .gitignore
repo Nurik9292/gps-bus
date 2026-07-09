@@ -30,6 +30,7 @@ scripts/*
 !scripts/step5_w22_tables.py
 !scripts/step5_w23_tables.py
 !scripts/step5_w24_offaudit.py
+!scripts/step5_w26_apexwins.py
 !scripts/campaign-healthcheck.py
 deployment/
 .idea
