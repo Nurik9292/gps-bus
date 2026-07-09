@@ -33,6 +33,7 @@ scripts/*
 !scripts/step5_w26_apexwins.py
 !scripts/step5_w28_reaudit.py
 !scripts/step5_w29_besttrue.py
+!scripts/step5_w30_r2rest.py
 !scripts/campaign-healthcheck.py
 deployment/
 .idea
