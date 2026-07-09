@@ -22,6 +22,9 @@ scripts/*
 !scripts/a10_5_window_stats.py
 !scripts/a11_1_registry_diff.py
 !scripts/step5_corpus_manifest.py
+!scripts/step5_w21_dataset.py
+!scripts/step5_w22_gaps.py
+!scripts/step5_w23_dwell.py
 !scripts/campaign-healthcheck.py
 deployment/
 .idea
