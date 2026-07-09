@@ -25,6 +25,10 @@ scripts/*
 !scripts/step5_w21_dataset.py
 !scripts/step5_w22_gaps.py
 !scripts/step5_w23_dwell.py
+!scripts/step5_w21_fit.py
+!scripts/step5_w21_before_after.py
+!scripts/step5_w22_tables.py
+!scripts/step5_w23_tables.py
 !scripts/campaign-healthcheck.py
 deployment/
 .idea

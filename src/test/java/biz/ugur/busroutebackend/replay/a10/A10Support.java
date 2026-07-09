@@ -162,6 +162,8 @@ public final class A10Support {
                 c.dTurnConfirmMeters(), c.kTurnRevert(), c.wTurnWindowMeters(), c.historyNMin(),
                 c.kOffRoute(), c.mOffRouteExit(),
                 lambda, cRej, c.scoreProgressBonus(),
-                c.sSwitch(), hSw, c.dSwitchSmoothMeters(), c.maxHypotheses());
+                c.sSwitch(), hSw, c.dSwitchSmoothMeters(), c.maxHypotheses(),
+                c.rHdopEnabled(), c.rHdopAMeters(), c.rHdopBMetersPerHdop(),
+                c.gateNisThreshold(), c.qScale());
     }
 }

@@ -47,6 +47,32 @@ public final class EpisodeReplayRunner {
 
     private EpisodeReplayRunner() {}
 
+    private static java.io.BufferedWriter nisDumpWriter;
+
+    private static synchronized void dumpNisTick(String route, String vid8, Instant ts,
+                                                 double nisCandidate, boolean accepted,
+                                                 String mode) {
+        String path = System.getProperty("corpus.nisdump");
+        if (path == null || path.isBlank()) return;
+        try {
+            if (nisDumpWriter == null) {
+                nisDumpWriter = java.nio.file.Files.newBufferedWriter(java.nio.file.Path.of(path));
+                nisDumpWriter.write("route|vid8|ts|nis_candidate|accepted|state\n");
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                    try {
+                        nisDumpWriter.close();
+                    } catch (java.io.IOException ignored) {
+                        System.err.println("nisdump close failed");
+                    }
+                }));
+            }
+            nisDumpWriter.write(String.format(java.util.Locale.ROOT, "%s|%s|%s|%.6f|%s|%s%n",
+                    route, vid8, ts, nisCandidate, accepted ? "Y" : "n", mode));
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
     public static EpisodeStats run(Episode ep, RouteTopology topo, CoreConfig cfg) {
         MotionFilterCore core = new MotionFilterCore(cfg);
         core.reset();
@@ -93,6 +119,12 @@ public final class EpisodeReplayRunner {
             if (m.equals("OFF_ROUTE")) offTicks++;
             if (m.equals("GPS_LOST") || m.equals("NO_GPS")) lostTicks++;
             prevMode = m;
+            if (!Double.isNaN(core.lastInnovation()) && core.lastInnovationVariance() > 0) {
+                double nu = core.lastInnovation();
+                double s = core.lastInnovationVariance();
+                dumpNisTick(ep.routeNumber(), ep.vehicleId().substring(0, 8), fx.timestamp(),
+                        nu * nu / s, core.lastUpdateAccepted(), est.mode());
+            }
             if (core.lastUpdateAccepted() && !Double.isNaN(core.lastInnovation())) {
                 double nu = core.lastInnovation();
                 absInnovations.add(Math.abs(nu));

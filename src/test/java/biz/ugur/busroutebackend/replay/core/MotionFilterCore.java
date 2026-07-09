@@ -248,7 +248,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         double s = p00 + r;
         lastNu = nu;
         lastS = s;
-        boolean gatePassed = snap.snapped() && Math.abs(nu) <= cfg.gammaGate() * Math.sqrt(s);
+        boolean gatePassed = snap.snapped() && (cfg.rHdopEnabled()
+                ? nu * nu <= cfg.gateNisThreshold() * s
+                : Math.abs(nu) <= cfg.gammaGate() * Math.sqrt(s));
 
         if (gatePassed && (mode == Mode.RECOVERING || mode == Mode.NEW_TRIP)) {
             mode = Mode.TRACKING;
@@ -922,11 +924,18 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     }
 
     private double measurementSigma(GpsFix fix, double dSnap) {
-        double base = cfg.sigmaMeasDefaultMeters();
-        if (fix.accuracy() != null && fix.accuracy() > 0) {
-            base = Math.max(cfg.accuracyRefMeters(), fix.accuracy());
-        } else if (fix.hdop() != null && fix.hdop() > 0) {
-            base = Math.max(cfg.accuracyRefMeters(), cfg.accuracyRefMeters() * fix.hdop());
+        double base;
+        if (cfg.rHdopEnabled()) {
+            double h = fix.hdop() != null && fix.hdop() > 0 ? fix.hdop() : 1.0;
+            double floor = cfg.rHdopAMeters() + cfg.rHdopBMetersPerHdop() * 0.5;
+            base = Math.max(floor, cfg.rHdopAMeters() + cfg.rHdopBMetersPerHdop() * h);
+        } else {
+            base = cfg.sigmaMeasDefaultMeters();
+            if (fix.accuracy() != null && fix.accuracy() > 0) {
+                base = Math.max(cfg.accuracyRefMeters(), fix.accuracy());
+            } else if (fix.hdop() != null && fix.hdop() > 0) {
+                base = Math.max(cfg.accuracyRefMeters(), cfg.accuracyRefMeters() * fix.hdop());
+            }
         }
         double offTrackFactor = 1.0 + dSnap / cfg.dSnapMeters();
         return base * offTrackFactor;

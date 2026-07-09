@@ -51,7 +51,12 @@ public record CoreConfig(
         double sSwitch,
         int hSwitch,
         double dSwitchSmoothMeters,
-        int maxHypotheses) {
+        int maxHypotheses,
+        boolean rHdopEnabled,
+        double rHdopAMeters,
+        double rHdopBMetersPerHdop,
+        double gateNisThreshold,
+        double qScale) {
 
     public static CoreConfig defaults() {
         return new CoreConfig(
@@ -60,7 +65,7 @@ public record CoreConfig(
                 15.0, 5.0,
                 80.0, 120.0,
                 3.0,
-                0.5, 0.8,
+                0.5 * qScaleFromSystemProperties(), 0.8 * qScaleFromSystemProperties(),
                 40.0 * 40.0, 5.0 * 5.0,
                 0.5, 30.0,
                 0.1,
@@ -79,6 +84,15 @@ public record CoreConfig(
                 2,
                 0.9, 1.0, 0.5,
                 0.25, 3, 150.0,
-                6);
+                6,
+                Boolean.getBoolean("r.hdop.enabled"),
+                Double.parseDouble(System.getProperty("r.hdop.a", "2.764")),
+                Double.parseDouble(System.getProperty("r.hdop.b", "3.734")),
+                Double.parseDouble(System.getProperty("gate.nis", "9.0")),
+                qScaleFromSystemProperties());
+    }
+
+    private static double qScaleFromSystemProperties() {
+        return Double.parseDouble(System.getProperty("q.scale", "1.0"));
     }
 }
