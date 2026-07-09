@@ -21,6 +21,7 @@ scripts/*
 !scripts/a10_3_derive.py
 !scripts/a10_5_window_stats.py
 !scripts/a11_1_registry_diff.py
+!scripts/step5_corpus_manifest.py
 !scripts/campaign-healthcheck.py
 deployment/
 .idea
