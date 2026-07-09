@@ -14,7 +14,7 @@ public class HypothesisBank {
     public static final class Hypothesis {
         private final String variantId;
         private final int direction;
-        private final GeometryFixture geom;
+        private final RouteLine geom;
         private double x;
         private double v;
         private double score;
@@ -37,7 +37,7 @@ public class HypothesisBank {
             return cumStandSec;
         }
 
-        private Hypothesis(GeometryFixture geom) {
+        private Hypothesis(RouteLine geom) {
             this.variantId = geom.routeNumber() + "#d" + geom.direction();
             this.direction = geom.direction();
             this.geom = geom;
@@ -51,7 +51,7 @@ public class HypothesisBank {
             return direction;
         }
 
-        public GeometryFixture geom() {
+        public RouteLine geom() {
             return geom;
         }
 
@@ -120,7 +120,7 @@ public class HypothesisBank {
         if (topo.equals(builtFrom) && !hyps.isEmpty()) return;
         hyps.clear();
         int base = topo.second() != null ? 2 : 1;
-        for (GeometryFixture g : topo.allGeometries()) {
+        for (RouteLine g : topo.allGeometries()) {
             if (hyps.size() >= cfg.maxHypotheses()) {
                 System.out.printf("банк гипотез: превышен N_hyp=%d, вариант %s не подключён%n",
                         cfg.maxHypotheses(), g.routeNumber());
@@ -171,10 +171,10 @@ public class HypothesisBank {
             if (h.snappedLast) h.lastZ = p.s();
             return;
         }
-        GeometryFixture.TerminalZone zone = h.geom.terminalZone();
+        RouteLine.TerminalZone zone = h.geom.terminalZone();
         if (zone != null) {
             boolean nearEnd = h.x >= h.geom.totalMeters() - cfg.epsArrMeters();
-            boolean inZone = GeometryFixture.haversineMeters(
+            boolean inZone = RouteLine.haversineMeters(
                     fix.latitude(), fix.longitude(), zone.lat(), zone.lon()) <= zone.radiusMeters();
             if (nearEnd && inZone) {
                 h.pinnedAtVariantTerminal = true;

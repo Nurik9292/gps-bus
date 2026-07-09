@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.replay.a10;
 
 import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.RouteLine;
 import biz.ugur.busroutebackend.prediction.core.RouteTopology;
 import biz.ugur.busroutebackend.prediction.core.CoreConfig;
 import biz.ugur.busroutebackend.replay.pipeline.CorpusLoader;
@@ -50,7 +51,7 @@ class A10Phase1Test {
         md.append("| route | режим | состав гипотез (variant_id → L, км) |\n|---|---|---|\n");
         for (var e : plainTopo.entrySet()) {
             StringBuilder comp = new StringBuilder();
-            for (GeometryFixture g : e.getValue().allGeometries()) {
+            for (RouteLine g : e.getValue().allGeometries()) {
                 if (comp.length() > 0) comp.append("; ");
                 comp.append(String.format(Locale.ROOT, "%s#d%d → %.1f",
                         g.routeNumber(), g.direction(), g.totalMeters() / 1000.0));
@@ -160,7 +161,7 @@ class A10Phase1Test {
         md.append("источника (лист 61ug(2), Р-8: s=9 844 на 61/0, s=16 990 на 61/1); ");
         md.append("bbox-граница источником НЕ является — bbox-деривация 61 отключена.\n\n");
 
-        List<GeometryFixture> shorts = List.of(
+        List<RouteLine> shorts = List.of(
                 biz.ugur.busroutebackend.replay.variants.Variant61FixturesTest.gokje0().shortVariant(),
                 biz.ugur.busroutebackend.replay.variants.Variant61FixturesTest.gokjeTail1().shortVariant());
         md.append(String.format(Locale.ROOT,

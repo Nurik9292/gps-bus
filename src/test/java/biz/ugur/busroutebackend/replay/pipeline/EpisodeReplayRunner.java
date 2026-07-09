@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.replay.pipeline;
 
-import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.RouteLine;
 import biz.ugur.busroutebackend.prediction.core.GpsFix;
 import biz.ugur.busroutebackend.replay.InputValidator;
 import biz.ugur.busroutebackend.prediction.core.PredictionModel;
@@ -77,7 +77,7 @@ public final class EpisodeReplayRunner {
         MotionFilterCore core = new MotionFilterCore(cfg);
         core.reset();
         InputValidator validator = InputValidator.spec9Defaults();
-        GeometryFixture g = topo.first();
+        RouteLine g = topo.first();
 
         Map<String, Long> events = new TreeMap<>();
         List<Double> absInnovations = new ArrayList<>();
@@ -159,7 +159,7 @@ public final class EpisodeReplayRunner {
                 flight.maxRatio(), flight.violations(), flight.sanctionedJumps());
     }
 
-    private static Map<String, Double> detectArrivals(Episode ep, GeometryFixture g) {
+    private static Map<String, Double> detectArrivals(Episode ep, RouteLine g) {
         Map<String, Double> out = new TreeMap<>();
         if (g.stops().isEmpty()) return out;
         ArrivalDetector det = new ArrivalDetector(new ArrivalDetector.Config(50.0, 5.0));
@@ -167,7 +167,7 @@ public final class EpisodeReplayRunner {
                 .map(f -> new ArrivalDetector.RawPoint(f.timestamp(), f.latitude(), f.longitude(), f.speedKmh()))
                 .toList();
         Instant t0 = ep.fixes().get(0).timestamp();
-        for (GeometryFixture.StopPoint sp : g.stops()) {
+        for (RouteLine.StopPoint sp : g.stops()) {
             double[] pt = g.pointAtS(sp.sMeters());
             det.detectArrival(raw, pt[0], pt[1]).ifPresent(at ->
                     out.put(sp.stopId(), (at.toEpochMilli() - t0.toEpochMilli()) / 1000.0));

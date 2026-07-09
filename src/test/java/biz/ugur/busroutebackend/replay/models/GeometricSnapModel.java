@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.replay.models;
 
-import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.RouteLine;
 import biz.ugur.busroutebackend.prediction.core.GpsFix;
 import biz.ugur.busroutebackend.prediction.core.PredictionModel;
 
@@ -9,7 +9,7 @@ public class GeometricSnapModel implements PredictionModel {
     public static final double DEFAULT_MEASUREMENT_VARIANCE_S = 15.0 * 15.0;
 
     @Override
-    public Estimate onFix(GpsFix fix, GeometryFixture g) {
+    public Estimate onFix(GpsFix fix, RouteLine g) {
         double best = Double.MAX_VALUE;
         double bestS = 0;
         var pts = g.points();
@@ -18,7 +18,7 @@ public class GeometricSnapModel implements PredictionModel {
             double[] a = pts.get(i);
             double[] b = pts.get(i + 1);
             double[] proj = projectOnSegment(fix.latitude(), fix.longitude(), a, b);
-            double d = GeometryFixture.haversineMeters(fix.latitude(), fix.longitude(), proj[0], proj[1]);
+            double d = RouteLine.haversineMeters(fix.latitude(), fix.longitude(), proj[0], proj[1]);
             if (d < best) {
                 best = d;
                 bestS = cum[i] + proj[2] * (cum[i + 1] - cum[i]);

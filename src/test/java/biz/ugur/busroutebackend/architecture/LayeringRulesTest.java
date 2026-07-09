@@ -79,4 +79,14 @@ class LayeringRulesTest {
                 .because("R2DBC implementations belong to infrastructure layer")
                 .check(classes);
     }
+
+    @Test
+    void predictionCoreDoesNotDependOnTestGeometryFixture() {
+        noClasses()
+                .that().resideInAPackage("biz.ugur.busroutebackend.prediction..")
+                .should().dependOnClassesThat().haveSimpleName("GeometryFixture")
+                .because("s-layer port (RouteLine): GeometryFixture is a test adapter, "
+                        + "main must depend on the port only (A-090726-7 P.2)")
+                .check(classes);
+    }
 }

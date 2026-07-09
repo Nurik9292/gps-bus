@@ -17,14 +17,7 @@ public record GeometryFixture(
         double[] cumDist,
         List<StopPoint> stops,
         String topology,
-        TerminalZone terminalZone) {
-
-    public static final String TOPOLOGY_THERE_AND_BACK = "there-and-back";
-    public static final String TOPOLOGY_LOOP = "loop";
-
-    public record StopPoint(String stopId, int seq, double sMeters) {}
-
-    public record TerminalZone(double lat, double lon, double radiusMeters) {}
+        TerminalZone terminalZone) implements RouteLine {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -43,6 +36,7 @@ public record GeometryFixture(
                 topology, zone);
     }
 
+    @Override
     public boolean isLoop() {
         return TOPOLOGY_LOOP.equals(topology);
     }
@@ -63,6 +57,7 @@ public record GeometryFixture(
         return fraction * totalMeters;
     }
 
+    @Override
     public double[] pointAtS(double s) {
         double target = Math.max(0, Math.min(s, totalMeters));
         int i = 0;
@@ -144,8 +139,7 @@ public record GeometryFixture(
                 n.get("totalMeters").asDouble(), pts, cum, List.copyOf(stops), topology, zone);
     }
 
-    public record Projection(double s, double distMeters) {}
-
+    @Override
     public Projection projectOntoRange(double lat, double lon, double sFrom, double sTo, double sDefault) {
         double best = Double.MAX_VALUE;
         double bestS = sDefault;

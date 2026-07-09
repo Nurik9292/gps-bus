@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.replay.models;
 
-import biz.ugur.busroutebackend.prediction.core.GeometryFixture;
+import biz.ugur.busroutebackend.prediction.core.RouteLine;
 import biz.ugur.busroutebackend.prediction.core.GpsFix;
 import biz.ugur.busroutebackend.prediction.core.PredictionModel;
 
@@ -10,7 +10,7 @@ public class HoldLastModel implements PredictionModel {
     private Estimate last;
 
     @Override
-    public Estimate onFix(GpsFix fix, GeometryFixture g) {
+    public Estimate onFix(GpsFix fix, RouteLine g) {
         if (last == null) {
             Estimate first = snap.onFix(fix, g);
             last = new Estimate(first.s(), 0.0, "HOLD", first.varianceS());
