@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class VehiclePositionPredictionService {
 
-    private org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap> v31ShadowTap;
+    private volatile org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap> v31ShadowTap;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setV31ShadowTap(org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap> tap) {
@@ -231,9 +231,13 @@ public class VehiclePositionPredictionService {
             try {
                 tap = v31ShadowTap.getIfAvailable();
                 if (tap != null) {
+                    // Врезка выше properties.isEnabled() и GpsOutlierFilter — ратифицировано A-090726-11 п.11.3 («сырой вход», Б-3)
                     tap.accept(new biz.ugur.busroutebackend.prediction.shadow.V31Fix(
                             vehicleId, licensePlate, routeNumber, latitude, longitude,
-                            speedKmh, course, inMotion, timestamp, direction));
+                            speedKmh, course, inMotion, timestamp, direction,
+                            gpsQuality != null ? gpsQuality.hdop() : null,
+                            gpsQuality != null ? gpsQuality.satellites() : null,
+                            gpsQuality != null ? gpsQuality.accuracy() : null));
                 }
             } catch (RuntimeException v31InjectionFailure) {
                 if (tap != null) {

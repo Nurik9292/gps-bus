@@ -79,7 +79,7 @@ public class V31ShadowService {
         });
         GpsFix gpsFix = new GpsFix(fix.vehicleId(), fix.licensePlate(), fix.routeNumber(),
                 fix.latitude(), fix.longitude(), fix.speedKmh(), fix.course(),
-                fix.inMotion(), fix.timestamp(), fix.direction(), null, null, null, null);
+                fix.inMotion(), fix.timestamp(), fix.direction(), fix.hdop(), fix.satellites(), fix.accuracy(), null);
         PredictionModel.Estimate est = core.onFix(gpsFix, topo);
         writeLogs(fix, core, est);
         v31TicksProcessed.incrementAndGet();

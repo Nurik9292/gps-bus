@@ -28,7 +28,7 @@ class V31ShadowIsolationTest {
 
     private static V31Fix fix(int i) {
         return new V31Fix("veh-shadow-0001", "TEST 01", "99t", 38.0, 58.0 + i * 0.0008,
-                30.0, 90.0, true, Instant.parse("2026-07-09T05:00:00Z").plusSeconds(i * 5L), 0);
+                30.0, 90.0, true, Instant.parse("2026-07-09T05:00:00Z").plusSeconds(i * 5L), 0, null, null, null);
     }
 
     private static RouteGeometryCache cacheStub() {
