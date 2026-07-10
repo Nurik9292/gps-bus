@@ -38,6 +38,7 @@ scripts/*
 !scripts/step5_w31_p5.py
 !scripts/step5_w31_p67.py
 !scripts/step5_w31_p9.py
+!scripts/step5_w31_p10.py
 !scripts/campaign-healthcheck.py
 deployment/
 .idea
