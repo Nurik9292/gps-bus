@@ -57,7 +57,10 @@ public record CoreConfig(
         double rHdopAMeters,
         double rHdopBMetersPerHdop,
         double gateNisThreshold,
-        double qScale) {
+        double qScale,
+        double epsCloseTailMeters,
+        int nTurnConfirmTerm,
+        double dTurnConfirmTermMeters) {
 
     public static CoreConfig defaults() {
         return new CoreConfig(
@@ -92,7 +95,10 @@ public record CoreConfig(
                 Double.parseDouble(System.getProperty("r.hdop.a", "2.764")),
                 Double.parseDouble(System.getProperty("r.hdop.b", "3.734")),
                 Double.parseDouble(System.getProperty("gate.nis", "9.0")),
-                qScaleFromSystemProperties());
+                qScaleFromSystemProperties(),
+                150.0, // epsCloseTailMeters (№22″, К-4а): калибруется, Шаг 5
+                5, // nTurnConfirmTerm (№23′, К-4б): калибруется, Шаг 5
+                150.0); // dTurnConfirmTermMeters (№23′, К-4б): калибруется, Шаг 5
     }
 
     private static double qScaleFromSystemProperties() {

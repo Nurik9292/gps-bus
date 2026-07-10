@@ -272,7 +272,25 @@ public class HypothesisBank {
             candidateStreak++;
         }
         if (candidateStreak < cfg.hSwitch()) return null;
-        return hyps.get(candidateIdx);
+        Hypothesis confirmed = hyps.get(candidateIdx);
+        if (leaderAtFullTerminal
+                && confirmed.direction != hyps.get(leaderIdx).direction
+                && !terminalDepartureConfirmed(confirmed)) {
+            return null;
+        }
+        return confirmed;
+    }
+
+    private boolean leaderAtFullTerminal;
+
+    public void markLeaderAtFullTerminal(boolean atTerminal) {
+        leaderAtFullTerminal = atTerminal;
+    }
+
+    private boolean terminalDepartureConfirmed(Hypothesis h) {
+        return h.progressStreak >= cfg.nTurnConfirmTerm()
+                && !Double.isNaN(h.streakStartZ)
+                && h.lastZ - h.streakStartZ >= cfg.dTurnConfirmTermMeters();
     }
 
     private long pairedTailPolls;

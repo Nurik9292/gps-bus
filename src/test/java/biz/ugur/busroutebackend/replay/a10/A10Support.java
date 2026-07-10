@@ -164,6 +164,7 @@ public final class A10Support {
                 lambda, cRej, c.scoreProgressBonus(),
                 c.sSwitch(), hSw, c.dSwitchSmoothMeters(), c.maxHypotheses(),
                 c.rHdopEnabled(), c.rHdopAMeters(), c.rHdopBMetersPerHdop(),
-                c.gateNisThreshold(), c.qScale());
+                c.gateNisThreshold(), c.qScale(),
+                c.epsCloseTailMeters(), c.nTurnConfirmTerm(), c.dTurnConfirmTermMeters());
     }
 }

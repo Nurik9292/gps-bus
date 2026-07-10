@@ -196,6 +196,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             return applyPendingDirectionSwitch(fix);
         }
         if (bankSwitchAllowed()) {
+            bank.markLeaderAtFullTerminal(mode == Mode.AT_TERMINAL
+                    || Math.abs(g.totalMeters() - x) <= cfg.epsArrMeters());
             HypothesisBank.Hypothesis cand = bank.pollConfirmedSwitch();
             if (cand != null) {
                 Estimate switched = applyLeaderSwitch(cand, fix, g);
@@ -333,6 +335,26 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             offRouteExitStreak = 0;
         }
         if (cand.direction() != direction) {
+            double closeTailGap = cand.geom().totalMeters() - cand.x();
+            if (Math.abs(closeTailGap) <= cfg.epsCloseTailMeters()) {
+                bank.commitSwitch();
+                direction = cand.direction();
+                x = Math.min(cand.x(), cand.geom().totalMeters());
+                v = 0;
+                mode = Mode.AT_TERMINAL;
+                turnStreak = 0;
+                revertStreak = 0;
+                persistCounter = 0;
+                reanchorConfirms = 0;
+                System.out.printf("банк: закрывающая смена d у терминала (№22″) → %s, x=%.1f "
+                                + "(|s−L|=%.1fм ≤ ε=%.0f), гео-скачок |dp|=%.1fм — тихая коррекция, "
+                                + "без NEW_TRIP/trip_id++%n",
+                        cand.variantId(), x, Math.abs(closeTailGap), cfg.epsCloseTailMeters(), dp);
+                resyncNextStop(cand.geom());
+                lastUpdateAccepted = false;
+                lastEtas = java.util.List.of();
+                return new Estimate(x, v, Mode.AT_TERMINAL.name(), Math.max(p00, 1e-6));
+            }
             bank.commitSwitch();
             pendingDirectionSwitch = cand;
             mode = Mode.RECOVERING;
