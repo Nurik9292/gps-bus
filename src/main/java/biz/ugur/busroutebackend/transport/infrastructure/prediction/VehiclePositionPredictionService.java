@@ -30,6 +30,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class VehiclePositionPredictionService {
 
+    private org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap> v31ShadowTap;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setV31ShadowTap(org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap> tap) {
+        this.v31ShadowTap = tap;
+    }
+
+
     private static final double METRES_PER_DEGREE_LAT = 111_320.0;
     private static final double DT_SECONDS = 1.0;
     private static final long MAX_GPS_AGE_MS = 10 * 60 * 1000L;
@@ -218,6 +226,16 @@ public class VehiclePositionPredictionService {
                             boolean inGarage,
                             boolean isBuffered,
                             biz.ugur.busroutebackend.transport.infrastructure.debug.GpsQuality gpsQuality) {
+        if (v31ShadowTap != null) {
+            biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap tap =
+                    v31ShadowTap.getIfAvailable();
+            if (tap != null) {
+                tap.accept(new biz.ugur.busroutebackend.prediction.shadow.V31Fix(
+                        vehicleId, licensePlate, routeNumber, latitude, longitude,
+                        speedKmh, course, inMotion, timestamp, direction));
+            }
+        }
+
         if (!properties.isEnabled()) {
             return;
         }
