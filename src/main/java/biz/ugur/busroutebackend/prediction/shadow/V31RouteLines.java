@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.prediction.shadow;
 
+import biz.ugur.busroutebackend.prediction.core.CoreConfig;
 import biz.ugur.busroutebackend.prediction.core.RouteLine;
 import biz.ugur.busroutebackend.prediction.core.RouteTopology;
 import biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo;
@@ -15,32 +16,57 @@ import java.util.concurrent.ConcurrentHashMap;
 public class V31RouteLines {
 
     private static final Logger log = LoggerFactory.getLogger(V31RouteLines.class);
-    private static final double ROUND_TRIP_SNAP_TOLERANCE_METERS = 80.0;
+    static final double STOP_SNAP_WARN_METERS = CoreConfig.defaults().dSnapMeters();
 
     private final RouteGeometryCache cache;
+    private final boolean strictS5;
     private final Map<String, RouteTopology> topologies = new ConcurrentHashMap<>();
+    private final java.util.Set<String> disabledRoutes = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.concurrent.atomic.AtomicLong v31DisabledRoutes = new java.util.concurrent.atomic.AtomicLong();
 
     public V31RouteLines(RouteGeometryCache cache) {
+        this(cache, false);
+    }
+
+    public V31RouteLines(RouteGeometryCache cache, boolean strictS5) {
         this.cache = cache;
+        this.strictS5 = strictS5;
+    }
+
+    public long v31DisabledRoutes() {
+        return v31DisabledRoutes.get();
     }
 
     public RouteTopology topologyFor(String routeNumber) {
+        if (disabledRoutes.contains(routeNumber)) return null;
         return topologies.computeIfAbsent(routeNumber, r -> {
-            RouteLine d0 = build(r, 0);
-            RouteLine d1 = build(r, 1);
-            if (d0 == null || d1 == null) return null;
-            return RouteTopology.thereAndBack(d0, d1);
+            try {
+                RouteLine d0 = build(r, 0);
+                RouteLine d1 = build(r, 1);
+                if (d0 == null || d1 == null) return null;
+                return RouteTopology.thereAndBack(d0, d1);
+            } catch (IllegalStateException s5) {
+                if (strictS5) throw s5;
+                log.error("v31 s-layer S-5: {} — v31 отключён для маршрута {} (v31DisabledRoutes++)",
+                        s5.getMessage(), r);
+                disabledRoutes.add(r);
+                v31DisabledRoutes.incrementAndGet();
+                return null;
+            }
         });
     }
 
     private RouteLine build(String routeNumber, int direction) {
         List<double[]> points = cache.getPoints(routeNumber, direction);
         if (points == null || points.size() < 2) return null;
-        double[] cum = new double[points.size()];
-        for (int i = 1; i < points.size(); i++) {
-            cum[i] = cum[i - 1] + RouteLine.haversineMeters(
-                    points.get(i - 1)[0], points.get(i - 1)[1],
-                    points.get(i)[0], points.get(i)[1]);
+        double[] cum = cache.getCumulativeDistances(routeNumber, direction);
+        if (cum == null || cum.length != points.size()) {
+            cum = new double[points.size()];
+            for (int i = 1; i < points.size(); i++) {
+                cum[i] = cum[i - 1] + RouteLine.haversineMeters(
+                        points.get(i - 1)[0], points.get(i - 1)[1],
+                        points.get(i)[0], points.get(i)[1]);
+            }
         }
         List<RouteLine.StopPoint> stops = new ArrayList<>();
         List<RouteStopInfo> infos = cache.getRouteStops(routeNumber, direction);
@@ -54,7 +80,7 @@ public class V31RouteLines {
             double lat = info.getLatitude().doubleValue();
             double lon = info.getLongitude().doubleValue();
             RouteLine.Projection p = project(points, cum, lat, lon, 0, cum[cum.length - 1]);
-            if (p.distMeters() > ROUND_TRIP_SNAP_TOLERANCE_METERS) {
+            if (p.distMeters() > STOP_SNAP_WARN_METERS) {
                 log.warn("v31 s-layer S-3: остановка {} на {}/{} в {} м от линии — помечена, legacy не подставляется",
                         info.getStopId(), routeNumber, direction, Math.round(p.distMeters()));
             }

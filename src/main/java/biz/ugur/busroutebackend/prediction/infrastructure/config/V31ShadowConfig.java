@@ -36,7 +36,9 @@ public class V31ShadowConfig {
     public V31ShadowService v31ShadowService(V31ShadowTap tap, V31RouteLines lines,
                                              Clock v31Clock,
                                              @Value("${app.prediction.v31.log-dir:logs/ws_pred_v31}")
-                                             String logDir) {
-        return new V31ShadowService(tap, lines, v31Clock, Path.of(logDir));
+                                             String logDir,
+                                             @Value("${app.prediction.v31.log-cap-bytes:500000000}")
+                                             long logCapBytes) {
+        return new V31ShadowService(tap, lines, v31Clock, Path.of(logDir), logCapBytes);
     }
 }

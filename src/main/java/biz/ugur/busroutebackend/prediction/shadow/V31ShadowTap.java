@@ -9,6 +9,7 @@ public class V31ShadowTap {
 
     private final Sinks.Many<V31Fix> sink = Sinks.many().multicast().directBestEffort();
     private final AtomicLong dropped = new AtomicLong();
+    private final AtomicLong errors = new AtomicLong();
 
     public void accept(V31Fix fix) {
         Sinks.EmitResult result = sink.tryEmitNext(fix);
@@ -23,5 +24,13 @@ public class V31ShadowTap {
 
     public long droppedCount() {
         return dropped.get();
+    }
+
+    public void recordError() {
+        errors.incrementAndGet();
+    }
+
+    public long errorCount() {
+        return errors.get();
     }
 }

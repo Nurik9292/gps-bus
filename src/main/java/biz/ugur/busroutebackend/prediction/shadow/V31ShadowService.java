@@ -12,7 +12,6 @@ import reactor.core.scheduler.Schedulers;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -31,15 +30,28 @@ public class V31ShadowService {
     private final Path tickLogPath;
     private final Map<String, MotionFilterCore> cores = new ConcurrentHashMap<>();
     private final AtomicLong v31TicksProcessed = new AtomicLong();
-    private final AtomicLong v31ErrorCount = new AtomicLong();
+    private final AtomicLong v31LogDroppedTicks = new AtomicLong();
+    private final V31ShadowTap tap;
+    private final Path logDirectory;
+    private final long logCapBytes;
+    private long bytesWritten;
+    private String writerHour;
     private BufferedWriter fixWriter;
     private BufferedWriter tickWriter;
     private Disposable subscription;
 
     public V31ShadowService(V31ShadowTap tap, V31RouteLines routeLines, Clock clock,
                             Path logDirectory) {
+        this(tap, routeLines, clock, logDirectory, 500_000_000L);
+    }
+
+    public V31ShadowService(V31ShadowTap tap, V31RouteLines routeLines, Clock clock,
+                            Path logDirectory, long logCapBytes) {
+        this.tap = tap;
         this.routeLines = routeLines;
         this.clock = clock;
+        this.logDirectory = logDirectory;
+        this.logCapBytes = logCapBytes;
         this.fixLogPath = logDirectory.resolve("ws_pred_v31_fixes.jsonl");
         this.tickLogPath = logDirectory.resolve("ws_pred_v31_ticks.psv");
         this.subscription = tap.flux()
@@ -48,11 +60,11 @@ public class V31ShadowService {
                     try {
                         process(fix);
                     } catch (Exception e) {
-                        v31ErrorCount.incrementAndGet();
+                        tap.recordError();
                         log.debug("v31 shadow tick failed: {}", e.getMessage());
                     }
                 }, err -> {
-                    v31ErrorCount.incrementAndGet();
+                    tap.recordError();
                     log.warn("v31 shadow stream terminated: {}", err.getMessage());
                 });
     }
@@ -76,28 +88,52 @@ public class V31ShadowService {
     private synchronized void writeLogs(V31Fix fix, MotionFilterCore core,
                                         PredictionModel.Estimate est) {
         try {
-            if (fixWriter == null) {
-                Files.createDirectories(fixLogPath.getParent());
-                fixWriter = Files.newBufferedWriter(fixLogPath);
-                tickWriter = Files.newBufferedWriter(tickLogPath);
+            if (bytesWritten >= logCapBytes) {
+                v31LogDroppedTicks.incrementAndGet();
+                return;
+            }
+            String hour = java.time.ZonedDateTime.ofInstant(clock.instant(), java.time.ZoneOffset.UTC)
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HH"));
+            if (fixWriter == null || !hour.equals(writerHour)) {
+                if (fixWriter != null) {
+                    fixWriter.close();
+                    tickWriter.close();
+                }
+                Files.createDirectories(logDirectory);
+                if (writerHour == null) {
+                    try (var files = Files.list(logDirectory)) {
+                        bytesWritten = files.filter(Files::isRegularFile)
+                                .mapToLong(f -> f.toFile().length()).sum();
+                    }
+                }
+                writerHour = hour;
+                fixWriter = Files.newBufferedWriter(logDirectory.resolve(
+                        "ws_pred_v31_fixes-" + hour + ".jsonl"));
+                tickWriter = Files.newBufferedWriter(logDirectory.resolve(
+                        "ws_pred_v31_ticks-" + hour + ".psv"));
                 tickWriter.write("vid8|ts|mode|leader|s\n");
             }
-            fixWriter.write(String.format(Locale.ROOT,
+            String fixLine = String.format(Locale.ROOT,
                     "{\"vehicleId\":\"%s\",\"licensePlate\":\"%s\",\"routeNumber\":\"%s\","
                             + "\"latitude\":%.7f,\"longitude\":%.7f,\"speedKmh\":%.4f,"
                             + "\"course\":%.1f,\"inMotion\":%s,\"timestamp\":\"%s\","
                             + "\"direction\":%d}%n",
                     fix.vehicleId(), fix.licensePlate(), fix.routeNumber(), fix.latitude(),
                     fix.longitude(), fix.speedKmh(), fix.course(), fix.inMotion(),
-                    fix.timestamp(), fix.direction()));
-            tickWriter.write(String.format(Locale.ROOT, "%s|%d|%s|%s|%.1f%n",
+                    fix.timestamp(), fix.direction());
+            String tickLine = String.format(Locale.ROOT, "%s|%d|%s|%s|%.1f%n",
                     fix.vehicleId().length() >= 8 ? fix.vehicleId().substring(0, 8) : fix.vehicleId(),
                     fix.timestamp().toEpochMilli(), est.mode(),
-                    core.bank().leader().variantId(), est.s()));
+                    core.bank().leader().variantId(), est.s());
+            fixWriter.write(fixLine);
+            tickWriter.write(tickLine);
+            bytesWritten += fixLine.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+                    + tickLine.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
             fixWriter.flush();
             tickWriter.flush();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+        } catch (IOException | RuntimeException e) {
+            v31LogDroppedTicks.incrementAndGet();
+            log.debug("v31 shadow log write failed: {}", e.getMessage());
         }
     }
 
@@ -106,7 +142,11 @@ public class V31ShadowService {
     }
 
     public long v31ErrorCount() {
-        return v31ErrorCount.get();
+        return tap.errorCount();
+    }
+
+    public long v31LogDroppedTicks() {
+        return v31LogDroppedTicks.get();
     }
 
     public Clock clock() {

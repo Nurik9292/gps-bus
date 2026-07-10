@@ -227,12 +227,18 @@ public class VehiclePositionPredictionService {
                             boolean isBuffered,
                             biz.ugur.busroutebackend.transport.infrastructure.debug.GpsQuality gpsQuality) {
         if (v31ShadowTap != null) {
-            biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap tap =
-                    v31ShadowTap.getIfAvailable();
-            if (tap != null) {
-                tap.accept(new biz.ugur.busroutebackend.prediction.shadow.V31Fix(
-                        vehicleId, licensePlate, routeNumber, latitude, longitude,
-                        speedKmh, course, inMotion, timestamp, direction));
+            biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap tap = null;
+            try {
+                tap = v31ShadowTap.getIfAvailable();
+                if (tap != null) {
+                    tap.accept(new biz.ugur.busroutebackend.prediction.shadow.V31Fix(
+                            vehicleId, licensePlate, routeNumber, latitude, longitude,
+                            speedKmh, course, inMotion, timestamp, direction));
+                }
+            } catch (RuntimeException v31InjectionFailure) {
+                if (tap != null) {
+                    tap.recordError();
+                }
             }
         }
 
