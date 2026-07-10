@@ -37,6 +37,7 @@ scripts/*
 !scripts/step5_w31_gokje_recon.py
 !scripts/step5_w31_p5.py
 !scripts/step5_w31_p67.py
+!scripts/step5_w31_p9.py
 !scripts/campaign-healthcheck.py
 deployment/
 .idea
