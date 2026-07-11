@@ -111,6 +111,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         offRouteExitStreak = 0;
         offRouteExitLastZx = Double.NaN;
         prevTravelMode = Mode.TRACKING;
+        termDepartMoveTicks = 0;
+        termDepartMisses = 0;
         bank = new HypothesisBank(cfg);
         pendingDirectionSwitch = null;
         lastNu = Double.NaN;
@@ -225,6 +227,11 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         boolean allHypothesesMissed = !snap.snapped() && bank.noneSnapped();
         offRouteMisses = allHypothesesMissed ? offRouteMisses + 1 : 0;
 
+        if (mode == Mode.AT_TERMINAL) {
+            Estimate departedOffAxis = terminalDepartureStep(fix, allHypothesesMissed, g);
+            if (departedOffAxis != null) return departedOffAxis;
+        }
+
         if (recoveringFromFreeze && snap.snapped()
                 && Math.abs(forwardDelta(snap.sOnLine(), x, g)) > cfg.dReanchorMeters()) {
             reinitAt(snap.sOnLine(), fix);
@@ -305,6 +312,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             revertStreak = 0;
             persistCounter = 0;
             reanchorConfirms = 0;
+            termDepartMoveTicks = 0;
+            termDepartMisses = 0;
             events.add(new StopEvent(StopEventType.AT_TERMINAL, "variant-terminal", fix.timestamp()));
         }
         lastUpdateAccepted = false;
@@ -314,6 +323,41 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     private boolean isTravelMode() {
         return mode == Mode.TRACKING || mode == Mode.DECELERATING || mode == Mode.DEPARTING;
+    }
+
+    private int termDepartMoveTicks;
+    private int termDepartMisses;
+
+    private Estimate terminalDepartureStep(GpsFix fix, boolean allHypothesesMissed, RouteLine g) {
+        if (fix.speedKmh() < cfg.vMoveKmh()) {
+            termDepartMoveTicks = 0;
+            return null;
+        }
+        termDepartMoveTicks++;
+        if (!allHypothesesMissed) {
+            termDepartMisses = 0;
+            return null;
+        }
+        if (termDepartMoveTicks < cfg.nDepMoveConfirm()) {
+            return null;
+        }
+        termDepartMisses++;
+        if (termDepartMisses < cfg.kTermMissOffRoute()) {
+            return null;
+        }
+        prevTravelMode = Mode.TRACKING;
+        mode = Mode.OFF_ROUTE;
+        offRouteTransitions++;
+        offRouteSec = 0;
+        offRouteMisses = 0;
+        offRouteExitStreak = 0;
+        termDepartMisses = 0;
+        termDepartMoveTicks = 0;
+        System.out.printf("терминал: выезд вне коридора (№15′) — AT_TERMINAL→OFF_ROUTE, "
+                + "x̂ заморожен на %.1f%n", x);
+        lastUpdateAccepted = false;
+        recomputeEtas(fix, g);
+        return new Estimate(x, v, Mode.OFF_ROUTE.name(), Math.max(p00, 1e-6));
     }
 
     private boolean bankSwitchAllowed() {
@@ -569,6 +613,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                 && mode != Mode.NEW_TRIP && mode != Mode.DWELL) {
             mode = Mode.AT_TERMINAL;
             turnStreak = 0;
+            termDepartMoveTicks = 0;
+            termDepartMisses = 0;
             events.add(new StopEvent(StopEventType.AT_TERMINAL, "terminal", fix.timestamp()));
             return;
         }
