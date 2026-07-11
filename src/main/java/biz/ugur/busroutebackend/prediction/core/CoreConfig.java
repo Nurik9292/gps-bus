@@ -62,7 +62,8 @@ public record CoreConfig(
         int nTurnConfirmTerm,
         double dTurnConfirmTermMeters,
         int kTermMissOffRoute,
-        int nDepMoveConfirm) {
+        int nDepMoveConfirm,
+        int kConfirmFreeze) {
 
     public static CoreConfig defaults() {
         return new CoreConfig(
@@ -102,7 +103,8 @@ public record CoreConfig(
                 5, // nTurnConfirmTerm (№23′, К-4б): калибруется, Шаг 5
                 150.0, // dTurnConfirmTermMeters (№23′, К-4б): калибруется, Шаг 5
                 5, // kTermMissOffRoute (№15′, К-2): калибруется, Шаг 5
-                3); // nDepMoveConfirm (№15′, К-2): калибруется, Шаг 5
+                3, // nDepMoveConfirm (№15′, К-2): калибруется, Шаг 5
+                2); // kConfirmFreeze (№22′, К-3): калибруется, Шаг 5
     }
 
     private static double qScaleFromSystemProperties() {

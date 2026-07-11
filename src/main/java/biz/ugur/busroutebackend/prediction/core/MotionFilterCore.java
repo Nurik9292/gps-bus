@@ -71,6 +71,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     private HypothesisBank bank;
     private HypothesisBank.Hypothesis pendingDirectionSwitch;
+    private boolean freezeReanchorGate;
+    private boolean tripPartial;
 
     public MotionFilterCore(CoreConfig cfg) {
         this.cfg = cfg;
@@ -119,6 +121,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         lastS = Double.NaN;
         recoveringFromFreeze = false;
         nextStopIdx = 0;
+        freezeReanchorGate = false;
+        tripPartial = false;
         minSpeedKmhInZone = Double.MAX_VALUE;
         dwellOutlierFlagged = false;
         events.clear();
@@ -139,6 +143,10 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     public long tripId() {
         return tripId;
+    }
+
+    public boolean currentTripPartial() {
+        return tripPartial;
     }
 
     public int lapCount() {
@@ -226,6 +234,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         Snap snap = snapInWindow(fix, g, dTau);
         boolean allHypothesesMissed = !snap.snapped() && bank.noneSnapped();
         offRouteMisses = allHypothesesMissed ? offRouteMisses + 1 : 0;
+        if (freezeReanchorGate && bank.leader().progressStreak() >= cfg.kConfirmFreeze()) {
+            freezeReanchorGate = false;
+        }
 
         if (mode == Mode.AT_TERMINAL) {
             Estimate departedOffAxis = terminalDepartureStep(fix, allHypothesesMissed, g);
@@ -236,6 +247,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                 && Math.abs(forwardDelta(snap.sOnLine(), x, g)) > cfg.dReanchorMeters()) {
             reinitAt(snap.sOnLine(), fix);
             recoveringFromFreeze = false;
+            freezeReanchorGate = true;
             bank.reseedAll();
             lastNu = 0;
             lastS = cfg.pInitPos();
@@ -248,6 +260,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         if (recoveringFromFreeze && snap.snapped()) {
             mode = Mode.TRACKING;
             recoveringFromFreeze = false;
+            freezeReanchorGate = true;
             bank.reseedAll();
         }
         double measSigma = measurementSigma(fix, snap.dSnap());
@@ -379,6 +392,13 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             offRouteExitStreak = 0;
         }
         if (cand.direction() != direction) {
+            if (freezeReanchorGate && cand.progressStreak() < cfg.kConfirmFreeze()) {
+                System.out.printf("№22′: смена d после freeze не подтверждена (prog=%d < %d) — "
+                        + "RECOVERING без trip_id++%n", cand.progressStreak(), cfg.kConfirmFreeze());
+                mode = Mode.RECOVERING;
+                lastUpdateAccepted = false;
+                return new Estimate(x, v, Mode.RECOVERING.name(), Math.max(p00, 1e-6));
+            }
             double closeTailGap = cand.geom().totalMeters() - cand.x();
             if (Math.abs(closeTailGap) <= cfg.epsCloseTailMeters()) {
                 bank.commitSwitch();
@@ -451,6 +471,12 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         p11 = cfg.pInitVel();
         tripId++;
         mode = Mode.NEW_TRIP;
+        tripPartial = freezeReanchorGate;
+        if (tripPartial) {
+            System.out.printf("№22′: NEW_TRIP (partial) — freeze-ре-привязка, start-of-trip = "
+                    + "точка ре-привязки x=%.1f; леги вне стоп-стоп-истории №12%n", x);
+        }
+        freezeReanchorGate = false;
         turnStreak = 0;
         revertStreak = 0;
         persistCounter = 0;
@@ -577,6 +603,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         p11 = cfg.pInitVel();
         tripId++;
         mode = Mode.NEW_TRIP;
+        tripPartial = false;
+        freezeReanchorGate = false;
         turnStreak = 0;
         revertStreak = 0;
         persistCounter = 0;
