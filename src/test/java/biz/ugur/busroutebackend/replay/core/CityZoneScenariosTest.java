@@ -356,14 +356,30 @@ class CityZoneScenariosTest {
     }
 
     private static MotionFilterCore wakePinnedCore(RouteTopology topo, long[] tOut) {
+        return wakePinnedCore(topo, tOut, false);
+    }
+
+    private static MotionFilterCore wakePinnedCore(RouteTopology topo, long[] tOut,
+                                                   boolean leaderD1) {
         MotionFilterCore core = new MotionFilterCore(CFG);
         core.reset();
-        Drive warmup = drive(core, topo, approachOnAxisTo(20000, 1000));
+        long t;
+        if (leaderD1) {
+            List<GpsFix> away = new ArrayList<>();
+            t = 1000;
+            for (double s = 600; s <= 2400; s += 150, t += 10) {
+                away.add(fixOn(G61_1, s, 45.0, t));
+            }
+            drive(core, topo, away);
+        } else {
+            Drive warmup = drive(core, topo, approachOnAxisTo(20000, 1000));
+            t = warmup.tEnd();
+        }
         double sNearP = sNearPlateauOutsideDeep();
-        long t = warmup.tEnd() + 600;
+        t += 600;
         List<GpsFix> wake = new ArrayList<>();
         for (int i = 0; i < 4; i++, t += 10) {
-            wake.add(fixOn(G61_0, sNearP + i * 30, 60.0, t));
+            wake.add(fixOn(G61_0, sNearP + i * 30, leaderD1 ? 20.0 : 60.0, t));
         }
         drive(core, topo, wake);
         tOut[0] = t;
@@ -450,7 +466,8 @@ class CityZoneScenariosTest {
     void cPrimeFiresOnQualifiedExitWithoutVisitBoundary() {
         RouteTopology topo = cityTopo();
         long[] t = new long[1];
-        MotionFilterCore core = wakePinnedCore(topo, t);
+        MotionFilterCore core = wakePinnedCore(topo, t, true);
+        assertThat(core.cityPinActive()).isTrue();
         t[0] = qualifyPin(core, topo, t[0] + 10);
         long tripBefore = core.tripId();
         int dirBefore = core.direction();
@@ -465,23 +482,72 @@ class CityZoneScenariosTest {
     }
 
     @Test
+    void closingSwitchBeforeQualificationSuppressesCPrime() {
+        RouteTopology topo = cityTopo();
+        MotionFilterCore core = new MotionFilterCore(CFG);
+        core.reset();
+        long t = 1000;
+        List<GpsFix> away = new ArrayList<>();
+        for (double s = 600; s <= 2400; s += 150, t += 10) {
+            away.add(fixOn(G61_1, s, 45.0, t));
+        }
+        drive(core, topo, away);
+        t += 700;
+        double sEndW = G61_0.totalMeters();
+        List<GpsFix> wake = new ArrayList<>();
+        for (int i = 0; i < 4; i++, t += 10) {
+            wake.add(fixOn(G61_0, sEndW - 260 + i * 15, 15.0, t));
+        }
+        drive(core, topo, wake);
+        assertThat(core.cityPinActive()).as("wake-пин установлен (лидер d1)").isTrue();
+        double sEnd = G61_0.totalMeters();
+        List<GpsFix> toEnd = new ArrayList<>();
+        for (double s = sEnd - 190; s <= sEnd; s += 25, t += 10) {
+            toEnd.add(fixOn(G61_0, s, 15.0, t));
+        }
+        drive(core, topo, toEnd);
+        assertThat(core.direction()).as("закрывающая №22″ прошла: лидер d0").isEqualTo(0);
+        assertThat(core.cityPinActive()).as("пин жив после закрывающей").isTrue();
+        long tripAfterClosing = core.tripId();
+        drive(core, topo, plateauCrawl(t + 10, 140, 10));
+        t += 170;
+        List<String> modes = new ArrayList<>();
+        for (int i = 1; i <= 10; i++) {
+            modes.add(core.onFix(fixAt(P_LAT + i * 250 * DEG_PER_METER_LAT, P_LON,
+                    40.0, t += 10), topo).mode());
+        }
+        long newTrips = 0;
+        String prevMode = "";
+        for (String md : modes) {
+            if ("NEW_TRIP".equals(md) && !"NEW_TRIP".equals(prevMode)) {
+                newTrips++;
+            }
+            prevMode = md;
+        }
+        assertThat(core.tripId() - tripAfterClosing)
+                .as("за визит ровно +1 (легитимный терминальный канал), дубль C' подавлен")
+                .isEqualTo(1);
+        assertThat(newTrips).as("одна граница на выезде").isEqualTo(1);
+        assertThat(core.cityPinActive()).isFalse();
+    }
+
+    @Test
     void cPrimeSuppressedWhenVisitBoundaryAlreadyHappened() {
         RouteTopology topo = cityTopo();
         long[] t = new long[1];
-        MotionFilterCore core = wakePinnedCore(topo, t);
+        MotionFilterCore core = wakePinnedCore(topo, t, true);
         t[0] = qualifyPin(core, topo, t[0] + 10);
         for (int i = 1; i <= 10; i++) {
             core.onFix(fixAt(P_LAT + i * 250 * DEG_PER_METER_LAT, P_LON, 40.0, t[0] += 10), topo);
         }
         long tripAfterCPrime = core.tripId();
-        t[0] += 400;
-        drive(core, topo, plateauCrawl(t[0], 60, 10));
-        t[0] += 70;
-        for (int i = 1; i <= 10; i++) {
-            core.onFix(fixAt(P_LAT + i * 250 * DEG_PER_METER_LAT, P_LON, 40.0, t[0] += 10), topo);
+        t[0] += 40;
+        for (int i = 0; i < 6; i++) {
+            core.onFix(fixAt(P_LAT + 2600 * DEG_PER_METER_LAT, P_LON, 0.0, t[0] += 10), topo);
         }
+        assertThat(core.cityPinActive()).as("после C' пин снят").isFalse();
         assertThat(core.tripId())
-                .as("повторный выезд после границы визита: C' подавлен")
+                .as("вне зоны без пина повторных границ нет")
                 .isEqualTo(tripAfterCPrime);
     }
 
@@ -509,12 +575,12 @@ class CityZoneScenariosTest {
         for (int i = 1; i <= 10; i++) {
             core.onFix(fixAt(P_LAT + i * 250 * DEG_PER_METER_LAT, P_LON, 40.0, t[0] += 10), topo);
         }
-        assertThat(core.tripId()).as("предусловие: C' дал границу").isGreaterThan(1);
+        assertThat(core.tripId()).as("предусловие: терминальный канал дал границу-якорь").isGreaterThan(1);
         double sNearP = sNearPlateauOutsideDeep();
         int dirAtBoundary = core.direction();
         List<Integer> dirs = new ArrayList<>();
-        for (int i = 1; i <= 20; i++) {
-            core.onFix(fixOn(G61_0, sNearP - i * 150, 45.0, t[0] += 10), topo);
+        for (int i = 1; i <= 25; i++) {
+            core.onFix(fixOn(G61_0, sNearP + 200 + i * 150, 45.0, t[0] += 10), topo);
             dirs.add(core.direction());
         }
         assertThat(dirs.get(0))
