@@ -71,7 +71,9 @@ public record CoreConfig(
         int kCityExit,
         double dCityExitDeltaMeters,
         double gCitySpanGapSec,
-        double tCityExitMinSpanSec) {
+        double tCityExitMinSpanSec,
+        double tPostBoundaryGuardSec,
+        int kConfirmPostBoundary) {
 
     public static CoreConfig defaults() {
         return new CoreConfig(
@@ -120,7 +122,9 @@ public record CoreConfig(
                 5, // kCityExit (М5-C): калибруется, Шаг 5
                 150.0, // dCityExitDeltaMeters (М5-C, ΔR): калибруется, Шаг 5
                 600.0, // gCitySpanGapSec (М5-A, гэп-допуск F1-span): калибруется, Шаг 5
-                30.0); // tCityExitMinSpanSec (М5-C, У-2 A-120726-2): калибруется, Шаг 5
+                30.0, // tCityExitMinSpanSec (М5-C, У-2 A-120726-2): калибруется, Шаг 5
+                300.0, // tPostBoundaryGuardSec (§Fold-guard, Р/И3.4): калибруется, Шаг 5 [120;600]
+                2); // kConfirmPostBoundary (§Fold-guard, образец К-3): калибруется, Шаг 5
     }
 
     private static double qScaleFromSystemProperties() {

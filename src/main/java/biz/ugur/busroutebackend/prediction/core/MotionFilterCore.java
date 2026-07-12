@@ -86,6 +86,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private boolean cityPinActive;
     private boolean cityPinFreezePrinted;
     private boolean cityPinDwellQualified;
+    private boolean cityBoundarySinceQual;
+    private double lastChanneledBoundaryEpoch = Double.NaN;
     private int cityExitStreak;
     private boolean cityExitArmed;
     private double cityBestSpanSec;
@@ -157,6 +159,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         cityTripIdAtZoneEntry = -1;
         cityPinFreezePrinted = false;
         cityPinDwellQualified = false;
+        cityBoundarySinceQual = false;
+        lastChanneledBoundaryEpoch = Double.NaN;
         cityPinActive = false;
         cityExitStreak = 0;
         cityExitArmed = false;
@@ -448,6 +452,15 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             offRouteExitStreak = 0;
         }
         if (cand.direction() != direction) {
+            if (withinPostBoundaryGuard(fix) && cand.progressStreak() < cfg.kConfirmPostBoundary()) {
+                System.out.printf("М5-FG: смена d%d→d%d отвергнута пост-граничным гистерезисом "
+                        + "(candProg=%d < %d, effΔ=%+.2f, x=%.1f)%n",
+                        direction, cand.direction(), cand.progressStreak(),
+                        cfg.kConfirmPostBoundary(),
+                        bank.effectiveScoreOf(cand) - bank.effectiveScoreOf(bank.leader()), x);
+                lastUpdateAccepted = false;
+                return null;
+            }
             if (freezeReanchorGate && cand.progressStreak() < cfg.kConfirmFreeze()) {
                 System.out.printf("№22′: смена d после freeze не подтверждена (prog=%d < %d) — "
                         + "RECOVERING без trip_id++%n", cand.progressStreak(), cfg.kConfirmFreeze());
@@ -474,6 +487,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                                 + "(|s−L|=%.1fм ≤ ε=%.0f), гео-скачок |dp|=%.1fм — тихая коррекция, "
                                 + "без NEW_TRIP/trip_id++%n",
                         cand.variantId(), x, Math.abs(closeTailGap), cfg.epsCloseTailMeters(), dp);
+                markChanneledBoundary(fix);
                 resyncNextStop(cand.geom());
                 lastUpdateAccepted = false;
                 lastEtas = java.util.List.of();
@@ -592,8 +606,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         if (inSpanZone && fix.speedKmh() <= cfg.vMoveKmh()) {
             if (Double.isNaN(citySpanFirstEpoch)) citySpanFirstEpoch = epoch;
             citySpanLastEpoch = epoch;
-            if (cityBestSpanSec >= cfg.tCityDwellSec()) {
+            if (cityBestSpanSec >= cfg.tCityDwellSec() && !cityPinDwellQualified) {
                 cityPinDwellQualified = true;
+                cityBoundarySinceQual = false;
             }
             cityBestSpanSec = Math.max(cityBestSpanSec,
                     citySpanLastEpoch - citySpanFirstEpoch);
@@ -609,9 +624,24 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         if (cityPinActive && cityExitStreak >= cfg.kCityExit()
                 && zoneDist > cfg.rCityPlateauMeters() + cfg.dCityExitDeltaMeters()) {
             cityPinActive = false;
-            System.out.printf("М5-C: пин-флаг city снят устойчивым выходом при лидере d%d "
-                    + "(k=%d, dist=%.0fм) — граница за банком%n",
-                    direction, cityExitStreak, zoneDist);
+            if (cityPinDwellQualified && !cityBoundarySinceQual) {
+                long oldTrip = tripId;
+                tripId++;
+                mode = Mode.NEW_TRIP;
+                tripPartial = false;
+                markChanneledBoundary(fix);
+                System.out.printf("М5-C′: same-d граница цикла из пина (d=%d, k=%d, "
+                        + "dist=%.0fм, x=%.1f) tripId %d→%d%n",
+                        direction, cityExitStreak, zoneDist, x, oldTrip, tripId);
+            } else if (cityPinDwellQualified) {
+                System.out.printf("М5-C′-SUPP: выход при квалифицированном пине подавлен — "
+                        + "граница визита уже была (последняя канальная @%.0f)%n",
+                        lastChanneledBoundaryEpoch);
+            } else {
+                System.out.printf("М5-C: пин-флаг city снят устойчивым выходом при лидере d%d "
+                        + "(k=%d, dist=%.0fм) — пин без квалификации, граница за банком%n",
+                        direction, cityExitStreak, zoneDist);
+            }
         }
     }
 
@@ -697,6 +727,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     }
 
     private void enterCityTerminal(GpsFix fix, RouteLine g, String eventTag) {
+        if (!cityPinDwellQualified) {
+            cityBoundarySinceQual = false;
+        }
         cityPinDwellQualified = true;
         cityExitArmed = true;
         cityExitStreak = 0;
@@ -845,7 +878,19 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         return new Estimate(heldTurnS, 0.0, mode.name(), Math.max(p00, 1e-6));
     }
 
+    private boolean withinPostBoundaryGuard(GpsFix fix) {
+        return !Double.isNaN(lastChanneledBoundaryEpoch)
+                && fix.timestamp().toEpochMilli() / 1000.0 - lastChanneledBoundaryEpoch
+                   < cfg.tPostBoundaryGuardSec();
+    }
+
+    private void markChanneledBoundary(GpsFix fix) {
+        lastChanneledBoundaryEpoch = fix.timestamp().toEpochMilli() / 1000.0;
+        cityBoundarySinceQual = true;
+    }
+
     private Estimate startNewTrip(GpsFix fix, RouteLine gNew) {
+        markChanneledBoundary(fix);
         direction = gNew.direction();
         x = turnFirstZx;
         v = Math.max(0, fix.speedKmh() / 3.6);
