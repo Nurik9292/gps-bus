@@ -70,8 +70,13 @@ class Acceptance31ReplayTest {
                 RouteTopology topo = banked61();
                 String vid8 = e.getKey().substring(0, 8);
                 System.out.printf("=== борт %s%n", vid8);
+                boolean prevPin = false;
                 for (GpsFix fx : fixes) {
                     var est = core.onFix(fx, topo);
+                    if (core.cityPinActive() != prevPin) {
+                        prevPin = core.cityPinActive();
+                        System.out.printf("М5-PIN %s %s %s%n", vid8, fx.timestamp(), prevPin ? "on" : "off");
+                    }
                     w.write(String.format(Locale.ROOT, "%s|%s|%s|%s|%.1f|%d|%d|%s%n",
                             vid8, fx.timestamp(), est.mode(),
                             core.bank().leader().variantId(), est.s(), core.direction(),
