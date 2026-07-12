@@ -168,6 +168,7 @@ public final class A10Support {
                 c.epsCloseTailMeters(), c.nTurnConfirmTerm(), c.dTurnConfirmTermMeters(),
                 c.kTermMissOffRoute(), c.nDepMoveConfirm(), c.kConfirmFreeze(),
                 c.rCityDeepMeters(), c.rCityPlateauMeters(), c.tCityDwellSec(),
-                c.mCityFixes(), c.kCityExit(), c.dCityExitDeltaMeters(), c.gCitySpanGapSec());
+                c.mCityFixes(), c.kCityExit(), c.dCityExitDeltaMeters(), c.gCitySpanGapSec(),
+                c.tCityExitMinSpanSec());
     }
 }

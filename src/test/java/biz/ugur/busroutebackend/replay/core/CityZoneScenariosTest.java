@@ -261,6 +261,58 @@ class CityZoneScenariosTest {
     }
 
     @Test
+    void wakeInPlateauOnlyPinsWithoutTerminal() {
+        MotionFilterCore core = new MotionFilterCore(CFG);
+        core.reset();
+        RouteTopology topo = cityTopo();
+        Drive warmup = drive(core, topo, approachOnAxisTo(20000, 1000));
+        double sNearP = 0;
+        double bestDp = Double.MAX_VALUE;
+        for (double s = 0; s <= G61_0.totalMeters(); s += 25) {
+            double[] q = G61_0.pointAtS(s);
+            double dp = GeometryFixture.haversineMeters(q[0], q[1], P_LAT, P_LON);
+            if (dp < bestDp && GeometryFixture.haversineMeters(q[0], q[1],
+                    G61_0.pointAtS(G61_0.totalMeters())[0],
+                    G61_0.pointAtS(G61_0.totalMeters())[1]) > CFG.rCityDeepMeters()) {
+                bestDp = dp;
+                sNearP = s;
+            }
+        }
+        assertThat(bestDp).as("на оси есть точка в P-радиусе вне D").isLessThan(CFG.rCityPlateauMeters());
+        long t = warmup.tEnd() + 600;
+        List<GpsFix> wake = new ArrayList<>();
+        for (int i = 0; i < 4; i++, t += 10) {
+            wake.add(fixOn(G61_0, sNearP + i * 30, 60.0, t));
+        }
+        Drive d = drive(core, topo, wake);
+
+        assertThat(core.mode().name())
+                .as("транзит-wake в P на скорости: AT_TERMINAL не рождается (У-1)")
+                .isNotEqualTo("AT_TERMINAL");
+        assertThat(cityEventTag(d.events())).isEmpty();
+        assertThat(core.cityPinActive()).isTrue();
+    }
+
+    @Test
+    void transitPassWithoutDwellKeepsCSilent() {
+        MotionFilterCore core = new MotionFilterCore(CFG);
+        core.reset();
+        RouteTopology topo = cityTopo();
+        List<GpsFix> fixes = approachOnAxisTo(29500, 1000);
+        long tripBefore = -1;
+        long t = lastT(fixes) + 10;
+        for (double s = 200; s <= 2600; s += 300, t += 10) {
+            fixes.add(fixOn(G61_1, s, 45.0, t));
+        }
+        Drive d = drive(core, topo, fixes);
+
+        assertThat(cityEventTag(d.events()))
+                .as("въезд-проезд без стоянки: ни A, ни C (У-2, флап-класс эп.15)")
+                .isEmpty();
+        assertThat(d.modes()).doesNotContain("NEW_TRIP");
+    }
+
+    @Test
     void gurtlyTerminalUntouchedByCityZone() {
         MotionFilterCore core = new MotionFilterCore(CFG);
         core.reset();
