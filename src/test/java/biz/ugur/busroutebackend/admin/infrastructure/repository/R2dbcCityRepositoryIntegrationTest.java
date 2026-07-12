@@ -54,6 +54,8 @@ class R2dbcCityRepositoryIntegrationTest {
                 name_tm VARCHAR(100),
                 is_active BOOLEAN DEFAULT true,
                 display_order INTEGER DEFAULT 0,
+                latitude DOUBLE PRECISION,
+                longitude DOUBLE PRECISION,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 version BIGINT DEFAULT 0
