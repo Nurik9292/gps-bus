@@ -456,6 +456,10 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                 x = Math.min(cand.x(), cand.geom().totalMeters());
                 v = 0;
                 mode = Mode.AT_TERMINAL;
+                if (cityZone != null && direction == cityEndDirection) {
+                    cityExitArmed = true;
+                    cityExitStreak = 0;
+                }
                 turnStreak = 0;
                 revertStreak = 0;
                 persistCounter = 0;
@@ -860,6 +864,10 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             turnStreak = 0;
             termDepartMoveTicks = 0;
             termDepartMisses = 0;
+            if (cityZone != null && direction == cityEndDirection) {
+                cityExitArmed = true;
+                cityExitStreak = 0;
+            }
             events.add(new StopEvent(StopEventType.AT_TERMINAL, "terminal", fix.timestamp()));
             return;
         }
