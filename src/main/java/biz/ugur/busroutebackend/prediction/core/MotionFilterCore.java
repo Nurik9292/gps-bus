@@ -178,6 +178,14 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         return tripPartial;
     }
 
+    public boolean freezeReanchorGateActive() {
+        return freezeReanchorGate;
+    }
+
+    public boolean cityPinActive() {
+        return cityPinActive;
+    }
+
     public int lapCount() {
         return lapCount;
     }
