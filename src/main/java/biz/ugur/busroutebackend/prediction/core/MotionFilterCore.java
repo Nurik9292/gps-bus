@@ -576,11 +576,12 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         cityRunPlateau = inPlateau ? cityRunPlateau + 1 : 0;
         boolean feedGapBroken = !Double.isNaN(cityPrevFixEpoch)
                 && epoch - cityPrevFixEpoch > cfg.gCitySpanGapSec();
-        if (!inPlateau || feedGapBroken) {
+        boolean inSpanZone = inDeep || inPlateau;
+        if (!inSpanZone || feedGapBroken) {
             citySpanFirstEpoch = Double.NaN;
             citySpanLastEpoch = Double.NaN;
         }
-        if (inPlateau && fix.speedKmh() <= cfg.vMoveKmh()) {
+        if (inSpanZone && fix.speedKmh() <= cfg.vMoveKmh()) {
             if (Double.isNaN(citySpanFirstEpoch)) citySpanFirstEpoch = epoch;
             citySpanLastEpoch = epoch;
             cityBestSpanSec = Math.max(cityBestSpanSec,
@@ -688,6 +689,11 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private Estimate cityExitStep(GpsFix fix, RouteTopology topo) {
         if (cityZone == null || direction != cityEndDirection
                 || !topo.hasOpposite(direction)) return null;
+        if (cityExitStreak >= cfg.kCityExit()
+                && (!cityExitArmed || cityBestSpanSec < cfg.tCityExitMinSpanSec())) {
+            System.out.printf("М5-C-гейт: отказ (armed=%b, span=%.0f, streak=%d, dist=%.0f)%n",
+                    cityExitArmed, cityBestSpanSec, cityExitStreak, cityPrevZoneDist);
+        }
         if (!cityExitArmed || cityBestSpanSec < cfg.tCityExitMinSpanSec()) return null;
         if (cityExitStreak < cfg.kCityExit()) return null;
         if (Double.isNaN(cityPrevZoneDist)
