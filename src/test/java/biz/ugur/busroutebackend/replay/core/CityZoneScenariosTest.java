@@ -439,4 +439,89 @@ class CityZoneScenariosTest {
                 .as("стоянка 60с < tCityDwellSec: выход не рождает границу").isEqualTo(tripBefore);
         assertThat(modes).doesNotContain("NEW_TRIP");
     }
+
+    private static long qualifyPin(MotionFilterCore core, RouteTopology topo, long t) {
+        List<GpsFix> crawl = plateauCrawl(t, 140, 10);
+        drive(core, topo, crawl);
+        return lastT(crawl);
+    }
+
+    @Test
+    void cPrimeFiresOnQualifiedExitWithoutVisitBoundary() {
+        RouteTopology topo = cityTopo();
+        long[] t = new long[1];
+        MotionFilterCore core = wakePinnedCore(topo, t);
+        t[0] = qualifyPin(core, topo, t[0] + 10);
+        long tripBefore = core.tripId();
+        int dirBefore = core.direction();
+        List<String> modes = new ArrayList<>();
+        for (int i = 1; i <= 10; i++) {
+            modes.add(core.onFix(fixAt(P_LAT + i * 250 * DEG_PER_METER_LAT, P_LON,
+                    40.0, t[0] += 10), topo).mode());
+        }
+        assertThat(core.tripId()).as("C': tripId++").isEqualTo(tripBefore + 1);
+        assertThat(core.direction()).as("C': same-d").isEqualTo(dirBefore);
+        assertThat(modes).contains("NEW_TRIP");
+    }
+
+    @Test
+    void cPrimeSuppressedWhenVisitBoundaryAlreadyHappened() {
+        RouteTopology topo = cityTopo();
+        long[] t = new long[1];
+        MotionFilterCore core = wakePinnedCore(topo, t);
+        t[0] = qualifyPin(core, topo, t[0] + 10);
+        for (int i = 1; i <= 10; i++) {
+            core.onFix(fixAt(P_LAT + i * 250 * DEG_PER_METER_LAT, P_LON, 40.0, t[0] += 10), topo);
+        }
+        long tripAfterCPrime = core.tripId();
+        t[0] += 400;
+        drive(core, topo, plateauCrawl(t[0], 60, 10));
+        t[0] += 70;
+        for (int i = 1; i <= 10; i++) {
+            core.onFix(fixAt(P_LAT + i * 250 * DEG_PER_METER_LAT, P_LON, 40.0, t[0] += 10), topo);
+        }
+        assertThat(core.tripId())
+                .as("повторный выезд после границы визита: C' подавлен")
+                .isEqualTo(tripAfterCPrime);
+    }
+
+    @Test
+    void cPrimeSilentOnUnqualifiedWakePin() {
+        RouteTopology topo = cityTopo();
+        long[] t = new long[1];
+        MotionFilterCore core = wakePinnedCore(topo, t);
+        long tripBefore = core.tripId();
+        List<String> modes = new ArrayList<>();
+        for (int i = 1; i <= 10; i++) {
+            modes.add(core.onFix(fixAt(P_LAT + i * 250 * DEG_PER_METER_LAT, P_LON,
+                    40.0, t[0] += 10), topo).mode());
+        }
+        assertThat(core.tripId()).as("wake-пин без квалификации: C' молчит").isEqualTo(tripBefore);
+        assertThat(modes).doesNotContain("NEW_TRIP");
+    }
+
+    @Test
+    void foldGuardBlocksBounceThenAllowsProgressedReversal() {
+        RouteTopology topo = cityTopo();
+        long[] t = new long[1];
+        MotionFilterCore core = wakePinnedCore(topo, t);
+        t[0] = qualifyPin(core, topo, t[0] + 10);
+        for (int i = 1; i <= 10; i++) {
+            core.onFix(fixAt(P_LAT + i * 250 * DEG_PER_METER_LAT, P_LON, 40.0, t[0] += 10), topo);
+        }
+        assertThat(core.tripId()).as("предусловие: C' дал границу").isGreaterThan(1);
+        double sNearP = sNearPlateauOutsideDeep();
+        int dirAtBoundary = core.direction();
+        List<Integer> dirs = new ArrayList<>();
+        for (int i = 1; i <= 20; i++) {
+            core.onFix(fixOn(G61_0, sNearP - i * 150, 45.0, t[0] += 10), topo);
+            dirs.add(core.direction());
+        }
+        assertThat(dirs.get(0))
+                .as("первые тики окна: отскок с candProg<k заблокирован")
+                .isEqualTo(dirAtBoundary);
+        assertThat(dirs.get(dirs.size() - 1))
+                .as("реальное движение с прогрессом: смена в итоге проходит")
+                .isNotEqualTo(dirAtBoundary);
+    }
 }
