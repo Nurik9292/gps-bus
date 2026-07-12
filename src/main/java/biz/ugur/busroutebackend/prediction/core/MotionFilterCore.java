@@ -84,6 +84,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private boolean cityZoneOccupied;
     private long cityTripIdAtZoneEntry = -1;
     private boolean cityPinActive;
+    private boolean cityPinFreezePrinted;
+    private boolean cityPinDwellQualified;
     private int cityExitStreak;
     private boolean cityExitArmed;
     private double cityBestSpanSec;
@@ -153,6 +155,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         cityPrevFixEpoch = Double.NaN;
         cityZoneOccupied = false;
         cityTripIdAtZoneEntry = -1;
+        cityPinFreezePrinted = false;
+        cityPinDwellQualified = false;
         cityPinActive = false;
         cityExitStreak = 0;
         cityExitArmed = false;
@@ -233,7 +237,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         RouteLine g = bank.leader().geom();
         double dTau = Math.max(0.0,
                 (fix.timestamp().toEpochMilli() - lastFixTime.toEpochMilli()) / 1000.0);
+        double xBeforePredict = x;
         predictOver(dTau, g);
+        holdPinnedXAgainstDeadReckoning(xBeforePredict);
         lastFixTime = fix.timestamp();
         lastRawSpeedKmh = fix.speedKmh();
 
@@ -525,6 +531,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         p11 = cfg.pInitVel();
         tripId++;
         mode = Mode.NEW_TRIP;
+        cityPinFreezePrinted = false;
+        cityPinDwellQualified = false;
         cityPinActive = false;
         cityExitStreak = 0;
         cityExitArmed = false;
@@ -584,6 +592,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         if (inSpanZone && fix.speedKmh() <= cfg.vMoveKmh()) {
             if (Double.isNaN(citySpanFirstEpoch)) citySpanFirstEpoch = epoch;
             citySpanLastEpoch = epoch;
+            if (cityBestSpanSec >= cfg.tCityDwellSec()) {
+                cityPinDwellQualified = true;
+            }
             cityBestSpanSec = Math.max(cityBestSpanSec,
                     citySpanLastEpoch - citySpanFirstEpoch);
         }
@@ -648,6 +659,21 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         }
     }
 
+    private void holdPinnedXAgainstDeadReckoning(double xBeforePredict) {
+        if (cityPinActive) {
+            if (!cityPinFreezePrinted) {
+                cityPinFreezePrinted = true;
+                System.out.printf("М5-Ц1: заморозка x при активном пине (x=%.1f) — "
+                        + "dead-reckoning отключён, обновление только принятыми снапами%n",
+                        xBeforePredict);
+            }
+            x = xBeforePredict;
+        } else if (cityPinFreezePrinted) {
+            cityPinFreezePrinted = false;
+            System.out.printf("М5-Ц1: заморозка x снята (пин off, mode=%s)%n", mode);
+        }
+    }
+
     private boolean cityWakePin(GpsFix fix) {
         if (cityZone == null) return false;
         double dDeep = RouteLine.haversineMeters(fix.latitude(), fix.longitude(),
@@ -671,6 +697,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     }
 
     private void enterCityTerminal(GpsFix fix, RouteLine g, String eventTag) {
+        cityPinDwellQualified = true;
         cityExitArmed = true;
         cityExitStreak = 0;
         mode = Mode.AT_TERMINAL;
@@ -694,7 +721,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             System.out.printf("М5-C-гейт: отказ (armed=%b, span=%.0f, streak=%d, dist=%.0f)%n",
                     cityExitArmed, cityBestSpanSec, cityExitStreak, cityPrevZoneDist);
         }
-        if (!cityExitArmed || cityBestSpanSec < cfg.tCityExitMinSpanSec()) return null;
+        if (!cityExitArmed || cityBestSpanSec < cfg.tCityExitMinSpanSec()
+                || !cityPinDwellQualified) return null;
         if (cityExitStreak < cfg.kCityExit()) return null;
         if (Double.isNaN(cityPrevZoneDist)
                 || cityPrevZoneDist <= cfg.rCityPlateauMeters() + cfg.dCityExitDeltaMeters()) {
@@ -828,6 +856,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         mode = Mode.NEW_TRIP;
         tripPartial = false;
         freezeReanchorGate = false;
+        cityPinFreezePrinted = false;
+        cityPinDwellQualified = false;
         cityPinActive = false;
         cityExitStreak = 0;
         cityExitArmed = false;

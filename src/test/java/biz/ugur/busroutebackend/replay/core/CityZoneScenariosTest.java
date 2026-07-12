@@ -338,4 +338,105 @@ class CityZoneScenariosTest {
         assertThat(arrivals).hasSize(1);
         assertThat(arrivals.get(0).stopId()).isEqualTo("terminal");
     }
+
+    private static double sNearPlateauOutsideDeep() {
+        double sNearP = 0;
+        double bestDp = Double.MAX_VALUE;
+        for (double s = 0; s <= G61_0.totalMeters(); s += 25) {
+            double[] q = G61_0.pointAtS(s);
+            double dp = GeometryFixture.haversineMeters(q[0], q[1], P_LAT, P_LON);
+            if (dp < bestDp && GeometryFixture.haversineMeters(q[0], q[1],
+                    G61_0.pointAtS(G61_0.totalMeters())[0],
+                    G61_0.pointAtS(G61_0.totalMeters())[1]) > CFG.rCityDeepMeters()) {
+                bestDp = dp;
+                sNearP = s;
+            }
+        }
+        return sNearP;
+    }
+
+    private static MotionFilterCore wakePinnedCore(RouteTopology topo, long[] tOut) {
+        MotionFilterCore core = new MotionFilterCore(CFG);
+        core.reset();
+        Drive warmup = drive(core, topo, approachOnAxisTo(20000, 1000));
+        double sNearP = sNearPlateauOutsideDeep();
+        long t = warmup.tEnd() + 600;
+        List<GpsFix> wake = new ArrayList<>();
+        for (int i = 0; i < 4; i++, t += 10) {
+            wake.add(fixOn(G61_0, sNearP + i * 30, 60.0, t));
+        }
+        drive(core, topo, wake);
+        tOut[0] = t;
+        return core;
+    }
+
+    @Test
+    void pinnedStandingVehicleWithRejectedSnapsHasZeroXDrift() {
+        RouteTopology topo = cityTopo();
+        long[] t = new long[1];
+        MotionFilterCore core = wakePinnedCore(topo, t);
+        assertThat(core.cityPinActive()).isTrue();
+        double offLat = P_LAT + 300 * DEG_PER_METER_LAT;
+        double x0 = core.onFix(fixAt(offLat, P_LON, 0.0, t[0] += 10), topo).s();
+        double maxDrift = 0;
+        for (int i = 0; i < 4; i++) {
+            double xi = core.onFix(fixAt(offLat, P_LON, 0.0, t[0] += 10), topo).s();
+            maxDrift = Math.max(maxDrift, Math.abs(xi - x0));
+        }
+        assertThat(maxDrift)
+                .as("дрейф x при пине и отвергнутых снапах (до persist-механики)")
+                .isEqualTo(0.0);
+    }
+
+    @Test
+    void pinnedXFollowsAcceptedSnap() {
+        RouteTopology topo = cityTopo();
+        long[] t = new long[1];
+        MotionFilterCore core = wakePinnedCore(topo, t);
+        double sNearP = sNearPlateauOutsideDeep();
+        double before = core.onFix(fixOn(G61_0, sNearP + 120, 20.0, t[0] += 10), topo).s();
+        double after = before;
+        for (int i = 1; i <= 5; i++) {
+            after = core.onFix(fixOn(G61_0, sNearP + 120 + i * 60, 30.0, t[0] += 10), topo).s();
+        }
+        assertThat(after).as("x следует за принятыми снапами при пине").isGreaterThan(before + 100);
+    }
+
+    @Test
+    void unpinnedDynamicsResumeAfterZoneExit() {
+        RouteTopology topo = cityTopo();
+        long[] t = new long[1];
+        MotionFilterCore core = wakePinnedCore(topo, t);
+        double sNearP = sNearPlateauOutsideDeep();
+        for (int i = 1; i <= 30 && core.cityPinActive(); i++) {
+            core.onFix(fixOn(G61_0, sNearP - i * 150, 45.0, t[0] += 10), topo);
+        }
+        assertThat(core.cityPinActive()).as("пин снят устойчивым выходом").isFalse();
+        long tripBefore = core.tripId();
+        for (int i = 0; i < 5; i++) {
+            core.onFix(fixOn(G61_0, sNearP - 4500 - i * 150, 45.0, t[0] += 10), topo);
+        }
+        assertThat(core.tripId()).as("выход wake-пина без квалификации не рождает границу")
+                .isEqualTo(tripBefore);
+    }
+
+    @Test
+    void transitWakeWithShortDwellProducesNoExitBoundary() {
+        RouteTopology topo = cityTopo();
+        long[] t = new long[1];
+        MotionFilterCore core = wakePinnedCore(topo, t);
+        double sNearP = sNearPlateauOutsideDeep();
+        for (int done = 0; done <= 60; done += 10) {
+            core.onFix(fixOn(G61_0, sNearP, 2.0, t[0] += 10), topo);
+        }
+        long tripBefore = core.tripId();
+        List<String> modes = new ArrayList<>();
+        for (int i = 1; i <= 10; i++) {
+            modes.add(core.onFix(fixAt(P_LAT + i * 250 * DEG_PER_METER_LAT, P_LON,
+                    40.0, t[0] += 10), topo).mode());
+        }
+        assertThat(core.tripId())
+                .as("стоянка 60с < tCityDwellSec: выход не рождает границу").isEqualTo(tripBefore);
+        assertThat(modes).doesNotContain("NEW_TRIP");
+    }
 }
