@@ -69,6 +69,7 @@ class Acceptance31ReplayTest {
                 core.reset();
                 RouteTopology topo = banked61();
                 String vid8 = e.getKey().substring(0, 8);
+                System.out.printf("=== борт %s%n", vid8);
                 for (GpsFix fx : fixes) {
                     var est = core.onFix(fx, topo);
                     w.write(String.format(Locale.ROOT, "%s|%s|%s|%s|%.1f|%d|%d|%s%n",
