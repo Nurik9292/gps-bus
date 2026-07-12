@@ -452,14 +452,21 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             offRouteExitStreak = 0;
         }
         if (cand.direction() != direction) {
-            if (withinPostBoundaryGuard(fix) && cand.progressStreak() < cfg.kConfirmPostBoundary()) {
-                System.out.printf("М5-FG: t=%s смена d%d→d%d отвергнута пост-граничным гистерезисом "
-                        + "(candProg=%d < %d, effΔ=%+.2f, x=%.1f)%n",
-                        fix.timestamp(), direction, cand.direction(), cand.progressStreak(),
-                        cfg.kConfirmPostBoundary(),
-                        bank.effectiveScoreOf(cand) - bank.effectiveScoreOf(bank.leader()), x);
-                lastUpdateAccepted = false;
-                return null;
+            if (withinPostBoundaryGuard(fix)) {
+                boolean midFrom = Math.min(x, gOld.totalMeters() - x) > cfg.epsMidlineMeters();
+                boolean midTo = Math.min(cand.x(), cand.geom().totalMeters() - cand.x())
+                        > cfg.epsMidlineMeters();
+                String verdict = midFrom && midTo ? "MIDLINE_BLOCK"
+                        : (cand.progressStreak() < cfg.kConfirmPostBoundary() ? "CP_BLOCK" : "PASS");
+                System.out.printf("М5-FG: t=%s verdict=%s s %.1f→%.1f d%d→d%d "
+                        + "(pre-switch cp=%d, effΔ=%+.2f)%n",
+                        fix.timestamp(), verdict, x, cand.x(), direction, cand.direction(),
+                        cand.progressStreak(),
+                        bank.effectiveScoreOf(cand) - bank.effectiveScoreOf(bank.leader()));
+                if (!"PASS".equals(verdict)) {
+                    lastUpdateAccepted = false;
+                    return null;
+                }
             }
             if (freezeReanchorGate && cand.progressStreak() < cfg.kConfirmFreeze()) {
                 System.out.printf("№22′: смена d после freeze не подтверждена (prog=%d < %d) — "
@@ -488,6 +495,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                                 + "без NEW_TRIP/trip_id++%n",
                         cand.variantId(), x, Math.abs(closeTailGap), cfg.epsCloseTailMeters(), dp);
                 markChanneledBoundary(fix);
+                printCityBoundary(fix, "№22″", direction, direction, x, tripId, tripId);
                 resyncNextStop(cand.geom());
                 lastUpdateAccepted = false;
                 lastEtas = java.util.List.of();
@@ -537,6 +545,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private Estimate applyPendingDirectionSwitch(GpsFix fix) {
         HypothesisBank.Hypothesis target = pendingDirectionSwitch;
         pendingDirectionSwitch = null;
+        int dFromPending = direction;
         direction = target.direction();
         x = target.x();
         v = Math.max(0, fix.speedKmh() / 3.6);
@@ -544,6 +553,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         p01 = p10 = 0;
         p11 = cfg.pInitVel();
         tripId++;
+        printCityBoundary(fix, "bank", dFromPending, direction, x, tripId - 1, tripId);
         cityBoundaryThisVisit = true;
         mode = Mode.NEW_TRIP;
         cityPinFreezePrinted = false;
@@ -625,21 +635,27 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                 && zoneDist > cfg.rCityPlateauMeters() + cfg.dCityExitDeltaMeters()) {
             cityPinActive = false;
             if (mode == Mode.AT_TERMINAL) {
-                System.out.printf("М5-C′-DEFER: выход при AT_TERMINAL — границу ведёт "
-                        + "терминальный канал (§2/C), C′ уступает%n");
+                System.out.printf("М5-C′-DEFER: t=%s выход при AT_TERMINAL — границу ведёт "
+                        + "терминальный канал (§2/C), C′ уступает (последняя канальная @%s)%n",
+                        fix.timestamp(),
+                        Double.isNaN(lastChanneledBoundaryEpoch) ? "—"
+                                : java.time.Instant.ofEpochSecond((long) lastChanneledBoundaryEpoch));
             } else if (cityPinDwellQualified && !cityBoundaryThisVisit) {
                 long oldTrip = tripId;
                 tripId++;
                 mode = Mode.NEW_TRIP;
                 tripPartial = false;
                 markChanneledBoundary(fix);
+                printCityBoundary(fix, "C′", direction, direction, x, oldTrip, tripId);
                 System.out.printf("М5-C′: same-d граница цикла из пина (d=%d, k=%d, "
                         + "dist=%.0fм, x=%.1f) tripId %d→%d%n",
                         direction, cityExitStreak, zoneDist, x, oldTrip, tripId);
             } else if (cityPinDwellQualified) {
-                System.out.printf("М5-C′-SUPP: выход при квалифицированном пине подавлен — "
-                        + "граница визита уже была (последняя канальная @%.0f)%n",
-                        lastChanneledBoundaryEpoch);
+                System.out.printf("М5-C′-SUPP: t=%s выход при квалифицированном пине подавлен — "
+                        + "граница визита уже была (последняя канальная @%s)%n",
+                        fix.timestamp(),
+                        Double.isNaN(lastChanneledBoundaryEpoch) ? "—"
+                                : java.time.Instant.ofEpochSecond((long) lastChanneledBoundaryEpoch));
             } else {
                 System.out.printf("М5-C: пин-флаг city снят устойчивым выходом при лидере d%d "
                         + "(k=%d, dist=%.0fм) — пин без квалификации, граница за банком%n",
@@ -886,6 +902,13 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
                    < cfg.tPostBoundaryGuardSec();
     }
 
+    private void printCityBoundary(GpsFix fix, String channel, int dFrom, int dTo,
+                                   double sAfter, long tripOld, long tripNew) {
+        if (cityZone == null) return;
+        System.out.printf("М5-NT: t=%s канал=%s d%d→d%d s=%.1f tripId %d→%d%n",
+                fix.timestamp(), channel, dFrom, dTo, sAfter, tripOld, tripNew);
+    }
+
     private void markChanneledBoundary(GpsFix fix) {
         lastChanneledBoundaryEpoch = fix.timestamp().toEpochMilli() / 1000.0;
         cityBoundaryThisVisit = true;
@@ -893,6 +916,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     private Estimate startNewTrip(GpsFix fix, RouteLine gNew) {
         markChanneledBoundary(fix);
+        printCityBoundary(fix, "terminal-§2C", direction, gNew.direction(), turnFirstZx,
+                tripId, tripId + 1);
         direction = gNew.direction();
         x = turnFirstZx;
         v = Math.max(0, fix.speedKmh() / 3.6);

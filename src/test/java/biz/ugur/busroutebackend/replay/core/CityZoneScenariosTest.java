@@ -507,6 +507,9 @@ class CityZoneScenariosTest {
         }
         drive(core, topo, toEnd);
         assertThat(core.direction()).as("закрывающая №22″ прошла: лидер d0").isEqualTo(0);
+        double sAfter = core.onFix(fixOn(G61_0, sEndW - 20, 3.0, t += 10), topo).s();
+        assertThat(Math.abs(sAfter - G61_0.totalMeters()))
+                .as("буква (ф): лидер d0 у конца линии, |s−L|<=eps").isLessThanOrEqualTo(150.0);
         assertThat(core.cityPinActive()).as("пин жив после закрывающей").isTrue();
         long tripAfterClosing = core.tripId();
         drive(core, topo, plateauCrawl(t + 10, 140, 10));
@@ -579,15 +582,15 @@ class CityZoneScenariosTest {
         double sNearP = sNearPlateauOutsideDeep();
         int dirAtBoundary = core.direction();
         List<Integer> dirs = new ArrayList<>();
-        for (int i = 1; i <= 25; i++) {
+        for (int i = 1; i <= 40; i++) {
             core.onFix(fixOn(G61_0, sNearP + 200 + i * 150, 45.0, t[0] += 10), topo);
             dirs.add(core.direction());
         }
-        assertThat(dirs.get(0))
-                .as("первые тики окна: отскок с candProg<k заблокирован")
-                .isEqualTo(dirAtBoundary);
+        assertThat(dirs.subList(0, 20))
+                .as("в окне-300: mid-line смена заблокирована безусловно (П-ε)")
+                .containsOnly(dirAtBoundary);
         assertThat(dirs.get(dirs.size() - 1))
-                .as("реальное движение с прогрессом: смена в итоге проходит")
+                .as("после истечения окна смена проходит — задержка, не потеря (бв)")
                 .isNotEqualTo(dirAtBoundary);
     }
 }

@@ -73,7 +73,8 @@ public record CoreConfig(
         double gCitySpanGapSec,
         double tCityExitMinSpanSec,
         double tPostBoundaryGuardSec,
-        int kConfirmPostBoundary) {
+        int kConfirmPostBoundary,
+        double epsMidlineMeters) {
 
     public static CoreConfig defaults() {
         return new CoreConfig(
@@ -124,7 +125,8 @@ public record CoreConfig(
                 600.0, // gCitySpanGapSec (М5-A, гэп-допуск F1-span): калибруется, Шаг 5
                 30.0, // tCityExitMinSpanSec (М5-C, У-2 A-120726-2): калибруется, Шаг 5
                 300.0, // tPostBoundaryGuardSec (§Fold-guard, Р/И3.4): калибруется, Шаг 5 [120;600]
-                2); // kConfirmPostBoundary (§Fold-guard, образец К-3): калибруется, Шаг 5
+                2, // kConfirmPostBoundary (§Fold-guard, образец К-3): калибруется, Шаг 5
+                300.0); // epsMidlineMeters (§0.4 ред. П-ε, И3.8): калибруется, Шаг 5 [150;600]
     }
 
     private static double qScaleFromSystemProperties() {
