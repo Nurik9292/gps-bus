@@ -74,6 +74,21 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private boolean freezeReanchorGate;
     private boolean tripPartial;
 
+    private RouteTopology.CityZone cityZone;
+    private int cityEndDirection = Integer.MIN_VALUE;
+    private int cityRunDeep;
+    private int cityRunPlateau;
+    private double citySpanFirstEpoch = Double.NaN;
+    private double citySpanLastEpoch = Double.NaN;
+    private double cityPrevFixEpoch = Double.NaN;
+    private boolean cityZoneOccupied;
+    private long cityTripIdAtZoneEntry = -1;
+    private boolean cityPinActive;
+    private int cityExitStreak;
+    private double cityPrevZoneDist = Double.NaN;
+    private double cityLastDeepDist = Double.NaN;
+    private double cityLastPlateauDist = Double.NaN;
+
     public MotionFilterCore(CoreConfig cfg) {
         this.cfg = cfg;
         this.currentVTarget = cfg.vTargetMs();
@@ -127,6 +142,20 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         dwellOutlierFlagged = false;
         events.clear();
         lastEtas = java.util.List.of();
+        cityZone = null;
+        cityEndDirection = Integer.MIN_VALUE;
+        cityRunDeep = 0;
+        cityRunPlateau = 0;
+        citySpanFirstEpoch = Double.NaN;
+        citySpanLastEpoch = Double.NaN;
+        cityPrevFixEpoch = Double.NaN;
+        cityZoneOccupied = false;
+        cityTripIdAtZoneEntry = -1;
+        cityPinActive = false;
+        cityExitStreak = 0;
+        cityPrevZoneDist = Double.NaN;
+        cityLastDeepDist = Double.NaN;
+        cityLastPlateauDist = Double.NaN;
     }
 
     public long absDeviationEvents() {
@@ -202,6 +231,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         }
 
         bank.onFix(fix, dTau);
+        cityZoneTrack(fix, topo);
         if (pendingDirectionSwitch != null) {
             return applyPendingDirectionSwitch(fix);
         }
@@ -219,6 +249,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         if (leaderPinnedAtVariantTerminal()) {
             return broadcastVariantTerminal(fix);
         }
+        cityArrivalStep(fix);
         if ((mode == Mode.AT_TERMINAL || mode == Mode.TURNING) && topo.hasOpposite(direction)) {
             Estimate handled = terminalTurnStep(fix, topo);
             if (handled != null) return handled;
@@ -241,6 +272,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         if (mode == Mode.AT_TERMINAL) {
             Estimate departedOffAxis = terminalDepartureStep(fix, allHypothesesMissed, g);
             if (departedOffAxis != null) return departedOffAxis;
+            Estimate cityExit = cityExitStep(fix, topo);
+            if (cityExit != null) return cityExit;
         }
 
         if (recoveringFromFreeze && snap.snapped()
@@ -255,6 +288,10 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             clampToLine(g);
             resyncNextStop(g);
             lastEtas = java.util.List.of();
+            if (cityWakePin(fix)) {
+                recomputeEtas(fix, bank.leader().geom());
+                return new Estimate(x, v, Mode.AT_TERMINAL.name(), Math.max(p00, 1e-6));
+            }
             return new Estimate(x, v, Mode.RECOVERING.name(), Math.max(p00, 1e-6));
         }
         if (recoveringFromFreeze && snap.snapped()) {
@@ -262,6 +299,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             recoveringFromFreeze = false;
             freezeReanchorGate = true;
             bank.reseedAll();
+            cityWakePin(fix);
         }
         double measSigma = measurementSigma(fix, snap.dSnap());
         double r = measSigma * measSigma;
@@ -471,6 +509,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         p11 = cfg.pInitVel();
         tripId++;
         mode = Mode.NEW_TRIP;
+        cityPinActive = false;
+        cityExitStreak = 0;
         tripPartial = freezeReanchorGate;
         if (tripPartial) {
             System.out.printf("№22′: NEW_TRIP (partial) — freeze-ре-привязка, start-of-trip = "
@@ -493,6 +533,154 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         lastS = cfg.pInitPos();
         lastUpdateAccepted = true;
         return new Estimate(x, v, Mode.NEW_TRIP.name(), Math.max(p00, 1e-6));
+    }
+
+    private void cityZoneTrack(GpsFix fix, RouteTopology topo) {
+        cityZone = topo.cityZone();
+        if (cityZone == null) return;
+        if (cityEndDirection == Integer.MIN_VALUE) {
+            cityEndDirection = resolveCityEndDirection(topo);
+        }
+        cityLastDeepDist = RouteLine.haversineMeters(fix.latitude(), fix.longitude(),
+                cityZone.deepLat(), cityZone.deepLon());
+        cityLastPlateauDist = RouteLine.haversineMeters(fix.latitude(), fix.longitude(),
+                cityZone.plateauLat(), cityZone.plateauLon());
+        boolean inDeep = cityLastDeepDist <= cfg.rCityDeepMeters();
+        boolean inPlateau = cityLastPlateauDist <= cfg.rCityPlateauMeters();
+        double epoch = fix.timestamp().toEpochMilli() / 1000.0;
+        boolean occupiedNow = inDeep || inPlateau;
+        if (occupiedNow && !cityZoneOccupied) {
+            cityTripIdAtZoneEntry = tripId;
+        }
+        cityZoneOccupied = occupiedNow;
+        cityRunDeep = inDeep ? cityRunDeep + 1 : 0;
+        cityRunPlateau = inPlateau ? cityRunPlateau + 1 : 0;
+        boolean feedGapBroken = !Double.isNaN(cityPrevFixEpoch)
+                && epoch - cityPrevFixEpoch > cfg.gCitySpanGapSec();
+        if (!inPlateau || feedGapBroken) {
+            citySpanFirstEpoch = Double.NaN;
+            citySpanLastEpoch = Double.NaN;
+        }
+        if (inPlateau && fix.speedKmh() <= cfg.vMoveKmh()) {
+            if (Double.isNaN(citySpanFirstEpoch)) citySpanFirstEpoch = epoch;
+            citySpanLastEpoch = epoch;
+        }
+        cityPrevFixEpoch = epoch;
+        double zoneDist = Math.min(cityLastDeepDist, cityLastPlateauDist);
+        if (!Double.isNaN(cityPrevZoneDist) && zoneDist > cityPrevZoneDist) {
+            cityExitStreak++;
+        } else {
+            cityExitStreak = 0;
+        }
+        cityPrevZoneDist = zoneDist;
+        if (cityPinActive && cityExitStreak >= cfg.kCityExit()
+                && zoneDist > cfg.rCityPlateauMeters() + cfg.dCityExitDeltaMeters()) {
+            cityPinActive = false;
+            System.out.printf("М5-C: пин-флаг city снят устойчивым выходом при лидере d%d "
+                    + "(k=%d, dist=%.0fм) — граница за банком%n",
+                    direction, cityExitStreak, zoneDist);
+        }
+    }
+
+    private int resolveCityEndDirection(RouteTopology topo) {
+        RouteLine best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (RouteLine g : topo.allGeometries()) {
+            double[] end = g.pointAtS(g.totalMeters());
+            double d = RouteLine.haversineMeters(end[0], end[1],
+                    cityZone.deepLat(), cityZone.deepLon());
+            if (d < bestDist) {
+                bestDist = d;
+                best = g;
+            }
+        }
+        return best == null ? Integer.MIN_VALUE : best.direction();
+    }
+
+    private boolean cityDwellSpanReached() {
+        return !Double.isNaN(citySpanFirstEpoch)
+                && citySpanLastEpoch - citySpanFirstEpoch >= cfg.tCityDwellSec();
+    }
+
+    private void cityArrivalStep(GpsFix fix) {
+        if (cityZone == null) return;
+        if (mode == Mode.AT_TERMINAL || mode == Mode.TURNING
+                || mode == Mode.NEW_TRIP || mode == Mode.DWELL) return;
+        boolean fire = cityRunDeep >= cfg.mCityFixes()
+                || (cityRunPlateau >= cfg.mCityFixes() && cityDwellSpanReached());
+        if (!fire) return;
+        if (tripId != cityTripIdAtZoneEntry) return;
+        if (direction == cityEndDirection) {
+            RouteLine g = bank.leader().geom();
+            double xOld = x;
+            enterCityTerminal(fix, g, "city-zone-A");
+            System.out.printf("М5-A: city-прибытие по зоне (runD=%d, runP=%d, span=%.0fс, "
+                    + "dD=%.0f, dP=%.0f) — AT_TERMINAL(city), x %.1f→%.1f%n",
+                    cityRunDeep, cityRunPlateau,
+                    Double.isNaN(citySpanFirstEpoch) ? 0.0 : citySpanLastEpoch - citySpanFirstEpoch,
+                    cityLastDeepDist, cityLastPlateauDist, xOld, x);
+        } else if (!cityPinActive) {
+            cityPinActive = true;
+            System.out.printf("М5-A: гео-прибытие в зону city при лидере d%d — пин-флаг "
+                    + "без смены mode (выбор оси за банком)%n", direction);
+        }
+    }
+
+    private boolean cityWakePin(GpsFix fix) {
+        if (cityZone == null) return false;
+        double dDeep = RouteLine.haversineMeters(fix.latitude(), fix.longitude(),
+                cityZone.deepLat(), cityZone.deepLon());
+        double dPlateau = RouteLine.haversineMeters(fix.latitude(), fix.longitude(),
+                cityZone.plateauLat(), cityZone.plateauLon());
+        if (dDeep > cfg.rCityDeepMeters() && dPlateau > cfg.rCityPlateauMeters()) return false;
+        if (direction == cityEndDirection) {
+            enterCityTerminal(fix, bank.leader().geom(), "city-zone-B");
+            System.out.printf("М5-B: пробуждение/ре-анкер в зоне city (dD=%.0f, dP=%.0f) — "
+                    + "пин восстановлен, AT_TERMINAL(city)%n", dDeep, dPlateau);
+            return true;
+        }
+        if (!cityPinActive) {
+            cityPinActive = true;
+            System.out.printf("М5-B: пробуждение в зоне city при лидере d%d — пин-флаг "
+                    + "без смены mode%n", direction);
+        }
+        return false;
+    }
+
+    private void enterCityTerminal(GpsFix fix, RouteLine g, String eventTag) {
+        mode = Mode.AT_TERMINAL;
+        x = g.totalMeters();
+        v = 0;
+        turnStreak = 0;
+        revertStreak = 0;
+        persistCounter = 0;
+        reanchorConfirms = 0;
+        termDepartMoveTicks = 0;
+        termDepartMisses = 0;
+        lastUpdateAccepted = false;
+        events.add(new StopEvent(StopEventType.AT_TERMINAL, eventTag, fix.timestamp()));
+    }
+
+    private Estimate cityExitStep(GpsFix fix, RouteTopology topo) {
+        if (cityZone == null || direction != cityEndDirection
+                || !topo.hasOpposite(direction)) return null;
+        if (cityExitStreak < cfg.kCityExit()) return null;
+        if (Double.isNaN(cityPrevZoneDist)
+                || cityPrevZoneDist <= cfg.rCityPlateauMeters() + cfg.dCityExitDeltaMeters()) {
+            return null;
+        }
+        RouteLine gOpp = topo.opposite(direction);
+        double sWindow = Math.min(gOpp.totalMeters(),
+                cfg.rCityPlateauMeters() + cfg.dCityExitDeltaMeters() + cfg.wTurnWindowMeters());
+        RouteLine.Projection pr = gOpp.projectOntoRange(
+                fix.latitude(), fix.longitude(), 0, sWindow, 0);
+        System.out.printf("М5-C: устойчивый выход из зоны city (k=%d, dist=%.0fм > R+ΔR=%.0f) — "
+                + "NEW_TRIP без оконного требования [0;wTurn], старт x=%.1f%n",
+                cityExitStreak, cityPrevZoneDist,
+                cfg.rCityPlateauMeters() + cfg.dCityExitDeltaMeters(), pr.s());
+        turnFirstZx = pr.s();
+        cityExitStreak = 0;
+        return startNewTrip(fix, gOpp);
     }
 
     private Estimate offRouteStep(GpsFix fix, RouteLine g, double dTau) {
@@ -533,6 +721,10 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             clampToLine(g);
             resyncNextStop(g);
             lastEtas = java.util.List.of();
+            if (cityWakePin(fix)) {
+                recomputeEtas(fix, bank.leader().geom());
+                return new Estimate(x, v, Mode.AT_TERMINAL.name(), Math.max(p00, 1e-6));
+            }
             return new Estimate(x, v, Mode.RECOVERING.name(), Math.max(p00, 1e-6));
         }
         mode = prevTravelMode;
@@ -605,6 +797,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         mode = Mode.NEW_TRIP;
         tripPartial = false;
         freezeReanchorGate = false;
+        cityPinActive = false;
+        cityExitStreak = 0;
         turnStreak = 0;
         revertStreak = 0;
         persistCounter = 0;
