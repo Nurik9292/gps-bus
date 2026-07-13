@@ -72,6 +72,10 @@ public class V31ShadowService {
                 });
     }
 
+    public void processForReplay(V31Fix fix) {
+        process(fix);
+    }
+
     void process(V31Fix fix) {
         RouteTopology topo = routeLines.topologyFor(fix.routeNumber());
         if (topo == null) return;

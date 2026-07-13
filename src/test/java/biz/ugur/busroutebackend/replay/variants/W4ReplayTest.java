@@ -1,6 +1,10 @@
-package biz.ugur.busroutebackend.prediction.shadow;
+package biz.ugur.busroutebackend.replay.variants;
 
 import biz.ugur.busroutebackend.prediction.broadcast.V31BroadcastLoop;
+import biz.ugur.busroutebackend.prediction.shadow.V31Fix;
+import biz.ugur.busroutebackend.prediction.shadow.V31RouteLines;
+import biz.ugur.busroutebackend.prediction.shadow.V31ShadowService;
+import biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap;
 import biz.ugur.busroutebackend.prediction.broadcast.V31BroadcastProperties;
 import biz.ugur.busroutebackend.prediction.broadcast.V31FrameSink;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -34,13 +38,12 @@ class W4ReplayTest {
             public Clock withZone(java.time.ZoneId zone) { return this; }
             public Instant instant() { return now.get(); }
         };
-        var fx = biz.ugur.busroutebackend.replay.variants.Variant61FixturesTest.class;
-        var topoBase = biz.ugur.busroutebackend.prediction.core.RouteTopology
-                .thereAndBack(biz.ugur.busroutebackend.replay.variants.Variant61FixturesTest.FULL_0,
-                        biz.ugur.busroutebackend.replay.variants.Variant61FixturesTest.FULL_1)
+                var topoBase = biz.ugur.busroutebackend.prediction.core.RouteTopology
+                .thereAndBack(Variant61FixturesTest.FULL_0,
+                        Variant61FixturesTest.FULL_1)
                 .withVariants(List.of(
-                        biz.ugur.busroutebackend.replay.variants.Variant61FixturesTest.gokje0().shortVariant(),
-                        biz.ugur.busroutebackend.replay.variants.Variant61FixturesTest.gokjeTail1().shortVariant()));
+                        Variant61FixturesTest.gokje0().shortVariant(),
+                        Variant61FixturesTest.gokjeTail1().shortVariant()));
         String cz = System.getProperty("w4.cityzone", "");
         final biz.ugur.busroutebackend.prediction.core.RouteTopology topo;
         if (!cz.isBlank()) {
@@ -91,7 +94,7 @@ class W4ReplayTest {
                         ticks++;
                     }
                     now.set(ts);
-                    shadow.process(new V31Fix(j.get("vehicleId").asText(),
+                    shadow.processForReplay(new V31Fix(j.get("vehicleId").asText(),
                             j.path("licensePlate").asText(""), "61",
                             j.get("latitude").asDouble(), j.get("longitude").asDouble(),
                             j.path("speedKmh").asDouble(0), j.path("course").asDouble(0),
