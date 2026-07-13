@@ -33,6 +33,12 @@ public class V31RouteLines {
         this.strictS5 = strictS5;
     }
 
+    private java.util.function.Function<String, RouteTopology.CityZone> zoneForRoute = r -> null;
+
+    public void zoneForRoute(java.util.function.Function<String, RouteTopology.CityZone> fn) {
+        this.zoneForRoute = fn;
+    }
+
     public long v31DisabledRoutes() {
         return v31DisabledRoutes.get();
     }
@@ -44,7 +50,9 @@ public class V31RouteLines {
                 RouteLine d0 = build(r, 0);
                 RouteLine d1 = build(r, 1);
                 if (d0 == null || d1 == null) return null;
-                return RouteTopology.thereAndBack(d0, d1);
+                RouteTopology topo = RouteTopology.thereAndBack(d0, d1);
+                RouteTopology.CityZone zone = zoneForRoute.apply(r);
+                return zone != null ? topo.withCityZone(zone) : topo;
             } catch (IllegalStateException s5) {
                 if (strictS5) throw s5;
                 log.error("v31 s-layer S-5: {} — v31 отключён для маршрута {} (v31DisabledRoutes++)",

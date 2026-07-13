@@ -73,7 +73,19 @@ public class PredictionBroadcaster {
         return coldStartUntilAt != null && coldStartUntilAt.isAfter(Instant.now());
     }
 
+    private java.util.function.Predicate<String> v31LiveRouteSuppressor = r -> false;
+
+    public void v31LiveRouteSuppressor(java.util.function.Predicate<String> suppressor) {
+        this.v31LiveRouteSuppressor = suppressor;
+    }
+
     public Mono<Void> broadcast(VehiclePredictionState state) {
+        if (state.getRouteNumber() != null
+                && v31LiveRouteSuppressor.test(state.getRouteNumber())) {
+            pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(),
+                    state.getLicensePlate(), "v31-live-cutover");
+            return Mono.empty();
+        }
         if (state.isInGarage()) {
             pipelineTracer.traceBroadcastSuppressed(state.getVehicleId(), state.getLicensePlate(), "in-garage");
             log.debug("[GPS_PIPELINE] WS_PRED_SUPPRESSED_IN_GARAGE vehicle={} plate={}",

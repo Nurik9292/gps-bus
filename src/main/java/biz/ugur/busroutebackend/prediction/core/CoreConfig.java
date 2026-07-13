@@ -132,4 +132,11 @@ public record CoreConfig(
     private static double qScaleFromSystemProperties() {
         return Double.parseDouble(System.getProperty("q.scale", "1.0"));
     }
+
+    public CoreConfig withCityZoneParams(double rDeep, double rPlateau, double tDwell,
+                                         int mRun, double gGap, double tExitMinSpan,
+                                         int kExit, double deltaR, double tPostGuard,
+                                         int kConfirmPB, double epsMid) {
+        return new CoreConfig(dtSec, w0Meters, kWindowPerSpeed, sigmaMeasDefaultMeters, accuracyRefMeters, dSnapMeters, dMaxMeters, gammaGate, qPos, qVel, pInitPos, pInitVel, rMaxRate, rMaxBaseMeters, weakZvWeight, nPersist, mReanchor, tLostSec, tMaxSec, vTargetMs, aDepMs2, aMaxMs2, vMaxMs, dReanchorMeters, recoveryPullFactor, vStopKmh, vMoveKmh, hStop, hDep, hDec, dwellMinSec, dDecelMeters, epsArrMeters, epsStopMeters, epsTermMeters, dwellExpectedSec, dwellMaxSec, nTurnConfirm, dTurnConfirmMeters, unpinWindowTicks, kTurnRevert, wTurnWindowMeters, historyNMin, kOffRoute, mOffRouteExit, scoreLambda, scoreRejectPenalty, scoreProgressBonus, sSwitch, hSwitch, dSwitchSmoothMeters, maxHypotheses, rHdopEnabled, rHdopAMeters, rHdopBMetersPerHdop, gateNisThreshold, qScale, epsCloseTailMeters, nTurnConfirmTerm, dTurnConfirmTermMeters, kTermMissOffRoute, nDepMoveConfirm, kConfirmFreeze, rDeep, rPlateau, tDwell, mRun, kExit, deltaR, gGap, tExitMinSpan, tPostGuard, kConfirmPB, epsMid);
+    }
 }

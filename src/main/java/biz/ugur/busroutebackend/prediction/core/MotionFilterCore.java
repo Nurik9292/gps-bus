@@ -32,6 +32,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private double p00, p01, p10, p11;
     private Mode mode = Mode.ACQUIRING;
     private Instant lastFixTime;
+    private Instant lastAdvancedAt;
 
     private int persistCounter;
     private int reanchorConfirms;
@@ -119,6 +120,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         lapCount = 0;
         mode = Mode.ACQUIRING;
         lastFixTime = null;
+        lastAdvancedAt = null;
         persistCounter = 0;
         reanchorConfirms = 0;
         slowTicks = movingTicks = decelTicks = 0;
@@ -198,6 +200,31 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         return cityPinActive;
     }
 
+    public Estimate broadcastTick(Instant now) {
+        if (!initialized || lastFixTime == null) {
+            return null;
+        }
+        RouteLine g = bank.leader().geom();
+        Instant advanceBase = lastAdvancedAt != null ? lastAdvancedAt : lastFixTime;
+        double dTau = Math.max(0.0,
+                (now.toEpochMilli() - advanceBase.toEpochMilli()) / 1000.0);
+        double tauOffset = Math.max(0.0,
+                (advanceBase.toEpochMilli() - lastFixTime.toEpochMilli()) / 1000.0);
+        double xBeforePredict = x;
+        predictOver(dTau, g, tauOffset);
+        holdPinnedXAgainstDeadReckoning(xBeforePredict);
+        lastAdvancedAt = now;
+        return new Estimate(x, v, mode.name(), Math.max(p00, 1e-6));
+    }
+
+    public Instant lastFixAt() {
+        return lastFixTime;
+    }
+
+    public double positionVariance() {
+        return Math.max(p00, 1e-6);
+    }
+
     public int lapCount() {
         return lapCount;
     }
@@ -239,12 +266,16 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             return first;
         }
         RouteLine g = bank.leader().geom();
+        Instant advanceBase = lastAdvancedAt != null ? lastAdvancedAt : lastFixTime;
         double dTau = Math.max(0.0,
-                (fix.timestamp().toEpochMilli() - lastFixTime.toEpochMilli()) / 1000.0);
+                (fix.timestamp().toEpochMilli() - advanceBase.toEpochMilli()) / 1000.0);
+        double tauOffset = Math.max(0.0,
+                (advanceBase.toEpochMilli() - lastFixTime.toEpochMilli()) / 1000.0);
         double xBeforePredict = x;
-        predictOver(dTau, g);
+        predictOver(dTau, g, tauOffset);
         holdPinnedXAgainstDeadReckoning(xBeforePredict);
         lastFixTime = fix.timestamp();
+        lastAdvancedAt = fix.timestamp();
         lastRawSpeedKmh = fix.speedKmh();
 
         if (mode == Mode.NO_GPS) {
@@ -1219,6 +1250,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         p01 = p10 = 0;
         initialized = true;
         lastFixTime = fix.timestamp();
+        lastAdvancedAt = fix.timestamp();
         mode = Mode.TRACKING;
         resyncNextStop(g);
         lastNu = 0;
@@ -1228,10 +1260,14 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     }
 
     private void predictOver(double dTauSec, RouteLine g) {
+        predictOver(dTauSec, g, 0.0);
+    }
+
+    private void predictOver(double dTauSec, RouteLine g, double tauOffsetSec) {
         double remaining = dTauSec;
         while (remaining > 1e-9) {
             double dt = Math.min(cfg.dtSec(), remaining);
-            double tauSinceFix = dTauSec - remaining;
+            double tauSinceFix = tauOffsetSec + dTauSec - remaining;
             boolean lost = tauSinceFix > cfg.tLostSec();
             boolean frozen = tauSinceFix > cfg.tMaxSec();
             if (frozen) {
