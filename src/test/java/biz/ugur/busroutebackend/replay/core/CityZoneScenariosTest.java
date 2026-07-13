@@ -593,4 +593,38 @@ class CityZoneScenariosTest {
                 .as("после истечения окна смена проходит — задержка, не потеря (бв)")
                 .isNotEqualTo(dirAtBoundary);
     }
+
+    private static long reversalDelayTicks(RouteTopology topo) {
+        MotionFilterCore core = new MotionFilterCore(CFG);
+        core.reset();
+        long t = 1000;
+        List<GpsFix> up = new ArrayList<>();
+        for (double s = 24000; s <= G61_0.totalMeters(); s += 150, t += 10) {
+            up.add(fixOn(G61_0, s, 45.0, t));
+        }
+        drive(core, topo, up);
+        long ticks = 0;
+        for (double s = G61_0.totalMeters() - 100; s >= 25000 && core.direction() == 0;
+             s -= 150, t += 10, ticks++) {
+            core.onFix(fixOn(G61_0, s, 45.0, t), topo);
+        }
+        return core.direction() == 1 ? ticks : -1;
+    }
+
+    @Test
+    void nullZoneReversalPassesUngated() {
+        long ticks = reversalDelayTicks(RouteTopology.thereAndBack(G61_0, G61_1));
+        assertThat(ticks).as("без зоны разворот проходит (гейт не читается)")
+                .isBetween(0L, 40L);
+    }
+
+    @Test
+    void zoneOnReversalStillPasses() {
+        long noZone = reversalDelayTicks(RouteTopology.thereAndBack(G61_0, G61_1));
+        long withZone = reversalDelayTicks(cityTopo());
+        assertThat(withZone).as("endpoint-разворот с зоной проходит (регресс)")
+                .isBetween(0L, 40L);
+        assertThat(Math.abs(withZone - noZone))
+                .as("задержка разворота с зоной сопоставима с base").isLessThanOrEqualTo(2L);
+    }
 }
