@@ -231,6 +231,13 @@ public class HypothesisBank {
         h.score = cfg.scoreLambda() * h.score + (1 - cfg.scoreLambda()) * w;
     }
 
+    public boolean anyNonLeaderProgressing() {
+        for (int i = 0; i < hyps.size(); i++) {
+            if (i != leaderIdx && hyps.get(i).progressStreak > 0) return true;
+        }
+        return false;
+    }
+
     public boolean noneSnapped() {
         for (Hypothesis h : hyps) {
             if (h.snappedLast) return false;

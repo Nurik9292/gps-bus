@@ -74,7 +74,10 @@ public record CoreConfig(
         double tCityExitMinSpanSec,
         double tPostBoundaryGuardSec,
         int kConfirmPostBoundary,
-        double epsMidlineMeters) {
+        double epsMidlineMeters,
+        double dOnlineMeters,
+        int kOffRouteReacq,
+        double minReacqTravelMeters) {
 
     public static CoreConfig defaults() {
         return new CoreConfig(
@@ -126,7 +129,10 @@ public record CoreConfig(
                 30.0, // tCityExitMinSpanSec (М5-C, У-2 A-120726-2): калибруется, Шаг 5
                 300.0, // tPostBoundaryGuardSec (§Fold-guard, Р/И3.4): калибруется, Шаг 5 [120;600]
                 2, // kConfirmPostBoundary (§Fold-guard, образец К-3): калибруется, Шаг 5
-                300.0); // epsMidlineMeters (§0.4 ред. П-ε, И3.8): калибруется, Шаг 5 [150;600]
+                300.0, // epsMidlineMeters (§0.4 ред. П-ε, И3.8): калибруется, Шаг 5 [150;600]
+                40.0, // dOnlineMeters (REACQ B-2026-07-13) [20;80]: Шаг-5 калибровано 14.07.2026, CORPUS-E + стенд-логи
+                5, // kOffRouteReacq (REACQ B-2026-07-13) [3;8]: Шаг-5 калибровано 14.07.2026, CORPUS-E + стенд-логи
+                300.0); // minReacqTravelMeters (REACQ B-2026-07-13) [100;600]: Шаг-5 калибровано 14.07.2026, CORPUS-E + стенд-логи
     }
 
     private static double qScaleFromSystemProperties() {
@@ -137,6 +143,6 @@ public record CoreConfig(
                                          int mRun, double gGap, double tExitMinSpan,
                                          int kExit, double deltaR, double tPostGuard,
                                          int kConfirmPB, double epsMid) {
-        return new CoreConfig(dtSec, w0Meters, kWindowPerSpeed, sigmaMeasDefaultMeters, accuracyRefMeters, dSnapMeters, dMaxMeters, gammaGate, qPos, qVel, pInitPos, pInitVel, rMaxRate, rMaxBaseMeters, weakZvWeight, nPersist, mReanchor, tLostSec, tMaxSec, vTargetMs, aDepMs2, aMaxMs2, vMaxMs, dReanchorMeters, recoveryPullFactor, vStopKmh, vMoveKmh, hStop, hDep, hDec, dwellMinSec, dDecelMeters, epsArrMeters, epsStopMeters, epsTermMeters, dwellExpectedSec, dwellMaxSec, nTurnConfirm, dTurnConfirmMeters, unpinWindowTicks, kTurnRevert, wTurnWindowMeters, historyNMin, kOffRoute, mOffRouteExit, scoreLambda, scoreRejectPenalty, scoreProgressBonus, sSwitch, hSwitch, dSwitchSmoothMeters, maxHypotheses, rHdopEnabled, rHdopAMeters, rHdopBMetersPerHdop, gateNisThreshold, qScale, epsCloseTailMeters, nTurnConfirmTerm, dTurnConfirmTermMeters, kTermMissOffRoute, nDepMoveConfirm, kConfirmFreeze, rDeep, rPlateau, tDwell, mRun, kExit, deltaR, gGap, tExitMinSpan, tPostGuard, kConfirmPB, epsMid);
+        return new CoreConfig(dtSec, w0Meters, kWindowPerSpeed, sigmaMeasDefaultMeters, accuracyRefMeters, dSnapMeters, dMaxMeters, gammaGate, qPos, qVel, pInitPos, pInitVel, rMaxRate, rMaxBaseMeters, weakZvWeight, nPersist, mReanchor, tLostSec, tMaxSec, vTargetMs, aDepMs2, aMaxMs2, vMaxMs, dReanchorMeters, recoveryPullFactor, vStopKmh, vMoveKmh, hStop, hDep, hDec, dwellMinSec, dDecelMeters, epsArrMeters, epsStopMeters, epsTermMeters, dwellExpectedSec, dwellMaxSec, nTurnConfirm, dTurnConfirmMeters, unpinWindowTicks, kTurnRevert, wTurnWindowMeters, historyNMin, kOffRoute, mOffRouteExit, scoreLambda, scoreRejectPenalty, scoreProgressBonus, sSwitch, hSwitch, dSwitchSmoothMeters, maxHypotheses, rHdopEnabled, rHdopAMeters, rHdopBMetersPerHdop, gateNisThreshold, qScale, epsCloseTailMeters, nTurnConfirmTerm, dTurnConfirmTermMeters, kTermMissOffRoute, nDepMoveConfirm, kConfirmFreeze, rDeep, rPlateau, tDwell, mRun, kExit, deltaR, gGap, tExitMinSpan, tPostGuard, kConfirmPB, epsMid, dOnlineMeters, kOffRouteReacq, minReacqTravelMeters);
     }
 }
