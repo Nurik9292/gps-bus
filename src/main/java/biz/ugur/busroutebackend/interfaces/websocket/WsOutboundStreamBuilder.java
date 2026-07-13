@@ -42,6 +42,20 @@ public class WsOutboundStreamBuilder {
     private final ObjectMapper objectMapper;
     private final WsBroadcastSink broadcastSink;
     private final PipelineTracer pipelineTracer;
+    private final java.util.concurrent.atomic.AtomicInteger activeSessions =
+            new java.util.concurrent.atomic.AtomicInteger();
+    private java.util.function.Supplier<reactor.core.publisher.Flux<
+            java.util.List<biz.ugur.busroutebackend.prediction.broadcast.V31FrameEnvelope>>>
+            v31Frames = reactor.core.publisher.Flux::never;
+
+    public void v31Frames(java.util.function.Supplier<reactor.core.publisher.Flux<
+            java.util.List<biz.ugur.busroutebackend.prediction.broadcast.V31FrameEnvelope>>> frames) {
+        this.v31Frames = frames;
+    }
+
+    public int activeSessions() {
+        return activeSessions.get();
+    }
 
     public WsOutboundStreamBuilder(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                    ObjectMapper objectMapper,
@@ -58,7 +72,17 @@ public class WsOutboundStreamBuilder {
         Flux<WebSocketMessage> liveUpdates = liveUpdatesStream(session, config);
         Flux<WebSocketMessage> heartbeat = heartbeatStream(session);
 
-        return Flux.merge(initialPositions, liveUpdates, heartbeat)
+        Flux<WebSocketMessage> v31Live = v31Frames.get()
+                .takeUntilOther(session.closeStatus().then())
+                .map(batch -> batch.stream()
+                        .filter(env -> isRouteInScope(env.routeNumber(), config))
+                        .map(biz.ugur.busroutebackend.prediction.broadcast.V31FrameEnvelope::json)
+                        .toList())
+                .filter(jsons -> !jsons.isEmpty())
+                .map(jsons -> session.textMessage(String.join("\n", jsons)));
+        activeSessions.incrementAndGet();
+        return Flux.merge(initialPositions, liveUpdates, heartbeat, v31Live)
+                .doFinally(sig -> activeSessions.decrementAndGet())
                 .onErrorContinue((error, obj) ->
                         log.error("Error sending WebSocket message - Error type: {}, Message: {}, Object type: {}",
                                 error.getClass().getName(),
@@ -159,6 +183,13 @@ public class WsOutboundStreamBuilder {
                     chunk.page(), e.getMessage());
             return session.textMessage("{\"type\":\"error\",\"message\":\"Serialization error\"}");
         }
+    }
+
+    private boolean isRouteInScope(String routeNumber, SessionConfig config) {
+        if (!"routes".equals(config.getSubscriptionType())) {
+            return true;
+        }
+        return config.getRouteFilter() != null && config.getRouteFilter().contains(routeNumber);
     }
 
     private Flux<WebSocketMessage> liveUpdatesStream(WebSocketSession session, SessionConfig config) {

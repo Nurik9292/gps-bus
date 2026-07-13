@@ -29,6 +29,9 @@ public class V31ShadowService {
     private final Path fixLogPath;
     private final Path tickLogPath;
     private final Map<String, MotionFilterCore> cores = new ConcurrentHashMap<>();
+    private final Map<String, V31Fix> lastFixes = new ConcurrentHashMap<>();
+    private java.util.function.Function<String, CoreConfig> configForRoute =
+            r -> CoreConfig.defaults();
     private final AtomicLong v31TicksProcessed = new AtomicLong();
     private final AtomicLong v31LogDroppedTicks = new AtomicLong();
     private final V31ShadowTap tap;
@@ -73,14 +76,18 @@ public class V31ShadowService {
         RouteTopology topo = routeLines.topologyFor(fix.routeNumber());
         if (topo == null) return;
         MotionFilterCore core = cores.computeIfAbsent(fix.vehicleId(), id -> {
-            MotionFilterCore c = new MotionFilterCore(CoreConfig.defaults());
+            MotionFilterCore c = new MotionFilterCore(configForRoute.apply(fix.routeNumber()));
             c.reset();
             return c;
         });
+        lastFixes.put(fix.vehicleId(), fix);
         GpsFix gpsFix = new GpsFix(fix.vehicleId(), fix.licensePlate(), fix.routeNumber(),
                 fix.latitude(), fix.longitude(), fix.speedKmh(), fix.course(),
                 fix.inMotion(), fix.timestamp(), fix.direction(), fix.hdop(), fix.satellites(), fix.accuracy(), null);
-        PredictionModel.Estimate est = core.onFix(gpsFix, topo);
+        PredictionModel.Estimate est;
+        synchronized (core) {
+            est = core.onFix(gpsFix, topo);
+        }
         writeLogs(fix, core, est);
         v31TicksProcessed.incrementAndGet();
     }
@@ -151,6 +158,18 @@ public class V31ShadowService {
 
     public Clock clock() {
         return clock;
+    }
+
+    public Map<String, MotionFilterCore> coresView() {
+        return java.util.Collections.unmodifiableMap(cores);
+    }
+
+    public V31Fix lastFixOf(String vehicleId) {
+        return lastFixes.get(vehicleId);
+    }
+
+    public void configForRoute(java.util.function.Function<String, CoreConfig> fn) {
+        this.configForRoute = fn;
     }
 
     public void shutdown() {
