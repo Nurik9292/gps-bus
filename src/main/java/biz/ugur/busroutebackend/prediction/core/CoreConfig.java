@@ -63,7 +63,18 @@ public record CoreConfig(
         double dTurnConfirmTermMeters,
         int kTermMissOffRoute,
         int nDepMoveConfirm,
-        int kConfirmFreeze) {
+        int kConfirmFreeze,
+        double rCityDeepMeters,
+        double rCityPlateauMeters,
+        double tCityDwellSec,
+        int mCityFixes,
+        int kCityExit,
+        double dCityExitDeltaMeters,
+        double gCitySpanGapSec,
+        double tCityExitMinSpanSec,
+        double tPostBoundaryGuardSec,
+        int kConfirmPostBoundary,
+        double epsMidlineMeters) {
 
     public static CoreConfig defaults() {
         return new CoreConfig(
@@ -104,7 +115,18 @@ public record CoreConfig(
                 150.0, // dTurnConfirmTermMeters (№23′, К-4б): калибруется, Шаг 5
                 5, // kTermMissOffRoute (№15′, К-2): калибруется, Шаг 5
                 3, // nDepMoveConfirm (№15′, К-2): калибруется, Шаг 5
-                2); // kConfirmFreeze (№22′, К-3): калибруется, Шаг 5
+                2, // kConfirmFreeze (№22′, К-3): калибруется, Шаг 5
+                300.0, // rCityDeepMeters (М5-A, узел D): калибруется, Шаг 5
+                900.0, // rCityPlateauMeters (М5-A, узел P; Т-2 A-120726-2): калибруется, Шаг 5
+                120.0, // tCityDwellSec (М5-A, F1-span): калибруется, Шаг 5
+                5, // mCityFixes (М5-A): калибруется, Шаг 5
+                5, // kCityExit (М5-C): калибруется, Шаг 5
+                150.0, // dCityExitDeltaMeters (М5-C, ΔR): калибруется, Шаг 5
+                600.0, // gCitySpanGapSec (М5-A, гэп-допуск F1-span): калибруется, Шаг 5
+                30.0, // tCityExitMinSpanSec (М5-C, У-2 A-120726-2): калибруется, Шаг 5
+                300.0, // tPostBoundaryGuardSec (§Fold-guard, Р/И3.4): калибруется, Шаг 5 [120;600]
+                2, // kConfirmPostBoundary (§Fold-guard, образец К-3): калибруется, Шаг 5
+                300.0); // epsMidlineMeters (§0.4 ред. П-ε, И3.8): калибруется, Шаг 5 [150;600]
     }
 
     private static double qScaleFromSystemProperties() {

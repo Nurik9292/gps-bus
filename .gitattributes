@@ -10,3 +10,4 @@ src/test/resources/fixtures/**/*.json  text eol=lf
 *.sh text eol=lf
 
 
+docs/data/** -text
