@@ -110,6 +110,8 @@ class W4ReplayTest {
                         + "сериализаций=%d №14-принтов=%d%n",
                 files.size(), fixes, ticks, loop.framesEmitted(), loop.framesSuppressed(),
                 loop.serializations(), loop.boundaryCapPrints());
+        System.out.printf("w4-replay: записано=%d ошибок-записи=%d%n",
+                loop.framesWritten(), loop.shadowWriteErrors());
         assertThat(loop.framesEmitted()).isGreaterThan(0);
         assertThat(loop.serializations()).isEqualTo(loop.framesEmitted());
     }

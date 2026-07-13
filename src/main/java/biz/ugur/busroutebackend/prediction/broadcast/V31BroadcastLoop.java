@@ -46,6 +46,8 @@ public class V31BroadcastLoop {
     private final AtomicLong framesSuppressed = new AtomicLong();
     private final AtomicLong serializations = new AtomicLong();
     private final AtomicLong boundaryCapPrints = new AtomicLong();
+    private final AtomicLong framesWritten = new AtomicLong();
+    private final AtomicLong shadowWriteErrors = new AtomicLong();
     private String writerHour;
     private BufferedWriter frameWriter;
 
@@ -185,7 +187,9 @@ public class V31BroadcastLoop {
             frameWriter.write(json);
             frameWriter.write(System.lineSeparator());
             frameWriter.flush();
+            framesWritten.incrementAndGet();
         } catch (IOException e) {
+            shadowWriteErrors.incrementAndGet();
             log.debug("v31 frame shadow write failed: {}", e.getMessage());
         }
     }
@@ -204,5 +208,13 @@ public class V31BroadcastLoop {
 
     public long boundaryCapPrints() {
         return boundaryCapPrints.get();
+    }
+
+    public long framesWritten() {
+        return framesWritten.get();
+    }
+
+    public long shadowWriteErrors() {
+        return shadowWriteErrors.get();
     }
 }
