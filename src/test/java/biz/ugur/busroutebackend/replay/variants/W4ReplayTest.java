@@ -93,7 +93,9 @@ class W4ReplayTest {
                         loop.tick();
                         ticks++;
                     }
-                    now.set(ts);
+                    if (ts.isAfter(now.get())) {
+                        now.set(ts);
+                    }
                     shadow.processForReplay(new V31Fix(j.get("vehicleId").asText(),
                             j.path("licensePlate").asText(""), "61",
                             j.get("latitude").asDouble(), j.get("longitude").asDouble(),
