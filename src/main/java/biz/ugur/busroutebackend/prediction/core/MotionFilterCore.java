@@ -452,7 +452,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             offRouteExitStreak = 0;
         }
         if (cand.direction() != direction) {
-            if (withinPostBoundaryGuard(fix)) {
+            if (cityZone != null && withinPostBoundaryGuard(fix)) {
                 boolean midFrom = Math.min(x, gOld.totalMeters() - x) > cfg.epsMidlineMeters();
                 boolean midTo = Math.min(cand.x(), cand.geom().totalMeters() - cand.x())
                         > cfg.epsMidlineMeters();
