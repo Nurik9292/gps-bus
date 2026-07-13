@@ -72,6 +72,8 @@ class W4ReplayTest {
                 mapper, clock, framesDir);
         long fixes = 0;
         long ticks = 0;
+        long dupTs = 0;
+        java.util.Map<String, Instant> prevTs = new java.util.HashMap<>();
         List<Path> files = Files.list(Path.of(corpus))
                 .filter(f -> f.getFileName().toString().startsWith("campaign-"))
                 .sorted().toList();
@@ -96,6 +98,10 @@ class W4ReplayTest {
                     if (ts.isAfter(now.get())) {
                         now.set(ts);
                     }
+                    String vidKey = j.get("vehicleId").asText();
+                    if (ts.equals(prevTs.put(vidKey, ts))) {
+                        dupTs++;
+                    }
                     shadow.processForReplay(new V31Fix(j.get("vehicleId").asText(),
                             j.path("licensePlate").asText(""), "61",
                             j.get("latitude").asDouble(), j.get("longitude").asDouble(),
@@ -112,8 +118,8 @@ class W4ReplayTest {
                         + "сериализаций=%d №14-принтов=%d%n",
                 files.size(), fixes, ticks, loop.framesEmitted(), loop.framesSuppressed(),
                 loop.serializations(), loop.boundaryCapPrints());
-        System.out.printf("w4-replay: записано=%d ошибок-записи=%d%n",
-                loop.framesWritten(), loop.shadowWriteErrors());
+        System.out.printf("w4-replay: записано=%d ошибок-записи=%d дубль-ts-фиксов=%d%n",
+                loop.framesWritten(), loop.shadowWriteErrors(), dupTs);
         assertThat(loop.framesEmitted()).isGreaterThan(0);
         assertThat(loop.serializations()).isEqualTo(loop.framesEmitted());
     }
