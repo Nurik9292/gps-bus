@@ -56,6 +56,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private long offRouteTransitions;
     private int offRouteExitStreak;
     private double offRouteExitLastZx = Double.NaN;
+    private double lastLeaderSnapAtMs = Double.NaN;
     private int offRouteReacqStreak;
     private double offRouteReacqSign;
     private double offRouteReacqFirstS = Double.NaN;
@@ -140,6 +141,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         offRouteTransitions = 0;
         offRouteExitStreak = 0;
         offRouteExitLastZx = Double.NaN;
+        lastLeaderSnapAtMs = Double.NaN;
         resetOffRouteReacqStreak();
         prevTravelMode = Mode.TRACKING;
         termDepartMoveTicks = 0;
@@ -322,6 +324,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
         currentVTarget = resolveVTarget(fix, g);
         Snap snap = snapInWindow(fix, g, dTau);
+        if (snap.snapped()) {
+            lastLeaderSnapAtMs = fix.timestamp().toEpochMilli();
+        }
         boolean allHypothesesMissed = !snap.snapped() && bank.noneSnapped();
         offRouteMisses = allHypothesesMissed ? offRouteMisses + 1 : 0;
         if (freezeReanchorGate && bank.leader().progressStreak() >= cfg.kConfirmFreeze()) {
@@ -980,9 +985,26 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         return out;
     }
 
+    static double effectiveTurnWindow(double baseMeters, double vAbsMs, double tauStarvSec,
+                                      double tauNomSec, double vClampMs, double capMeters) {
+        double vEff = Math.max(0, Math.min(vAbsMs, vClampMs));
+        double tauEff = Math.max(0, tauStarvSec - tauNomSec);
+        return Math.min(baseMeters + vEff * tauEff, capMeters);
+    }
+
+    private double tauStarvSec(GpsFix fix) {
+        if (Double.isNaN(lastLeaderSnapAtMs)) {
+            return 0;
+        }
+        return Math.max(0, (fix.timestamp().toEpochMilli() - lastLeaderSnapAtMs) / 1000.0);
+    }
+
     private Estimate terminalTurnStep(GpsFix fix, RouteTopology topo) {
         RouteLine gOpp = topo.opposite(direction);
-        Snap opp = snapBetween(fix, gOpp, 0, cfg.wTurnWindowMeters());
+        double wEff = effectiveTurnWindow(cfg.wTurnWindowMeters(), Math.abs(v),
+                tauStarvSec(fix), cfg.turnTauNomSec(), cfg.turnVClampMs(),
+                cfg.wTurnWindowMaxMeters());
+        Snap opp = snapBetween(fix, gOpp, 0, wEff);
         boolean advancing = opp.snapped()
                 && (turnStreak == 0 || opp.sOnLine() > turnLastZx + 0.5);
         if (advancing) {
@@ -1536,6 +1558,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     }
 
     private void reinitAt(double sOnLine, GpsFix fix) {
+        lastLeaderSnapAtMs = fix.timestamp().toEpochMilli();
         x = sOnLine;
         v = Math.max(0, fix.speedKmh() / 3.6);
         p00 = cfg.pInitPos();
