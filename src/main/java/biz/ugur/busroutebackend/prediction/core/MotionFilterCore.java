@@ -56,6 +56,11 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private long offRouteTransitions;
     private int offRouteExitStreak;
     private double offRouteExitLastZx = Double.NaN;
+    private int offRouteReacqStreak;
+    private double offRouteReacqSign;
+    private double offRouteReacqFirstS = Double.NaN;
+    private double offRouteReacqLastS = Double.NaN;
+    private boolean offRouteReacqBankKicked;
     private Mode prevTravelMode = Mode.TRACKING;
 
     private double lastNu = Double.NaN;
@@ -135,6 +140,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         offRouteTransitions = 0;
         offRouteExitStreak = 0;
         offRouteExitLastZx = Double.NaN;
+        resetOffRouteReacqStreak();
         prevTravelMode = Mode.TRACKING;
         termDepartMoveTicks = 0;
         termDepartMisses = 0;
@@ -387,6 +393,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             mode = Mode.OFF_ROUTE;
             offRouteTransitions++;
             offRouteSec = 0;
+            resetOffRouteReacqStreak();
             lastUpdateAccepted = false;
             recomputeEtas(fix, g);
             return new Estimate(x, v, Mode.OFF_ROUTE.name(), Math.max(p00, 1e-6));
@@ -455,6 +462,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         offRouteSec = 0;
         offRouteMisses = 0;
         offRouteExitStreak = 0;
+        resetOffRouteReacqStreak();
         termDepartMisses = 0;
         termDepartMoveTicks = 0;
         System.out.printf("терминал: выезд вне коридора (№15′) — AT_TERMINAL→OFF_ROUTE, "
@@ -481,6 +489,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             offRouteMisses = 0;
             offRouteSec = 0;
             offRouteExitStreak = 0;
+            resetOffRouteReacqStreak();
         }
         if (cand.direction() != direction) {
             if (cityZone != null && withinPostBoundaryGuard(fix)) {
@@ -844,6 +853,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             offRouteExitStreak = 0;
         }
         if (offRouteExitStreak < cfg.mOffRouteExit()) {
+            Estimate reacquired = offRouteGlobalReacquireStep(fix, g);
+            if (reacquired != null) return reacquired;
             lastUpdateAccepted = false;
             recomputeEtas(fix, g);
             return new Estimate(x, v, Mode.OFF_ROUTE.name(), Math.max(p00, 1e-6));
@@ -852,6 +863,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         offRouteMisses = 0;
         offRouteSec = 0;
         offRouteExitStreak = 0;
+        resetOffRouteReacqStreak();
         bank.reseedAll();
         double gap = Math.abs(forwardDelta(corridor.sOnLine(), x, g));
         if (gap > cfg.dReanchorMeters()) {
@@ -870,6 +882,90 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         }
         mode = prevTravelMode;
         return null;
+    }
+
+    private void resetOffRouteReacqStreak() {
+        offRouteReacqStreak = 0;
+        offRouteReacqSign = 0;
+        offRouteReacqFirstS = Double.NaN;
+        offRouteReacqLastS = Double.NaN;
+        offRouteReacqBankKicked = false;
+    }
+
+    private void restartOffRouteReacqStreakAt(double sGlob) {
+        offRouteReacqStreak = 1;
+        offRouteReacqSign = 0;
+        offRouteReacqFirstS = sGlob;
+        offRouteReacqLastS = sGlob;
+    }
+
+    private Estimate offRouteGlobalReacquireStep(GpsFix fix, RouteLine g) {
+        if (cityPinActive) {
+            resetOffRouteReacqStreak();
+            return null;
+        }
+        RouteLine.Projection p = g.projectOntoRange(
+                fix.latitude(), fix.longitude(), 0, g.totalMeters(), 0);
+        if (p.distMeters() > cfg.dOnlineMeters()) {
+            resetOffRouteReacqStreak();
+            return null;
+        }
+        double sGlob = p.s();
+        if (offRouteReacqStreak == 0) {
+            restartOffRouteReacqStreakAt(sGlob);
+            return null;
+        }
+        double ds = sGlob - offRouteReacqLastS;
+        double sign = Math.signum(ds);
+        boolean stepConsistent = Math.abs(ds) >= 0.5
+                && (offRouteReacqSign == 0 || sign == offRouteReacqSign);
+        if (!stepConsistent) {
+            restartOffRouteReacqStreakAt(sGlob);
+            return null;
+        }
+        offRouteReacqStreak++;
+        offRouteReacqSign = sign;
+        offRouteReacqLastS = sGlob;
+        if (offRouteReacqStreak < cfg.kOffRouteReacq()
+                || Math.abs(offRouteReacqLastS - offRouteReacqFirstS) < cfg.minReacqTravelMeters()) {
+            return null;
+        }
+        double xOld = x;
+        double gap = Math.abs(sGlob - xOld);
+        boolean alongLeader = offRouteReacqSign > 0;
+        if (!alongLeader) {
+            boolean kick = !offRouteReacqBankKicked && !bank.anyNonLeaderProgressing();
+            System.out.printf("OFFR-REACQ: t=%s борт=%s x_old=%.1f→s_glob=%.1f разрыв=%.1fм "
+                            + "K=%d канал=bank effect=%s%n",
+                    fix.timestamp(), fix.vehicleId(), xOld, sGlob, gap, offRouteReacqStreak,
+                    kick ? "applied" : "suppressed");
+            restartOffRouteReacqStreakAt(sGlob);
+            if (kick) {
+                offRouteReacqBankKicked = true;
+                bank.reseedAll();
+            }
+            return null;
+        }
+        System.out.printf("OFFR-REACQ: t=%s борт=%s x_old=%.1f→s_glob=%.1f разрыв=%.1fм "
+                        + "K=%d канал=reinit effect=applied%n",
+                fix.timestamp(), fix.vehicleId(), xOld, sGlob, gap, offRouteReacqStreak);
+        resetOffRouteReacqStreak();
+        offRouteTransitions++;
+        offRouteExitStreak = 0;
+        reinitAt(sGlob, fix);
+        freezeReanchorGate = true;
+        bank.reseedAll();
+        lastNu = 0;
+        lastS = cfg.pInitPos();
+        lastUpdateAccepted = true;
+        clampToLine(g);
+        resyncNextStop(g);
+        lastEtas = java.util.List.of();
+        if (cityWakePin(fix)) {
+            recomputeEtas(fix, bank.leader().geom());
+            return new Estimate(x, v, Mode.AT_TERMINAL.name(), Math.max(p00, 1e-6));
+        }
+        return new Estimate(x, v, Mode.RECOVERING.name(), Math.max(p00, 1e-6));
     }
 
     @Override
