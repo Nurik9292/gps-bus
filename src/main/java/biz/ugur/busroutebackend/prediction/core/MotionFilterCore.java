@@ -933,17 +933,22 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         double xOld = x;
         double gap = Math.abs(sGlob - xOld);
         boolean alongLeader = offRouteReacqSign > 0;
-        System.out.printf("OFFR-REACQ: t=%s борт=%s x_old=%.1f→s_glob=%.1f разрыв=%.1fм K=%d канал=%s%n",
-                fix.timestamp(), fix.vehicleId(), xOld, sGlob, gap, offRouteReacqStreak,
-                alongLeader ? "reinit" : "bank");
         if (!alongLeader) {
+            boolean kick = !offRouteReacqBankKicked && !bank.anyNonLeaderProgressing();
+            System.out.printf("OFFR-REACQ: t=%s борт=%s x_old=%.1f→s_glob=%.1f разрыв=%.1fм "
+                            + "K=%d канал=bank effect=%s%n",
+                    fix.timestamp(), fix.vehicleId(), xOld, sGlob, gap, offRouteReacqStreak,
+                    kick ? "applied" : "suppressed");
             restartOffRouteReacqStreakAt(sGlob);
-            if (!offRouteReacqBankKicked && !bank.anyNonLeaderProgressing()) {
+            if (kick) {
                 offRouteReacqBankKicked = true;
                 bank.reseedAll();
             }
             return null;
         }
+        System.out.printf("OFFR-REACQ: t=%s борт=%s x_old=%.1f→s_glob=%.1f разрыв=%.1fм "
+                        + "K=%d канал=reinit effect=applied%n",
+                fix.timestamp(), fix.vehicleId(), xOld, sGlob, gap, offRouteReacqStreak);
         resetOffRouteReacqStreak();
         offRouteTransitions++;
         offRouteExitStreak = 0;
