@@ -985,7 +985,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         return out;
     }
 
-    static double effectiveTurnWindow(double baseMeters, double vAbsMs, double tauStarvSec,
+    public static double effectiveTurnWindow(double baseMeters, double vAbsMs, double tauStarvSec,
                                       double tauNomSec, double vClampMs, double capMeters) {
         double vEff = Math.max(0, Math.min(vAbsMs, vClampMs));
         double tauEff = Math.max(0, tauStarvSec - tauNomSec);
