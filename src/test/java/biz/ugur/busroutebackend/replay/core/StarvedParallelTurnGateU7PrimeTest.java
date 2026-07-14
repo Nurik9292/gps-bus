@@ -70,7 +70,7 @@ class StarvedParallelTurnGateU7PrimeTest {
             touchTimes[i] = t;
             run.add(fixOnAxis(G61_0, touchS[i], 15.0, t));
         }
-        for (double s = 1650; s <= 2600; s += 250) {
+        for (double s = 1650; s <= 4100; s += 250) {
             t += 60;
             run.add(fixOffAxis(G61_0, s, 190.0, 15.0, t));
         }
@@ -89,8 +89,9 @@ class StarvedParallelTurnGateU7PrimeTest {
             for (int i = 0; i < 3; i++) {
                 if (fx.timestamp().getEpochSecond() == touchTimes[i]) {
                     spot.append(String.format(
-                            "касание-%d s=%.0f: s_base(600)=%s, s_wEff(%.0f)=%s, mode-после=%s, tripId=%d%n",
-                            i + 1, touchS[i], touchS[i] > 600 ? "ВНЕ" : "внутри",
+                            "касание-%d s=%.0f: τ_in=%.0fс v̂=%.1f s_base(600)=%s, s_wEff(%.0f)=%s, mode-после=%s, tripId=%d%n",
+                            i + 1, touchS[i], tauIn, Math.abs(core.modelSpeedMs()),
+                            touchS[i] > 600 ? "ВНЕ" : "внутри",
                             wEff, touchS[i] <= wEff ? "В ОКНЕ" : "вне", est.mode(), core.tripId()));
                 }
             }
