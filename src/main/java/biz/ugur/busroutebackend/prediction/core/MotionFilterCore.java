@@ -993,11 +993,11 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         return out;
     }
 
-    public static double effectiveTurnWindow(double baseMeters, double vAbsMs, double tauStarvSec,
-                                      double tauNomSec, double vClampMs, double capMeters) {
-        double vEff = Math.max(0, Math.min(vAbsMs, vClampMs));
+    public static double effectiveTurnWindow(double baseMeters, double vTargetMs,
+                                             double tauStarvSec, double tauNomSec,
+                                             double capMeters) {
         double tauEff = Math.max(0, tauStarvSec - tauNomSec);
-        return Math.min(baseMeters + vEff * tauEff, capMeters);
+        return Math.min(baseMeters + vTargetMs * tauEff, capMeters);
     }
 
     private double tauStarvSec(GpsFix fix) {
@@ -1009,9 +1009,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     private Estimate terminalTurnStep(GpsFix fix, RouteTopology topo) {
         RouteLine gOpp = topo.opposite(direction);
-        double wEff = effectiveTurnWindow(cfg.wTurnWindowMeters(), Math.abs(v),
-                tauStarvSec(fix), cfg.turnTauNomSec(), cfg.turnVClampMs(),
-                cfg.wTurnWindowMaxMeters());
+        double wEff = effectiveTurnWindow(cfg.wTurnWindowMeters(), cfg.turnVTargetMs(),
+                tauStarvSec(fix), cfg.turnTauNomSec(), cfg.wTurnWindowMaxMeters());
         Snap opp = snapBetween(fix, gOpp, 0, wEff);
         boolean advancing = opp.snapped()
                 && (turnStreak == 0 || opp.sOnLine() > turnLastZx + 0.5);

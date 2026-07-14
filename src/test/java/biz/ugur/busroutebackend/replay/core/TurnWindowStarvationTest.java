@@ -18,52 +18,32 @@ class TurnWindowStarvationTest {
     private static final CoreConfig CFG = CoreConfig.defaults();
     private static final double BASE = CFG.wTurnWindowMeters();
     private static final double TAU_NOM = CFG.turnTauNomSec();
-    private static final double V_CLAMP = CFG.turnVClampMs();
+    private static final double V_TARGET = CFG.turnVTargetMs();
     private static final double CAP = CFG.wTurnWindowMaxMeters();
 
-    private static double w(double vAbs, double tau) {
-        return MotionFilterCore.effectiveTurnWindow(BASE, vAbs, tau, TAU_NOM, V_CLAMP, CAP);
+    private static double w(double tau) {
+        return MotionFilterCore.effectiveTurnWindow(BASE, V_TARGET, tau, TAU_NOM, CAP);
     }
 
     @Test
     void u1TauAtOrBelowNomYieldsExactBase() {
-        assertThat(w(15.0, 0)).isEqualTo(BASE);
-        assertThat(w(15.0, TAU_NOM)).isEqualTo(BASE);
-        assertThat(w(V_CLAMP, TAU_NOM - 0.001)).isEqualTo(BASE);
-    }
-
-    @Test
-    void u2ZeroModelSpeedYieldsBaseAtAnyTau() {
-        assertThat(w(0, 0)).isEqualTo(BASE);
-        assertThat(w(0, 300)).isEqualTo(BASE);
-        assertThat(w(0, 1e9)).isEqualTo(BASE);
+        assertThat(w(0)).isEqualTo(BASE);
+        assertThat(w(TAU_NOM)).isEqualTo(BASE);
+        assertThat(w(TAU_NOM - 0.001)).isEqualTo(BASE);
     }
 
     @Test
     void u3CapReachedExactlyAndNeverExceeded() {
-        assertThat(w(V_CLAMP, 295)).isEqualTo(CAP);
-        assertThat(w(V_CLAMP, 296)).isEqualTo(CAP);
-        assertThat(w(V_CLAMP, 1e9)).isEqualTo(CAP);
+        assertThat(w(457)).isEqualTo(CAP);
+        assertThat(w(458)).isEqualTo(CAP);
+        assertThat(w(1e9)).isEqualTo(CAP);
     }
 
     @Test
-    void u4SpeedAboveClampContributesByClampOnly() {
-        assertThat(w(25.0, 125)).isEqualTo(w(V_CLAMP, 125));
-        assertThat(w(1e6, 125)).isEqualTo(BASE + V_CLAMP * (125 - TAU_NOM));
-    }
-
-    @Test
-    void u5MonotoneNonDecreasingInTauAndSpeedWithinCap() {
+    void u5MonotoneNonDecreasingInTauWithinCap() {
         double prev = -1;
-        for (double tau = 0; tau <= 400; tau += 5) {
-            double cur = w(12.0, tau);
-            assertThat(cur).isGreaterThanOrEqualTo(prev);
-            assertThat(cur).isLessThanOrEqualTo(CAP);
-            prev = cur;
-        }
-        prev = -1;
-        for (double v = 0; v <= 30; v += 0.5) {
-            double cur = w(v, 200);
+        for (double tau = 0; tau <= 600; tau += 5) {
+            double cur = w(tau);
             assertThat(cur).isGreaterThanOrEqualTo(prev);
             assertThat(cur).isLessThanOrEqualTo(CAP);
             prev = cur;
