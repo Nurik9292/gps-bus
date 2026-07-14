@@ -82,8 +82,8 @@ class StarvedParallelTurnGateU7PrimeTest {
             double tauIn = Double.isNaN(core.lastLeaderSnapAtMs()) ? 0
                     : Math.max(0, (fx.timestamp().toEpochMilli() - core.lastLeaderSnapAtMs()) / 1000.0);
             double wEff = MotionFilterCore.effectiveTurnWindow(
-                    CFG.wTurnWindowMeters(), Math.abs(core.modelSpeedMs()), tauIn,
-                    CFG.turnTauNomSec(), CFG.turnVClampMs(), CFG.wTurnWindowMaxMeters());
+                    CFG.wTurnWindowMeters(), CFG.turnVTargetMs(), tauIn,
+                    CFG.turnTauNomSec(), CFG.wTurnWindowMaxMeters());
             var est = core.onFix(fx, topo);
             steps.add(new Step(est.mode(), core.tripId(), fx));
             for (int i = 0; i < 3; i++) {
