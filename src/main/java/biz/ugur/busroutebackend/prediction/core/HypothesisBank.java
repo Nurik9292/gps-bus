@@ -161,14 +161,7 @@ public class HypothesisBank {
     private void updateHypothesis(Hypothesis h, GpsFix fix, double dTau) {
         double dt = Math.max(dTau, cfg.dtSec());
         if (!h.seeded) {
-            var p = h.geom.projectOntoRange(fix.latitude(), fix.longitude(), 0, h.geom.totalMeters(), 0);
-            h.x = p.s();
-            h.v = Math.max(0, fix.speedKmh() / 3.6);
-            h.seeded = true;
-            h.missStreak = 0;
-            h.lastZ = Double.NaN;
-            h.snappedLast = p.distMeters() <= cfg.dSnapMeters();
-            if (h.snappedLast) h.lastZ = p.s();
+            seedFromFix(h, fix);
             return;
         }
         RouteLine.TerminalZone zone = h.geom.terminalZone();
@@ -229,6 +222,32 @@ public class HypothesisBank {
             }
         }
         h.score = cfg.scoreLambda() * h.score + (1 - cfg.scoreLambda()) * w;
+    }
+
+    private void seedFromFix(Hypothesis h, GpsFix fix) {
+        var p = h.geom.projectOntoRange(fix.latitude(), fix.longitude(), 0, h.geom.totalMeters(), 0);
+        h.x = p.s();
+        h.v = Math.max(0, fix.speedKmh() / 3.6);
+        h.seeded = true;
+        h.missStreak = 0;
+        h.lastZ = Double.NaN;
+        h.snappedLast = p.distMeters() <= cfg.dSnapMeters();
+        if (h.snappedLast) h.lastZ = p.s();
+    }
+
+    public boolean reanchorMainOppositeAt(int direction, double sOnLine, GpsFix fix) {
+        for (Hypothesis h : hyps) {
+            if (h.variant || h.direction != direction) continue;
+            if (h.snappedLast) return false;
+            h.x = sOnLine;
+            h.v = Math.max(0, fix.speedKmh() / 3.6);
+            h.seeded = true;
+            h.missStreak = 0;
+            h.lastZ = sOnLine;
+            h.snappedLast = true;
+            return true;
+        }
+        return false;
     }
 
     public boolean anyNonLeaderProgressing() {

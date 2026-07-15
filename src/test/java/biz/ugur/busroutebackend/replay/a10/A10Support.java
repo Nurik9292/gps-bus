@@ -170,6 +170,7 @@ public final class A10Support {
                 c.rCityDeepMeters(), c.rCityPlateauMeters(), c.tCityDwellSec(),
                 c.mCityFixes(), c.kCityExit(), c.dCityExitDeltaMeters(), c.gCitySpanGapSec(),
                 c.tCityExitMinSpanSec(), c.tPostBoundaryGuardSec(), c.kConfirmPostBoundary(), c.epsMidlineMeters(),
-                c.dOnlineMeters(), c.kOffRouteReacq(), c.minReacqTravelMeters());
+                c.dOnlineMeters(), c.kOffRouteReacq(), c.minReacqTravelMeters(),
+                c.wTurnWindowMaxMeters(), c.turnTauNomSec(), c.turnVTargetMs());
     }
 }
