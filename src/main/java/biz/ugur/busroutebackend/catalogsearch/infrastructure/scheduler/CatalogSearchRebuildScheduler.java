@@ -31,7 +31,7 @@ public class CatalogSearchRebuildScheduler {
                         stats.inserted(), stats.orphanAliases()));
     }
 
-    Mono<biz.ugur.busroutebackend.catalogsearch.domain.model.RebuildStats> rebuildTick() {
+    public Mono<biz.ugur.busroutebackend.catalogsearch.domain.model.RebuildStats> rebuildTick() {
         return indexRepository.rebuildAll().timeout(TICK_TIMEOUT);
     }
 }
