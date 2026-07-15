@@ -32,8 +32,10 @@ public class MobileSearchController extends BaseController {
     @RateLimiter(name = "searchApi")
     public Mono<ResponseEntity<ApiResponse<CatalogSearchResult>>> search(
             @RequestParam(required = false) String q,
-            @RequestParam(required = false) Integer limit) {
-        return ok(searchCatalogUseCase.execute(Mono.just(new SearchCatalogUseCase.Query(q, limit))));
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lon) {
+        return ok(searchCatalogUseCase.execute(Mono.just(new SearchCatalogUseCase.Query(q, limit, lat, lon))));
     }
 
     @Override

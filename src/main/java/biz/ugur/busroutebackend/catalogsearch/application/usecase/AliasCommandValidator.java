@@ -18,6 +18,9 @@ final class AliasCommandValidator {
 
     static CatalogObjectKind requireKind(String raw) {
         CatalogObjectKind kind = raw == null ? null : CatalogObjectKind.fromString(raw);
+        if (kind != null && !kind.aliasable()) {
+            kind = null;
+        }
         if (kind == null) {
             throw new CatalogSearchValidationException("INVALID_OBJECT_KIND",
                     "objectKind must be one of STOP, ROUTE: " + raw);

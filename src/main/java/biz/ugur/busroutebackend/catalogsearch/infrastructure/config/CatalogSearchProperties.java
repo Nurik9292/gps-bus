@@ -16,4 +16,8 @@ public class CatalogSearchProperties {
     private String rebuildCron = "0 0 4 * * *";
     private String rebuildZone = "Asia/Ashgabat";
     private long cacheTtlSeconds = 180;
+    private boolean federationEnabled = true;
+    private double placeScoreFactor = 1.0;
+    private long placeTimeoutMs = 800;
+    private double geoBoostFactor = 0.5;
 }
