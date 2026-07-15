@@ -1007,11 +1007,30 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         return Math.max(0, (fix.timestamp().toEpochMilli() - lastLeaderSnapAtMs) / 1000.0);
     }
 
+    private void seedBankFromExtendedTurnZone(GpsFix fix, RouteLine gOpp) {
+        double tauStarv = tauStarvSec(fix);
+        double wEff = effectiveTurnWindow(cfg.wTurnWindowMeters(), cfg.turnVTargetMs(),
+                tauStarv, cfg.turnTauNomSec(), cfg.wTurnWindowMaxMeters());
+        if (wEff <= cfg.wTurnWindowMeters()) {
+            return;
+        }
+        Snap extended = snapBetween(fix, gOpp, cfg.wTurnWindowMeters(), wEff);
+        if (!extended.snapped()) {
+            return;
+        }
+        boolean reanchored = bank.reanchorMainOppositeAt(gOpp.direction(), extended.sOnLine(), fix);
+        if (reanchored) {
+            System.out.printf("K1-SEED: t=%s d%d s_ext=%.1f wEff=%.1f tau=%.1f%n",
+                    fix.timestamp(), gOpp.direction(), extended.sOnLine(), wEff, tauStarv);
+        }
+    }
+
     private Estimate terminalTurnStep(GpsFix fix, RouteTopology topo) {
         RouteLine gOpp = topo.opposite(direction);
-        double wEff = effectiveTurnWindow(cfg.wTurnWindowMeters(), cfg.turnVTargetMs(),
-                tauStarvSec(fix), cfg.turnTauNomSec(), cfg.wTurnWindowMaxMeters());
-        Snap opp = snapBetween(fix, gOpp, 0, wEff);
+        Snap opp = snapBetween(fix, gOpp, 0, cfg.wTurnWindowMeters());
+        if (!opp.snapped()) {
+            seedBankFromExtendedTurnZone(fix, gOpp);
+        }
         boolean advancing = opp.snapped()
                 && (turnStreak == 0 || opp.sOnLine() > turnLastZx + 0.5);
         if (advancing) {

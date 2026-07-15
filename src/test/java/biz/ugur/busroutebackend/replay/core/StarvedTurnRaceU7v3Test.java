@@ -62,7 +62,7 @@ class StarvedTurnRaceU7v3Test {
     }
 
     @Test
-    void u7v3RaceStarvedMonotoneWithinLateralMustResolveViaOffRoute() {
+    void u7v3RaceStarvedMonotoneWithinLateralResolvesViaBankTwoPhaseCommit() {
         RouteTopology topo = RouteTopology.thereAndBack(G61_1, G61_0);
         MotionFilterCore core = arriveGurtly(topo);
         long tripBefore = core.tripId();
@@ -115,18 +115,26 @@ class StarvedTurnRaceU7v3Test {
         int firstOffRoute = modes.indexOf("OFF_ROUTE");
         int firstNewTrip = modes.indexOf("NEW_TRIP");
         int firstTurning = modes.indexOf("TURNING");
-        assertThat(firstOffRoute)
-                .as("U7'v3: разрешение через OFF_ROUTE (pin-cap)")
+        assertThat(firstTurning)
+                .as("δ3: расширенная зона не кормит терминальный канал — TURNING не наступает")
+                .isNegative();
+        assertThat(firstNewTrip)
+                .as("δ3-добор: банковский NEW_TRIP наступает")
                 .isPositive();
-        assertThat(firstTurning < 0 || firstTurning > firstOffRoute)
-                .as("ложный terminalTurn НЕ выигрывает гонку у OFF_ROUTE")
-                .isTrue();
-        if (firstNewTrip >= 0) {
-            assertThat(firstNewTrip).isGreaterThan(firstOffRoute);
+        assertThat(modes.get(firstNewTrip - 1))
+                .as("δ3: двухфазный commit — RECOVERING строго перед NEW_TRIP")
+                .isEqualTo("RECOVERING");
+        assertThat(firstNewTrip)
+                .as("δ3: не быстрый щелчок (2-3 тика) — банковский путь занимает минимум 6 тиков (0-based индекс ≥5)")
+                .isGreaterThanOrEqualTo(5);
+        if (firstOffRoute >= 0) {
+            assertThat(firstNewTrip)
+                    .as("если OFF_ROUTE наступил — NEW_TRIP только после него")
+                    .isGreaterThan(firstOffRoute);
         }
         assertThat(core.tripId() - tripBefore)
-                .as("tripId контрактом (не терминальным щелчком до OFF_ROUTE)")
-                .isLessThanOrEqualTo(1);
+                .as("граница рейса ровно одна, банковским контрактом")
+                .isEqualTo(1);
     }
 
     @Test
