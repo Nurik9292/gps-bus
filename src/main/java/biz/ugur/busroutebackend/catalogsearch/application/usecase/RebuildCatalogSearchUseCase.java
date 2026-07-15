@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.catalogsearch.application.usecase;
 
 import biz.ugur.busroutebackend.catalogsearch.application.dto.RebuildResult;
+import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchCache;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchIndexRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
@@ -12,12 +13,15 @@ import reactor.core.publisher.Mono;
 public class RebuildCatalogSearchUseCase extends BaseUseCase<Mono<Void>, RebuildResult> {
 
     private final CatalogSearchIndexRepository indexRepository;
+    private final CatalogSearchCache cache;
 
     public RebuildCatalogSearchUseCase(CatalogSearchIndexRepository indexRepository,
+                                       CatalogSearchCache cache,
                                        CorrelationContextService correlationService,
                                        EventBus eventBus) {
         super(correlationService, eventBus);
         this.indexRepository = indexRepository;
+        this.cache = cache;
     }
 
     @Override
@@ -25,6 +29,7 @@ public class RebuildCatalogSearchUseCase extends BaseUseCase<Mono<Void>, Rebuild
         return Mono.defer(() -> {
             long startedAt = System.currentTimeMillis();
             return indexRepository.rebuildAll()
+                    .flatMap(stats -> cache.evictAll().thenReturn(stats))
                     .map(stats -> new RebuildResult(stats.inserted(), stats.orphanAliases(),
                             System.currentTimeMillis() - startedAt));
         });

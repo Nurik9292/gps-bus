@@ -9,6 +9,7 @@ import biz.ugur.busroutebackend.catalogsearch.domain.model.CatalogObjectKind;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.RebuildStats;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.SearchAlias;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogObjectLookup;
+import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchCache;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchIndexRepository;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.SearchAliasRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
@@ -21,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -47,6 +49,10 @@ class CreateAliasUseCaseTest {
     @Mock
     private SecurityContextService securityContextService;
     @Mock
+    private CatalogSearchCache cache;
+    @Mock
+    private TransactionalOperator transactionalOperator;
+    @Mock
     private CorrelationContextService correlationService;
     @Mock
     private EventBus eventBus;
@@ -57,8 +63,11 @@ class CreateAliasUseCaseTest {
     void setUp() {
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
+        when(transactionalOperator.transactional(any(Mono.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(cache.evictAll()).thenReturn(Mono.just(0L));
         useCase = new CreateAliasUseCase(aliasRepository, indexRepository, objectLookup,
-                securityContextService, correlationService, eventBus);
+                securityContextService, cache, transactionalOperator, correlationService, eventBus);
     }
 
     private static CreateAliasCommand cmd(String kind, String objectId, String aliasRaw,

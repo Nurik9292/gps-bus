@@ -7,13 +7,14 @@ import biz.ugur.busroutebackend.catalogsearch.domain.exceptions.CatalogSearchVal
 import biz.ugur.busroutebackend.catalogsearch.domain.model.AliasSource;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.SearchAlias;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogObjectLookup;
+import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchCache;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchIndexRepository;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.SearchAliasRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
@@ -24,22 +25,22 @@ public class PatchAliasUseCase extends BaseUseCase<Mono<PatchAliasCommand>, Alia
     private final SearchAliasRepository aliasRepository;
     private final CatalogSearchIndexRepository indexRepository;
     private final CatalogObjectLookup objectLookup;
+    private final CatalogSearchCache cache;
+    private final TransactionalOperator transactionalOperator;
 
     public PatchAliasUseCase(SearchAliasRepository aliasRepository,
                              CatalogSearchIndexRepository indexRepository,
                              CatalogObjectLookup objectLookup,
+                             CatalogSearchCache cache,
+                             TransactionalOperator transactionalOperator,
                              CorrelationContextService correlationService,
                              EventBus eventBus) {
         super(correlationService, eventBus);
         this.aliasRepository = aliasRepository;
         this.indexRepository = indexRepository;
         this.objectLookup = objectLookup;
-    }
-
-    @Override
-    @Transactional
-    public Mono<AliasResult> execute(Mono<PatchAliasCommand> request) {
-        return super.execute(request);
+        this.cache = cache;
+        this.transactionalOperator = transactionalOperator;
     }
 
     @Override
@@ -54,13 +55,15 @@ public class PatchAliasUseCase extends BaseUseCase<Mono<PatchAliasCommand>, Alia
             AliasSource source = cmd.source() == null ? null
                     : AliasCommandValidator.requireApiSource(cmd.source(), null);
 
-            return aliasRepository.findById(cmd.aliasId())
-                    .switchIfEmpty(Mono.error(new AliasNotFoundException(cmd.aliasId())))
-                    .map(alias -> alias.withCuration(weight, source))
-                    .flatMap(aliasRepository::save)
-                    .flatMap(saved -> indexRepository
-                            .rebuildObject(saved.getObjectKind(), saved.getObjectId())
-                            .thenReturn(saved))
+            return transactionalOperator.transactional(
+                            aliasRepository.findById(cmd.aliasId())
+                                    .switchIfEmpty(Mono.error(new AliasNotFoundException(cmd.aliasId())))
+                                    .map(alias -> alias.withCuration(weight, source))
+                                    .flatMap(aliasRepository::save)
+                                    .flatMap(saved -> indexRepository
+                                            .rebuildObject(saved.getObjectKind(), saved.getObjectId())
+                                            .thenReturn(saved)))
+                    .flatMap(saved -> cache.evictAll().thenReturn(saved))
                     .flatMap(this::toResult);
         });
     }

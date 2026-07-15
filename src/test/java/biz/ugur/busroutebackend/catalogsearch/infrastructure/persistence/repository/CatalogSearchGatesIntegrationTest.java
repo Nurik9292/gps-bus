@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.catalogsearch.application.usecase.DeleteAliasUse
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.PreviewCatalogSearchUseCase;
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.SearchAliasesUseCase;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.CatalogObjectKind;
+import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchCache;
 import biz.ugur.busroutebackend.catalogsearch.infrastructure.config.CatalogSearchProperties;
 import biz.ugur.busroutebackend.catalogsearch.infrastructure.scheduler.CatalogSearchRebuildScheduler;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
@@ -21,6 +22,7 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.ReactiveTransactionManager;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -118,10 +120,14 @@ class CatalogSearchGatesIntegrationTest {
         SecurityContextService security = mock(SecurityContextService.class);
         when(security.getCurrentAdminId()).thenReturn(Mono.empty());
         EventBus eventBus = mock(EventBus.class);
+        TransactionalOperator txOperator = TransactionalOperator.create(transactionManager);
+        CatalogSearchCache cache = mock(CatalogSearchCache.class);
+        when(cache.evictAll()).thenReturn(Mono.just(0L));
 
         createUseCase = new CreateAliasUseCase(aliasRepository, indexRepository, objectLookup,
-                security, correlation, eventBus);
-        deleteUseCase = new DeleteAliasUseCase(aliasRepository, indexRepository, correlation, eventBus);
+                security, cache, txOperator, correlation, eventBus);
+        deleteUseCase = new DeleteAliasUseCase(aliasRepository, indexRepository, cache, txOperator,
+                correlation, eventBus);
         previewUseCase = new PreviewCatalogSearchUseCase(indexRepository, aliasRepository, correlation, eventBus);
         searchAliasesUseCase = new SearchAliasesUseCase(aliasRepository, correlation, eventBus);
         scheduler = new CatalogSearchRebuildScheduler(indexRepository);

@@ -11,6 +11,7 @@ import biz.ugur.busroutebackend.catalogsearch.domain.model.AliasSource;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.CatalogObjectKind;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.SearchAlias;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogObjectLookup;
+import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchCache;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchIndexRepository;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.SearchAliasRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
@@ -19,7 +20,7 @@ import biz.ugur.busroutebackend.shared.application.SecurityContextService;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
@@ -31,11 +32,15 @@ public class CreateAliasUseCase extends BaseUseCase<Mono<CreateAliasCommand>, Al
     private final CatalogSearchIndexRepository indexRepository;
     private final CatalogObjectLookup objectLookup;
     private final SecurityContextService securityContextService;
+    private final CatalogSearchCache cache;
+    private final TransactionalOperator transactionalOperator;
 
     public CreateAliasUseCase(SearchAliasRepository aliasRepository,
                               CatalogSearchIndexRepository indexRepository,
                               CatalogObjectLookup objectLookup,
                               SecurityContextService securityContextService,
+                              CatalogSearchCache cache,
+                              TransactionalOperator transactionalOperator,
                               CorrelationContextService correlationService,
                               EventBus eventBus) {
         super(correlationService, eventBus);
@@ -43,12 +48,8 @@ public class CreateAliasUseCase extends BaseUseCase<Mono<CreateAliasCommand>, Al
         this.indexRepository = indexRepository;
         this.objectLookup = objectLookup;
         this.securityContextService = securityContextService;
-    }
-
-    @Override
-    @Transactional
-    public Mono<AliasCreatedResult> execute(Mono<CreateAliasCommand> request) {
-        return super.execute(request);
+        this.cache = cache;
+        this.transactionalOperator = transactionalOperator;
     }
 
     @Override
@@ -69,7 +70,8 @@ public class CreateAliasUseCase extends BaseUseCase<Mono<CreateAliasCommand>, Al
                                             "ALIAS_NORMALIZES_TO_EMPTY",
                                             "aliasRaw normalizes to empty string: " + aliasRaw));
                                 }
-                                return createWithReindex(kind, objectId, aliasRaw, norm, weight, source, title);
+                                return createWithReindex(kind, objectId, aliasRaw, norm, weight, source, title)
+                                        .flatMap(result -> cache.evictAll().thenReturn(result));
                             }));
         });
     }
@@ -77,7 +79,8 @@ public class CreateAliasUseCase extends BaseUseCase<Mono<CreateAliasCommand>, Al
     private Mono<AliasCreatedResult> createWithReindex(CatalogObjectKind kind, String objectId,
                                                        String aliasRaw, String norm, BigDecimal weight,
                                                        AliasSource source, String title) {
-        return aliasRepository.existsByObjectAndRaw(kind, objectId, aliasRaw)
+        return transactionalOperator.transactional(
+                aliasRepository.existsByObjectAndRaw(kind, objectId, aliasRaw)
                 .flatMap(exists -> exists
                         ? Mono.error(new AliasAlreadyExistsException(kind, objectId, aliasRaw))
                         : securityContextService.getCurrentAdminId()
@@ -93,7 +96,7 @@ public class CreateAliasUseCase extends BaseUseCase<Mono<CreateAliasCommand>, Al
                         .map(CollisionResult::fromDomain)
                         .collectList()
                         .map(collisions -> new AliasCreatedResult(
-                                AliasResult.fromDomain(saved, title), collisions)));
+                                AliasResult.fromDomain(saved, title), collisions))));
     }
 
     @Override
