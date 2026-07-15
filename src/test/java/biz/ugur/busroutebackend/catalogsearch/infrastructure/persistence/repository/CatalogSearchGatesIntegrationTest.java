@@ -248,6 +248,34 @@ class CatalogSearchGatesIntegrationTest {
     }
 
     @Test
+    void gate7WeightRankingAndExactMatchAntiPathology() {
+        seedObjects();
+        createUseCase.execute(Mono.just(new CreateAliasCommand(
+                "STOP", "stop-1", "Народное", new BigDecimal("3.0"), "CURATED"))).block();
+        createUseCase.execute(Mono.just(new CreateAliasCommand(
+                "STOP", "stop-2", "Народное", new BigDecimal("0.5"), "CURATED"))).block();
+        StepVerifier.create(indexRepository.rebuildAll()).expectNextCount(1).verifyComplete();
+
+        StepVerifier.create(previewUseCase.execute(Mono.just(
+                        new PreviewCatalogSearchUseCase.Query("народное", 10))))
+                .assertNext(result -> {
+                    assertThat(result.items()).hasSize(2);
+                    assertThat(result.items().get(0).objectId()).isEqualTo("stop-1");
+                    assertThat(result.items().get(0).score())
+                            .isGreaterThan(result.items().get(1).score());
+                })
+                .verifyComplete();
+
+        StepVerifier.create(previewUseCase.execute(Mono.just(
+                        new PreviewCatalogSearchUseCase.Query("Мир 2 1", 10))))
+                .assertNext(result -> {
+                    assertThat(result.items()).isNotEmpty();
+                    assertThat(result.items().get(0).objectId()).isEqualTo("stop-2");
+                })
+                .verifyComplete();
+    }
+
+    @Test
     void previewFindsTypoAgainstFullNameViaWordSimilarity() {
         seedObjects();
         StepVerifier.create(indexRepository.rebuildAll()
