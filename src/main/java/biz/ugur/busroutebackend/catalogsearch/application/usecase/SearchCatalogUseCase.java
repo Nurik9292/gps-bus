@@ -28,7 +28,11 @@ import java.util.List;
 @Service
 public class SearchCatalogUseCase extends BaseUseCase<Mono<SearchCatalogUseCase.Query>, CatalogSearchResult> {
 
-    public record Query(String q, Integer limit, Double lat, Double lon) {
+    public record Query(String q, Integer limit, Double lat, Double lon, boolean bypassCache) {
+
+        public Query(String q, Integer limit, Double lat, Double lon) {
+            this(q, limit, lat, lon, false);
+        }
     }
 
     static final int LIMIT_DEFAULT = 10;
@@ -64,16 +68,20 @@ public class SearchCatalogUseCase extends BaseUseCase<Mono<SearchCatalogUseCase.
             return aliasRepository.normalize(q)
                     .flatMap(qn -> qn.isBlank()
                             ? Mono.just(new CatalogSearchResult(q, !federated, List.of()))
-                            : federatedSearch(q, qn, limit, query.lat(), query.lon(), federated));
+                            : federatedSearch(q, qn, limit, query.lat(), query.lon(), federated,
+                                    query.bypassCache()));
         });
     }
 
     private Mono<CatalogSearchResult> federatedSearch(String q, String qn, int limit,
-                                                      Double lat, Double lon, boolean federated) {
-        Mono<List<SearchHit>> transit = cache.get(qn, limit)
-                .switchIfEmpty(Mono.defer(() -> indexRepository.search(qn, limit)
-                        .collectList()
-                        .flatMap(hits -> cache.put(qn, limit, hits).thenReturn(hits))));
+                                                      Double lat, Double lon, boolean federated,
+                                                      boolean bypassCache) {
+        Mono<List<SearchHit>> transit = bypassCache
+                ? indexRepository.search(qn, limit).collectList()
+                : cache.get(qn, limit)
+                        .switchIfEmpty(Mono.defer(() -> indexRepository.search(qn, limit)
+                                .collectList()
+                                .flatMap(hits -> cache.put(qn, limit, hits).thenReturn(hits))));
         if (!federated) {
             return transit.map(hits -> toResult(q, true, rank(hits, lat, lon, limit)));
         }

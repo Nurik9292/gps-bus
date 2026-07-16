@@ -5,6 +5,8 @@ import biz.ugur.busroutebackend.catalogsearch.application.usecase.CreateAliasUse
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.DeleteAliasUseCase;
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.PreviewCatalogSearchUseCase;
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.SearchAliasesUseCase;
+import biz.ugur.busroutebackend.catalogsearch.application.usecase.SearchCatalogUseCase;
+import biz.ugur.busroutebackend.place.application.usecase.SearchPlacesUseCase;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.CatalogObjectKind;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchCache;
 import biz.ugur.busroutebackend.catalogsearch.infrastructure.config.CatalogSearchProperties;
@@ -102,6 +104,7 @@ class CatalogSearchGatesIntegrationTest {
     @Autowired
     private ReactiveTransactionManager transactionManager;
 
+    private CatalogSearchProperties properties;
     private R2dbcCatalogSearchIndexRepository indexRepository;
     private CreateAliasUseCase createUseCase;
     private DeleteAliasUseCase deleteUseCase;
@@ -111,7 +114,7 @@ class CatalogSearchGatesIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        CatalogSearchProperties properties = new CatalogSearchProperties();
+        properties = new CatalogSearchProperties();
         indexRepository = new R2dbcCatalogSearchIndexRepository(databaseClient, transactionManager, properties);
 
         CorrelationContextService correlation = mock(CorrelationContextService.class);
@@ -128,7 +131,11 @@ class CatalogSearchGatesIntegrationTest {
                 security, cache, txOperator, correlation, eventBus);
         deleteUseCase = new DeleteAliasUseCase(aliasRepository, indexRepository, cache, txOperator,
                 correlation, eventBus);
-        previewUseCase = new PreviewCatalogSearchUseCase(indexRepository, aliasRepository, correlation, eventBus);
+        SearchPlacesUseCase placesStub = mock(SearchPlacesUseCase.class);
+        when(placesStub.execute(any(Mono.class))).thenReturn(Mono.just(java.util.List.of()));
+        SearchCatalogUseCase searchCatalog = new SearchCatalogUseCase(indexRepository, aliasRepository,
+                cache, placesStub, properties, correlation, eventBus);
+        previewUseCase = new PreviewCatalogSearchUseCase(searchCatalog, correlation, eventBus);
         searchAliasesUseCase = new SearchAliasesUseCase(aliasRepository, correlation, eventBus);
         scheduler = new CatalogSearchRebuildScheduler(indexRepository);
 
