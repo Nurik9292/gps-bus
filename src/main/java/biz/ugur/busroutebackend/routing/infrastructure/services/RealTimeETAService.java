@@ -47,21 +47,28 @@ public class RealTimeETAService {
             }
 
             NearestBusInfo best = null;
+            java.util.Map<String, OptionalDouble> stopFracByRouteDir = new java.util.HashMap<>();
 
-            for (int direction = 0; direction <= 1; direction++) {
-                OptionalDouble stopFracOpt = routeGeometryCache.getStopFractionByName(routeNumber, direction, stopName);
-                if (stopFracOpt.isEmpty() && !Double.isNaN(stopLat) && !Double.isNaN(stopLon)) {
-                    stopFracOpt = routeGeometryCache.getStopFractionByCoordinates(
-                            routeNumber, direction, stopLat, stopLon, 80.0);
-                }
-                if (stopFracOpt.isEmpty()) continue;
+            for (VehiclePredictionState vehicle : onRoute) {
+                    String routeId = vehicle.getRouteId();
+                    if (routeId == null) continue;
+                    int direction = vehicle.getDirection();
 
-                double stopFrac = stopFracOpt.getAsDouble();
-                double totalDist = routeGeometryCache.getTotalDistance(routeNumber, direction);
-                if (totalDist <= 0) continue;
+                    OptionalDouble stopFracOpt = stopFracByRouteDir.computeIfAbsent(
+                            routeId + "#" + direction, key -> {
+                                OptionalDouble byName = routeGeometryCache
+                                        .getStopFractionByName(routeId, direction, stopName);
+                                if (byName.isEmpty() && !Double.isNaN(stopLat) && !Double.isNaN(stopLon)) {
+                                    return routeGeometryCache.getStopFractionByCoordinates(
+                                            routeId, direction, stopLat, stopLon, 80.0);
+                                }
+                                return byName;
+                            });
+                    if (stopFracOpt.isEmpty()) continue;
 
-                for (VehiclePredictionState vehicle : onRoute) {
-                    if (vehicle.getDirection() != direction) continue;
+                    double stopFrac = stopFracOpt.getAsDouble();
+                    double totalDist = routeGeometryCache.getTotalDistance(routeId, direction);
+                    if (totalDist <= 0) continue;
 
                     double vehicleFrac = vehicle.getLastGpsFraction();
                     if (vehicleFrac >= stopFrac + 0.005) continue;
@@ -90,7 +97,6 @@ public class RealTimeETAService {
                                 speedKmh
                         );
                     }
-                }
             }
 
             if (best != null) {

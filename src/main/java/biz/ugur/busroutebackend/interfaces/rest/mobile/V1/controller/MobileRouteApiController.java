@@ -152,10 +152,11 @@ public class MobileRouteApiController extends BaseMobileController {
     }
 
     @GetMapping("/{routeNumber}")
-    public Mono<ResponseEntity<ApiResponse<MobileRouteResponse>>> getRouteByNumber(@PathVariable String routeNumber) {
+    public Mono<ResponseEntity<ApiResponse<MobileRouteResponse>>> getRouteByNumber(@PathVariable String routeNumber,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String cityId) {
 
         return okOrNotFound(getOptionalClientId().flatMap(optionalClientId ->
-                routeResolutionService.resolveByNumber(routeNumber)
+                routeResolutionService.resolveByNumber(routeNumber, cityId)
                         .flatMap(resolvedRoute ->
                                 optionalClientId
                                         .map(clientId -> routeIsFavoriteUseCase

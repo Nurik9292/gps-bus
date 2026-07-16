@@ -35,24 +35,24 @@ class RouteGeometryCacheEventHandlerTest {
     void refreshesGeometryCacheForRouteOnGeometryUpdatedEvent() {
         when(eventBus.on(RouteGeometryUpdatedEvent.class))
                 .thenReturn(Flux.just(geometryUpdatedFor("47")));
-        when(routeGeometryCache.refreshRoute("47")).thenReturn(Mono.empty());
+        when(routeGeometryCache.refreshRoute("route-id-47")).thenReturn(Mono.empty());
 
         handler.init();
 
-        verify(routeGeometryCache).refreshRoute("47");
+        verify(routeGeometryCache).refreshRoute("route-id-47");
     }
 
     @Test
     void subscriptionSurvivesAndProcessesNextEventWhenOneRefreshFails() {
         when(eventBus.on(RouteGeometryUpdatedEvent.class))
                 .thenReturn(Flux.just(geometryUpdatedFor("3"), geometryUpdatedFor("29")));
-        when(routeGeometryCache.refreshRoute("3"))
+        when(routeGeometryCache.refreshRoute("route-id-3"))
                 .thenReturn(Mono.error(new RuntimeException("db unavailable")));
-        when(routeGeometryCache.refreshRoute("29")).thenReturn(Mono.empty());
+        when(routeGeometryCache.refreshRoute("route-id-29")).thenReturn(Mono.empty());
 
         handler.init();
 
-        verify(routeGeometryCache).refreshRoute("3");
-        verify(routeGeometryCache).refreshRoute("29");
+        verify(routeGeometryCache).refreshRoute("route-id-3");
+        verify(routeGeometryCache).refreshRoute("route-id-29");
     }
 }

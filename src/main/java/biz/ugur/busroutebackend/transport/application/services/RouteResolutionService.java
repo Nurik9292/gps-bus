@@ -11,6 +11,8 @@ public interface RouteResolutionService {
 
     Mono<ResolvedRouteData> resolveByNumber(String routeNumber);
 
+    Mono<ResolvedRouteData> resolveByNumber(String routeNumber, String cityId);
+
     Flux<ResolvedRouteData> resolveAllRoutes();
 
     Flux<ResolvedRouteData> resolveAllRoutes(String cityId);

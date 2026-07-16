@@ -67,7 +67,7 @@ class V31ShadowIsolationTest {
     void b3ExceptionInsideV31DoesNotBreakMainStream(@org.junit.jupiter.api.io.TempDir Path dir) {
         V31ShadowTap tap = new V31ShadowTap();
         V31RouteLines lines = Mockito.mock(V31RouteLines.class);
-        Mockito.when(lines.topologyFor(Mockito.anyString()))
+        Mockito.when(lines.topologyFor(Mockito.anyString(), Mockito.anyString()))
                 .thenThrow(new IllegalStateException("injected v31 failure"))
                 .thenReturn(null);
         V31ShadowService service = new V31ShadowService(tap, lines, Clock.systemUTC(), dir);
