@@ -56,6 +56,7 @@ prod-build-local:
 	cp target/bus-route-backend-*.jar build-local/app.jar
 	cp Dockerfile.prod-local build-local/Dockerfile
 	docker build -t bus-route-backend:latest build-local
+	docker tag bus-route-backend:latest bus-route-backend-bus-route-app:latest
 	rm -rf build-local
 
 docker-dev-build:
