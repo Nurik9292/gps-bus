@@ -66,6 +66,20 @@ spring:
     default-property-inclusion: non_null
 
 app:
+  prediction:
+    v31:
+      enabled: ${APP_PREDICTION_V31_ENABLED:false}
+      broadcast: ${APP_PREDICTION_V31_BROADCAST:off}
+      routes-allowlist: ${APP_PREDICTION_V31_ROUTES:}
+      w-broadcast-hz: ${APP_PREDICTION_V31_HZ:1.0}
+      t-heartbeat-sec: ${APP_PREDICTION_V31_HEARTBEAT:5}
+      cityzone:
+        routes:
+          "[61]":
+            d-lat: 38.050990
+            d-lon: 58.170747
+            p-lat: 38.058718
+            p-lon: 58.175667
   mail:
     enabled: ${MAIL_ENABLED:false}
     admin-email: ${ADMIN_EMAIL:admin@busroute.tm}
@@ -682,7 +696,12 @@ gps:
   recorder:
     enabled: ${GPS_RECORDER_ENABLED:false}
     output-dir: ${GPS_RECORDER_OUTPUT_DIR:logs/fixtures}
-    max-duration-sec: ${GPS_RECORDER_MAX_DURATION_SEC:300}
+    max-duration-sec: ${GPS_RECORDER_MAX_DURATION_SEC:3600}
+    campaign-enabled: ${GPS_RECORDER_CAMPAIGN_ENABLED:false}
+    session-duration-sec: ${GPS_RECORDER_SESSION_DURATION_SEC:3600}
+    session-prefix: ${GPS_RECORDER_SESSION_PREFIX:campaign}
+    roll-check-interval-sec: ${GPS_RECORDER_ROLL_CHECK_INTERVAL_SEC:30}
+    routes: ${GPS_RECORDER_ROUTES:}
 
 payment:
   scheduler:

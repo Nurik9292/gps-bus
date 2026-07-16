@@ -71,10 +71,11 @@ class NamingConventionsTest {
                 .that().haveSimpleNameEndingWith("Config")
                 .and().haveSimpleNameNotEndingWith("SessionConfig")
                 .and().haveSimpleNameNotEndingWith("GpsConfig")
+                .and().haveSimpleNameNotEndingWith("CoreConfig")
                 .should().resideInAPackage("..infrastructure..")
                 .orShould().resideInAPackage("..shared..")
                 .because("Framework configuration is an infrastructure concern. "
-                        + "SessionConfig/GpsConfig are value-holders, not @Configuration.")
+                        + "SessionConfig/GpsConfig/CoreConfig are value-holders, not @Configuration.")
                 .check(classes);
     }
 }

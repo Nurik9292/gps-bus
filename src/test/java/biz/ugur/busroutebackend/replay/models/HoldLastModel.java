@@ -1,0 +1,25 @@
+package biz.ugur.busroutebackend.replay.models;
+
+import biz.ugur.busroutebackend.prediction.core.RouteLine;
+import biz.ugur.busroutebackend.prediction.core.GpsFix;
+import biz.ugur.busroutebackend.prediction.core.PredictionModel;
+
+public class HoldLastModel implements PredictionModel {
+
+    private final GeometricSnapModel snap = new GeometricSnapModel();
+    private Estimate last;
+
+    @Override
+    public Estimate onFix(GpsFix fix, RouteLine g) {
+        if (last == null) {
+            Estimate first = snap.onFix(fix, g);
+            last = new Estimate(first.s(), 0.0, "HOLD", first.varianceS());
+        }
+        return last;
+    }
+
+    @Override
+    public void reset() {
+        last = null;
+    }
+}

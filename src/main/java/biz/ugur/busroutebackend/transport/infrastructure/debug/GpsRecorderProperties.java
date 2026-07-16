@@ -15,5 +15,15 @@ public class GpsRecorderProperties {
 
     private String outputDir = "logs/fixtures";
 
-    private int maxDurationSec = 300;
+    private int maxDurationSec = 3600;
+
+    private boolean campaignEnabled = false;
+
+    private int sessionDurationSec = 3600;
+
+    private String sessionPrefix = "campaign";
+
+    private int rollCheckIntervalSec = 30;
+
+    private java.util.List<String> routes = java.util.List.of();
 }

@@ -80,9 +80,14 @@ public class GpsRecorder {
                                 double course,
                                 boolean inMotion,
                                 Instant timestamp,
-                                int direction) {
+                                int direction,
+                                Double hdop,
+                                Integer satellites,
+                                Double accuracy) {
         ActiveSession session = activeSession.get();
         if (session == null) return;
+
+        if (!routePassesFilter(routeNumber)) return;
 
         Instant now = Instant.now();
         if (now.isAfter(session.stopAt)) {
@@ -101,6 +106,9 @@ public class GpsRecorder {
         event.put("inMotion", inMotion);
         event.put("timestamp", timestamp.toString());
         event.put("direction", direction);
+        event.put("hdop", hdop);
+        event.put("satellites", satellites);
+        event.put("accuracy", accuracy);
         event.put("wallClock", now.toString());
 
         try {
@@ -112,6 +120,24 @@ public class GpsRecorder {
             }
         } catch (IOException e) {
             log.warn("[GPS_RECORDER] failed to write event: {}", e.getMessage());
+        }
+    }
+
+    private boolean routePassesFilter(String routeNumber) {
+        java.util.List<String> routes = properties.getRoutes();
+        if (routes == null || routes.isEmpty()) return true;
+        return routeNumber != null && routes.contains(routeNumber);
+    }
+
+    public void flush() {
+        ActiveSession session = activeSession.get();
+        if (session == null) return;
+        try {
+            synchronized (session.writer) {
+                session.writer.flush();
+            }
+        } catch (IOException e) {
+            log.warn("[GPS_RECORDER] flush failed: {}", e.getMessage());
         }
     }
 

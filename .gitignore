@@ -13,7 +13,33 @@ target/
 .sts4-cache
 .claude
 .superpowers/
-scripts/
+scripts/*
+!scripts/ws_pred_extract.py
+!scripts/ws-pred-daily-extract.sh
+!scripts/a10_short_trip_detector.py
+!scripts/a10_48_polygon_dir_test.py
+!scripts/a10_3_derive.py
+!scripts/a10_5_window_stats.py
+!scripts/a11_1_registry_diff.py
+!scripts/step5_corpus_manifest.py
+!scripts/step5_w21_dataset.py
+!scripts/step5_w22_gaps.py
+!scripts/step5_w23_dwell.py
+!scripts/step5_w21_fit.py
+!scripts/step5_w21_before_after.py
+!scripts/step5_w22_tables.py
+!scripts/step5_w23_tables.py
+!scripts/step5_w24_offaudit.py
+!scripts/step5_w26_apexwins.py
+!scripts/step5_w28_reaudit.py
+!scripts/step5_w29_besttrue.py
+!scripts/step5_w30_r2rest.py
+!scripts/step5_w31_gokje_recon.py
+!scripts/step5_w31_p5.py
+!scripts/step5_w31_p67.py
+!scripts/step5_w31_p9.py
+!scripts/step5_w31_p10.py
+!scripts/campaign-healthcheck.py
 deployment/
 .idea
 *.iws
@@ -33,7 +59,7 @@ build/
 
 .env
 logs/
-docs/
+docs/*
 problems/
 map/
 data/
@@ -63,3 +89,8 @@ src/main/resources/static/routes.geojson
 # Local DB migration drafts (not the Flyway migrations under src/main/resources/db/)
 /db/
 build-local/
+scratchpad/
+
+!docs/data/
+!docs/data/**
+__pycache__/

@@ -30,6 +30,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class VehiclePositionPredictionService {
 
+    private volatile org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap> v31ShadowTap;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setV31ShadowTap(org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap> tap) {
+        this.v31ShadowTap = tap;
+    }
+
+
     private static final double METRES_PER_DEGREE_LAT = 111_320.0;
     private static final double DT_SECONDS = 1.0;
     private static final long MAX_GPS_AGE_MS = 10 * 60 * 1000L;
@@ -200,7 +208,8 @@ public class VehiclePositionPredictionService {
                             boolean directionConfirmed,
                             boolean inGarage) {
         onGpsUpdate(vehicleId, licensePlate, routeNumber, latitude, longitude, speedKmh,
-                course, inMotion, timestamp, direction, directionConfirmed, inGarage, false);
+                course, inMotion, timestamp, direction, directionConfirmed, inGarage, false,
+                biz.ugur.busroutebackend.transport.infrastructure.debug.GpsQuality.UNKNOWN);
     }
 
     public void onGpsUpdate(String vehicleId,
@@ -215,7 +224,28 @@ public class VehiclePositionPredictionService {
                             int direction,
                             boolean directionConfirmed,
                             boolean inGarage,
-                            boolean isBuffered) {
+                            boolean isBuffered,
+                            biz.ugur.busroutebackend.transport.infrastructure.debug.GpsQuality gpsQuality) {
+        if (v31ShadowTap != null) {
+            biz.ugur.busroutebackend.prediction.shadow.V31ShadowTap tap = null;
+            try {
+                tap = v31ShadowTap.getIfAvailable();
+                if (tap != null) {
+                    // Врезка выше properties.isEnabled() и GpsOutlierFilter — ратифицировано A-090726-11 п.11.3 («сырой вход», Б-3)
+                    tap.accept(new biz.ugur.busroutebackend.prediction.shadow.V31Fix(
+                            vehicleId, licensePlate, routeNumber, latitude, longitude,
+                            speedKmh, course, inMotion, timestamp, direction,
+                            gpsQuality != null ? gpsQuality.hdop() : null,
+                            gpsQuality != null ? gpsQuality.satellites() : null,
+                            gpsQuality != null ? gpsQuality.accuracy() : null));
+                }
+            } catch (RuntimeException v31InjectionFailure) {
+                if (tap != null) {
+                    tap.recordError();
+                }
+            }
+        }
+
         if (!properties.isEnabled()) {
             return;
         }
@@ -236,7 +266,8 @@ public class VehiclePositionPredictionService {
         GpsRecorder recorder = gpsRecorderProvider.getIfAvailable();
         if (recorder != null) {
             recorder.recordIfActive(vehicleId, licensePlate, routeNumber,
-                    latitude, longitude, speedKmh, course, inMotion, timestamp, direction);
+                    latitude, longitude, speedKmh, course, inMotion, timestamp, direction,
+                    gpsQuality.hdop(), gpsQuality.satellites(), gpsQuality.accuracy());
         }
 
         long gpsAgeMs = Instant.now().toEpochMilli() - timestamp.toEpochMilli();
