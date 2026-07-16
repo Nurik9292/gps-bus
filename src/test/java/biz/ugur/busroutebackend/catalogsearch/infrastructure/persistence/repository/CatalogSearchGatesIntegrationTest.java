@@ -52,7 +52,10 @@ class CatalogSearchGatesIntegrationTest {
             .withPassword("test")
             .withCopyFileToContainer(
                     MountableFile.forClasspathResource("db/migration/V97__create_catalog_search.sql"),
-                    "/tmp/v97.sql");
+                    "/tmp/v97.sql")
+            .withCopyFileToContainer(
+                    MountableFile.forClasspathResource("db/migration/V98__extend_catalog_search_places_streets.sql"),
+                    "/tmp/v98.sql");
 
     @DynamicPropertySource
     static void configure(DynamicPropertyRegistry registry) {
@@ -84,6 +87,42 @@ class CatalogSearchGatesIntegrationTest {
                     name_en VARCHAR(200),
                     is_active BOOLEAN DEFAULT true
                 );
+                CREATE TABLE cities (
+                    id VARCHAR(36) PRIMARY KEY,
+                    name VARCHAR(200) NOT NULL
+                );
+                CREATE TABLE places (
+                    id VARCHAR(36) PRIMARY KEY,
+                    name VARCHAR(300) NOT NULL,
+                    name_en VARCHAR(300),
+                    name_tm VARCHAR(300),
+                    address VARCHAR(500),
+                    category VARCHAR(100),
+                    city_id VARCHAR(36),
+                    latitude DOUBLE PRECISION,
+                    longitude DOUBLE PRECISION,
+                    is_active BOOLEAN DEFAULT true
+                );
+                CREATE TABLE place_aliases (
+                    id VARCHAR(36) PRIMARY KEY,
+                    place_id VARCHAR(36) NOT NULL,
+                    alias VARCHAR(300) NOT NULL,
+                    language VARCHAR(5)
+                );
+                CREATE TABLE streets (
+                    id VARCHAR(36) PRIMARY KEY,
+                    name VARCHAR(300) NOT NULL,
+                    name_en VARCHAR(300),
+                    name_tm VARCHAR(300),
+                    city_id VARCHAR(36),
+                    is_active BOOLEAN DEFAULT true
+                );
+                CREATE TABLE street_aliases (
+                    id VARCHAR(36) PRIMARY KEY,
+                    street_id VARCHAR(36) NOT NULL,
+                    alias VARCHAR(300) NOT NULL,
+                    language VARCHAR(5)
+                );
                 """);
         if (ext.getExitCode() != 0) {
             throw new IllegalStateException("schema bootstrap failed: " + ext.getStderr());
@@ -92,6 +131,11 @@ class CatalogSearchGatesIntegrationTest {
                 "-v", "ON_ERROR_STOP=1", "-f", "/tmp/v97.sql");
         if (v97.getExitCode() != 0) {
             throw new IllegalStateException("V97 failed: " + v97.getStderr());
+        }
+        var v98 = postgres.execInContainer("psql", "-U", "test", "-d", "testdb",
+                "-v", "ON_ERROR_STOP=1", "-f", "/tmp/v98.sql");
+        if (v98.getExitCode() != 0) {
+            throw new IllegalStateException("V98 failed: " + v98.getStderr());
         }
     }
 
@@ -143,6 +187,32 @@ class CatalogSearchGatesIntegrationTest {
                 .then(databaseClient.sql("DELETE FROM search_index").then())
                 .then(databaseClient.sql("DELETE FROM bus_stops").then())
                 .then(databaseClient.sql("DELETE FROM bus_routes").then())
+                .then(databaseClient.sql("DELETE FROM place_aliases").then())
+                .then(databaseClient.sql("DELETE FROM places").then())
+                .then(databaseClient.sql("DELETE FROM street_aliases").then())
+                .then(databaseClient.sql("DELETE FROM streets").then())
+                .then(databaseClient.sql("DELETE FROM cities").then())
+                .block();
+    }
+
+    private void seedGeoObjects() {
+        databaseClient.sql("INSERT INTO cities (id, name) VALUES ('city-1', 'Ашхабад')").then()
+                .then(databaseClient.sql("""
+                        INSERT INTO places (id, name, category, address, city_id, latitude, longitude) VALUES
+                            ('place-1', 'Berkarar söwda merkezi', 'Торговый центр', 'Atatürk köçesi', 'city-1', 37.9601, 58.3261)
+                        """).then())
+                .then(databaseClient.sql("""
+                        INSERT INTO place_aliases (id, place_id, alias, language) VALUES
+                            ('pa-1', 'place-1', 'Беркарар', 'ru')
+                        """).then())
+                .then(databaseClient.sql("""
+                        INSERT INTO streets (id, name, city_id) VALUES
+                            ('street-1', 'Görogly köçesi', 'city-1')
+                        """).then())
+                .then(databaseClient.sql("""
+                        INSERT INTO street_aliases (id, street_id, alias, language) VALUES
+                            ('sta-1', 'street-1', 'Гёроглы', 'ru')
+                        """).then())
                 .block();
     }
 
@@ -280,6 +350,68 @@ class CatalogSearchGatesIntegrationTest {
                     assertThat(result.items().get(0).objectId()).isEqualTo("stop-2");
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void gateB1CyrillicAliasFindsPlaceWithCoordinates() {
+        seedGeoObjects();
+        StepVerifier.create(indexRepository.rebuildAll()
+                        .then(previewUseCase.execute(Mono.just(
+                                new PreviewCatalogSearchUseCase.Query("беркарар", 10)))))
+                .assertNext(result -> {
+                    assertThat(result.items()).isNotEmpty();
+                    var top = result.items().get(0);
+                    assertThat(top.objectKind()).isEqualTo("PLACE");
+                    assertThat(top.objectId()).isEqualTo("place-1");
+                    assertThat(top.title()).isEqualTo("Berkarar söwda merkezi");
+                    assertThat(top.subtitle()).isEqualTo("Торговый центр · Atatürk köçesi");
+                    assertThat(top.lat()).isEqualTo(37.9601);
+                    assertThat(top.lon()).isEqualTo(58.3261);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void gateB2StreetFoundByCyrillicAliasWithCitySubtitle() {
+        seedGeoObjects();
+        StepVerifier.create(indexRepository.rebuildAll()
+                        .then(previewUseCase.execute(Mono.just(
+                                new PreviewCatalogSearchUseCase.Query("гёроглы", 10)))))
+                .assertNext(result -> {
+                    assertThat(result.items()).isNotEmpty();
+                    var top = result.items().get(0);
+                    assertThat(top.objectKind()).isEqualTo("STREET");
+                    assertThat(top.objectId()).isEqualTo("street-1");
+                    assertThat(top.title()).isEqualTo("Görogly köçesi");
+                    assertThat(top.subtitle()).isEqualTo("Ашхабад");
+                    assertThat(top.lat()).isNull();
+                    assertThat(top.lon()).isNull();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void gateB3PointwisePlaceRebuildAgreesWithFullRebuild() {
+        seedGeoObjects();
+        StepVerifier.create(indexRepository.rebuildAll()).expectNextCount(1).verifyComplete();
+
+        databaseClient.sql("INSERT INTO place_aliases (id, place_id, alias, language)"
+                        + " VALUES ('pa-2', 'place-1', 'Русский базар', 'ru')")
+                .then().block();
+        StepVerifier.create(indexRepository.rebuildObject(CatalogObjectKind.PLACE, "place-1"))
+                .expectNextCount(1).verifyComplete();
+
+        StepVerifier.create(previewUseCase.execute(Mono.just(
+                        new PreviewCatalogSearchUseCase.Query("русски базар", 10))))
+                .assertNext(result -> {
+                    assertThat(result.items()).isNotEmpty();
+                    assertThat(result.items().get(0).objectId()).isEqualTo("place-1");
+                })
+                .verifyComplete();
+
+        Long afterPointwise = countIndexRows();
+        StepVerifier.create(indexRepository.rebuildAll()).expectNextCount(1).verifyComplete();
+        assertThat(countIndexRows()).isEqualTo(afterPointwise);
     }
 
     @Test
