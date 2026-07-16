@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.catalogsearch.domain.repository;
 
 import biz.ugur.busroutebackend.catalogsearch.domain.model.AliasCollision;
+import biz.ugur.busroutebackend.catalogsearch.domain.model.CatalogName;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.CatalogObjectKind;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.SearchAlias;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.SearchAliasView;
@@ -20,6 +21,10 @@ public interface SearchAliasRepository {
     Flux<SearchAliasView> searchByText(String query, int page, int size);
 
     Mono<Long> countByText(String query);
+
+    Flux<CatalogName> searchNames(String query, int page, int size);
+
+    Mono<Long> countNames(String query);
 
     Mono<Boolean> existsByObjectAndRaw(CatalogObjectKind kind, String objectId, String aliasRaw);
 

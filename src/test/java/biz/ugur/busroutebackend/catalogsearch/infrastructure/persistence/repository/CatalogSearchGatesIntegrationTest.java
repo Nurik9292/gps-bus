@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.catalogsearch.application.usecase.CreateAliasUse
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.DeleteAliasUseCase;
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.PreviewCatalogSearchUseCase;
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.SearchAliasesUseCase;
+import biz.ugur.busroutebackend.catalogsearch.application.usecase.SearchCatalogNamesUseCase;
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.SearchCatalogUseCase;
 import biz.ugur.busroutebackend.place.application.usecase.GeocodeFallbackUseCase;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.CatalogObjectKind;
@@ -107,7 +108,8 @@ class CatalogSearchGatesIntegrationTest {
                     id VARCHAR(36) PRIMARY KEY,
                     place_id VARCHAR(36) NOT NULL,
                     alias VARCHAR(300) NOT NULL,
-                    language VARCHAR(5)
+                    language VARCHAR(5),
+                    updated_at TIMESTAMP NOT NULL DEFAULT now()
                 );
                 CREATE TABLE streets (
                     id VARCHAR(36) PRIMARY KEY,
@@ -121,7 +123,8 @@ class CatalogSearchGatesIntegrationTest {
                     id VARCHAR(36) PRIMARY KEY,
                     street_id VARCHAR(36) NOT NULL,
                     alias VARCHAR(300) NOT NULL,
-                    language VARCHAR(5)
+                    language VARCHAR(5),
+                    updated_at TIMESTAMP NOT NULL DEFAULT now()
                 );
                 """);
         if (ext.getExitCode() != 0) {
@@ -154,6 +157,7 @@ class CatalogSearchGatesIntegrationTest {
     private DeleteAliasUseCase deleteUseCase;
     private PreviewCatalogSearchUseCase previewUseCase;
     private SearchAliasesUseCase searchAliasesUseCase;
+    private SearchCatalogNamesUseCase searchNamesUseCase;
     private CatalogSearchRebuildScheduler scheduler;
 
     @BeforeEach
@@ -181,6 +185,7 @@ class CatalogSearchGatesIntegrationTest {
                 cache, geocodeStub, properties, correlation, eventBus);
         previewUseCase = new PreviewCatalogSearchUseCase(searchCatalog, correlation, eventBus);
         searchAliasesUseCase = new SearchAliasesUseCase(aliasRepository, correlation, eventBus);
+        searchNamesUseCase = new SearchCatalogNamesUseCase(aliasRepository, correlation, eventBus);
         scheduler = new CatalogSearchRebuildScheduler(indexRepository);
 
         databaseClient.sql("DELETE FROM search_alias").then()
@@ -412,6 +417,41 @@ class CatalogSearchGatesIntegrationTest {
         Long afterPointwise = countIndexRows();
         StepVerifier.create(indexRepository.rebuildAll()).expectNextCount(1).verifyComplete();
         assertThat(countIndexRows()).isEqualTo(afterPointwise);
+    }
+
+    @Test
+    void gateB4UnifiedNamesListMixesAllKindsNewestFirstWithTransliteratedNorm() {
+        seedObjects();
+        seedGeoObjects();
+        createUseCase.execute(Mono.just(new CreateAliasCommand(
+                "STOP", "stop-1", "Русский базар", null, "CURATED"))).block();
+
+        StepVerifier.create(searchNamesUseCase.execute(Mono.just(
+                        new SearchCatalogNamesUseCase.Query(null, 1, 25))))
+                .assertNext(list -> {
+                    assertThat(list.items()).hasSize(3);
+                    assertThat(list.items()).extracting("objectKind")
+                            .containsExactlyInAnyOrder("STOP", "PLACE", "STREET");
+                    var street = list.items().stream()
+                            .filter(n -> n.objectKind().equals("STREET")).findFirst().orElseThrow();
+                    assertThat(street.objectTitle()).isEqualTo("Görogly köçesi");
+                    assertThat(street.aliasRaw()).isEqualTo("Гёроглы");
+                    assertThat(street.aliasNorm()).isEqualTo("gerogly");
+                    assertThat(street.weight()).isNull();
+                    var place = list.items().stream()
+                            .filter(n -> n.objectKind().equals("PLACE")).findFirst().orElseThrow();
+                    assertThat(place.objectTitle()).isEqualTo("Berkarar söwda merkezi");
+                    assertThat(place.aliasNorm()).isEqualTo("berkarar");
+                })
+                .verifyComplete();
+
+        StepVerifier.create(searchNamesUseCase.execute(Mono.just(
+                        new SearchCatalogNamesUseCase.Query("беркарар", 1, 25))))
+                .assertNext(list -> {
+                    assertThat(list.items()).hasSize(1);
+                    assertThat(list.items().get(0).objectKind()).isEqualTo("PLACE");
+                })
+                .verifyComplete();
     }
 
     @Test

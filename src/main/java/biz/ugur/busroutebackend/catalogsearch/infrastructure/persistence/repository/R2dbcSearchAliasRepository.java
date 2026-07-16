@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.catalogsearch.infrastructure.persistence.reposi
 
 import biz.ugur.busroutebackend.catalogsearch.domain.model.AliasCollision;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.AliasSource;
+import biz.ugur.busroutebackend.catalogsearch.domain.model.CatalogName;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.CatalogObjectKind;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.SearchAlias;
 import biz.ugur.busroutebackend.catalogsearch.domain.model.SearchAliasView;
@@ -28,6 +29,28 @@ public class R2dbcSearchAliasRepository implements SearchAliasRepository {
             " LEFT JOIN bus_routes br ON sa.object_kind = 'ROUTE' AND br.id = sa.object_id";
 
     private static final String OBJECT_TITLE_EXPR = "COALESCE(bs.stop_name, br.route_number)";
+
+    private static final String UNIFIED_NAMES_SOURCE = """
+            SELECT sa.object_kind, sa.id::text AS alias_id, sa.object_id,
+                   COALESCE(bs.stop_name, br.route_number) AS object_title,
+                   sa.alias_raw, sa.alias_norm, sa.weight, sa.source,
+                   sa.updated_at
+            FROM search_alias sa
+            LEFT JOIN bus_stops bs ON sa.object_kind = 'STOP' AND bs.id = sa.object_id
+            LEFT JOIN bus_routes br ON sa.object_kind = 'ROUTE' AND br.id = sa.object_id
+            UNION ALL
+            SELECT 'PLACE', pa.id, pa.place_id, p.name,
+                   pa.alias, search_norm(pa.alias), NULL::numeric, NULL,
+                   pa.updated_at::timestamptz
+            FROM place_aliases pa
+            JOIN places p ON p.id = pa.place_id
+            UNION ALL
+            SELECT 'STREET', sta.id, sta.street_id, st.name,
+                   sta.alias, search_norm(sta.alias), NULL::numeric, NULL,
+                   sta.updated_at::timestamptz
+            FROM street_aliases sta
+            JOIN streets st ON st.id = sta.street_id
+            """;
 
     private final DatabaseClient databaseClient;
 
@@ -123,6 +146,41 @@ public class R2dbcSearchAliasRepository implements SearchAliasRepository {
                 .bind("pattern", patternOf(query))
                 .map(row -> row.get("cnt", Long.class))
                 .one();
+    }
+
+    @Override
+    public Flux<CatalogName> searchNames(String query, int page, int size) {
+        return databaseClient.sql("SELECT * FROM (" + UNIFIED_NAMES_SOURCE + ") u" +
+                        " WHERE (:pattern = '%%' OR u.alias_raw ILIKE :pattern OR u.alias_norm ILIKE :pattern)" +
+                        " ORDER BY u.updated_at DESC, u.alias_id DESC" +
+                        " LIMIT :limit OFFSET :offset")
+                .bind("pattern", patternOf(query))
+                .bind("limit", size)
+                .bind("offset", (long) (page - 1) * size)
+                .map(R2dbcSearchAliasRepository::mapName)
+                .all();
+    }
+
+    @Override
+    public Mono<Long> countNames(String query) {
+        return databaseClient.sql("SELECT count(*) AS cnt FROM (" + UNIFIED_NAMES_SOURCE + ") u" +
+                        " WHERE (:pattern = '%%' OR u.alias_raw ILIKE :pattern OR u.alias_norm ILIKE :pattern)")
+                .bind("pattern", patternOf(query))
+                .map(row -> row.get("cnt", Long.class))
+                .one();
+    }
+
+    private static CatalogName mapName(Readable row) {
+        return new CatalogName(
+                CatalogObjectKind.fromString(row.get("object_kind", String.class)),
+                row.get("alias_id", String.class),
+                row.get("object_id", String.class),
+                row.get("object_title", String.class),
+                row.get("alias_raw", String.class),
+                row.get("alias_norm", String.class),
+                row.get("weight", BigDecimal.class),
+                row.get("source", String.class),
+                toInstant(row.get("updated_at", OffsetDateTime.class)));
     }
 
     private static String patternOf(String query) {

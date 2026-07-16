@@ -12,8 +12,10 @@ import biz.ugur.busroutebackend.catalogsearch.application.usecase.DeleteAliasUse
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.GetObjectAliasesUseCase;
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.PatchAliasUseCase;
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.PreviewCatalogSearchUseCase;
+import biz.ugur.busroutebackend.catalogsearch.application.dto.NamesList;
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.RebuildCatalogSearchUseCase;
 import biz.ugur.busroutebackend.catalogsearch.application.usecase.SearchAliasesUseCase;
+import biz.ugur.busroutebackend.catalogsearch.application.usecase.SearchCatalogNamesUseCase;
 import biz.ugur.busroutebackend.catalogsearch.domain.exceptions.CatalogSearchValidationException;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
 import org.springframework.context.MessageSource;
@@ -43,6 +45,7 @@ public class CatalogSearchAdminController extends BasePaginatedController {
     private final DeleteAliasUseCase deleteAliasUseCase;
     private final GetObjectAliasesUseCase getObjectAliasesUseCase;
     private final SearchAliasesUseCase searchAliasesUseCase;
+    private final SearchCatalogNamesUseCase searchCatalogNamesUseCase;
     private final RebuildCatalogSearchUseCase rebuildUseCase;
     private final PreviewCatalogSearchUseCase previewUseCase;
 
@@ -51,6 +54,7 @@ public class CatalogSearchAdminController extends BasePaginatedController {
                                         DeleteAliasUseCase deleteAliasUseCase,
                                         GetObjectAliasesUseCase getObjectAliasesUseCase,
                                         SearchAliasesUseCase searchAliasesUseCase,
+                                        SearchCatalogNamesUseCase searchCatalogNamesUseCase,
                                         RebuildCatalogSearchUseCase rebuildUseCase,
                                         PreviewCatalogSearchUseCase previewUseCase,
                                         MessageSource messageSource) {
@@ -60,6 +64,7 @@ public class CatalogSearchAdminController extends BasePaginatedController {
         this.deleteAliasUseCase = deleteAliasUseCase;
         this.getObjectAliasesUseCase = getObjectAliasesUseCase;
         this.searchAliasesUseCase = searchAliasesUseCase;
+        this.searchCatalogNamesUseCase = searchCatalogNamesUseCase;
         this.rebuildUseCase = rebuildUseCase;
         this.previewUseCase = previewUseCase;
     }
@@ -116,6 +121,16 @@ public class CatalogSearchAdminController extends BasePaginatedController {
     @DeleteMapping("/aliases/{id}")
     public Mono<ResponseEntity<Void>> deleteAlias(@PathVariable Long id) {
         return deleteAliasUseCase.execute(Mono.just(id)).then(noContent());
+    }
+
+    @GetMapping("/names")
+    public Mono<ResponseEntity<ApiResponse<NamesList>>> listNames(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "25") int size) {
+        validatePagination(page, size);
+        return okPaginated(searchCatalogNamesUseCase
+                .execute(Mono.just(new SearchCatalogNamesUseCase.Query(q, page, size))));
     }
 
     @PostMapping("/rebuild")
