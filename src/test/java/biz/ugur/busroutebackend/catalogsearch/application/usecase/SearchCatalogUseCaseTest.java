@@ -8,7 +8,7 @@ import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchInd
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.SearchAliasRepository;
 import biz.ugur.busroutebackend.catalogsearch.infrastructure.config.CatalogSearchProperties;
 import biz.ugur.busroutebackend.place.application.dto.PlaceSearchResult;
-import biz.ugur.busroutebackend.place.application.usecase.SearchPlacesUseCase;
+import biz.ugur.busroutebackend.place.application.usecase.GeocodeFallbackUseCase;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,9 +40,11 @@ class SearchCatalogUseCaseTest {
 
     private static final SearchHit STOP_HIT = new SearchHit(CatalogObjectKind.STOP, "stop-1",
             "Berkarar SM", null, 37.95, 58.38, 2.4, "CURATED");
-    private static final PlaceSearchResult PLACE = new PlaceSearchResult("place-1",
-            "Berkarar söwda merkezi", null, null, null, "Aşgabat", "Söwda merkezi",
-            new BigDecimal("37.94"), new BigDecimal("58.37"), "city-1", List.of(), 0.9);
+    private static final SearchHit PLACE_HIT = new SearchHit(CatalogObjectKind.PLACE, "place-1",
+            "Berkarar söwda merkezi", "Söwda merkezi · Aşgabat", 37.94, 58.37, 0.9, "NAME");
+    private static final PlaceSearchResult GEOCODED = new PlaceSearchResult(null,
+            "Berkarar, Ak bugdaý etraby", null, null, null, "Ahal welaýaty", null,
+            new BigDecimal("37.90"), new BigDecimal("58.30"), "Ahal", List.of(), 0.3);
 
     @Mock
     private CatalogSearchIndexRepository indexRepository;
@@ -51,7 +53,7 @@ class SearchCatalogUseCaseTest {
     @Mock
     private CatalogSearchCache cache;
     @Mock
-    private SearchPlacesUseCase searchPlacesUseCase;
+    private GeocodeFallbackUseCase geocodeFallbackUseCase;
     @Mock
     private CorrelationContextService correlationService;
     @Mock
@@ -66,10 +68,10 @@ class SearchCatalogUseCaseTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         properties = new CatalogSearchProperties();
         useCase = new SearchCatalogUseCase(indexRepository, aliasRepository, cache,
-                searchPlacesUseCase, properties, correlationService, eventBus);
+                geocodeFallbackUseCase, properties, correlationService, eventBus);
     }
 
-    private void stubTransit(SearchHit... hits) {
+    private void stubIndexed(SearchHit... hits) {
         when(aliasRepository.normalize("berkar")).thenReturn(Mono.just("berkar"));
         when(cache.get("berkar", 10)).thenReturn(Mono.empty());
         when(indexRepository.search("berkar", 10)).thenReturn(Flux.just(hits));
@@ -77,9 +79,9 @@ class SearchCatalogUseCaseTest {
     }
 
     @Test
-    void gate17FederatedResultContainsBothStopAndPlace() {
-        stubTransit(STOP_HIT);
-        when(searchPlacesUseCase.execute(any(Mono.class))).thenReturn(Mono.just(List.of(PLACE)));
+    void gate17FederatedResultContainsIndexedPlaceAndStopTogether() {
+        stubIndexed(STOP_HIT, PLACE_HIT);
+        when(geocodeFallbackUseCase.execute(any(Mono.class))).thenReturn(Mono.just(List.of()));
 
         StepVerifier.create(useCase.execute(Mono.just(new SearchCatalogUseCase.Query("berkar", null, null, null))))
                 .assertNext(result -> {
@@ -93,10 +95,38 @@ class SearchCatalogUseCaseTest {
     }
 
     @Test
-    void gate18PlaceFailureDegradesToTransitOnlyItems() {
-        stubTransit(STOP_HIT);
-        when(searchPlacesUseCase.execute(any(Mono.class)))
-                .thenReturn(Mono.error(new IllegalStateException("place down")));
+    void geocodeFallbackFiresOnlyBelowThreshold() {
+        stubIndexed(STOP_HIT);
+        when(geocodeFallbackUseCase.execute(any(Mono.class))).thenReturn(Mono.just(List.of(GEOCODED)));
+
+        StepVerifier.create(useCase.execute(Mono.just(new SearchCatalogUseCase.Query("berkar", null, null, null))))
+                .assertNext(result -> {
+                    assertThat(result.items()).hasSize(2);
+                    assertThat(result.items()).extracting("objectKind")
+                            .containsExactlyInAnyOrder("STOP", "PLACE");
+                    assertThat(result.items()).extracting("objectId")
+                            .containsExactlyInAnyOrder("stop-1", null);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void geocodeFallbackSkippedWhenIndexYieldsEnoughHits() {
+        SearchHit second = new SearchHit(CatalogObjectKind.ROUTE, "route-1", "142", null, null, null, 1.2, "NAME");
+        SearchHit third = new SearchHit(CatalogObjectKind.STREET, "street-1", "Görogly köçesi", null, null, null, 1.0, "NAME");
+        stubIndexed(STOP_HIT, second, third);
+
+        StepVerifier.create(useCase.execute(Mono.just(new SearchCatalogUseCase.Query("berkar", null, null, null))))
+                .assertNext(result -> assertThat(result.items()).hasSize(3))
+                .verifyComplete();
+        verify(geocodeFallbackUseCase, never()).execute(any(Mono.class));
+    }
+
+    @Test
+    void gate18GeocodeFailureDegradesToIndexedItems() {
+        stubIndexed(STOP_HIT);
+        when(geocodeFallbackUseCase.execute(any(Mono.class)))
+                .thenReturn(Mono.error(new IllegalStateException("nominatim down")));
 
         StepVerifier.create(useCase.execute(Mono.just(new SearchCatalogUseCase.Query("berkar", null, null, null))))
                 .assertNext(result -> {
@@ -112,8 +142,8 @@ class SearchCatalogUseCaseTest {
                 null, 37.9500, 58.3800, 1.0, "NAME");
         SearchHit far = new SearchHit(CatalogObjectKind.STOP, "stop-far", "AAA far",
                 null, 38.9500, 58.3800, 1.0, "NAME");
-        stubTransit(far, near);
-        when(searchPlacesUseCase.execute(any(Mono.class))).thenReturn(Mono.just(List.of()));
+        stubIndexed(far, near);
+        when(geocodeFallbackUseCase.execute(any(Mono.class))).thenReturn(Mono.just(List.of()));
 
         StepVerifier.create(useCase.execute(Mono.just(
                         new SearchCatalogUseCase.Query("berkar", null, 37.9501, 58.3801))))
@@ -122,9 +152,9 @@ class SearchCatalogUseCaseTest {
     }
 
     @Test
-    void federationDisabledKeepsTransitOnlyContractAndSkipsPlaces() {
+    void federationDisabledKeepsTransitOnlyContractAndSkipsGeocode() {
         properties.setFederationEnabled(false);
-        stubTransit(STOP_HIT);
+        stubIndexed(STOP_HIT);
 
         StepVerifier.create(useCase.execute(Mono.just(new SearchCatalogUseCase.Query("berkar", null, null, null))))
                 .assertNext(result -> {
@@ -132,14 +162,14 @@ class SearchCatalogUseCaseTest {
                     assertThat(result.items()).hasSize(1);
                 })
                 .verifyComplete();
-        verify(searchPlacesUseCase, never()).execute(any(Mono.class));
+        verify(geocodeFallbackUseCase, never()).execute(any(Mono.class));
     }
 
     @Test
     void cacheHitSkipsIndexQueryButStillFederates() {
         when(aliasRepository.normalize("berkar")).thenReturn(Mono.just("berkar"));
         when(cache.get("berkar", 10)).thenReturn(Mono.just(List.of(STOP_HIT)));
-        when(searchPlacesUseCase.execute(any(Mono.class))).thenReturn(Mono.just(List.of(PLACE)));
+        when(geocodeFallbackUseCase.execute(any(Mono.class))).thenReturn(Mono.just(List.of(GEOCODED)));
 
         StepVerifier.create(useCase.execute(Mono.just(new SearchCatalogUseCase.Query("berkar", null, null, null))))
                 .assertNext(result -> assertThat(result.items()).hasSize(2))
@@ -155,7 +185,7 @@ class SearchCatalogUseCaseTest {
                 .assertNext(result -> assertThat(result.items()).isEmpty())
                 .verifyComplete();
         verify(cache, never()).get(anyString(), anyInt());
-        verify(searchPlacesUseCase, never()).execute(any(Mono.class));
+        verify(geocodeFallbackUseCase, never()).execute(any(Mono.class));
     }
 
     @Test

@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.place.domain.model.PlaceCategory;
 import biz.ugur.busroutebackend.place.domain.repository.PlaceRepository;
 import biz.ugur.busroutebackend.place.domain.valueobjects.PlaceId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.place.domain.events.PlaceCatalogChangedEvent;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +51,7 @@ public class UpdatePlaceUseCase extends BaseUseCase<Mono<UpdatePlaceCommand>, Pl
                     return placeRepository.save(updated);
                 })
                 .map(PlaceResult::fromDomain)
-                .doOnSuccess(r -> log.info("Place updated: {}", r.id()));
+                .doOnSuccess(r -> log.info("Place updated: {}", r.id()))
+                .doOnSuccess(r -> eventBus.publish(new PlaceCatalogChangedEvent(r.id())));
     }
 }

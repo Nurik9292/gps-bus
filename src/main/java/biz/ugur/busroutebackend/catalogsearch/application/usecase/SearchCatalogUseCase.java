@@ -9,9 +9,8 @@ import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchCac
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.CatalogSearchIndexRepository;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.SearchAliasRepository;
 import biz.ugur.busroutebackend.catalogsearch.infrastructure.config.CatalogSearchProperties;
-import biz.ugur.busroutebackend.place.application.dto.PlaceSearchQuery;
 import biz.ugur.busroutebackend.place.application.dto.PlaceSearchResult;
-import biz.ugur.busroutebackend.place.application.usecase.SearchPlacesUseCase;
+import biz.ugur.busroutebackend.place.application.usecase.GeocodeFallbackUseCase;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
@@ -37,17 +36,18 @@ public class SearchCatalogUseCase extends BaseUseCase<Mono<SearchCatalogUseCase.
 
     static final int LIMIT_DEFAULT = 10;
     static final int LIMIT_MAX = 50;
+    static final int GEO_FALLBACK_THRESHOLD = 3;
 
     private final CatalogSearchIndexRepository indexRepository;
     private final SearchAliasRepository aliasRepository;
     private final CatalogSearchCache cache;
-    private final SearchPlacesUseCase searchPlacesUseCase;
+    private final GeocodeFallbackUseCase geocodeFallbackUseCase;
     private final CatalogSearchProperties properties;
 
     public SearchCatalogUseCase(CatalogSearchIndexRepository indexRepository,
                                 SearchAliasRepository aliasRepository,
                                 CatalogSearchCache cache,
-                                SearchPlacesUseCase searchPlacesUseCase,
+                                GeocodeFallbackUseCase geocodeFallbackUseCase,
                                 CatalogSearchProperties properties,
                                 CorrelationContextService correlationService,
                                 EventBus eventBus) {
@@ -55,7 +55,7 @@ public class SearchCatalogUseCase extends BaseUseCase<Mono<SearchCatalogUseCase.
         this.indexRepository = indexRepository;
         this.aliasRepository = aliasRepository;
         this.cache = cache;
-        this.searchPlacesUseCase = searchPlacesUseCase;
+        this.geocodeFallbackUseCase = geocodeFallbackUseCase;
         this.properties = properties;
     }
 
@@ -76,28 +76,35 @@ public class SearchCatalogUseCase extends BaseUseCase<Mono<SearchCatalogUseCase.
     private Mono<CatalogSearchResult> federatedSearch(String q, String qn, int limit,
                                                       Double lat, Double lon, boolean federated,
                                                       boolean bypassCache) {
-        Mono<List<SearchHit>> transit = bypassCache
+        Mono<List<SearchHit>> indexed = bypassCache
                 ? indexRepository.search(qn, limit).collectList()
                 : cache.get(qn, limit)
                         .switchIfEmpty(Mono.defer(() -> indexRepository.search(qn, limit)
                                 .collectList()
                                 .flatMap(hits -> cache.put(qn, limit, hits).thenReturn(hits))));
         if (!federated) {
-            return transit.map(hits -> toResult(q, true, rank(hits, lat, lon, limit)));
+            return indexed.map(hits -> toResult(q, true, rank(hits, lat, lon, limit)));
         }
-        Mono<List<SearchHit>> places = searchPlacesUseCase
-                .execute(Mono.just(new PlaceSearchQuery(q, null, null, limit, null)))
+        return indexed.flatMap(hits -> withGeocodeFallback(q, hits, limit))
+                .map(hits -> toResult(q, false, rank(hits, lat, lon, limit)));
+    }
+
+    private Mono<List<SearchHit>> withGeocodeFallback(String q, List<SearchHit> hits, int limit) {
+        if (hits.size() >= GEO_FALLBACK_THRESHOLD) {
+            return Mono.just(hits);
+        }
+        return geocodeFallbackUseCase
+                .execute(Mono.just(new GeocodeFallbackUseCase.Query(q, limit - hits.size())))
                 .timeout(Duration.ofMillis(properties.getPlaceTimeoutMs()))
                 .map(this::toPlaceHits)
                 .onErrorResume(err -> {
-                    log.warn("[CATALOG_SEARCH] place federation degraded: {}", err.getMessage());
+                    log.warn("[CATALOG_SEARCH] geocode fallback degraded: {}", err.getMessage());
                     return Mono.just(List.of());
-                });
-        return Mono.zip(transit, places)
-                .map(tuple -> {
-                    List<SearchHit> merged = new ArrayList<>(tuple.getT1());
-                    merged.addAll(tuple.getT2());
-                    return toResult(q, false, rank(merged, lat, lon, limit));
+                })
+                .map(geoHits -> {
+                    List<SearchHit> merged = new ArrayList<>(hits);
+                    merged.addAll(geoHits);
+                    return merged;
                 });
     }
 

@@ -61,7 +61,7 @@ class AutocompletePlacesUseCaseTest {
         when(cacheService.cacheAutocompleteResults(anyString(), any())).thenReturn(Mono.empty());
 
         StepVerifier.create(useCase.execute(Mono.just(
-                new PlaceSearchQuery("cafe", "ashgabat", null, 10, "ru"))))
+                new PlaceSearchQuery("cafe", "ashgabat", null, 10))))
                 .assertNext(list -> assertEquals(1, list.size()))
                 .verifyComplete();
     }
@@ -78,7 +78,7 @@ class AutocompletePlacesUseCaseTest {
         when(cacheService.cacheAutocompleteResults(anyString(), any())).thenReturn(Mono.empty());
 
         StepVerifier.create(useCase.execute(Mono.just(
-                new PlaceSearchQuery("cafe", "ashgabat", null, 0, "ru"))))
+                new PlaceSearchQuery("cafe", "ashgabat", null, 0))))
                 .assertNext(list -> assertEquals(1, list.size()))
                 .verifyComplete();
 

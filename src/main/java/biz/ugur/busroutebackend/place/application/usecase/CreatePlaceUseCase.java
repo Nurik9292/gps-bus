@@ -9,6 +9,7 @@ import biz.ugur.busroutebackend.place.domain.model.PlaceCategory;
 import biz.ugur.busroutebackend.place.domain.repository.PlaceAliasRepository;
 import biz.ugur.busroutebackend.place.domain.repository.PlaceRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.place.domain.events.PlaceCatalogChangedEvent;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
@@ -72,6 +73,7 @@ public class CreatePlaceUseCase extends BaseUseCase<Mono<CreatePlaceCommand>, Pl
                             .collectList()
                             .map(aliases -> PlaceResult.fromDomain(saved, aliases));
                 })
-                .doOnSuccess(r -> log.info("Place created: {}", r.name()));
+                .doOnSuccess(r -> log.info("Place created: {}", r.name()))
+                .doOnSuccess(r -> eventBus.publish(new PlaceCatalogChangedEvent(r.id())));
     }
 }

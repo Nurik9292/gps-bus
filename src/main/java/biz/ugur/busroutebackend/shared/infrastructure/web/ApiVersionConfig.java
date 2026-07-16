@@ -88,7 +88,6 @@ public class ApiVersionConfig {
 
     public static final String PLACES = "/places";
     public static final String STREETS = "/streets";
-    public static final String V1_PLACES = API_V1 + PLACES;
     public static final String V1_MOBILE_PLACES = V1_MOBILE + PLACES;
     public static final String V1_ADMIN_PLACES = V1_ADMIN + PLACES;
     public static final String V1_ADMIN_STREETS = V1_ADMIN + STREETS;

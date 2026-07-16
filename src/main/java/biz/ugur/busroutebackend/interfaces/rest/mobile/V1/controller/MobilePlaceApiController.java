@@ -48,7 +48,7 @@ public class MobilePlaceApiController extends BaseController {
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) String lang) {
 
-        return ok(Mono.just(new PlaceSearchQuery(query, cityId, category, limit, lang))
+        return ok(Mono.just(new PlaceSearchQuery(query, cityId, category, limit))
                 .as(searchPlacesUseCase::execute));
     }
 
@@ -83,7 +83,7 @@ public class MobilePlaceApiController extends BaseController {
             @RequestParam(required = false) String cityId,
             @RequestParam(defaultValue = "10") int limit) {
 
-        return ok(Mono.just(new PlaceSearchQuery(query, cityId, null, limit, null))
+        return ok(Mono.just(new PlaceSearchQuery(query, cityId, null, limit))
                 .as(autocompletePlacesUseCase::execute));
     }
 }

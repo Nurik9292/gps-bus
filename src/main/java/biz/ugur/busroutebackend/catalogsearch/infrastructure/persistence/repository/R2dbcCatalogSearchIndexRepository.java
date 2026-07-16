@@ -38,9 +38,11 @@ public class R2dbcCatalogSearchIndexRepository implements CatalogSearchIndexRepo
                 ORDER BY object_kind, object_id, score DESC
             )
             SELECT b.object_kind, b.object_id, b.title, b.subtitle, b.source, b.score,
-                   bs.latitude AS stop_lat, bs.longitude AS stop_lon
+                   COALESCE(bs.latitude, p.latitude) AS hit_lat,
+                   COALESCE(bs.longitude, p.longitude) AS hit_lon
             FROM best b
             LEFT JOIN bus_stops bs ON b.object_kind = 'STOP' AND bs.id = b.object_id
+            LEFT JOIN places p ON b.object_kind = 'PLACE' AND p.id = b.object_id
             ORDER BY b.score DESC, b.title
             LIMIT :limit
             """;
@@ -99,8 +101,8 @@ public class R2dbcCatalogSearchIndexRepository implements CatalogSearchIndexRepo
                 row.get("object_id", String.class),
                 row.get("title", String.class),
                 row.get("subtitle", String.class),
-                row.get("stop_lat", Double.class),
-                row.get("stop_lon", Double.class),
+                row.get("hit_lat", Double.class),
+                row.get("hit_lon", Double.class),
                 score == null ? 0.0 : score.doubleValue(),
                 row.get("source", String.class));
     }

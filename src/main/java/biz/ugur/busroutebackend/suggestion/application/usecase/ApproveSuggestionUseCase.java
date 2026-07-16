@@ -12,6 +12,8 @@ import biz.ugur.busroutebackend.suggestion.domain.model.SuggestionEntityType;
 import biz.ugur.busroutebackend.suggestion.domain.repository.AliasSuggestionRepository;
 import biz.ugur.busroutebackend.suggestion.domain.valueobjects.AliasSuggestionId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.place.domain.events.PlaceCatalogChangedEvent;
+import biz.ugur.busroutebackend.place.domain.events.StreetCatalogChangedEvent;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
@@ -55,11 +57,15 @@ public class ApproveSuggestionUseCase extends BaseUseCase<Mono<ReviewSuggestionI
         if (suggestion.getEntityType() == SuggestionEntityType.PLACE) {
             PlaceAlias alias = PlaceAlias.create(
                     suggestion.getEntityId(), suggestion.getSuggestedAlias(), suggestion.getLanguage());
-            return placeAliasRepository.save(alias).then();
+            return placeAliasRepository.save(alias)
+                    .doOnNext(saved -> eventBus.publish(new PlaceCatalogChangedEvent(saved.getPlaceId())))
+                    .then();
         } else {
             StreetAlias alias = StreetAlias.create(
                     suggestion.getEntityId(), suggestion.getSuggestedAlias(), suggestion.getLanguage());
-            return streetAliasRepository.save(alias).then();
+            return streetAliasRepository.save(alias)
+                    .doOnNext(saved -> eventBus.publish(new StreetCatalogChangedEvent(saved.getStreetId())))
+                    .then();
         }
     }
 
