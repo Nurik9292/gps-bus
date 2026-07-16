@@ -43,20 +43,24 @@ public class V31RouteLines {
         return v31DisabledRoutes.get();
     }
 
-    public RouteTopology topologyFor(String routeNumber) {
-        if (disabledRoutes.contains(routeNumber)) return null;
-        return topologies.computeIfAbsent(routeNumber, r -> {
+    public RouteTopology topologyFor(String routeCacheKey) {
+        return topologyFor(routeCacheKey, routeCacheKey);
+    }
+
+    public RouteTopology topologyFor(String routeCacheKey, String routeNumber) {
+        if (disabledRoutes.contains(routeCacheKey)) return null;
+        return topologies.computeIfAbsent(routeCacheKey, r -> {
             try {
-                RouteLine d0 = build(r, 0);
-                RouteLine d1 = build(r, 1);
+                RouteLine d0 = build(r, routeNumber, 0);
+                RouteLine d1 = build(r, routeNumber, 1);
                 if (d0 == null || d1 == null) return null;
                 RouteTopology topo = RouteTopology.thereAndBack(d0, d1);
-                RouteTopology.CityZone zone = zoneForRoute.apply(r);
+                RouteTopology.CityZone zone = zoneForRoute.apply(routeNumber);
                 return zone != null ? topo.withCityZone(zone) : topo;
             } catch (IllegalStateException s5) {
                 if (strictS5) throw s5;
                 log.error("v31 s-layer S-5: {} — v31 отключён для маршрута {} (v31DisabledRoutes++)",
-                        s5.getMessage(), r);
+                        s5.getMessage(), routeNumber);
                 disabledRoutes.add(r);
                 v31DisabledRoutes.incrementAndGet();
                 return null;
@@ -64,10 +68,10 @@ public class V31RouteLines {
         });
     }
 
-    private RouteLine build(String routeNumber, int direction) {
-        List<double[]> points = cache.getPoints(routeNumber, direction);
+    private RouteLine build(String routeCacheKey, String routeNumber, int direction) {
+        List<double[]> points = cache.getPoints(routeCacheKey, direction);
         if (points == null || points.size() < 2) return null;
-        double[] cum = cache.getCumulativeDistances(routeNumber, direction);
+        double[] cum = cache.getCumulativeDistances(routeCacheKey, direction);
         if (cum == null || cum.length != points.size()) {
             cum = new double[points.size()];
             for (int i = 1; i < points.size(); i++) {
@@ -77,7 +81,7 @@ public class V31RouteLines {
             }
         }
         List<RouteLine.StopPoint> stops = new ArrayList<>();
-        List<RouteStopInfo> infos = cache.getRouteStops(routeNumber, direction);
+        List<RouteStopInfo> infos = cache.getRouteStops(routeCacheKey, direction);
         double prevS = -1.0;
         for (RouteStopInfo info : infos == null ? List.<RouteStopInfo>of() : infos) {
             if (info.getLatitude() == null || info.getLongitude() == null) {

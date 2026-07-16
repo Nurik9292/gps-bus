@@ -36,7 +36,7 @@ public class CheckRouteNumberUseCase extends BaseUseCase<Mono<String>, Boolean> 
     private Mono<Boolean> processInternal(String routeNumber) {
         return correlationService.getCurrentCorrelationId().flatMap(correlationId -> {
             log.info("Check availability route number CorrelationId - {} RouteNumber - {}", correlationId, routeNumber);
-            return busRouteRepository.existsByRouteNumber(routeNumber);
+            return busRouteRepository.existsByRouteNumberAndCityId(routeNumber, null);
         });
     }
 }

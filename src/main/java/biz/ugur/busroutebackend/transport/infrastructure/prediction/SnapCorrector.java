@@ -59,7 +59,7 @@ class SnapCorrector {
     }
 
     private boolean anchorTooStale(VehiclePredictionState existing, Instant gpsTimestamp,
-                                   String vehicleId, String licensePlate, String routeNumber) {
+                                   String vehicleId, String licensePlate, String routeId) {
         Instant anchorAt = existing.getLastGpsUpdate();
         if (anchorAt == null || gpsTimestamp == null) {
             return false;
@@ -69,7 +69,7 @@ class SnapCorrector {
             return false;
         }
         log.info("[GPS_PIPELINE] SNAP_ANCHOR_STALE vehicle={} plate={} route={} anchorAgeMs={} threshold={} — cold whole-line re-projection",
-                vehicleId, licensePlate, routeNumber, ageMs, properties.getStaleAnchorMs());
+                vehicleId, licensePlate, routeId, ageMs, properties.getStaleAnchorMs());
         return true;
     }
 
@@ -88,7 +88,7 @@ class SnapCorrector {
     ) {}
 
     SnapResult applySnap(VehiclePredictionState existing,
-                         String vehicleId, String licensePlate, String routeNumber,
+                         String vehicleId, String licensePlate, String routeId,
                          double latitude, double longitude, double course, int direction,
                          Instant gpsTimestamp) {
 
@@ -99,43 +99,43 @@ class SnapCorrector {
         int newImplausibleCount = existing != null ? existing.getConsecutiveImplausibleCount() : 0;
 
         boolean routeReassigned = existing != null
-                && existing.getRouteNumber() != null
-                && routeNumber != null
-                && !existing.getRouteNumber().equals(routeNumber);
+                && existing.getRouteId() != null
+                && routeId != null
+                && !existing.getRouteId().equals(routeId);
 
-        if (routeNumber == null || !properties.isSnapToRoute()) {
-            log.debug("[GPS_PIPELINE] SNAP_SKIP vehicle={} snapToRoute={} routeNumber={}",
-                    vehicleId, properties.isSnapToRoute(), routeNumber);
-            pipelineTracer.traceSnap(vehicleId, licensePlate, routeNumber, direction,
+        if (routeId == null || !properties.isSnapToRoute()) {
+            log.debug("[GPS_PIPELINE] SNAP_SKIP vehicle={} snapToRoute={} routeId={}",
+                    vehicleId, properties.isSnapToRoute(), routeId);
+            pipelineTracer.traceSnap(vehicleId, licensePlate, routeId, direction,
                     Double.MAX_VALUE, -1, false, "SKIP_NO_ROUTE");
             return new SnapResult(latitude, longitude, -1, direction, null, 0,
                     course, newRejectedFrac, newImplausibleCount, false, Double.MAX_VALUE);
         }
 
-        List<double[]> routeCoords = routeGeometryCache.getPoints(routeNumber, direction);
+        List<double[]> routeCoords = routeGeometryCache.getPoints(routeId, direction);
         if (routeCoords == null) {
             int opposite = (direction == 0) ? 1 : 0;
-            routeCoords = routeGeometryCache.getPoints(routeNumber, opposite);
+            routeCoords = routeGeometryCache.getPoints(routeId, opposite);
             if (routeCoords != null) {
                 direction = opposite;
-                pipelineTracer.traceSnap(vehicleId, licensePlate, routeNumber, direction,
+                pipelineTracer.traceSnap(vehicleId, licensePlate, routeId, direction,
                         Double.MAX_VALUE, -1, false, "GEOMETRY_FALLBACK_OPPOSITE");
             }
         }
 
         if (routeCoords == null) {
-            log.debug("[GPS_PIPELINE] SNAP_SKIP vehicle={} snapToRoute={} routeNumber={}",
-                    vehicleId, properties.isSnapToRoute(), routeNumber);
-            pipelineTracer.traceSnap(vehicleId, licensePlate, routeNumber, direction,
+            log.debug("[GPS_PIPELINE] SNAP_SKIP vehicle={} snapToRoute={} routeId={}",
+                    vehicleId, properties.isSnapToRoute(), routeId);
+            pipelineTracer.traceSnap(vehicleId, licensePlate, routeId, direction,
                     Double.MAX_VALUE, -1, false, "SKIP_NO_GEOMETRY");
             return new SnapResult(latitude, longitude, -1, direction, null, 0,
                     course, newRejectedFrac, newImplausibleCount, false, Double.MAX_VALUE);
         }
 
-        double totalDist = routeGeometryCache.getTotalDistance(routeNumber, direction);
-        double[] cumDist = routeGeometryCache.getCumulativeDistances(routeNumber, direction);
+        double totalDist = routeGeometryCache.getTotalDistance(routeId, direction);
+        double[] cumDist = routeGeometryCache.getCumulativeDistances(routeId, direction);
         log.debug("[GPS_PIPELINE] SNAP_ATTEMPT vehicle={} plate={} route={} dir={} lat={} lon={} course={} polyline_first3=[{},{},{}] polyline_last3=[{},{},{}] polyline_size={}",
-                vehicleId, licensePlate, routeNumber, direction, latitude, longitude, course,
+                vehicleId, licensePlate, routeId, direction, latitude, longitude, course,
                 routeCoords.size() > 0 ? routeCoords.get(0)[0] + "," + routeCoords.get(0)[1] : "-",
                 routeCoords.size() > 1 ? routeCoords.get(1)[0] + "," + routeCoords.get(1)[1] : "-",
                 routeCoords.size() > 2 ? routeCoords.get(2)[0] + "," + routeCoords.get(2)[1] : "-",
@@ -145,7 +145,7 @@ class SnapCorrector {
                 routeCoords.size());
         boolean anchorUsable = existing != null
                 && existing.getLastGpsFraction() >= 0
-                && !anchorTooStale(existing, gpsTimestamp, vehicleId, licensePlate, routeNumber);
+                && !anchorTooStale(existing, gpsTimestamp, vehicleId, licensePlate, routeId);
         MapMatchingService.SnappedResult snap = anchorUsable
                 ? mapMatchingService.snapToNearestSegment(latitude, longitude, routeCoords, cumDist, totalDist,
                         existing.getLastGpsFraction(), properties.getWindowedSnapFractionWindow())
@@ -156,7 +156,7 @@ class SnapCorrector {
         boolean fracCorrected = false;
 
         HeadingFlipStrategy.Result headingResult = headingFlip.maybeFlip(
-                existing, vehicleId, licensePlate, routeNumber,
+                existing, vehicleId, licensePlate, routeId,
                 latitude, longitude, course,
                 direction, routeCoords, totalDist, cumDist,
                 snap, rawSnapMinDistance);
@@ -177,7 +177,7 @@ class SnapCorrector {
 
         if (snap.snapped()) {
             log.debug("[GPS_PIPELINE] SNAP_OK vehicle={} route={} dist={}m frac={}",
-                    vehicleId, routeNumber,
+                    vehicleId, routeId,
                     String.format("%.1f", snap.distanceMeters()),
                     String.format("%.4f", snap.fraction()));
             oppositeCounter.reset(vehicleId);
@@ -185,7 +185,7 @@ class SnapCorrector {
             double predictedFraction = (existing != null) ? existing.getFractionOnRoute() : -1;
 
             FracFlipStrategy.Result fracResult = fracFlip.maybeFlip(
-                    existing, vehicleId, licensePlate, routeNumber,
+                    existing, vehicleId, licensePlate, routeId,
                     latitude, longitude,
                     direction, routeCoords, totalDist,
                     snap, rawSnapMinDistance, headingCorrected);
@@ -203,18 +203,18 @@ class SnapCorrector {
             boolean resetToDR = false;
 
             boolean routeChanged = existing != null
-                    && existing.getRouteNumber() != null
-                    && !existing.getRouteNumber().equals(routeNumber);
+                    && existing.getRouteId() != null
+                    && !existing.getRouteId().equals(routeId);
             if (routeChanged) {
                 newRejectedFrac = -1;
                 newImplausibleCount = 0;
                 log.debug("[GPS_PIPELINE] ROUTE_CHANGE vehicle={} route={}→{} frac={} — resetting snap state",
-                        vehicleId, existing.getRouteNumber(), routeNumber,
+                        vehicleId, existing.getRouteId(), routeId,
                         String.format("%.4f", realFraction));
             }
 
             ImplausibleJumpHandler.Result implausible = implausibleJumpHandler.evaluate(
-                    existing, vehicleId, routeNumber, direction, realFraction,
+                    existing, vehicleId, routeId, direction, realFraction,
                     headingCorrected, fracCorrected, routeChanged,
                     newRejectedFrac, newImplausibleCount);
             plausibleSnap = implausible.plausibleSnap();
@@ -237,7 +237,7 @@ class SnapCorrector {
                 if (!noOpFlip) {
                     log.warn("[GPS_PIPELINE] DIR_FLIP_ACCEPT vehicle={} plate={} route={} dir={} " +
                                     "oldFrac={}→newFrac={} oldPos=({},{})→newPos=({},{}) realIsAhead={}",
-                            vehicleId, licensePlate, routeNumber, direction,
+                            vehicleId, licensePlate, routeId, direction,
                             String.format("%.4f", predictedFraction),
                             String.format("%.4f", realFraction),
                             existing != null ? String.format("%.5f", existing.getPredictedLatitude()) : "-",
@@ -253,7 +253,7 @@ class SnapCorrector {
             if (snapVsGpsDistance > properties.getTeleportThresholdMeters()) {
                 log.warn("[GPS_PIPELINE] SNAP_TOO_FAR_FROM_GPS vehicle={} plate={} route={} " +
                                 "snapDist={}m gps=({},{}) snap=({},{}) frac={} — keeping predicted on route, awaiting re-snap",
-                        vehicleId, licensePlate, routeNumber,
+                        vehicleId, licensePlate, routeId,
                         String.format("%.0f", snapVsGpsDistance),
                         String.format("%.5f", latitude), String.format("%.5f", longitude),
                         String.format("%.5f", snap.latitude()), String.format("%.5f", snap.longitude()),
@@ -287,7 +287,7 @@ class SnapCorrector {
             }
         } else {
             OppositeFallbackStrategy.Result fallback = oppositeFallback.tryFlip(
-                    existing, vehicleId, licensePlate, routeNumber,
+                    existing, vehicleId, licensePlate, routeId,
                     direction, latitude, longitude, snap, rawSnapMinDistance);
             rawSnapMinDistance = fallback.rawSnapMinDistance();
 
@@ -300,7 +300,7 @@ class SnapCorrector {
                 predictedLat = snap.latitude();
                 predictedLon = snap.longitude();
                 fraction = realFractionOpposite;
-                double[] oppositeCumDist = routeGeometryCache.getCumulativeDistances(routeNumber, direction);
+                double[] oppositeCumDist = routeGeometryCache.getCumulativeDistances(routeId, direction);
                 course = mapMatchingService.calculateCourseFromRoute(routeCoords, oppositeCumDist, fraction, direction, totalDist);
                 oppositeFallbackAccepted = true;
             } else {
@@ -328,12 +328,12 @@ class SnapCorrector {
         } else {
             branch = "NO_SNAP";
         }
-        pipelineTracer.traceSnap(vehicleId, licensePlate, routeNumber, direction,
+        pipelineTracer.traceSnap(vehicleId, licensePlate, routeId, direction,
                 rawSnapMinDistance, fraction, snap.snapped(), branch);
 
         if (direction != inputDirection) {
             pipelineTracer.traceSnapStateDirectionMutation(
-                    vehicleId, licensePlate, routeNumber,
+                    vehicleId, licensePlate, routeId,
                     inputDirection, direction, branch,
                     inputFraction, fraction, rawSnapMinDistance);
         }

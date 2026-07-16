@@ -33,11 +33,11 @@ public class RouteGeometryCacheEventHandler {
     }
 
     private Mono<Void> refreshGeometryFor(RouteGeometryUpdatedEvent event) {
-        String routeNumber = event.getRouteNumber();
-        return routeGeometryCache.refreshRoute(routeNumber)
+        String routeId = event.getRouteId();
+        return routeGeometryCache.refreshRoute(routeId)
                 .onErrorResume(err -> {
                     log.error("[GPS_PIPELINE] Failed to refresh route geometry cache for route {} after geometry change",
-                            routeNumber, err);
+                            routeId, err);
                     return Mono.empty();
                 });
     }

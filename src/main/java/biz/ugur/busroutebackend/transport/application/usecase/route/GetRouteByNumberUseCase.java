@@ -42,7 +42,7 @@ public class GetRouteByNumberUseCase implements UseCase<Mono<GetRouteByNumberUse
                 .flatMap(correlationId -> {
                     log.debug("Getting route by route number - Correlation {}: routeNumber={}", correlationId, query.routeNumber);
 
-                    return busRouteRepository.findByRouteNumber(query.routeNumber)
+                    return busRouteRepository.findPreferredByRouteNumber(query.routeNumber)
                             .flatMap(this::enrichRouteWithStops)
                             .doOnSuccess(result -> log.debug("Retrieved route: {}", result.routeNumber()))
                             .onErrorMap(error -> {

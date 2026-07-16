@@ -39,7 +39,7 @@ class CheckRouteNumberUseCaseTest {
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
-        when(busRouteRepository.existsByRouteNumber("29A")).thenReturn(Mono.just(true));
+        when(busRouteRepository.existsByRouteNumberAndCityId("29A", null)).thenReturn(Mono.just(true));
 
         StepVerifier.create(useCase.execute(Mono.just("29A")))
                 .assertNext(result -> assertTrue(result))
@@ -51,7 +51,7 @@ class CheckRouteNumberUseCaseTest {
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
-        when(busRouteRepository.existsByRouteNumber("99X")).thenReturn(Mono.just(false));
+        when(busRouteRepository.existsByRouteNumberAndCityId("99X", null)).thenReturn(Mono.just(false));
 
         StepVerifier.create(useCase.execute(Mono.just("99X")))
                 .assertNext(result -> assertFalse(result))

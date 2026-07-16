@@ -113,7 +113,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
 
         return cacheRepository.getCached(cacheKey)
                 .switchIfEmpty(
-                        busRouteRepository.findByRouteNumber(routeNumber)
+                        busRouteRepository.findPreferredByRouteNumber(routeNumber)
                                 .flatMapMany(route ->
                                         vehicleRepository.findByAssignedRouteId(route.getId())
                                                 .filter(Vehicle::getIsActive)

@@ -52,7 +52,7 @@ public class StopArrivalNotificationService {
             if (totalDist <= 0 || state.getRouteNumber() == null) continue;
 
             List<biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo> stopsAhead =
-                    routeGeometryCache.getStopsAhead(state.getRouteNumber(), state.getDirection(), trueFraction);
+                    routeGeometryCache.getStopsAhead(state.getRouteId(), state.getDirection(), trueFraction);
 
             for (biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo stop : stopsAhead) {
                 double stopFrac = stop.getDistanceFromStartMeters() / totalDist;

@@ -77,7 +77,7 @@ public class V31ShadowService {
     }
 
     void process(V31Fix fix) {
-        RouteTopology topo = routeLines.topologyFor(fix.routeNumber());
+        RouteTopology topo = routeLines.topologyFor(fix.routeCacheKey(), fix.routeNumber());
         if (topo == null) return;
         MotionFilterCore core = cores.computeIfAbsent(fix.vehicleId(), id -> {
             MotionFilterCore c = new MotionFilterCore(configForRoute.apply(fix.routeNumber()));

@@ -130,7 +130,7 @@ public class ImportRouteAssignmentsFromExcelUseCase extends BaseUseCase<Mono<Imp
     }
 
     private Mono<BusRoute> findRouteByNumber(String routeNumber) {
-        return busRouteRepository.findByRouteNumber(routeNumber)
+        return busRouteRepository.findPreferredByRouteNumber(routeNumber)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException(
                         "Route not found: " + routeNumber)));
     }

@@ -196,10 +196,28 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
     }
 
     @Override
-    public Mono<BusRoute> findByRouteNumber(String routeNumber) {
+    public Mono<BusRoute> findByRouteNumberAndCityId(String routeNumber, String cityId) {
         String sql = String.format(
-                "SELECT %s FROM bus_routes WHERE route_number = :routeNumber AND is_active = true",
+                "SELECT %s FROM bus_routes WHERE route_number = :routeNumber AND city_id = :cityId AND is_active = true",
                 selectColumns()
+        );
+
+        return databaseClient.sql(sql)
+                .bind("routeNumber", routeNumber)
+                .bind("cityId", cityId)
+                .map(getRowMapper())
+                .one();
+    }
+
+    @Override
+    public Mono<BusRoute> findPreferredByRouteNumber(String routeNumber) {
+        String sql = String.format(
+                "SELECT %s FROM bus_routes br" +
+                " LEFT JOIN cities c ON c.id = br.city_id" +
+                " WHERE br.route_number = :routeNumber AND br.is_active = true" +
+                " ORDER BY c.display_order NULLS LAST, br.city_id NULLS LAST" +
+                " LIMIT 1",
+                selectColumns("br")
         );
 
         return databaseClient.sql(sql)
@@ -222,11 +240,14 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
 
 
     @Override
-    public Mono<Boolean> existsByRouteNumber(String routeNumber) {
-        String sql = "SELECT COUNT(*) FROM bus_routes WHERE route_number = :routeNumber";
+    public Mono<Boolean> existsByRouteNumberAndCityId(String routeNumber, String cityId) {
+        String sql = "SELECT COUNT(*) FROM bus_routes WHERE route_number = :routeNumber"
+                + " AND (:cityId::VARCHAR IS NULL OR city_id = :cityId)";
 
-        return databaseClient.sql(sql)
-                .bind("routeNumber", routeNumber)
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
+                .bind("routeNumber", routeNumber);
+        spec = cityId == null ? spec.bindNull("cityId", String.class) : spec.bind("cityId", cityId);
+        return spec
                 .map(row -> row.get(0, Long.class))
                 .one()
                 .map(count -> count > 0);
@@ -351,7 +372,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
     }
 
     @Override
-    public Flux<RouteStopInfo> getRouteStopsInfoByNumber(String routeNumber, Integer direction) {
+    public Flux<RouteStopInfo> getRouteStopsInfoByRouteId(String routeId, Integer direction) {
         String sql = """
             SELECT bs.id, bs.stop_name, bs.stop_code, bs.latitude, bs.longitude,
                    rs.stop_sequence, rs.estimated_travel_time_minutes, rs.distance_from_start_meters, 
@@ -359,14 +380,14 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
             FROM route_stops rs
             JOIN bus_stops bs ON rs.stop_id = bs.id
             JOIN bus_routes br ON rs.route_id = br.id
-            WHERE br.route_number = :routeNumber 
+            WHERE br.id = :routeId 
             AND rs.direction = :direction
             AND bs.is_active = true AND br.is_active = true
             ORDER BY rs.stop_sequence
             """;
 
         return databaseClient.sql(sql)
-                .bind("routeNumber", routeNumber)
+                .bind("routeId", routeId)
                 .bind("direction", direction)
                 .map(this::mapToRouteStopInfo)
                 .all();

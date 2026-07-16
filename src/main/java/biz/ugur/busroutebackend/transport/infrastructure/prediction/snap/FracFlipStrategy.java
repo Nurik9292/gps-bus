@@ -61,7 +61,7 @@ public class FracFlipStrategy {
     }
 
     public Result maybeFlip(VehiclePredictionState existing,
-                             String vehicleId, String licensePlate, String routeNumber,
+                             String vehicleId, String licensePlate, String routeId,
                              double latitude, double longitude,
                              int currentDirection, List<double[]> currentRouteCoords,
                              double currentTotalDist,
@@ -107,7 +107,7 @@ public class FracFlipStrategy {
 
         if (isStationary && !atTerminalFlip) {
             log.debug("[GPS_PIPELINE] DIR_CORRECT_FRAC_SKIP_STATIONARY vehicle={} route={} dir={} delta={} inMotion={} rawSpeed={}km/h (GPS noise on stationary bus, not a real direction reversal)",
-                    vehicleId, routeNumber, currentDirection,
+                    vehicleId, routeId, currentDirection,
                     String.format("%.4f", fracDelta),
                     existing.isInMotion(),
                     String.format("%.1f", existing.getRawGpsSpeedKmh()));
@@ -116,17 +116,17 @@ public class FracFlipStrategy {
 
         if (!plausibleJump && !atTerminalFlip) {
             log.debug("[GPS_PIPELINE] DIR_CORRECT_FRAC_SKIP vehicle={} route={} dir={} delta={} (jump too large or heading corrected)",
-                    vehicleId, routeNumber, currentDirection, String.format("%.4f", fracDelta));
+                    vehicleId, routeId, currentDirection, String.format("%.4f", fracDelta));
             return noFlip;
         }
 
         int correctedDir = (currentDirection == 0) ? 1 : 0;
-        List<double[]> correctedCoords = routeGeometryCache.getPoints(routeNumber, correctedDir);
+        List<double[]> correctedCoords = routeGeometryCache.getPoints(routeId, correctedDir);
         if (correctedCoords == null) {
             return noFlip;
         }
 
-        double correctedDist = routeGeometryCache.getTotalDistance(routeNumber, correctedDir);
+        double correctedDist = routeGeometryCache.getTotalDistance(routeId, correctedDir);
         MapMatchingService.SnappedResult correctedSnap =
                 mapMatchingService.snapToNearestSegment(latitude, longitude, correctedCoords, correctedDist);
 
@@ -143,7 +143,7 @@ public class FracFlipStrategy {
         if (frontageRoadParallelRun && !atTerminalFlip) {
             log.info("[GPS_PIPELINE] DIR_FLIP_BLOCKED_FRONTAGE_GUARD vehicle={} route={} dir={} " +
                             "primaryDist={}m oppositeDist={}m delta={}m fracDelta={} — frontage-road parallel polylines, refusing flip",
-                    vehicleId, routeNumber, currentDirection,
+                    vehicleId, routeId, currentDirection,
                     String.format("%.1f", primarySnapDist),
                     String.format("%.1f", oppositeSnapDist),
                     String.format("%.1f", primarySnapDist - oppositeSnapDist),
@@ -168,7 +168,7 @@ public class FracFlipStrategy {
         }
 
         log.info("[GPS_PIPELINE] DIR_CORRECT_FRAC vehicle={} route={} dir={}→{} gpsFrac={}→{} oppositeFrac={} (delta={}{})",
-                vehicleId, routeNumber, currentDirection, correctedDir,
+                vehicleId, routeId, currentDirection, correctedDir,
                 String.format("%.4f", lastGpsFrac),
                 String.format("%.4f", realFraction),
                 String.format("%.4f", correctedSnap.fraction()),

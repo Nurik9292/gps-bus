@@ -157,6 +157,7 @@ public class PersistAndBroadcastStage {
                     v.getId().getValue(),
                     v.getLicensePlate(),
                     v.getRouteNumber(),
+                    v.getAssignedRouteId() != null ? v.getAssignedRouteId().getValue() : null,
                     v.getCurrentLatitude(),
                     v.getCurrentLongitude(),
                     v.getSpeedKmh() != null ? v.getSpeedKmh() : 0.0,

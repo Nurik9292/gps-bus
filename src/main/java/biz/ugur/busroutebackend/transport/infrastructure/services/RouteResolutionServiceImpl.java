@@ -49,7 +49,7 @@ public class RouteResolutionServiceImpl implements RouteResolutionService {
 
     @Override
     public Mono<ResolvedRouteData> resolveByNumber(String routeNumber) {
-        return busRouteRepository.findByRouteNumber(routeNumber)
+        return busRouteRepository.findPreferredByRouteNumber(routeNumber)
                 .flatMap(route -> resolveRoute(route, route.getId().getValue()))
                 .doOnSuccess(result -> {
                     if (result != null) {

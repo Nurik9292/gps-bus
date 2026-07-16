@@ -15,17 +15,19 @@ import reactor.core.publisher.Mono;
 public interface BusRouteRepository extends BaseRepository<BusRoute, BusRouteId> {
 
 
-    Mono<BusRoute> findByRouteNumber(String routeNumber);
+    Mono<BusRoute> findByRouteNumberAndCityId(String routeNumber, String cityId);
+
+    Mono<BusRoute> findPreferredByRouteNumber(String routeNumber);
 
     Flux<BusRoute> findActiveRoutes();
 
-    Mono<Boolean> existsByRouteNumber(String routeNumber);
+    Mono<Boolean> existsByRouteNumberAndCityId(String routeNumber, String cityId);
 
     Mono<Long> countActiveRoutes();
 
     Flux<RouteStopInfo> getRouteStopsInfo(BusRouteId routeId);
 
-    Flux<RouteStopInfo> getRouteStopsInfoByNumber(String routeNumber, Integer direction);
+    Flux<RouteStopInfo> getRouteStopsInfoByRouteId(String routeId, Integer direction);
 
     Mono<RouteVehicleStatistics> getRouteVehicleStatistics(BusRouteId routeId);
 
