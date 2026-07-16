@@ -106,10 +106,10 @@ public class R2dbcSearchAliasRepository implements SearchAliasRepository {
     public Flux<SearchAliasView> searchByText(String query, int page, int size) {
         return databaseClient.sql("SELECT " + ALIAS_COLUMNS + ", " + OBJECT_TITLE_EXPR + " AS object_title" +
                         " FROM search_alias sa" + OBJECT_TITLE_JOIN +
-                        " WHERE sa.alias_raw ILIKE :pattern OR sa.alias_norm ILIKE :pattern" +
-                        " ORDER BY sa.alias_norm, sa.id" +
+                        " WHERE (:pattern = '%%' OR sa.alias_raw ILIKE :pattern OR sa.alias_norm ILIKE :pattern)" +
+                        " ORDER BY sa.updated_at DESC, sa.id DESC" +
                         " LIMIT :limit OFFSET :offset")
-                .bind("pattern", "%" + query + "%")
+                .bind("pattern", patternOf(query))
                 .bind("limit", size)
                 .bind("offset", (long) (page - 1) * size)
                 .map(R2dbcSearchAliasRepository::mapView)
@@ -119,10 +119,14 @@ public class R2dbcSearchAliasRepository implements SearchAliasRepository {
     @Override
     public Mono<Long> countByText(String query) {
         return databaseClient.sql("SELECT count(*) AS cnt FROM search_alias sa" +
-                        " WHERE sa.alias_raw ILIKE :pattern OR sa.alias_norm ILIKE :pattern")
-                .bind("pattern", "%" + query + "%")
+                        " WHERE (:pattern = '%%' OR sa.alias_raw ILIKE :pattern OR sa.alias_norm ILIKE :pattern)")
+                .bind("pattern", patternOf(query))
                 .map(row -> row.get("cnt", Long.class))
                 .one();
+    }
+
+    private static String patternOf(String query) {
+        return "%" + (query == null ? "" : query.trim()) + "%";
     }
 
     @Override

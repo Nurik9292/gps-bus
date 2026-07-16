@@ -2,7 +2,6 @@ package biz.ugur.busroutebackend.catalogsearch.application.usecase;
 
 import biz.ugur.busroutebackend.catalogsearch.application.dto.AliasList;
 import biz.ugur.busroutebackend.catalogsearch.application.dto.AliasResult;
-import biz.ugur.busroutebackend.catalogsearch.domain.exceptions.CatalogSearchValidationException;
 import biz.ugur.busroutebackend.catalogsearch.domain.repository.SearchAliasRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
@@ -28,10 +27,6 @@ public class SearchAliasesUseCase extends BaseUseCase<Mono<SearchAliasesUseCase.
     @Override
     protected Mono<AliasList> process(Mono<Query> request) {
         return request.flatMap(query -> {
-            if (query.q() == null || query.q().isBlank()) {
-                throw new CatalogSearchValidationException("QUERY_BLANK",
-                        "q must not be blank for alias search");
-            }
             return aliasRepository.searchByText(query.q(), query.page(), query.size())
                     .map(AliasResult::fromDomain)
                     .collectList()

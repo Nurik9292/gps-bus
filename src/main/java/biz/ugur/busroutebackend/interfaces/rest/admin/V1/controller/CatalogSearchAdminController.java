@@ -94,10 +94,6 @@ public class CatalogSearchAdminController extends BasePaginatedController {
                     .flatMap(list -> ok(Mono.just(list)))
                     .map(r -> r);
         }
-        if (q == null || q.isBlank()) {
-            return Mono.error(new CatalogSearchValidationException("QUERY_BLANK",
-                    "either objectKind+objectId or q must be provided"));
-        }
         validatePagination(page, size);
         return searchAliasesUseCase
                 .execute(Mono.just(new SearchAliasesUseCase.Query(q, page, size)))
