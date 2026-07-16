@@ -72,15 +72,6 @@ public class R2dbcStreetAliasRepository extends BaseR2dbcRepository<StreetAlias,
                 .all();
     }
 
-    @Override
-    public Mono<Void> deleteByStreetId(String streetId) {
-        String sql = "DELETE FROM street_aliases WHERE street_id = :streetId";
-        return databaseClient.sql(sql)
-                .bind("streetId", streetId)
-                .fetch()
-                .rowsUpdated()
-                .then();
-    }
 
 
     private StreetAlias mapRow(Row row, RowMetadata metadata) {

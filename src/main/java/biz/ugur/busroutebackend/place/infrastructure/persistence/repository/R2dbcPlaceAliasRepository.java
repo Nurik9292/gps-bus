@@ -72,15 +72,6 @@ public class R2dbcPlaceAliasRepository extends BaseR2dbcRepository<PlaceAlias, P
                 .all();
     }
 
-    @Override
-    public Mono<Void> deleteByPlaceId(String placeId) {
-        String sql = "DELETE FROM place_aliases WHERE place_id = :placeId";
-        return databaseClient.sql(sql)
-                .bind("placeId", placeId)
-                .fetch()
-                .rowsUpdated()
-                .then();
-    }
 
     private PlaceAlias mapRow(Row row, RowMetadata metadata) {
         return PlaceAliasEntityMapper.toDomain(PlaceAliasEntity.builder()

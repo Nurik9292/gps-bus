@@ -9,6 +9,4 @@ import reactor.core.publisher.Mono;
 public interface PlaceAliasRepository extends BaseRepository<PlaceAlias, PlaceAliasId> {
 
     Flux<PlaceAlias> findByPlaceId(String placeId);
-
-    Mono<Void> deleteByPlaceId(String placeId);
 }
