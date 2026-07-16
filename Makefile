@@ -1,4 +1,4 @@
-.PHONY: help dev-up dev-down dev-logs dev-clean test-up test-down prod-build run
+.PHONY: help dev-up dev-down dev-logs dev-clean test-up test-down prod-build prod-build-local run
 
 # Load .env file if it exists
 ifneq (,$(wildcard ./.env))
@@ -49,6 +49,10 @@ db-reset:
 
 prod-build:
 	docker build -t bus-route-backend:latest -f Dockerfile.prod .
+
+prod-build-local:
+	./mvnw -q clean package -DskipTests -B
+	docker build -t bus-route-backend:latest -f Dockerfile.prod-local .
 
 docker-dev-build:
 	./scripts/docker-dev.sh build

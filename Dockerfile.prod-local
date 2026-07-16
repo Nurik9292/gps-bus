@@ -1,0 +1,15 @@
+FROM eclipse-temurin:25-jre-alpine
+
+RUN apk add --no-cache \
+    curl \
+    && rm -rf /var/cache/apk/*
+
+RUN addgroup -S appuser && adduser -S appuser -G appuser
+WORKDIR /app
+COPY target/bus-route-backend-*.jar app.jar
+
+RUN mkdir -p logs && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8080
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS $JVM_OPTS -jar app.jar"]
