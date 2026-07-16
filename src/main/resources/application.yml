@@ -667,6 +667,16 @@ ugur:
     tracked-plates: ${TRACKED_PLATES:}
     tracked-device-ids: ${TRACKED_DEVICE_IDS:}
     tracked-routes: ${TRACKED_ROUTES:}
+  catalog-search:
+    enabled: ${CATALOG_SEARCH_ENABLED:false}
+    word-similarity-threshold: ${CATALOG_SEARCH_WSIM_THRESHOLD:0.6}
+    rebuild-cron: ${CATALOG_SEARCH_REBUILD_CRON:0 0 4 * * *}
+    rebuild-zone: Asia/Ashgabat
+    cache-ttl-seconds: ${CATALOG_SEARCH_CACHE_TTL:180}
+    federation-enabled: ${CATALOG_SEARCH_FEDERATION:true}
+    place-score-factor: ${CATALOG_SEARCH_PLACE_FACTOR:1.0}
+    place-timeout-ms: ${CATALOG_SEARCH_PLACE_TIMEOUT_MS:800}
+    geo-boost-factor: ${CATALOG_SEARCH_GEO_BOOST:0.5}
 
 gps:
   recorder:

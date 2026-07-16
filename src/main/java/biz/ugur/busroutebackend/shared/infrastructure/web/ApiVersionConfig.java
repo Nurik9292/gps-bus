@@ -75,6 +75,10 @@ public class ApiVersionConfig {
     public static final String V1_CLIENT_SUGGESTIONS = V1_CLIENT + SUGGESTIONS;
     public static final String V1_ADMIN_SUGGESTIONS = V1_ADMIN + SUGGESTIONS;
 
+    public static final String CATALOG_SEARCH = "/catalog-search";
+    public static final String V1_ADMIN_CATALOG_SEARCH = V1_ADMIN + CATALOG_SEARCH;
+    public static final String V1_MOBILE_SEARCH = V1_MOBILE + "/search";
+
     public static final String V1_INTEGRATION = API_V1 + INTEGRATION;
     public static final String V1_INTEGRATION_CLIENTS = V1_INTEGRATION + CLIENTS;
 

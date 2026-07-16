@@ -9,6 +9,21 @@ public final class RedisKeyRegistry {
     private RedisKeyRegistry() {
     }
 
+    public static final class CatalogSearch {
+        public static final String QUERY_PREFIX = "catalog-search:q";
+
+        public static String query(String queryHash, int limit) {
+            return QUERY_PREFIX + ":" + queryHash + ":" + limit;
+        }
+
+        public static String pattern() {
+            return QUERY_PREFIX + ":*";
+        }
+
+        private CatalogSearch() {
+        }
+    }
+
     public static final class Gps {
         public static final String UPDATE_STATS_PREFIX = "gps:update:stats";
         public static final String HEALTH_PREFIX = "gps:health";
