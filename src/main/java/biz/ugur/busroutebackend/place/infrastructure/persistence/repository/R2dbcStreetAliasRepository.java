@@ -82,16 +82,6 @@ public class R2dbcStreetAliasRepository extends BaseR2dbcRepository<StreetAlias,
                 .then();
     }
 
-    @Override
-    public Flux<StreetAlias> findAllWithStreetNames() {
-        String sql = String.format(
-                "SELECT %s FROM street_aliases sa JOIN streets s ON sa.street_id = s.id WHERE s.is_active = true",
-                selectColumns("sa")
-        );
-        return databaseClient.sql(sql)
-                .map(getRowMapper())
-                .all();
-    }
 
     private StreetAlias mapRow(Row row, RowMetadata metadata) {
         return StreetAliasEntityMapper.toDomain(StreetAliasEntity.builder()

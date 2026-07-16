@@ -160,7 +160,7 @@ app:
 
   place:
     search:
-      similarity-threshold: 0.3
+      similarity-threshold: ${PLACE_SEARCH_WSIM_THRESHOLD:0.6}
       short-query-max-length: 3
       default-limit: 20
       max-limit: 50

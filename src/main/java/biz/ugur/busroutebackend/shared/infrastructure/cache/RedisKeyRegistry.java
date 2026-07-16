@@ -118,8 +118,6 @@ public final class RedisKeyRegistry {
         public static final String SEARCH_PREFIX = "place:search";
         public static final String AUTOCOMPLETE_PREFIX = "place:autocomplete";
         public static final String DETAIL_PREFIX = "place:detail";
-        public static final String STREET_ALIAS_MAP = "place:street:alias:map";
-
         public static final Duration SEARCH_TTL = Duration.ofMinutes(5);
         public static final Duration DETAIL_TTL = Duration.ofMinutes(30);
         public static final Duration AUTOCOMPLETE_TTL = Duration.ofMinutes(3);

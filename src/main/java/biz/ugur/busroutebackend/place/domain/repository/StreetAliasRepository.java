@@ -11,6 +11,4 @@ public interface StreetAliasRepository extends BaseRepository<StreetAlias, Stree
     Flux<StreetAlias> findByStreetId(String streetId);
 
     Mono<Void> deleteByStreetId(String streetId);
-
-    Flux<StreetAlias> findAllWithStreetNames();
 }
