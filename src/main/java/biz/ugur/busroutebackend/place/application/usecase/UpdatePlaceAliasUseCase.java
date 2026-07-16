@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.place.domain.exceptions.PlaceNotFoundException;
 import biz.ugur.busroutebackend.place.domain.repository.PlaceAliasRepository;
 import biz.ugur.busroutebackend.place.domain.valueobjects.PlaceAliasId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.place.domain.events.PlaceCatalogChangedEvent;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class UpdatePlaceAliasUseCase extends BaseUseCase<Mono<UpdateAliasCommand
                             var updated = existing.updateAlias(cmd.alias(), cmd.language());
                             return placeAliasRepository.save(updated);
                         })
+                        .doOnNext(saved -> eventBus.publish(new PlaceCatalogChangedEvent(saved.getPlaceId())))
                         .map(AliasResult::fromDomain)
         );
     }

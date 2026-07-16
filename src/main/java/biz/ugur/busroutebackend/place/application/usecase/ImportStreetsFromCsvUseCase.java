@@ -6,6 +6,7 @@ import biz.ugur.busroutebackend.place.domain.model.StreetAlias;
 import biz.ugur.busroutebackend.place.domain.repository.StreetAliasRepository;
 import biz.ugur.busroutebackend.place.domain.repository.StreetRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.place.domain.events.GeoCatalogBulkChangedEvent;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +43,12 @@ public class ImportStreetsFromCsvUseCase extends BaseUseCase<Mono<ImportStreetsF
 
     @Override
     protected Mono<CsvImportResult> process(Mono<Input> request) {
-        return request.flatMap(this::processInternal);
+        return request.flatMap(this::processInternal)
+                .doOnSuccess(result -> {
+                    if (result.imported() > 0) {
+                        eventBus.publish(new GeoCatalogBulkChangedEvent());
+                    }
+                });
     }
 
     @Override

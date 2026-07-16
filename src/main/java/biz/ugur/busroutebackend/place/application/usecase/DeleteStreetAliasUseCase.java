@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.place.application.usecase;
 import biz.ugur.busroutebackend.place.domain.repository.StreetAliasRepository;
 import biz.ugur.busroutebackend.place.domain.valueobjects.StreetAliasId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.place.domain.events.StreetCatalogChangedEvent;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import org.springframework.stereotype.Service;
@@ -22,7 +23,9 @@ public class DeleteStreetAliasUseCase extends BaseUseCase<Mono<String>, Void> {
 
     @Override
     protected Mono<Void> process(Mono<String> request) {
-        return request.flatMap(id -> streetAliasRepository.deleteById(StreetAliasId.of(id)));
+        return request.flatMap(id -> streetAliasRepository.findById(StreetAliasId.of(id))
+                .flatMap(alias -> streetAliasRepository.deleteById(StreetAliasId.of(id))
+                        .doOnSuccess(v -> eventBus.publish(new StreetCatalogChangedEvent(alias.getStreetId())))));
     }
 
     @Override

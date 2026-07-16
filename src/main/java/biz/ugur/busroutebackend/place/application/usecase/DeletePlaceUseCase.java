@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.place.domain.exceptions.PlaceNotFoundException;
 import biz.ugur.busroutebackend.place.domain.repository.PlaceRepository;
 import biz.ugur.busroutebackend.place.domain.valueobjects.PlaceId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.place.domain.events.PlaceCatalogChangedEvent;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ public class DeletePlaceUseCase extends BaseUseCase<Mono<String>, Void> {
         return placeRepository.findById(PlaceId.of(placeId))
                 .switchIfEmpty(Mono.error(new PlaceNotFoundException(placeId)))
                 .flatMap(place -> placeRepository.deleteById(place.getId()))
-                .doOnSuccess(v -> log.info("Place deleted: {}", placeId));
+                .doOnSuccess(v -> log.info("Place deleted: {}", placeId))
+                .doOnSuccess(v -> eventBus.publish(new PlaceCatalogChangedEvent(placeId)));
     }
 }

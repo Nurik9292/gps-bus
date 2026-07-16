@@ -7,6 +7,7 @@ import biz.ugur.busroutebackend.place.domain.model.PlaceCategory;
 import biz.ugur.busroutebackend.place.domain.repository.PlaceAliasRepository;
 import biz.ugur.busroutebackend.place.domain.repository.PlaceRepository;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.place.domain.events.GeoCatalogBulkChangedEvent;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +45,12 @@ public class ImportPlacesFromCsvUseCase extends BaseUseCase<Mono<ImportPlacesFro
 
     @Override
     protected Mono<CsvImportResult> process(Mono<Input> request) {
-        return request.flatMap(this::processInternal);
+        return request.flatMap(this::processInternal)
+                .doOnSuccess(result -> {
+                    if (result.imported() > 0) {
+                        eventBus.publish(new GeoCatalogBulkChangedEvent());
+                    }
+                });
     }
 
     @Override

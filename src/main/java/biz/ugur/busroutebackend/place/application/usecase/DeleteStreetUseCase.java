@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.place.domain.exceptions.PlaceNotFoundException;
 import biz.ugur.busroutebackend.place.domain.repository.StreetRepository;
 import biz.ugur.busroutebackend.place.domain.valueobjects.StreetId;
 import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
+import biz.ugur.busroutebackend.place.domain.events.StreetCatalogChangedEvent;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ public class DeleteStreetUseCase extends BaseUseCase<Mono<String>, Void> {
                 streetRepository.findById(StreetId.of(id))
                         .switchIfEmpty(Mono.error(new PlaceNotFoundException("Street", id)))
                         .flatMap(street -> streetRepository.deleteById(street.getId()))
+                        .doOnSuccess(v -> eventBus.publish(new StreetCatalogChangedEvent(id)))
         );
     }
 
