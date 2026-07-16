@@ -6,7 +6,7 @@ RUN apk add --no-cache \
 
 RUN addgroup -S appuser && adduser -S appuser -G appuser
 WORKDIR /app
-COPY target/bus-route-backend-*.jar app.jar
+COPY app.jar app.jar
 
 RUN mkdir -p logs && chown -R appuser:appuser /app
 USER appuser

@@ -52,7 +52,11 @@ prod-build:
 
 prod-build-local:
 	./mvnw -q clean package -DskipTests -B
-	docker build -t bus-route-backend:latest -f Dockerfile.prod-local .
+	rm -rf build-local && mkdir -p build-local
+	cp target/bus-route-backend-*.jar build-local/app.jar
+	cp Dockerfile.prod-local build-local/Dockerfile
+	docker build -t bus-route-backend:latest build-local
+	rm -rf build-local
 
 docker-dev-build:
 	./scripts/docker-dev.sh build
