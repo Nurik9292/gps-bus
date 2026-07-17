@@ -171,6 +171,6 @@ public final class A10Support {
                 c.mCityFixes(), c.kCityExit(), c.dCityExitDeltaMeters(), c.gCitySpanGapSec(),
                 c.tCityExitMinSpanSec(), c.tPostBoundaryGuardSec(), c.kConfirmPostBoundary(), c.epsMidlineMeters(),
                 c.dOnlineMeters(), c.kOffRouteReacq(), c.minReacqTravelMeters(),
-                c.wTurnWindowMaxMeters(), c.turnTauNomSec(), c.turnVTargetMs(), c.dTermEscapeMeters());
+                c.wTurnWindowMaxMeters(), c.turnTauNomSec(), c.turnVTargetMs(), c.dTermEscapeMeters(), c.dDirSwitchRunMeters(), c.tDirFlapGuardSec());
     }
 }
