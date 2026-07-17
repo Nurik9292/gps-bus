@@ -108,6 +108,19 @@ class V31BroadcastLoopTest {
     }
 
     @Test
+    void garageVehicleEmitsNothingEvenWhenTracking() {
+        V31Fix parked = new V31Fix(RAW.vehicleId(), RAW.licensePlate(), RAW.routeNumber(),
+                RAW.routeId(), RAW.latitude(), RAW.longitude(), 0.0, RAW.course(),
+                false, RAW.timestamp(), RAW.direction(),
+                RAW.hdop(), RAW.satellites(), RAW.accuracy(), true);
+        when(shadow.lastFixOf("veh-0001-abcd")).thenReturn(parked);
+        modeIs("TRACKING");
+        loop.tick();
+        assertThat(received).isEmpty();
+        assertThat(loop.garageSuppressed()).isEqualTo(1);
+    }
+
+    @Test
     void trackingEmitsPredOnLineWithEta() throws Exception {
         modeIs("TRACKING");
         loop.tick();

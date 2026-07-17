@@ -6,14 +6,24 @@ public record V31Fix(String vehicleId, String licensePlate, String routeNumber,
                      String routeId,
                      double latitude, double longitude, double speedKmh, double course,
                      boolean inMotion, Instant timestamp, int direction,
-                     Double hdop, Integer satellites, Double accuracy) {
+                     Double hdop, Integer satellites, Double accuracy,
+                     boolean inGarage) {
 
     public V31Fix(String vehicleId, String licensePlate, String routeNumber,
                   double latitude, double longitude, double speedKmh, double course,
                   boolean inMotion, Instant timestamp, int direction,
                   Double hdop, Integer satellites, Double accuracy) {
         this(vehicleId, licensePlate, routeNumber, null, latitude, longitude, speedKmh,
-                course, inMotion, timestamp, direction, hdop, satellites, accuracy);
+                course, inMotion, timestamp, direction, hdop, satellites, accuracy, false);
+    }
+
+    public V31Fix(String vehicleId, String licensePlate, String routeNumber,
+                  String routeId,
+                  double latitude, double longitude, double speedKmh, double course,
+                  boolean inMotion, Instant timestamp, int direction,
+                  Double hdop, Integer satellites, Double accuracy) {
+        this(vehicleId, licensePlate, routeNumber, routeId, latitude, longitude, speedKmh,
+                course, inMotion, timestamp, direction, hdop, satellites, accuracy, false);
     }
 
     public String routeCacheKey() {

@@ -44,6 +44,7 @@ public class V31BroadcastLoop {
     private final Map<String, SentState> lastSent = new ConcurrentHashMap<>();
     private final AtomicLong framesEmitted = new AtomicLong();
     private final AtomicLong framesSuppressed = new AtomicLong();
+    private final AtomicLong garageSuppressed = new AtomicLong();
     private final AtomicLong serializations = new AtomicLong();
     private final AtomicLong boundaryCapPrints = new AtomicLong();
     private final AtomicLong framesWritten = new AtomicLong();
@@ -77,6 +78,10 @@ public class V31BroadcastLoop {
             MotionFilterCore core = e.getValue();
             V31Fix raw = shadow.lastFixOf(vehicleId);
             if (raw == null || !props.routeInScope(raw.routeNumber())) {
+                continue;
+            }
+            if (raw.inGarage()) {
+                garageSuppressed.incrementAndGet();
                 continue;
             }
             V31Frame frame;
@@ -200,6 +205,10 @@ public class V31BroadcastLoop {
 
     public long framesSuppressed() {
         return framesSuppressed.get();
+    }
+
+    public long garageSuppressed() {
+        return garageSuppressed.get();
     }
 
     public long serializations() {
