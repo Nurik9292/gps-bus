@@ -256,7 +256,8 @@ public class VehiclePositionPredictionService {
                             speedKmh, course, inMotion, timestamp, direction,
                             gpsQuality != null ? gpsQuality.hdop() : null,
                             gpsQuality != null ? gpsQuality.satellites() : null,
-                            gpsQuality != null ? gpsQuality.accuracy() : null));
+                            gpsQuality != null ? gpsQuality.accuracy() : null,
+                            inGarage));
                 }
             } catch (RuntimeException v31InjectionFailure) {
                 if (tap != null) {
