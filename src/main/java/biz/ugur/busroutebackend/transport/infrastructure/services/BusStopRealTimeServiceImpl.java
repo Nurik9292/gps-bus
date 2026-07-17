@@ -137,7 +137,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 .filter(s -> !biz.ugur.busroutebackend.transport.infrastructure.prediction.PredictionBroadcaster.isInColdStart(s))
                 .flatMap(state -> {
                     OptionalDouble stopFracOpt = routeGeometryCache.getStopFraction(
-                            state.getRouteNumber(), state.getDirection(), stopId);
+                            state.getRouteId(), state.getDirection(), stopId);
                     if (stopFracOpt.isEmpty()) return Mono.empty();
 
                     double stopFrac = stopFracOpt.getAsDouble();
@@ -155,8 +155,8 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                             state.getLicensePlate(),
                             null,
                             state.getRouteNumber(),
-                            routeGeometryCache.getRouteName(state.getRouteNumber()),
-                            routeGeometryCache.getRouteColor(state.getRouteNumber()),
+                            routeGeometryCache.getRouteName(state.getRouteId()),
+                            routeGeometryCache.getRouteColor(state.getRouteId()),
                             etaMin,
                             status,
                             state.getPredictedLatitude(),

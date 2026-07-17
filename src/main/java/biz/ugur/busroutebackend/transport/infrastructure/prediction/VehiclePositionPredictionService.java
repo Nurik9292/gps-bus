@@ -183,17 +183,35 @@ public class VehiclePositionPredictionService {
         if (state.getRouteNumber() == null) {
             return state;
         }
-        List<double[]> coords = routeGeometryCache.getPoints(state.getRouteNumber(), state.getDirection());
+        List<double[]> coords = routeGeometryCache.getPoints(state.getRouteId(), state.getDirection());
         if (coords == null) {
             return state;
         }
-        double totalDist = routeGeometryCache.getTotalDistance(state.getRouteNumber(), state.getDirection());
+        double totalDist = routeGeometryCache.getTotalDistance(state.getRouteId(), state.getDirection());
         return state.toBuilder()
                 .routeCoordinates(coords)
                 .totalRouteDistanceMeters(totalDist)
                 .build();
     }
 
+
+    public void onGpsUpdate(String vehicleId,
+                            String licensePlate,
+                            String routeNumber,
+                            String routeId,
+                            double latitude,
+                            double longitude,
+                            double speedKmh,
+                            double course,
+                            boolean inMotion,
+                            Instant timestamp,
+                            int direction,
+                            boolean directionConfirmed,
+                            boolean inGarage) {
+        onGpsUpdate(vehicleId, licensePlate, routeNumber, routeId, latitude, longitude, speedKmh,
+                course, inMotion, timestamp, direction, directionConfirmed, inGarage, false,
+                biz.ugur.busroutebackend.transport.infrastructure.debug.GpsQuality.UNKNOWN);
+    }
 
     public void onGpsUpdate(String vehicleId,
                             String licensePlate,
@@ -207,7 +225,7 @@ public class VehiclePositionPredictionService {
                             int direction,
                             boolean directionConfirmed,
                             boolean inGarage) {
-        onGpsUpdate(vehicleId, licensePlate, routeNumber, latitude, longitude, speedKmh,
+        onGpsUpdate(vehicleId, licensePlate, routeNumber, routeNumber, latitude, longitude, speedKmh,
                 course, inMotion, timestamp, direction, directionConfirmed, inGarage, false,
                 biz.ugur.busroutebackend.transport.infrastructure.debug.GpsQuality.UNKNOWN);
     }
@@ -215,6 +233,7 @@ public class VehiclePositionPredictionService {
     public void onGpsUpdate(String vehicleId,
                             String licensePlate,
                             String routeNumber,
+                            String routeId,
                             double latitude,
                             double longitude,
                             double speedKmh,
@@ -233,7 +252,7 @@ public class VehiclePositionPredictionService {
                 if (tap != null) {
                     // Врезка выше properties.isEnabled() и GpsOutlierFilter — ратифицировано A-090726-11 п.11.3 («сырой вход», Б-3)
                     tap.accept(new biz.ugur.busroutebackend.prediction.shadow.V31Fix(
-                            vehicleId, licensePlate, routeNumber, latitude, longitude,
+                            vehicleId, licensePlate, routeNumber, routeId, latitude, longitude,
                             speedKmh, course, inMotion, timestamp, direction,
                             gpsQuality != null ? gpsQuality.hdop() : null,
                             gpsQuality != null ? gpsQuality.satellites() : null,
@@ -388,7 +407,7 @@ public class VehiclePositionPredictionService {
         }
 
         SnapCorrector.SnapResult snapResult = snapCorrector.applySnap(
-                existing, vehicleId, licensePlate, routeNumber,
+                existing, vehicleId, licensePlate, routeId,
                 latitude, longitude, course, direction, timestamp);
         double predictedLat = snapResult.predictedLatitude();
         double predictedLon = snapResult.predictedLongitude();
@@ -511,8 +530,8 @@ public class VehiclePositionPredictionService {
         }
 
         boolean routeChanged = existing != null
-                && existing.getRouteNumber() != null
-                && !existing.getRouteNumber().equals(routeNumber);
+                && existing.getRouteId() != null
+                && !existing.getRouteId().equals(routeId);
         if (routeChanged) {
             log.info("[GPS_PIPELINE] ROUTE_CHANGED vehicle={} plate={} from={} to={} — resetting off-route state",
                     vehicleId, licensePlate, existing.getRouteNumber(), routeNumber);
@@ -571,6 +590,7 @@ public class VehiclePositionPredictionService {
                 .vehicleId(vehicleId)
                 .licensePlate(licensePlate)
                 .routeNumber(routeNumber)
+                .routeId(routeId)
                 .gpsLatitude(latitude)
                 .gpsLongitude(longitude)
                 .speedKmh(PredictionMath.computeSmoothedSpeed(existing != null ? existing.getRecentSpeeds() : null, speedKmh))

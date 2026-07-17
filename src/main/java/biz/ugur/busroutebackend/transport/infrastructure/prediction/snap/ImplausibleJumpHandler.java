@@ -37,7 +37,7 @@ public class ImplausibleJumpHandler {
     }
 
     public Result evaluate(VehiclePredictionState existing,
-                           String vehicleId, String routeNumber, int direction,
+                           String vehicleId, String routeId, int direction,
                            double realFraction,
                            boolean headingCorrected, boolean fracCorrected,
                            boolean routeChanged,
@@ -63,7 +63,7 @@ public class ImplausibleJumpHandler {
 
         if (strikes >= RESET_AFTER_STRIKES) {
             log.info("[GPS_PIPELINE] SNAP_IMPLAUSIBLE_RESET vehicle={} route={} dir={} frac={}→{} jump={} ({}x) — resetting to dead-reckoning at GPS position",
-                    vehicleId, routeNumber, direction,
+                    vehicleId, routeId, direction,
                     String.format("%.4f", lastGpsFrac),
                     String.format("%.4f", realFraction),
                     String.format("%.4f", jumpSize),
@@ -72,7 +72,7 @@ public class ImplausibleJumpHandler {
         }
 
         log.debug("[GPS_PIPELINE] SNAP_IMPLAUSIBLE vehicle={} route={} dir={} lastFrac={}→newFrac={} jump={} ({}/3) — keeping predicted, entering cold-start",
-                vehicleId, routeNumber, direction,
+                vehicleId, routeId, direction,
                 String.format("%.4f", lastGpsFrac),
                 String.format("%.4f", realFraction),
                 String.format("%.4f", jumpSize),

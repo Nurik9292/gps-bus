@@ -212,7 +212,7 @@ class VehiclePositionPredictor {
                 return dwellTriggered;
             }
 
-            double[] cumDistAdvance = routeGeometryCache.getCumulativeDistances(state.getRouteNumber(), state.getDirection());
+            double[] cumDistAdvance = routeGeometryCache.getCumulativeDistances(state.getRouteId(), state.getDirection());
             double[] coords = mapMatchingService.interpolateRoutePoint(routeCoords, cumDistAdvance, newFraction, totalRouteDistance);
             if (coords == null) return state;
 
@@ -323,7 +323,7 @@ class VehiclePositionPredictor {
         if (!shouldDwell) return null;
 
         Optional<biz.ugur.busroutebackend.transport.domain.valueobject.RouteStopInfo> nextStopOpt =
-                routeGeometryCache.getNextStop(state.getRouteNumber(), state.getDirection(), trueFrac);
+                routeGeometryCache.getNextStop(state.getRouteId(), state.getDirection(), trueFrac);
         if (nextStopOpt.isEmpty()) return null;
 
         var nextStop = nextStopOpt.get();
@@ -337,7 +337,7 @@ class VehiclePositionPredictor {
 
         recordSegmentTravelObservation(state, nextStop.getStopId());
 
-        double[] dwellCumDist = routeGeometryCache.getCumulativeDistances(state.getRouteNumber(), state.getDirection());
+        double[] dwellCumDist = routeGeometryCache.getCumulativeDistances(state.getRouteId(), state.getDirection());
         double[] stopCoords = mapMatchingService.interpolateRoutePoint(routeCoords, dwellCumDist, nextStopFrac, totalRouteDistance);
         if (stopCoords == null) return null;
 
@@ -484,7 +484,7 @@ class VehiclePositionPredictor {
 
     private double computeDistanceToNextStopFromFraction(double fraction, VehiclePredictionState state, double totalRouteDistance) {
         if (fraction < 0 || state.getRouteNumber() == null || totalRouteDistance <= 0) return -1;
-        double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteNumber(), state.getDirection());
+        double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteId(), state.getDirection());
         if (stopFractions == null || stopFractions.length == 0) return -1;
         double nextStopFrac = PredictionMath.findNextStopFraction(stopFractions, fraction);
         if (nextStopFrac < 0) return -1;
@@ -493,7 +493,7 @@ class VehiclePositionPredictor {
 
     private double computeDistanceToNextStop(VehiclePredictionState state, double totalRouteDistance) {
         if (state.getRouteNumber() == null || totalRouteDistance <= 0) return -1;
-        double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteNumber(), state.getDirection());
+        double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteId(), state.getDirection());
         if (stopFractions == null || stopFractions.length == 0) return -1;
         double currentFraction = state.getFractionOnRoute();
         double nextStopFraction = PredictionMath.findNextStopFraction(stopFractions, currentFraction);
@@ -504,7 +504,7 @@ class VehiclePositionPredictor {
     private double computeStopDecelerationFactor(VehiclePredictionState state, double totalRouteDistance) {
         if (state.getRouteNumber() == null) return 1.0;
 
-        double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteNumber(), state.getDirection());
+        double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteId(), state.getDirection());
         if (stopFractions == null || stopFractions.length == 0) return 1.0;
 
         double currentFraction = state.getFractionOnRoute();
@@ -525,7 +525,7 @@ class VehiclePositionPredictor {
 
     private double computeStopAccelerationFactor(VehiclePredictionState state, double totalRouteDistance) {
         if (state.getRouteNumber() == null) return 1.0;
-        double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteNumber(), state.getDirection());
+        double[] stopFractions = routeGeometryCache.getStopFractions(state.getRouteId(), state.getDirection());
         if (stopFractions == null || stopFractions.length == 0) return 1.0;
 
         double currentFraction = state.getFractionOnRoute();

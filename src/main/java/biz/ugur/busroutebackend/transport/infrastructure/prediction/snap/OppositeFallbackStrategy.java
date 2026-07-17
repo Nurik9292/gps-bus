@@ -54,7 +54,7 @@ public class OppositeFallbackStrategy {
     }
 
     public Result tryFlip(VehiclePredictionState existing,
-                           String vehicleId, String licensePlate, String routeNumber,
+                           String vehicleId, String licensePlate, String routeId,
                            int currentDirection, double latitude, double longitude,
                            MapMatchingService.SnappedResult primaryFailed,
                            double currentRawSnapMinDistance) {
@@ -62,17 +62,17 @@ public class OppositeFallbackStrategy {
         double rawSnapMinDistance = currentRawSnapMinDistance;
         int oppositeDir = (currentDirection == 0) ? 1 : 0;
 
-        List<double[]> oppositeCoords = routeGeometryCache.getPoints(routeNumber, oppositeDir);
+        List<double[]> oppositeCoords = routeGeometryCache.getPoints(routeId, oppositeDir);
         if (oppositeCoords == null) {
             log.debug("[GPS_PIPELINE] SNAP_FAIL vehicle={} route={} dist={}m > threshold={}m → keeping predicted on route, awaiting re-snap",
-                    vehicleId, routeNumber,
+                    vehicleId, routeId,
                     String.format("%.1f", primaryFailed.distanceMeters()),
                     (int) properties.getMaxSnapDistanceMeters());
             oppositeCounter.reset(vehicleId);
             return Result.notAccepted(currentDirection, rawSnapMinDistance);
         }
 
-        double oppositeDist = routeGeometryCache.getTotalDistance(routeNumber, oppositeDir);
+        double oppositeDist = routeGeometryCache.getTotalDistance(routeId, oppositeDir);
         MapMatchingService.SnappedResult oppositeSnap =
                 mapMatchingService.snapToNearestSegment(latitude, longitude, oppositeCoords, oppositeDist);
 
@@ -93,7 +93,7 @@ public class OppositeFallbackStrategy {
                     : properties.getOppositeSnapThreshold();
 
             log.debug("[GPS_PIPELINE] SNAP_OPPOSITE vehicle={} route={} dir={}→{} dist={}m (primary={}m) hardMismatch={} required={}",
-                    vehicleId, routeNumber, currentDirection, oppositeDir,
+                    vehicleId, routeId, currentDirection, oppositeDir,
                     String.format("%.1f", oppositeSnap.distanceMeters()),
                     String.format("%.1f", primaryFailed.distanceMeters()),
                     hardMismatch, requiredSnaps);
@@ -102,7 +102,7 @@ public class OppositeFallbackStrategy {
             if (snapCount >= requiredSnaps) {
                 oppositeCounter.queueDirectionFix(vehicleId, oppositeDir);
                 log.info("[GPS_PIPELINE] DIR_AUTO_FIX vehicle={} route={} dir={}→{} ({}x consecutive opposite snap, hardMismatch={})",
-                        vehicleId, routeNumber, currentDirection, oppositeDir, snapCount, hardMismatch);
+                        vehicleId, routeId, currentDirection, oppositeDir, snapCount, hardMismatch);
                 oppositeCounter.reset(vehicleId);
             }
 
@@ -119,13 +119,13 @@ public class OppositeFallbackStrategy {
                     : -1;
             log.warn("[GPS_PIPELINE] OPPOSITE_FALLBACK_REJECTED vehicle={} plate={} route={} dir={}→{} " +
                             "primaryDist={}m oppositeDist={}m physicalJump={}m — GPS noise near parallel lanes, keeping predicted on route",
-                    vehicleId, licensePlate, routeNumber, currentDirection, oppositeDir,
+                    vehicleId, licensePlate, routeId, currentDirection, oppositeDir,
                     String.format("%.1f", primaryFailed.distanceMeters()),
                     String.format("%.1f", oppositeSnap.distanceMeters()),
                     physicalJumpMeters >= 0 ? String.format("%.0f", physicalJumpMeters) : "-");
         } else {
             log.debug("[GPS_PIPELINE] SNAP_FAIL vehicle={} route={} dist={}m (opposite={}m) > threshold={}m → keeping predicted on route, awaiting re-snap",
-                    vehicleId, routeNumber,
+                    vehicleId, routeId,
                     String.format("%.1f", primaryFailed.distanceMeters()),
                     String.format("%.1f", oppositeSnap.distanceMeters()),
                     (int) properties.getMaxSnapDistanceMeters());

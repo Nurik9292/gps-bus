@@ -42,7 +42,7 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteDa
                     log.debug("Getting route with geometry - CorrelationId: {} - RouteNumber: {}",
                             correlationId, routeNumber);
 
-                    return busRouteRepository.findByRouteNumber(routeNumber)
+                    return busRouteRepository.findPreferredByRouteNumber(routeNumber)
                             .flatMap(this::enrichWithStopsAndVehicles)
                             .doOnSuccess(route -> log.info("Route {} geometry retrieved - CorrelationId: {} - ForwardStops: {} - BackwardStops: {}",
                                     routeNumber, correlationId, route.getForwardStopsCount(), route.getBackwardStopsCount()))
@@ -87,7 +87,8 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteDa
                     log.debug("Getting route stops - CorrelationId: {} - RouteNumber: {} - Direction: {}",
                             correlationId, routeNumber, direction);
 
-                    return busRouteRepository.getRouteStopsInfoByNumber(routeNumber, direction)
+                    return busRouteRepository.findPreferredByRouteNumber(routeNumber)
+                            .flatMapMany(route -> busRouteRepository.getRouteStopsInfoByRouteId(route.getId().getValue(), direction))
                             .map(routeDtoMappingService::toRouteStopDto)
                             .collectList()
                             .doOnSuccess(stops -> log.debug("Route stops retrieved - CorrelationId: {} - RouteNumber: {} - Direction: {} - Count: {}",
@@ -107,7 +108,7 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteDa
                 .flatMap(correlationId -> {
                     log.info("Updating route geometry - CorrelationId: {} - RouteNumber: {}", correlationId, routeNumber);
 
-                    return busRouteRepository.findByRouteNumber(routeNumber)
+                    return busRouteRepository.findPreferredByRouteNumber(routeNumber)
                             .flatMap(route -> {
                                 try {
                                     var forwardGeometry = createRouteGeometry(request.getForwardCoordinates());
@@ -133,14 +134,14 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteDa
 
 
     private Mono<RouteData> enrichWithStopsAndVehicles(BusRoute busRoute) {
-        String routeNumber = busRoute.getRouteNumber();
+        String routeId = busRoute.getId().getValue();
 
         Mono<List<RouteStopInfo>> forwardStops = busRouteRepository
-                .getRouteStopsInfoByNumber(routeNumber, 0)
+                .getRouteStopsInfoByRouteId(routeId, 0)
                 .collectList();
 
         Mono<List<RouteStopInfo>> backwardStops = busRouteRepository
-                .getRouteStopsInfoByNumber(routeNumber, 1)
+                .getRouteStopsInfoByRouteId(routeId, 1)
                 .collectList();
 
         Mono<RouteVehicleStatistics> vehicleStats = busRouteRepository

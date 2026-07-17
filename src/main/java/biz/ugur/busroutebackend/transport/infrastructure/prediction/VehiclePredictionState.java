@@ -14,6 +14,7 @@ public class VehiclePredictionState {
     private String vehicleId;
     private String licensePlate;
     private String routeNumber;
+    private String routeId;
 
     private double gpsLatitude;
     private double gpsLongitude;

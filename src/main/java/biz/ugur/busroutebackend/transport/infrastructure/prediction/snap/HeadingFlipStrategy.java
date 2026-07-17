@@ -58,7 +58,7 @@ public class HeadingFlipStrategy {
     }
 
     public Result maybeFlip(VehiclePredictionState existing,
-                             String vehicleId, String licensePlate, String routeNumber,
+                             String vehicleId, String licensePlate, String routeId,
                              double latitude, double longitude, double course,
                              int currentDirection, List<double[]> currentRouteCoords,
                              double currentTotalDist, double[] currentCumDist,
@@ -75,7 +75,7 @@ public class HeadingFlipStrategy {
                         && existing.getRawGpsSpeedKmh() < properties.getStationarySpeedThresholdKmh()));
         if (isStationary) {
             log.info("[GPS_PIPELINE] DIR_HEADING_SKIP_STATIONARY vehicle={} plate={} route={} dir={} course={}° inMotion={} rawSpeed={}km/h — course is stale on stationary bus, no flip",
-                    vehicleId, licensePlate, routeNumber, currentDirection,
+                    vehicleId, licensePlate, routeId, currentDirection,
                     (int) course,
                     existing != null && existing.isInMotion(),
                     existing != null ? String.format("%.1f", existing.getRawGpsSpeedKmh()) : "-");
@@ -113,13 +113,13 @@ public class HeadingFlipStrategy {
         }
 
         int flippedDir = (currentDirection == 0) ? 1 : 0;
-        List<double[]> flippedCoords = routeGeometryCache.getPoints(routeNumber, flippedDir);
+        List<double[]> flippedCoords = routeGeometryCache.getPoints(routeId, flippedDir);
         if (flippedCoords == null) {
             return Result.notFlipped(currentDirection, currentRouteCoords, currentTotalDist,
                     primarySnap, currentRawSnapMinDistance);
         }
 
-        double flippedDist = routeGeometryCache.getTotalDistance(routeNumber, flippedDir);
+        double flippedDist = routeGeometryCache.getTotalDistance(routeId, flippedDir);
         MapMatchingService.SnappedResult flippedSnap =
                 mapMatchingService.snapToNearestSegment(latitude, longitude, flippedCoords, flippedDist);
 

@@ -72,7 +72,7 @@ public class RouteGeometryCache {
     private reactor.core.publisher.Mono<Void> loadWithRetry() {
         return busRouteRepository.findActiveRoutes()
                 .doOnNext(this::cacheRoute)
-                .flatMap(route -> loadStopFractions(route.getRouteNumber()))
+                .flatMap(route -> loadStopFractions(route.getId().getValue()))
                 .retryWhen(reactor.util.retry.Retry.backoff(5, Duration.ofSeconds(2))
                         .maxBackoff(Duration.ofSeconds(32))
                         .doBeforeRetry(signal -> log.warn(
@@ -86,20 +86,20 @@ public class RouteGeometryCache {
                 .then();
     }
 
-    private reactor.core.publisher.Mono<Void> loadStopFractions(String routeNumber) {
+    private reactor.core.publisher.Mono<Void> loadStopFractions(String routeId) {
         return reactor.core.publisher.Flux.fromIterable(List.of(0, 1))
-                .flatMap(dir -> busRouteRepository.getRouteStopsInfoByNumber(routeNumber, dir)
+                .flatMap(dir -> busRouteRepository.getRouteStopsInfoByRouteId(routeId, dir)
                         .collectList()
-                        .doOnSuccess(stops -> cacheStopFractions(routeNumber, dir, stops)))
+                        .doOnSuccess(stops -> cacheStopFractions(routeId, dir, stops)))
                 .then()
                 .onErrorResume(e -> {
-                    log.debug("Stop fractions load skipped for route {}: {}", routeNumber, e.getMessage());
+                    log.debug("Stop fractions load skipped for route {}: {}", routeId, e.getMessage());
                     return reactor.core.publisher.Mono.empty();
                 });
     }
 
-    private void cacheStopFractions(String routeNumber, int direction, List<RouteStopInfo> stops) {
-        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+    private void cacheStopFractions(String routeId, int direction, List<RouteStopInfo> stops) {
+        String key = routeId + (direction == 0 ? FORWARD : BACKWARD);
         double totalDistance = distanceCache.getOrDefault(key, 0.0);
         if (totalDistance <= 0 || stops == null || stops.isEmpty()) return;
 
@@ -130,8 +130,8 @@ public class RouteGeometryCache {
         stopFractionsByIdCache.put(key, java.util.Map.copyOf(byId));
         stopFractionsByNameCache.put(key, java.util.Map.copyOf(byName));
 
-        warnOnSequenceOrderInversions(routeNumber, direction, resolved);
-        log.debug("Cached {} stop fractions for route {} dir={}", fractions.length, routeNumber, direction);
+        warnOnSequenceOrderInversions(routeId, direction, resolved);
+        log.debug("Cached {} stop fractions for routeId {} dir={}", fractions.length, routeId, direction);
     }
 
     private StopWithFraction resolveStopFraction(List<double[]> points, double totalDistance, RouteStopInfo stop) {
@@ -152,7 +152,7 @@ public class RouteGeometryCache {
         return null;
     }
 
-    private void warnOnSequenceOrderInversions(String routeNumber, int direction, List<StopWithFraction> resolved) {
+    private void warnOnSequenceOrderInversions(String routeId, int direction, List<StopWithFraction> resolved) {
         List<StopWithFraction> bySequence = resolved.stream()
                 .filter(sf -> sf.stop().getSequence() != null)
                 .sorted(Comparator.comparingInt(sf -> sf.stop().getSequence()))
@@ -165,57 +165,57 @@ public class RouteGeometryCache {
         }
         if (inversions > 0) {
             log.warn("[GPS_PIPELINE] Route {} dir={}: {} stop fraction inversions against stop_sequence order — possible out-and-back wrong-pass snap",
-                    routeNumber, direction, inversions);
+                    routeId, direction, inversions);
         }
     }
 
     private record StopWithFraction(RouteStopInfo stop, double fraction) {}
 
 
-    public List<double[]> getPoints(String routeNumber, int direction) {
-        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+    public List<double[]> getPoints(String routeId, int direction) {
+        String key = routeId + (direction == 0 ? FORWARD : BACKWARD);
         return pointsCache.get(key);
     }
 
     
-    public double getTotalDistance(String routeNumber, int direction) {
-        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+    public double getTotalDistance(String routeId, int direction) {
+        String key = routeId + (direction == 0 ? FORWARD : BACKWARD);
         return distanceCache.getOrDefault(key, 0.0);
     }
 
  
-    public double[] getStopFractions(String routeNumber, int direction) {
-        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+    public double[] getStopFractions(String routeId, int direction) {
+        String key = routeId + (direction == 0 ? FORWARD : BACKWARD);
         return stopFractionsCache.get(key);
     }
 
    
-    public List<RouteStopInfo> getRouteStops(String routeNumber, int direction) {
-        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+    public List<RouteStopInfo> getRouteStops(String routeId, int direction) {
+        String key = routeId + (direction == 0 ? FORWARD : BACKWARD);
         List<RouteStopInfo> stops = routeStopsCache.get(key);
         return stops != null ? stops : Collections.emptyList();
     }
 
 
-    public List<RouteStopInfo> getStopsAhead(String routeNumber, int direction, double currentFraction) {
-        int idx = firstStopIndexAhead(routeNumber, direction, currentFraction);
+    public List<RouteStopInfo> getStopsAhead(String routeId, int direction, double currentFraction) {
+        int idx = firstStopIndexAhead(routeId, direction, currentFraction);
         if (idx < 0) return Collections.emptyList();
-        List<RouteStopInfo> stops = getRouteStops(routeNumber, direction);
+        List<RouteStopInfo> stops = getRouteStops(routeId, direction);
         if (idx >= stops.size()) return Collections.emptyList();
         return List.copyOf(stops.subList(idx, stops.size()));
     }
 
-    public Optional<RouteStopInfo> getNextStop(String routeNumber, int direction, double currentFraction) {
-        int idx = firstStopIndexAhead(routeNumber, direction, currentFraction);
+    public Optional<RouteStopInfo> getNextStop(String routeId, int direction, double currentFraction) {
+        int idx = firstStopIndexAhead(routeId, direction, currentFraction);
         if (idx < 0) return Optional.empty();
-        List<RouteStopInfo> stops = getRouteStops(routeNumber, direction);
+        List<RouteStopInfo> stops = getRouteStops(routeId, direction);
         if (idx >= stops.size()) return Optional.empty();
         return Optional.of(stops.get(idx));
     }
 
-    private int firstStopIndexAhead(String routeNumber, int direction, double currentFraction) {
-        if (getTotalDistance(routeNumber, direction) <= 0) return -1;
-        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+    private int firstStopIndexAhead(String routeId, int direction, double currentFraction) {
+        if (getTotalDistance(routeId, direction) <= 0) return -1;
+        String key = routeId + (direction == 0 ? FORWARD : BACKWARD);
         double[] fractions = stopFractionsCache.get(key);
         if (fractions == null || fractions.length == 0) return -1;
 
@@ -225,29 +225,29 @@ public class RouteGeometryCache {
     }
 
  
-    public OptionalDouble getStopFraction(String routeNumber, int direction, String stopId) {
+    public OptionalDouble getStopFraction(String routeId, int direction, String stopId) {
         if (stopId == null) return OptionalDouble.empty();
-        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+        String key = routeId + (direction == 0 ? FORWARD : BACKWARD);
         java.util.Map<String, Double> byId = stopFractionsByIdCache.get(key);
         if (byId == null) return OptionalDouble.empty();
         Double frac = byId.get(stopId);
         return frac != null ? OptionalDouble.of(frac) : OptionalDouble.empty();
     }
 
-    public OptionalDouble getStopFractionByName(String routeNumber, int direction, String stopName) {
+    public OptionalDouble getStopFractionByName(String routeId, int direction, String stopName) {
         if (stopName == null || stopName.isBlank()) return OptionalDouble.empty();
-        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+        String key = routeId + (direction == 0 ? FORWARD : BACKWARD);
         java.util.Map<String, Double> byName = stopFractionsByNameCache.get(key);
         if (byName == null) return OptionalDouble.empty();
         Double frac = byName.get(stopName.toLowerCase());
         return frac != null ? OptionalDouble.of(frac) : OptionalDouble.empty();
     }
 
-    public OptionalDouble getStopFractionByCoordinates(String routeNumber, int direction,
+    public OptionalDouble getStopFractionByCoordinates(String routeId, int direction,
                                                         double lat, double lon, double maxDistanceMeters) {
         RouteStopInfo nearest = null;
         double nearestDist = Double.MAX_VALUE;
-        for (RouteStopInfo s : getRouteStops(routeNumber, direction)) {
+        for (RouteStopInfo s : getRouteStops(routeId, direction)) {
             double dist = haversineMeters(lat, lon,
                     s.getLatitude().doubleValue(), s.getLongitude().doubleValue());
             if (dist < nearestDist) {
@@ -256,7 +256,7 @@ public class RouteGeometryCache {
             }
         }
         if (nearest == null || nearestDist > maxDistanceMeters) return OptionalDouble.empty();
-        return getStopFraction(routeNumber, direction, nearest.getStopId());
+        return getStopFraction(routeId, direction, nearest.getStopId());
     }
 
     private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
@@ -269,44 +269,47 @@ public class RouteGeometryCache {
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    public reactor.core.publisher.Mono<Void> refreshRoute(String routeNumber) {
-        return busRouteRepository.findByRouteNumber(routeNumber)
+    public reactor.core.publisher.Mono<Void> refreshRoute(String routeIdOrNumber) {
+        return busRouteRepository.findById(biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId.of(routeIdOrNumber))
+                .switchIfEmpty(reactor.core.publisher.Mono.defer(
+                        () -> busRouteRepository.findPreferredByRouteNumber(routeIdOrNumber)))
+                .filter(BusRoute::getIsActive)
                 .doOnNext(this::cacheRoute)
-                .flatMap(route -> loadStopFractions(routeNumber))
-                .doOnSuccess(ignored -> log.info("[GPS_PIPELINE] Refreshed route geometry cache for route {}", routeNumber))
-                .doOnError(error -> log.error("[GPS_PIPELINE] Failed to refresh route {}: {}", routeNumber, error.getMessage()))
+                .flatMap(route -> loadStopFractions(route.getId().getValue()))
+                .doOnSuccess(ignored -> log.info("[GPS_PIPELINE] Refreshed route geometry cache for {}", routeIdOrNumber))
+                .doOnError(error -> log.error("[GPS_PIPELINE] Failed to refresh route {}: {}", routeIdOrNumber, error.getMessage()))
                 .then();
     }
 
 
     private void cacheRoute(BusRoute route) {
-        String routeNumber = route.getRouteNumber();
+        String routeId = route.getId().getValue();
         if (route.getRouteName() != null) {
-            routeNameCache.put(routeNumber, route.getRouteName());
+            routeNameCache.put(routeId, route.getRouteName());
         }
         if (route.getRouteColor() != null) {
-            routeColorCache.put(routeNumber, route.getRouteColor());
+            routeColorCache.put(routeId, route.getRouteColor());
         }
-        cacheGeometry(routeNumber, FORWARD,  route.getRouteGeometryForward());
-        cacheGeometry(routeNumber, BACKWARD, route.getRouteGeometryBackward());
+        cacheGeometry(routeId, FORWARD,  route.getRouteGeometryForward());
+        cacheGeometry(routeId, BACKWARD, route.getRouteGeometryBackward());
     }
 
-    public String getRouteName(String routeNumber) {
-        return routeNameCache.get(routeNumber);
+    public String getRouteName(String routeId) {
+        return routeNameCache.get(routeId);
     }
 
-    public String getRouteColor(String routeNumber) {
-        return routeColorCache.get(routeNumber);
+    public String getRouteColor(String routeId) {
+        return routeColorCache.get(routeId);
     }
 
-    private void cacheGeometry(String routeNumber, String suffix, String wkt) {
+    private void cacheGeometry(String routeId, String suffix, String wkt) {
         if (wkt == null || wkt.isBlank()) return;
 
         try {
             List<double[]> points = parseWkt(wkt);
             if (points.size() < 2) return;
 
-            String key = routeNumber + suffix;
+            String key = routeId + suffix;
             pointsCache.put(key, points);
 
             double[] cumDist = new double[points.size()];
@@ -319,12 +322,12 @@ public class RouteGeometryCache {
             cumulativeDistancesCache.put(key, cumDist);
             distanceCache.put(key, cumDist[cumDist.length - 1]);
         } catch (Exception e) {
-            log.warn("[GPS_PIPELINE] Cannot parse WKT for route {} {}: {}", routeNumber, suffix, e.getMessage());
+            log.warn("[GPS_PIPELINE] Cannot parse WKT for route {} {}: {}", routeId, suffix, e.getMessage());
         }
     }
 
-    public double[] getCumulativeDistances(String routeNumber, int direction) {
-        String key = routeNumber + (direction == 0 ? FORWARD : BACKWARD);
+    public double[] getCumulativeDistances(String routeId, int direction) {
+        String key = routeId + (direction == 0 ? FORWARD : BACKWARD);
         return cumulativeDistancesCache.get(key);
     }
 

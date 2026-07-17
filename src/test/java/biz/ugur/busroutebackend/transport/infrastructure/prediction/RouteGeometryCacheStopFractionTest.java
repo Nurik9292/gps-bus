@@ -83,13 +83,15 @@ class RouteGeometryCacheStopFractionTest {
 
     private void givenRouteWithStops(RouteStopInfo... stops) {
         BusRoute route = BusRoute.builder()
+                .id(biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId.of(ROUTE))
                 .routeNumber(ROUTE)
                 .isActive(true)
                 .routeGeometryForward(STRAIGHT_1KM_NORTH_WKT)
                 .build();
-        when(busRouteRepository.findByRouteNumber(ROUTE)).thenReturn(Mono.just(route));
-        when(busRouteRepository.getRouteStopsInfoByNumber(ROUTE, 0)).thenReturn(Flux.just(stops));
-        when(busRouteRepository.getRouteStopsInfoByNumber(ROUTE, 1)).thenReturn(Flux.empty());
+        when(busRouteRepository.findById(biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId.of(ROUTE)))
+                .thenReturn(Mono.just(route));
+        when(busRouteRepository.getRouteStopsInfoByRouteId(ROUTE, 0)).thenReturn(Flux.just(stops));
+        when(busRouteRepository.getRouteStopsInfoByRouteId(ROUTE, 1)).thenReturn(Flux.empty());
 
         StepVerifier.create(cache.refreshRoute(ROUTE)).verifyComplete();
     }
