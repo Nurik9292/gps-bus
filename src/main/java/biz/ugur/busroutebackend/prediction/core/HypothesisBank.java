@@ -155,6 +155,9 @@ public class HypothesisBank {
     }
 
     public void onFix(GpsFix fix, double dTau) {
+        if (fix.timestamp() != null) {
+            lastFixEpochMs = fix.timestamp().toEpochMilli();
+        }
         for (Hypothesis h : hyps) {
             updateHypothesis(h, fix, dTau);
         }
@@ -223,16 +226,29 @@ public class HypothesisBank {
             h.snappedLast = true;
             h.missStreak = 0;
         } else {
-            w = -1.0 - cfg.scoreRejectPenalty();
-            h.snappedLast = false;
-            h.missStreak++;
+            var axis = h.geom.projectOntoRange(fix.latitude(), fix.longitude(),
+                    0, h.geom.totalMeters(), h.x);
+            boolean blindWindowButOnAxis = axis.distMeters() <= cfg.dSnapMeters();
+            if (blindWindowButOnAxis && h.missStreak + 1 >= 2) {
+                h.x = axis.s();
+                h.v = Math.max(0, fix.speedKmh() / 3.6);
+                double norm = axis.distMeters() / cfg.dSnapMeters();
+                w = -(norm * norm);
+                h.lastZ = axis.s();
+                h.snappedLast = true;
+                h.missStreak = 0;
+            } else {
+                w = blindWindowButOnAxis ? -1.0 : -1.0 - cfg.scoreRejectPenalty();
+                h.snappedLast = false;
+                h.missStreak++;
+                if (h.missStreak >= RESEED_AFTER_CONSECUTIVE_MISSES) {
+                    h.seeded = false;
+                }
+            }
             h.progressStreak = 0;
             h.streakStartZ = Double.NaN;
             h.termRunTicks = 0;
             h.termRunStartZ = Double.NaN;
-            if (h.missStreak >= RESEED_AFTER_CONSECUTIVE_MISSES) {
-                h.seeded = false;
-            }
         }
         h.score = cfg.scoreLambda() * h.score + (1 - cfg.scoreLambda()) * w;
     }
@@ -312,12 +328,38 @@ public class HypothesisBank {
         }
         if (candidateStreak < cfg.hSwitch()) return null;
         Hypothesis confirmed = hyps.get(candidateIdx);
+        boolean directionChange = confirmed.direction != hyps.get(leaderIdx).direction;
         if (leaderAtFullTerminal
-                && confirmed.direction != hyps.get(leaderIdx).direction
+                && directionChange
                 && !terminalDepartureConfirmed(confirmed)) {
             return null;
         }
+        boolean leaderStillAdvancingOwnAxis = hyps.get(leaderIdx).termRunTicks > 0;
+        if (!leaderAtFullTerminal && directionChange && leaderStillAdvancingOwnAxis) {
+            double confirmRun = termRunMeters(confirmed);
+            double requiredRun = withinFlapGuard()
+                    ? 2 * cfg.dDirSwitchRunMeters()
+                    : cfg.dDirSwitchRunMeters();
+            if (confirmRun < requiredRun) {
+                return null;
+            }
+        }
+        if (directionChange) {
+            lastDirSwitchAtMs = lastFixEpochMs;
+        }
         return confirmed;
+    }
+
+    private long lastFixEpochMs = Long.MIN_VALUE;
+    private long lastDirSwitchAtMs = Long.MIN_VALUE;
+
+    private boolean withinFlapGuard() {
+        return lastDirSwitchAtMs != Long.MIN_VALUE
+                && lastFixEpochMs - lastDirSwitchAtMs <= cfg.tDirFlapGuardSec() * 1000L;
+    }
+
+    private static double termRunMeters(Hypothesis h) {
+        return Double.isNaN(h.termRunStartZ) ? 0.0 : h.lastZ - h.termRunStartZ;
     }
 
     private boolean leaderAtFullTerminal;
@@ -327,10 +369,10 @@ public class HypothesisBank {
     }
 
     private boolean terminalDepartureConfirmed(Hypothesis h) {
-        double termRunMeters = Double.isNaN(h.termRunStartZ) ? 0.0 : h.lastZ - h.termRunStartZ;
+        double termRun = termRunMeters(h);
         boolean movingTicksAccumulated = h.termRunTicks >= cfg.nTurnConfirmTerm()
-                && termRunMeters >= cfg.dTurnConfirmTermMeters();
-        boolean departedFar = termRunMeters >= cfg.dTermEscapeMeters();
+                && termRun >= cfg.dTurnConfirmTermMeters();
+        boolean departedFar = termRun >= cfg.dTermEscapeMeters();
         return movingTicksAccumulated || departedFar;
     }
 
