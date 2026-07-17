@@ -285,6 +285,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         Instant advanceBase = lastAdvancedAt != null ? lastAdvancedAt : lastFixTime;
         double dTau = Math.max(0.0,
                 (fix.timestamp().toEpochMilli() - advanceBase.toEpochMilli()) / 1000.0);
+        double dtSinceLastFix = Math.max(0.0,
+                (fix.timestamp().toEpochMilli() - lastFixTime.toEpochMilli()) / 1000.0);
         double tauOffset = Math.max(0.0,
                 (advanceBase.toEpochMilli() - lastFixTime.toEpochMilli()) / 1000.0);
         double xBeforePredict = x;
@@ -299,7 +301,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             recoveringFromFreeze = true;
         }
 
-        bank.onFix(fix, dTau);
+        bank.onFix(fix, dtSinceLastFix);
         cityZoneTrack(fix, topo);
         if (pendingDirectionSwitch != null) {
             return applyPendingDirectionSwitch(fix);
@@ -326,12 +328,12 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         }
 
         if (mode == Mode.OFF_ROUTE) {
-            Estimate handled = offRouteStep(fix, g, dTau);
+            Estimate handled = offRouteStep(fix, g, dtSinceLastFix);
             if (handled != null) return handled;
         }
 
         currentVTarget = resolveVTarget(fix, g);
-        Snap snap = snapInWindow(fix, g, dTau);
+        Snap snap = snapInWindow(fix, g, dtSinceLastFix);
         if (snap.snapped()) {
             lastLeaderSnapAtMs = fix.timestamp().toEpochMilli();
         }
@@ -390,7 +392,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         }
 
         if (gatePassed) {
-            kalmanUpdate(nu, r, dTau);
+            kalmanUpdate(nu, r, dtSinceLastFix);
             weakSpeedUpdate(fix);
             lastAcceptedZx = snap.sOnLine();
             lastUpdateAccepted = true;
@@ -412,9 +414,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             return new Estimate(x, v, Mode.OFF_ROUTE.name(), Math.max(p00, 1e-6));
         }
         if (g.stops().isEmpty()) {
-            stepModeBySpeed(fix, dTau);
+            stepModeBySpeed(fix, dtSinceLastFix);
         } else {
-            stepStopLayer(fix, g, dTau);
+            stepStopLayer(fix, g, dtSinceLastFix);
         }
         recomputeEtas(fix, g);
 
