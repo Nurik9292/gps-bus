@@ -329,6 +329,9 @@ public class HypothesisBank {
         if (candidateStreak < cfg.hSwitch()) return null;
         Hypothesis confirmed = hyps.get(candidateIdx);
         boolean directionChange = confirmed.direction != hyps.get(leaderIdx).direction;
+        if (directionChange && confirmed.progressStreak == 0) {
+            return null;
+        }
         if (leaderAtFullTerminal
                 && directionChange
                 && !terminalDepartureConfirmed(confirmed)) {

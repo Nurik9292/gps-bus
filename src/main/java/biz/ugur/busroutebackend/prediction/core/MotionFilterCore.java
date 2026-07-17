@@ -487,6 +487,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
 
     private boolean bankSwitchAllowed() {
         return isTravelMode() || mode == Mode.AT_TERMINAL || mode == Mode.OFF_ROUTE
+                || mode == Mode.GPS_LOST
                 || (mode == Mode.RECOVERING && !recoveringFromFreeze);
     }
 
