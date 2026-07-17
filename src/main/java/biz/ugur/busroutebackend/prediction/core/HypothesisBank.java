@@ -28,6 +28,8 @@ public class HypothesisBank {
         private int unpinAgeTicks = Integer.MAX_VALUE;
         private int progressStreak;
         private double streakStartZ = Double.NaN;
+        private int termRunTicks;
+        private double termRunStartZ = Double.NaN;
 
         public boolean pinnedAtVariantTerminal() {
             return pinnedAtVariantTerminal;
@@ -195,10 +197,12 @@ public class HypothesisBank {
             double residual = p.s() - h.x;
             h.x += 0.5 * residual;
             h.v = Math.max(0, Math.min(h.v + 0.2 * residual / dt, cfg.vMaxMs()));
-            boolean progress = !Double.isNaN(h.lastZ)
-                    && fix.speedKmh() >= cfg.vMoveKmh()
-                    && p.s() - h.lastZ > 0.5
-                    && p.s() - h.lastZ <= cfg.vMaxMs() * dt + 15.0;
+            double ds = Double.isNaN(h.lastZ) ? 0.0 : p.s() - h.lastZ;
+            boolean advanced = !Double.isNaN(h.lastZ)
+                    && ds > 0.5
+                    && ds <= cfg.vMaxMs() * dt + 15.0;
+            boolean regressed = !Double.isNaN(h.lastZ) && ds < -0.5;
+            boolean progress = advanced && fix.speedKmh() >= cfg.vMoveKmh();
             double norm = p.distMeters() / cfg.dSnapMeters();
             w = -(norm * norm) + (progress ? cfg.scoreProgressBonus() : 0.0);
             if (progress) {
@@ -207,6 +211,13 @@ public class HypothesisBank {
             } else {
                 h.progressStreak = 0;
                 h.streakStartZ = Double.NaN;
+            }
+            if (progress) {
+                if (h.termRunTicks == 0) h.termRunStartZ = h.lastZ;
+                h.termRunTicks++;
+            } else if (regressed) {
+                h.termRunTicks = 0;
+                h.termRunStartZ = Double.NaN;
             }
             h.lastZ = p.s();
             h.snappedLast = true;
@@ -217,6 +228,8 @@ public class HypothesisBank {
             h.missStreak++;
             h.progressStreak = 0;
             h.streakStartZ = Double.NaN;
+            h.termRunTicks = 0;
+            h.termRunStartZ = Double.NaN;
             if (h.missStreak >= RESEED_AFTER_CONSECUTIVE_MISSES) {
                 h.seeded = false;
             }
@@ -314,9 +327,11 @@ public class HypothesisBank {
     }
 
     private boolean terminalDepartureConfirmed(Hypothesis h) {
-        return h.progressStreak >= cfg.nTurnConfirmTerm()
-                && !Double.isNaN(h.streakStartZ)
-                && h.lastZ - h.streakStartZ >= cfg.dTurnConfirmTermMeters();
+        double termRunMeters = Double.isNaN(h.termRunStartZ) ? 0.0 : h.lastZ - h.termRunStartZ;
+        boolean movingTicksAccumulated = h.termRunTicks >= cfg.nTurnConfirmTerm()
+                && termRunMeters >= cfg.dTurnConfirmTermMeters();
+        boolean departedFar = termRunMeters >= cfg.dTermEscapeMeters();
+        return movingTicksAccumulated || departedFar;
     }
 
     private long pairedTailPolls;

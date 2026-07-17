@@ -43,7 +43,7 @@ class ParallelRoadTurnContractGateTest {
                 c.mCityFixes(), c.kCityExit(), c.dCityExitDeltaMeters(), c.gCitySpanGapSec(),
                 c.tCityExitMinSpanSec(), c.tPostBoundaryGuardSec(), c.kConfirmPostBoundary(),
                 c.epsMidlineMeters(), c.dOnlineMeters(), c.kOffRouteReacq(), c.minReacqTravelMeters(),
-                c.wTurnWindowMaxMeters(), c.turnTauNomSec(), c.turnVTargetMs());
+                c.wTurnWindowMaxMeters(), c.turnTauNomSec(), c.turnVTargetMs(), c.dTermEscapeMeters());
     }
 
     private static GpsFix fixOnAxis(GeometryFixture g, double s, double speedKmh, long tSec) {
