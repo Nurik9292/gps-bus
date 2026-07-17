@@ -10,6 +10,12 @@ public record RouteSelectOption(
         String routeNumber,
 
         @JsonProperty("route_name")
-        String routeName
+        String routeName,
+
+        @JsonProperty("city_id")
+        String cityId,
+
+        @JsonProperty("city_name")
+        String cityName
 ) {
 }

@@ -119,7 +119,7 @@ public class ImportRouteAssignmentsFromExcelUseCase extends BaseUseCase<Mono<Imp
 
     private Mono<RouteAssignment> processRow(ExcelImportRow row, String assignedBy) {
         return findVehicleByLicensePlate(row.licensePlate())
-                .flatMap(vehicle -> findRouteByNumber(row.routeNumber())
+                .flatMap(vehicle -> findRouteForVehicle(vehicle, row.routeNumber())
                         .flatMap(route -> createAssignment(vehicle, route, row, assignedBy)));
     }
 
@@ -129,7 +129,14 @@ public class ImportRouteAssignmentsFromExcelUseCase extends BaseUseCase<Mono<Imp
                         "Vehicle not found: " + licensePlate)));
     }
 
-    private Mono<BusRoute> findRouteByNumber(String routeNumber) {
+    private Mono<BusRoute> findRouteForVehicle(Vehicle vehicle, String routeNumber) {
+        if (vehicle.getCityId() != null) {
+            return busRouteRepository
+                    .findByRouteNumberAndCityId(routeNumber, vehicle.getCityId().getValue())
+                    .switchIfEmpty(Mono.error(new IllegalArgumentException(
+                            "Route " + routeNumber + " not found in city of vehicle "
+                                    + vehicle.getLicensePlate())));
+        }
         return busRouteRepository.findPreferredByRouteNumber(routeNumber)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException(
                         "Route not found: " + routeNumber)));

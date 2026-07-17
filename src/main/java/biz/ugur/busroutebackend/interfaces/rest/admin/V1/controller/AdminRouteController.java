@@ -91,11 +91,13 @@ public class AdminRouteController extends BasePaginatedController {
  
     @GetMapping("/select-options")
     public Mono<ResponseEntity<ApiResponse<List<RouteSelectOption>>>> getSelectOptions() {
-        return ok(busRouteRepository.findActiveRoutes()
-                .map(route -> new RouteSelectOption(
-                        route.getId().getValue(),
-                        route.getRouteNumber(),
-                        route.getRouteName()
+        return ok(busRouteRepository.findActiveRouteSelectInfo()
+                .map(info -> new RouteSelectOption(
+                        info.id(),
+                        info.routeNumber(),
+                        info.routeName(),
+                        info.cityId(),
+                        info.cityName()
                 ))
                 .collectList());
     }

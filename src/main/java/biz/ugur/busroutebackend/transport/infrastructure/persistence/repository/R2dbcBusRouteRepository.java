@@ -240,6 +240,26 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
 
 
     @Override
+    public Flux<biz.ugur.busroutebackend.transport.domain.valueobject.RouteSelectInfo> findActiveRouteSelectInfo() {
+        String sql = """
+            SELECT br.id, br.route_number, br.route_name, br.city_id, c.name AS city_name
+            FROM bus_routes br
+            LEFT JOIN cities c ON c.id = br.city_id
+            WHERE br.is_active = true
+            ORDER BY c.display_order NULLS LAST, br.route_number
+            """;
+
+        return databaseClient.sql(sql)
+                .map(row -> new biz.ugur.busroutebackend.transport.domain.valueobject.RouteSelectInfo(
+                        row.get("id", String.class),
+                        row.get("route_number", String.class),
+                        row.get("route_name", String.class),
+                        row.get("city_id", String.class),
+                        row.get("city_name", String.class)))
+                .all();
+    }
+
+    @Override
     public Mono<Boolean> existsByRouteNumberAndCityId(String routeNumber, String cityId) {
         String sql = "SELECT COUNT(*) FROM bus_routes WHERE route_number = :routeNumber"
                 + " AND (:cityId::VARCHAR IS NULL OR city_id = :cityId)";
