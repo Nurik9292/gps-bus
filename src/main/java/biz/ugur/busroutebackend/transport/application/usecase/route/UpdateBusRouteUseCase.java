@@ -26,16 +26,19 @@ public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteD
     private final BusRouteRepository busRouteRepository;
     private final RouteStopsService routeStopsService;
     private final RouteDataMapper routeDataMapper;
+    private final biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder;
 
     public UpdateBusRouteUseCase(BusRouteRepository busRouteRepository,
                                  EventBus eventBus,
                                  CorrelationContextService correlationService,
                                  RouteStopsService routeStopsService,
-                                 RouteDataMapper routeDataMapper) {
+                                 RouteDataMapper routeDataMapper,
+                                 biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder) {
         super(correlationService, eventBus);
         this.busRouteRepository = busRouteRepository;
         this.routeStopsService = routeStopsService;
         this.routeDataMapper = routeDataMapper;
+        this.nameHistoryRecorder = nameHistoryRecorder;
     }
 
 
@@ -91,7 +94,9 @@ public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteD
             updatedRoute = updateRouteGeometry(updatedRoute, command);
         }
 
-        return busRouteRepository.save(updatedRoute);
+        return busRouteRepository.save(updatedRoute)
+                .flatMap(saved -> nameHistoryRecorder.recordRouteChanges(exsistBusRoute, saved)
+                        .thenReturn(saved));
     }
 
 

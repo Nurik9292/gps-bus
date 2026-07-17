@@ -35,6 +35,8 @@ public class AdminRouteController extends BasePaginatedController {
     private final GetRouteByIdUseCase getRouteByIdUseCase;
     private final BusRouteRepository busRouteRepository;
     private final RouteGeometryCache routeGeometryCache;
+    private final biz.ugur.busroutebackend.transport.application.usecase.route.RestoreRouteNameUseCase restoreRouteNameUseCase;
+    private final biz.ugur.busroutebackend.transport.domain.repository.NameHistoryRepository nameHistoryRepository;
 
 
     public AdminRouteController(CreateBusRouteUseCase createBusRouteUseCase,
@@ -46,6 +48,8 @@ public class AdminRouteController extends BasePaginatedController {
                                 GetRouteByIdUseCase getRouteByIdUseCase,
                                 BusRouteRepository busRouteRepository,
                                 RouteGeometryCache routeGeometryCache,
+                                biz.ugur.busroutebackend.transport.application.usecase.route.RestoreRouteNameUseCase restoreRouteNameUseCase,
+                                biz.ugur.busroutebackend.transport.domain.repository.NameHistoryRepository nameHistoryRepository,
                                 MessageSource messageSource) {
         super(messageSource);
         this.createBusRouteUseCase = createBusRouteUseCase;
@@ -57,6 +61,8 @@ public class AdminRouteController extends BasePaginatedController {
         this.getRouteByIdUseCase = getRouteByIdUseCase;
         this.busRouteRepository = busRouteRepository;
         this.routeGeometryCache = routeGeometryCache;
+        this.restoreRouteNameUseCase = restoreRouteNameUseCase;
+        this.nameHistoryRepository = nameHistoryRepository;
     }
 
     @Override
@@ -149,6 +155,26 @@ public class AdminRouteController extends BasePaginatedController {
     public Mono<ResponseEntity<Void>> refreshRouteCache(@PathVariable String routeNumber) {
         return routeGeometryCache.refreshRoute(routeNumber)
                 .then(noContent());
+    }
+
+    public record RestoreNameRequest(String field) {
+    }
+
+    @GetMapping("/{routeId}/name-history")
+    public Mono<ResponseEntity<ApiResponse<java.util.List<biz.ugur.busroutebackend.transport.application.dto.NameChangeResult>>>> getNameHistory(
+            @PathVariable String routeId) {
+        return ok(nameHistoryRepository
+                .findByEntity(biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder.KIND_ROUTE, routeId)
+                .map(biz.ugur.busroutebackend.transport.application.dto.NameChangeResult::fromDomain)
+                .collectList());
+    }
+
+    @PostMapping("/{routeId}/name-history/restore")
+    public Mono<ResponseEntity<ApiResponse<BusRouteResponse>>> restoreName(@PathVariable String routeId,
+            @RequestBody RestoreNameRequest request) {
+        return ok(Mono.just(new biz.ugur.busroutebackend.transport.application.usecase.route.RestoreRouteNameUseCase.Query(routeId, request.field()))
+                .as(restoreRouteNameUseCase::execute)
+                .map(this::toBasic));
     }
 
     private BusRouteResponse toBasic(RouteData  routeData) {

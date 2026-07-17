@@ -29,12 +29,16 @@ public class AdminStopController extends BasePaginatedController {
     private final GetBusStopByIdUseCase getBusStopByIdUseCase;
     private final UpdateBusStopUseCase updateBusStopUseCase;
     private final DeleteBusStopUseCase deleteBusStopUseCase;
+    private final biz.ugur.busroutebackend.transport.application.usecase.stop.RestoreStopNameUseCase restoreStopNameUseCase;
+    private final biz.ugur.busroutebackend.transport.domain.repository.NameHistoryRepository nameHistoryRepository;
 
     public AdminStopController(CreateBusStopUseCase createBusStopUseCase,
                                GetAllBusStopsUseCase getAllBusStopsUseCase,
                                GetBusStopByIdUseCase getBusStopByIdUseCase,
                                UpdateBusStopUseCase updateBusStopUseCase,
                                DeleteBusStopUseCase deleteBusStopUseCase,
+                               biz.ugur.busroutebackend.transport.application.usecase.stop.RestoreStopNameUseCase restoreStopNameUseCase,
+                               biz.ugur.busroutebackend.transport.domain.repository.NameHistoryRepository nameHistoryRepository,
                                MessageSource messageSource) {
         super(messageSource);
 
@@ -43,6 +47,8 @@ public class AdminStopController extends BasePaginatedController {
         this.getBusStopByIdUseCase = getBusStopByIdUseCase;
         this.updateBusStopUseCase = updateBusStopUseCase;
         this.deleteBusStopUseCase = deleteBusStopUseCase;
+        this.restoreStopNameUseCase = restoreStopNameUseCase;
+        this.nameHistoryRepository = nameHistoryRepository;
     }
 
     @Override
@@ -97,6 +103,26 @@ public class AdminStopController extends BasePaginatedController {
         return Mono.just(stopId)
                 .as(deleteBusStopUseCase::execute)
                 .then(noContent());
+    }
+
+    public record RestoreNameRequest(String field) {
+    }
+
+    @GetMapping("/{stopId}/name-history")
+    public Mono<ResponseEntity<ApiResponse<java.util.List<biz.ugur.busroutebackend.transport.application.dto.NameChangeResult>>>> getNameHistory(
+            @PathVariable String stopId) {
+        return ok(nameHistoryRepository
+                .findByEntity(biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder.KIND_STOP, stopId)
+                .map(biz.ugur.busroutebackend.transport.application.dto.NameChangeResult::fromDomain)
+                .collectList());
+    }
+
+    @PostMapping("/{stopId}/name-history/restore")
+    public Mono<ResponseEntity<ApiResponse<BusStopResponse>>> restoreName(@PathVariable String stopId,
+            @RequestBody RestoreNameRequest request) {
+        return ok(Mono.just(new biz.ugur.busroutebackend.transport.application.usecase.stop.RestoreStopNameUseCase.Query(stopId, request.field()))
+                .as(restoreStopNameUseCase::execute)
+                .map(this::toBasic));
     }
 
     private BusStopResponse toBasic (StopData stopData) {

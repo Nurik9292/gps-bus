@@ -38,6 +38,15 @@ class UpdateBusRouteUseCaseTest {
     private BusRouteRepository busRouteRepository;
 
     @Mock
+    private biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubNameHistory() {
+        org.mockito.Mockito.lenient().when(nameHistoryRecorder.recordRouteChanges(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(reactor.core.publisher.Mono.empty());
+    }
+
+    @Mock
     private RouteStopsService routeStopsService;
 
     @Mock

@@ -35,6 +35,9 @@ class UpdateBusStopUseCaseTest {
     private BusStopRepository busStopRepository;
 
     @Mock
+    private biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder;
+
+    @Mock
     private CorrelationContextService correlationService;
 
     @Mock
@@ -44,6 +47,8 @@ class UpdateBusStopUseCaseTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(nameHistoryRecorder.recordStopChanges(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(reactor.core.publisher.Mono.empty());
         existing = BusStop.create(
                 "Central Station", "Central EN", "Merkez", StopCode.of("AS001"),
                 new BigDecimal("37.96"), new BigDecimal("58.33"),

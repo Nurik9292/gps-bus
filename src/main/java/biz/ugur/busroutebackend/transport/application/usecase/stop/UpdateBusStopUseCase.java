@@ -20,12 +20,15 @@ import java.math.BigDecimal;
 public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopData> {
 
     private final BusStopRepository busStopRepository;
+    private final biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder;
 
     public UpdateBusStopUseCase(BusStopRepository busStopRepository,
+                                biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder,
                                 EventBus eventBus,
                                 CorrelationContextService correlationService) {
         super(correlationService, eventBus);
         this.busStopRepository = busStopRepository;
+        this.nameHistoryRecorder = nameHistoryRecorder;
     }
 
     @Override
@@ -75,7 +78,9 @@ public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopData
                     command.cityId()
             );
 
-            return busStopRepository.save(updatedStop);
+            return busStopRepository.save(updatedStop)
+                    .flatMap(saved -> nameHistoryRecorder.recordStopChanges(existingStop, saved)
+                            .thenReturn(saved));
         } catch (Exception e) {
             return Mono.error(e);
         }
