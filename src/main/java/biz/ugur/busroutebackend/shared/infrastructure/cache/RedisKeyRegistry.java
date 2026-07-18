@@ -179,4 +179,15 @@ public final class RedisKeyRegistry {
         private Prediction() {
         }
     }
+
+    public static final class Segments {
+        public static final String LIVE_TRAVEL_PREFIX = "segment:live:travel";
+
+        public static String liveTravel(String fromStopId, String toStopId) {
+            return LIVE_TRAVEL_PREFIX + ":" + fromStopId + ":" + toStopId;
+        }
+
+        private Segments() {
+        }
+    }
 }
