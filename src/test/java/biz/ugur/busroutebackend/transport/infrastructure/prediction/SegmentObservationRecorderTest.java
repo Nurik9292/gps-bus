@@ -42,6 +42,8 @@ class SegmentObservationRecorderTest {
     @Mock
     private SegmentLiveStateRepository liveRepository;
     @Mock
+    private biz.ugur.busroutebackend.transport.domain.repository.TerminalDwellStatsRepository terminalDwellRepository;
+    @Mock
     private RouteLine geom;
 
     private EtaLiveFactorProperties properties;
@@ -75,8 +77,11 @@ class SegmentObservationRecorderTest {
                         return shadowService;
                     }
                 };
+        when(terminalDwellRepository.findByKey(anyString(), anyInt(), anyInt(), anyBoolean()))
+                .thenReturn(Mono.empty());
+        when(terminalDwellRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
         recorder = new SegmentObservationRecorder(
-                provider, historyRepository, liveRepository, properties);
+                provider, historyRepository, liveRepository, terminalDwellRepository, properties);
         when(historyRepository.findByKey(anyString(), anyInt(), anyString(), anyString(),
                 anyInt(), anyBoolean())).thenReturn(Mono.empty());
         when(historyRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
@@ -215,9 +220,34 @@ class SegmentObservationRecorderTest {
                     }
                 };
         SegmentObservationRecorder detached = new SegmentObservationRecorder(
-                absent, historyRepository, liveRepository, properties);
+                absent, historyRepository, liveRepository, terminalDwellRepository, properties);
         org.assertj.core.api.Assertions.assertThatCode(detached::register)
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void terminalDwellIsRecordedBetweenLastStopArrivalAndTripBoundary() {
+        tick("57", 0, 2850.0);
+        tick("57", 20, 2995.0);
+        recorder.onTick(fix("57", 320), geom, 100.0, 1, 2, List.of());
+
+        ArgumentCaptor<biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat> saved =
+                ArgumentCaptor.forClass(
+                        biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat.class);
+        verify(terminalDwellRepository, timeout(2000)).save(saved.capture());
+        assertThat(saved.getValue().getRouteNumber()).isEqualTo("57");
+        assertThat(saved.getValue().getDirection()).isZero();
+        assertThat(saved.getValue().getAvgDwellSeconds())
+                .isCloseTo(301.4, org.assertj.core.data.Offset.offset(1.0));
+    }
+
+    @Test
+    void shortTerminalTouchIsNotRecorded() {
+        tick("57", 0, 2850.0);
+        tick("57", 20, 2995.0);
+        recorder.onTick(fix("57", 40), geom, 100.0, 1, 2, List.of());
+
+        verify(terminalDwellRepository, never()).save(any());
     }
 
     @Test
