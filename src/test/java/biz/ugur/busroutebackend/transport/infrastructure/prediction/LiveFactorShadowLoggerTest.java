@@ -38,6 +38,7 @@ class LiveFactorShadowLoggerTest {
 
     private biz.ugur.busroutebackend.transport.infrastructure.config.EtaLiveFactorProperties properties;
     private LiveFactorShadowLogger logger;
+    private LiveFactorSnapshotHolder holder;
 
     private static final Instant NOW = Instant.parse("2026-07-18T05:30:00Z");
 
@@ -46,8 +47,31 @@ class LiveFactorShadowLoggerTest {
         properties = new biz.ugur.busroutebackend.transport.infrastructure.config.EtaLiveFactorProperties();
         properties.setMode(
                 biz.ugur.busroutebackend.transport.infrastructure.config.EtaLiveFactorProperties.Mode.SHADOW);
+        org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.prediction.shadow.V31ShadowService> noShadow =
+                new org.springframework.beans.factory.ObjectProvider<>() {
+                    @Override
+                    public biz.ugur.busroutebackend.prediction.shadow.V31ShadowService getObject() {
+                        throw new IllegalStateException("no bean");
+                    }
+
+                    @Override
+                    public biz.ugur.busroutebackend.prediction.shadow.V31ShadowService getIfAvailable() {
+                        return null;
+                    }
+
+                    @Override
+                    public biz.ugur.busroutebackend.prediction.shadow.V31ShadowService getIfUnique() {
+                        return null;
+                    }
+
+                    @Override
+                    public biz.ugur.busroutebackend.prediction.shadow.V31ShadowService getObject(Object... args) {
+                        throw new IllegalStateException("no bean");
+                    }
+                };
+        holder = new LiveFactorSnapshotHolder();
         logger = new LiveFactorShadowLogger(liveRepository, historyRepository, properties,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC), holder, noShadow);
     }
 
     @Test
@@ -87,6 +111,30 @@ class LiveFactorShadowLoggerTest {
         StepVerifier.create(logger.collectFactors())
                 .assertNext(factors -> assertThat(factors).isEmpty())
                 .verifyComplete();
+    }
+
+    @Test
+    void shadowModePublishesEmptyFactors() {
+        holder.publish(java.util.Map.of("X|Y", 2.0));
+        reactor.test.StepVerifier.create(logger.applyIfLive(List.of(
+                        new LiveFactorShadowLogger.EdgeFactor("A", "B", 90, 5, 60, 20, 1.5))))
+                .expectNextCount(1)
+                .verifyComplete();
+        org.assertj.core.api.Assertions.assertThat(holder.size()).isZero();
+    }
+
+    @Test
+    void liveModePublishesFactorsAndBuildsSnapshot() {
+        properties.setMode(
+                biz.ugur.busroutebackend.transport.infrastructure.config.EtaLiveFactorProperties.Mode.LIVE);
+        when(historyRepository.findByHourAndWeekend(anyInt(), anyBoolean()))
+                .thenReturn(reactor.core.publisher.Flux.empty());
+        reactor.test.StepVerifier.create(logger.applyIfLive(List.of(
+                        new LiveFactorShadowLogger.EdgeFactor("A", "B", 90, 5, 60, 20, 1.5))))
+                .expectNextCount(1)
+                .verifyComplete();
+        org.assertj.core.api.Assertions.assertThat(holder.factor("A", "B")).isEqualTo(1.5);
+        org.assertj.core.api.Assertions.assertThat(holder.factor("X", "Y")).isEqualTo(1.0);
     }
 
     @Test

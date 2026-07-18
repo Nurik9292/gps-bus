@@ -1,8 +1,12 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
+import biz.ugur.busroutebackend.prediction.core.MotionFilterCore;
+import biz.ugur.busroutebackend.prediction.core.history.SegmentDwellHistory;
+import biz.ugur.busroutebackend.prediction.shadow.V31ShadowService;
 import biz.ugur.busroutebackend.transport.domain.repository.SegmentLiveStateRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.SegmentTravelStatsRepository;
 import biz.ugur.busroutebackend.transport.infrastructure.config.EtaLiveFactorProperties;
+import org.springframework.beans.factory.ObjectProvider;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -34,17 +38,23 @@ public class LiveFactorShadowLogger {
     private final SegmentTravelStatsRepository historyRepository;
     private final EtaLiveFactorProperties properties;
     private final Clock clock;
+    private final LiveFactorSnapshotHolder snapshotHolder;
+    private final ObjectProvider<V31ShadowService> shadowService;
 
     private Disposable ticker;
 
     public LiveFactorShadowLogger(SegmentLiveStateRepository liveRepository,
                                   SegmentTravelStatsRepository historyRepository,
                                   EtaLiveFactorProperties properties,
-                                  Clock clock) {
+                                  Clock clock,
+                                  LiveFactorSnapshotHolder snapshotHolder,
+                                  ObjectProvider<V31ShadowService> shadowService) {
         this.liveRepository = liveRepository;
         this.historyRepository = historyRepository;
         this.properties = properties;
         this.clock = clock;
+        this.snapshotHolder = snapshotHolder;
+        this.shadowService = shadowService;
     }
 
     record EdgeFactor(String fromStopId, String toStopId,
@@ -62,6 +72,7 @@ public class LiveFactorShadowLogger {
                 .concatMap(t -> collectFactors()
                         .timeout(TICK_TIMEOUT)
                         .doOnNext(this::logSummary)
+                        .flatMap(this::applyIfLive)
                         .onErrorResume(err -> {
                             log.warn("[ETA_LIVE_FACTOR] тик не удался: {}", err.getMessage());
                             return Mono.empty();
@@ -99,6 +110,47 @@ public class LiveFactorShadowLogger {
                                         clamp(snap.emaSeconds() / base.weightedAvgSeconds()))),
                         EDGE_CONCURRENCY)
                 .collectList();
+    }
+
+    Mono<List<EdgeFactor>> applyIfLive(List<EdgeFactor> factors) {
+        if (properties.getMode() != EtaLiveFactorProperties.Mode.LIVE) {
+            snapshotHolder.publish(java.util.Map.of());
+            return Mono.just(factors);
+        }
+        java.util.Map<String, Double> byEdge = new java.util.HashMap<>();
+        for (EdgeFactor f : factors) {
+            byEdge.put(SegmentDwellHistory.edgeKey(f.fromStopId(), f.toStopId()), f.factor());
+        }
+        snapshotHolder.publish(byEdge);
+        ZonedDateTime now = ZonedDateTime.ofInstant(clock.instant(), ASHGABAT);
+        int hour = now.getHour();
+        boolean weekend = now.getDayOfWeek().getValue() >= 6;
+        return historyRepository.findByHourAndWeekend(hour, weekend)
+                .collectMap(
+                        stat -> SegmentDwellHistory.segKey(stat.getFromStopId(),
+                                stat.getToStopId(), hour, weekend),
+                        stat -> new SegmentDwellHistory.Stat(
+                                stat.getAvgTravelSeconds(), (int) stat.getSampleCount()),
+                        java.util.HashMap::new)
+                .map(seg -> new SegmentDwellHistory(java.util.Map.of(), seg, byEdge))
+                .doOnNext(this::distributeToCores)
+                .thenReturn(factors);
+    }
+
+    private void distributeToCores(SegmentDwellHistory snapshot) {
+        V31ShadowService shadow = shadowService.getIfAvailable();
+        if (shadow == null) {
+            return;
+        }
+        int n = 0;
+        for (MotionFilterCore core : shadow.coresView().values()) {
+            synchronized (core) {
+                core.withHistory(snapshot);
+            }
+            n++;
+        }
+        log.debug("[ETA_LIVE_FACTOR] снапшот роздан {} ядрам (сегментов={}, факторов={})",
+                n, snapshot.segTravelByKey().size(), snapshot.liveFactorByEdge().size());
     }
 
     private double clamp(double factor) {

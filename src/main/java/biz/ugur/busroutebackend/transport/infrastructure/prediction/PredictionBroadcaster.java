@@ -38,18 +38,22 @@ public class PredictionBroadcaster {
     private final ConcurrentHashMap<String, Double> lastMotionCourse = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Integer> lastBroadcastDirection = new ConcurrentHashMap<>();
 
+    private final LiveFactorSnapshotHolder liveFactorSnapshotHolder;
+
     public PredictionBroadcaster(DirectVehiclePositionBroadcaster directBroadcaster,
                                   RouteGeometryCache routeGeometryCache,
                                   ETAProperties etaProperties,
                                   PredictionProperties properties,
                                   @Lazy VehiclePositionPredictor predictor,
-                                  biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer) {
+                                  biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer,
+                                  LiveFactorSnapshotHolder liveFactorSnapshotHolder) {
         this.directBroadcaster = directBroadcaster;
         this.routeGeometryCache = routeGeometryCache;
         this.etaProperties = etaProperties;
         this.properties = properties;
         this.predictor = predictor;
         this.pipelineTracer = pipelineTracer;
+        this.liveFactorSnapshotHolder = liveFactorSnapshotHolder;
     }
 
     public double[] getLastBroadcastPosition(String vehicleId) {
@@ -416,6 +420,17 @@ public class PredictionBroadcaster {
         return new double[]{baseLat + dLat, baseLon + dLon};
     }
 
+        private static final int LIVE_FACTOR_HORIZON_SEGMENTS = 5;
+
+    private static double horizonDampedLiveFactor(double factor, int segmentIndexAhead) {
+        if (segmentIndexAhead >= LIVE_FACTOR_HORIZON_SEGMENTS) {
+            return 1.0;
+        }
+        double weight = (LIVE_FACTOR_HORIZON_SEGMENTS - segmentIndexAhead)
+                / (double) LIVE_FACTOR_HORIZON_SEGMENTS;
+        return 1.0 + (factor - 1.0) * weight;
+    }
+
     private List<NextStopEta> computeNextStopsEta(VehiclePredictionState state, int maxStops) {
         if (!state.isDirectionConfirmed()) {
             return List.of();
@@ -469,6 +484,11 @@ public class PredictionBroadcaster {
                 segmentSeconds = historical.getAvgTravelSeconds();
             } else {
                 segmentSeconds = (distMeters / 1000.0 / effectiveSpeed) * 3600.0 * trafficMult;
+            }
+            if (prevStopId != null) {
+                segmentSeconds *= horizonDampedLiveFactor(
+                        liveFactorSnapshotHolder.factor(prevStopId, stop.getStopId()),
+                        etas.size());
             }
 
             cumulativeSeconds += segmentSeconds;

@@ -117,6 +117,20 @@ public class R2dbcSegmentTravelStatsRepository implements SegmentTravelStatsRepo
     }
 
     @Override
+    public Flux<SegmentTravelStat> findByHourAndWeekend(int hourOfDay, boolean weekend) {
+        String sql = "SELECT " + SELECT_COLUMNS + """
+                FROM segment_travel_stats
+                WHERE hour_of_day = :hourOfDay
+                  AND is_weekend = :weekend
+                """;
+        return databaseClient.sql(sql)
+                .bind("hourOfDay", hourOfDay)
+                .bind("weekend", weekend)
+                .map(this::mapRow)
+                .all();
+    }
+
+    @Override
     public Mono<SegmentBaseline> findEdgeBaseline(String fromStopId, String toStopId,
                                                   int hourOfDay, boolean weekend) {
         String sql = """

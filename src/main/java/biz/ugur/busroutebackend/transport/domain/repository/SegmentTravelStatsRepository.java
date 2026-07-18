@@ -17,4 +17,6 @@ public interface SegmentTravelStatsRepository {
 
     Mono<SegmentBaseline> findEdgeBaseline(String fromStopId, String toStopId,
                                            int hourOfDay, boolean weekend);
+
+    Flux<SegmentTravelStat> findByHourAndWeekend(int hourOfDay, boolean weekend);
 }

@@ -47,7 +47,7 @@ class PredictionBroadcasterGlideTest {
         broadcaster = new PredictionBroadcaster(
                 directBroadcaster, routeGeometryCache, etaProperties,
                 properties, org.mockito.Mockito.mock(VehiclePositionPredictor.class),
-                new PipelineTracer());
+                new PipelineTracer(), new LiveFactorSnapshotHolder());
         lenient().when(routeGeometryCache.getStopsAhead(anyString(), anyInt(), anyDouble()))
                 .thenReturn(List.of());
     }

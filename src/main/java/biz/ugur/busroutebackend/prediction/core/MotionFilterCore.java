@@ -1343,7 +1343,9 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             double dist = legDistance(sStop, from, g, prevStopId == null);
             if (prevStopId != null) {
                 var hist = history.segTravelSec(prevStopId, sp.stopId(), hourBin, weekend, cfg.historyNMin());
-                t += hist.isPresent() ? hist.getAsDouble() : segmentTimeStopToStop(dist, vCruise, a);
+                double segSec = hist.isPresent() ? hist.getAsDouble() : segmentTimeStopToStop(dist, vCruise, a);
+                t += segSec * horizonDampedFactor(
+                        history.liveFactor(prevStopId, sp.stopId()), out.size());
             } else if (k == 0 && mode != Mode.DWELL) {
                 t += timeToStopKinematic(dist, vNow, vCruise, a);
             } else {
@@ -1359,6 +1361,17 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             prevStopId = sp.stopId();
         }
         lastEtas = java.util.List.copyOf(out);
+    }
+
+    private static final int LIVE_FACTOR_HORIZON_SEGMENTS = 5;
+
+    private static double horizonDampedFactor(double factor, int segmentIndexAhead) {
+        if (segmentIndexAhead >= LIVE_FACTOR_HORIZON_SEGMENTS) {
+            return 1.0;
+        }
+        double weight = (LIVE_FACTOR_HORIZON_SEGMENTS - segmentIndexAhead)
+                / (double) LIVE_FACTOR_HORIZON_SEGMENTS;
+        return 1.0 + (factor - 1.0) * weight;
     }
 
     private double legDistance(double toS, double fromS, RouteLine g, boolean firstLeg) {
