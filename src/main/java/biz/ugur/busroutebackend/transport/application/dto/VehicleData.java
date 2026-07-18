@@ -17,6 +17,7 @@ public record VehicleData(
         String routeNumber,
         Boolean isActive,
         Double course,
+        String cityId,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -34,6 +35,7 @@ public record VehicleData(
                 vehicle.getRouteNumber(),
                 vehicle.getIsActive(),
                 vehicle.getCourse(),
+                vehicle.getCityId() != null ? vehicle.getCityId().getValue() : null,
                 vehicle.getCreatedAt(),
                 vehicle.getUpdatedAt()
         );

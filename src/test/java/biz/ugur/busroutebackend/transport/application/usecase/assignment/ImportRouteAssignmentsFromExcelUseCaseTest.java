@@ -135,19 +135,42 @@ class ImportRouteAssignmentsFromExcelUseCaseTest {
     }
 
     @Test
-    void vehicleWithoutCityFallsBackToPreferredRoute() {
+    void vehicleWithoutCityAndUniqueRouteNumberIsAssigned() {
         stubCorrelation();
         stubHappyTail();
         when(excelParser.parse(FILE)).thenReturn(Mono.just(List.of(row("25"))));
         when(vehicleRepository.findByLicensePlate("1111 AGH"))
                 .thenReturn(Mono.just(vehicleInCity(null)));
-        when(busRouteRepository.findPreferredByRouteNumber("25"))
-                .thenReturn(Mono.just(route("route-ash-25", "25")));
+        when(busRouteRepository.findActiveByRouteNumber("25"))
+                .thenReturn(reactor.core.publisher.Flux.just(route("route-ash-25", "25")));
 
         StepVerifier.create(useCase.execute(Mono.just(new ImportFromExcelCommand(FILE, "op"))))
                 .assertNext(result -> assertThat(result.successCount()).isEqualTo(1))
                 .verifyComplete();
 
-        verify(busRouteRepository).findPreferredByRouteNumber("25");
+        verify(busRouteRepository).findActiveByRouteNumber("25");
+    }
+
+    @Test
+    void vehicleWithoutCityAndAmbiguousRouteNumberFailsRow() {
+        stubCorrelation();
+        when(excelParser.parse(FILE)).thenReturn(Mono.just(List.of(row("1"))));
+        when(vehicleRepository.findByLicensePlate("1111 AGH"))
+                .thenReturn(Mono.just(vehicleInCity(null)));
+        when(busRouteRepository.findActiveByRouteNumber("1"))
+                .thenReturn(reactor.core.publisher.Flux.just(
+                        route("route-ash-1", "1"), route("route-tb-1", "1")));
+
+        StepVerifier.create(useCase.execute(Mono.just(new ImportFromExcelCommand(FILE, "op"))))
+                .assertNext(result -> {
+                    assertThat(result.successCount()).isZero();
+                    assertThat(result.failedCount()).isEqualTo(1);
+                    assertThat(result.failed().get(0).error())
+                            .contains("has no city")
+                            .contains("2 cities");
+                })
+                .verifyComplete();
+
+        verify(assignmentRepository, never()).save(any());
     }
 }

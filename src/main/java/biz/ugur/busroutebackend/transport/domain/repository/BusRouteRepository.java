@@ -19,6 +19,8 @@ public interface BusRouteRepository extends BaseRepository<BusRoute, BusRouteId>
 
     Mono<BusRoute> findPreferredByRouteNumber(String routeNumber);
 
+    Flux<BusRoute> findActiveByRouteNumber(String routeNumber);
+
     Flux<BusRoute> findActiveRoutes();
 
     Flux<biz.ugur.busroutebackend.transport.domain.valueobject.RouteSelectInfo> findActiveRouteSelectInfo();

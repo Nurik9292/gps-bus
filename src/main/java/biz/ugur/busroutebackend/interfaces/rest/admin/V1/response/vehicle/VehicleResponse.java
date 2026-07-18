@@ -42,6 +42,9 @@ public record VehicleResponse(
         @JsonProperty("course")
         Double course,
 
+        @JsonProperty("city_id")
+        String cityId,
+
         @JsonProperty("created_at")
         LocalDateTime createdAt,
 
@@ -62,6 +65,7 @@ public record VehicleResponse(
                 data.routeNumber(),
                 data.isActive(),
                 data.course(),
+                data.cityId(),
                 data.createdAt(),
                 data.updatedAt()
         );
