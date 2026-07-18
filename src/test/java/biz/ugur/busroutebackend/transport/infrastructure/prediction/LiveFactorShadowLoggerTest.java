@@ -164,6 +164,30 @@ class LiveFactorShadowLoggerTest {
     }
 
     @Test
+    void hungApplyPhaseIsCutByTickTimeoutAndNextTicksProceed() {
+        properties.setMode(
+                biz.ugur.busroutebackend.transport.infrastructure.config.EtaLiveFactorProperties.Mode.LIVE);
+        java.util.concurrent.atomic.AtomicInteger scans = new java.util.concurrent.atomic.AtomicInteger();
+        when(liveRepository.scanLiveEdges()).thenAnswer(inv -> {
+            scans.incrementAndGet();
+            return Flux.just(new SegmentLiveSnapshot("A", "B", 90.0, 5, NOW));
+        });
+        when(historyRepository.findEdgeBaseline(anyString(), anyString(), anyInt(), anyBoolean()))
+                .thenReturn(Mono.just(new SegmentBaseline("A", "B", 60.0, 20)));
+        when(historyRepository.findByHourAndWeekend(anyInt(), anyBoolean()))
+                .thenReturn(Flux.never());
+
+        StepVerifier.withVirtualTime(() -> logger.tickerPipeline(
+                        Flux.interval(LiveFactorShadowLogger.TICK_PERIOD,
+                                LiveFactorShadowLogger.TICK_PERIOD)))
+                .expectSubscription()
+                .thenAwait(java.time.Duration.ofMinutes(10))
+                .then(() -> assertThat(scans.get()).isGreaterThanOrEqualTo(5))
+                .thenCancel()
+                .verify(java.time.Duration.ofSeconds(5));
+    }
+
+    @Test
     void scanFailurePropagatesForTickErrorHandling() {
         when(liveRepository.scanLiveEdges())
                 .thenReturn(Flux.error(new RuntimeException("redis down")));

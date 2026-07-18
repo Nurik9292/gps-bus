@@ -68,15 +68,7 @@ public class LiveFactorShadowLogger {
             log.info("[ETA_LIVE_FACTOR] режим OFF — shadow-логгер не запущен");
             return;
         }
-        ticker = Flux.interval(TICK_PERIOD, TICK_PERIOD)
-                .concatMap(t -> collectFactors()
-                        .timeout(TICK_TIMEOUT)
-                        .doOnNext(this::logSummary)
-                        .flatMap(this::applyIfLive)
-                        .onErrorResume(err -> {
-                            log.warn("[ETA_LIVE_FACTOR] тик не удался: {}", err.getMessage());
-                            return Mono.empty();
-                        }))
+        ticker = tickerPipeline(Flux.interval(TICK_PERIOD, TICK_PERIOD))
                 .subscribe(
                         summary -> {
                         },
@@ -84,6 +76,24 @@ public class LiveFactorShadowLogger {
                                 err.getMessage()));
         log.info("[ETA_LIVE_FACTOR] shadow-логгер запущен (режим {}, тик {} c)",
                 properties.getMode(), TICK_PERIOD.toSeconds());
+    }
+
+    Flux<List<EdgeFactor>> tickerPipeline(Flux<Long> ticks) {
+        return ticks
+                .onBackpressureDrop(tick -> log.warn(
+                        "[ETA_LIVE_FACTOR] тик {} пропущен — предыдущий ещё выполняется", tick))
+                .concatMap(t -> wholeTickWithTimeout(), 1);
+    }
+
+    private Mono<List<EdgeFactor>> wholeTickWithTimeout() {
+        return collectFactors()
+                .doOnNext(this::logSummary)
+                .flatMap(this::applyIfLive)
+                .timeout(TICK_TIMEOUT)
+                .onErrorResume(err -> {
+                    log.warn("[ETA_LIVE_FACTOR] тик не удался: {}", err.getMessage());
+                    return Mono.empty();
+                });
     }
 
     @PreDestroy
