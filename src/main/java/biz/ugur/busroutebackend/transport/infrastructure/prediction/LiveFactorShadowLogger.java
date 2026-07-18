@@ -126,13 +126,35 @@ public class LiveFactorShadowLogger {
         int hour = now.getHour();
         boolean weekend = now.getDayOfWeek().getValue() >= 6;
         return historyRepository.findByHourAndWeekend(hour, weekend)
-                .collectMap(
-                        stat -> SegmentDwellHistory.segKey(stat.getFromStopId(),
-                                stat.getToStopId(), hour, weekend),
-                        stat -> new SegmentDwellHistory.Stat(
-                                stat.getAvgTravelSeconds(), (int) stat.getSampleCount()),
-                        java.util.HashMap::new)
-                .map(seg -> new SegmentDwellHistory(java.util.Map.of(), seg, byEdge))
+                .collectMultimap(stat -> SegmentDwellHistory.edgeKey(
+                        stat.getFromStopId(), stat.getToStopId()))
+                .map(byEdgeRows -> {
+                    java.util.Map<String, SegmentDwellHistory.Stat> aggregated =
+                            new java.util.HashMap<>();
+                    byEdgeRows.forEach((edge, rows) -> {
+                        double weighted = 0;
+                        long samples = 0;
+                        for (var stat : rows) {
+                            weighted += stat.getAvgTravelSeconds() * stat.getSampleCount();
+                            samples += stat.getSampleCount();
+                        }
+                        if (samples > 0) {
+                            aggregated.put(edge, new SegmentDwellHistory.Stat(
+                                    weighted / samples, (int) samples));
+                        }
+                    });
+                    return aggregated;
+                })
+                .doOnNext(snapshotHolder::publishBaselines)
+                .map(aggregated -> {
+                    java.util.Map<String, SegmentDwellHistory.Stat> seg = new java.util.HashMap<>();
+                    aggregated.forEach((edge, stat) -> {
+                        int sep = edge.indexOf('|');
+                        seg.put(SegmentDwellHistory.segKey(edge.substring(0, sep),
+                                edge.substring(sep + 1), hour, weekend), stat);
+                    });
+                    return new SegmentDwellHistory(java.util.Map.of(), seg, byEdge);
+                })
                 .doOnNext(this::distributeToCores)
                 .thenReturn(factors);
     }

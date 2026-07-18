@@ -480,8 +480,14 @@ public class PredictionBroadcaster {
                     ? predictor.getSegmentTravelStat(state.getRouteNumber(), state.getDirection(),
                             prevStopId, stop.getStopId(), hourOfDay, weekend)
                     : null;
+            biz.ugur.busroutebackend.prediction.core.history.SegmentDwellHistory.Stat sharedEdge =
+                    prevStopId != null
+                            ? liveFactorSnapshotHolder.edgeBaseline(prevStopId, stop.getStopId())
+                            : null;
             if (historical != null && historical.getSampleCount() >= HISTORICAL_ETA_MIN_SAMPLES) {
                 segmentSeconds = historical.getAvgTravelSeconds();
+            } else if (sharedEdge != null && sharedEdge.n() >= HISTORICAL_ETA_MIN_SAMPLES) {
+                segmentSeconds = sharedEdge.meanSec();
             } else {
                 segmentSeconds = (distMeters / 1000.0 / effectiveSpeed) * 3600.0 * trafficMult;
             }
