@@ -39,12 +39,14 @@ public class SegmentObservationRecorder implements V31StopEventSink {
 
     private record TrackState(String routeNumber, int direction, long tripId,
                               double s, Instant at,
-                              String pendingFromStopId, Instant pendingDepartAt) {
+                              String pendingFromStopId, Instant pendingDepartAt,
+                              Instant terminalArrivedAt) {
     }
 
     private final org.springframework.beans.factory.ObjectProvider<V31ShadowService> shadowService;
     private final SegmentTravelStatsRepository historyRepository;
     private final SegmentLiveStateRepository liveRepository;
+    private final biz.ugur.busroutebackend.transport.domain.repository.TerminalDwellStatsRepository terminalDwellRepository;
     private final EtaLiveFactorProperties properties;
 
     private final Map<String, TrackState> tracks = new ConcurrentHashMap<>();
@@ -58,10 +60,12 @@ public class SegmentObservationRecorder implements V31StopEventSink {
             org.springframework.beans.factory.ObjectProvider<V31ShadowService> shadowService,
             SegmentTravelStatsRepository historyRepository,
             SegmentLiveStateRepository liveRepository,
+            biz.ugur.busroutebackend.transport.domain.repository.TerminalDwellStatsRepository terminalDwellRepository,
             EtaLiveFactorProperties properties) {
         this.shadowService = shadowService;
         this.historyRepository = historyRepository;
         this.liveRepository = liveRepository;
+        this.terminalDwellRepository = terminalDwellRepository;
         this.properties = properties;
     }
 
@@ -103,8 +107,14 @@ public class SegmentObservationRecorder implements V31StopEventSink {
                 && prev.direction() == direction
                 && prev.tripId() == tripId;
         if (!sameRun) {
+            if (prev != null && prev.terminalArrivedAt() != null
+                    && prev.routeNumber().equals(fix.routeNumber())
+                    && prev.direction() != direction) {
+                recordTerminalDwell(prev.routeNumber(), prev.direction(),
+                        prev.terminalArrivedAt(), now);
+            }
             tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
-                    s, now, null, null));
+                    s, now, null, null, null));
             return;
         }
 
@@ -112,20 +122,31 @@ public class SegmentObservationRecorder implements V31StopEventSink {
         if (advance < -BACKWARD_RESET_METERS || advance > MAX_ADVANCE_PER_TICK_METERS) {
             resetsOnJump.incrementAndGet();
             tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
-                    s, now, null, null));
+                    s, now, null, null, prev.terminalArrivedAt()));
             return;
         }
         if (advance <= 0) {
             tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
-                    prev.s(), prev.at(), prev.pendingFromStopId(), prev.pendingDepartAt()));
+                    prev.s(), prev.at(), prev.pendingFromStopId(), prev.pendingDepartAt(),
+                    prev.terminalArrivedAt()));
             return;
         }
 
         String pendingFrom = prev.pendingFromStopId();
         Instant pendingDepartAt = prev.pendingDepartAt();
+        Instant terminalArrivedAt = prev.terminalArrivedAt();
         double tickSpanSec = (now.toEpochMilli() - prev.at().toEpochMilli()) / 1000.0;
+        List<RouteLine.StopPoint> stops = leaderGeom.stops();
+        if (!stops.isEmpty() && terminalArrivedAt == null) {
+            RouteLine.StopPoint last = stops.get(stops.size() - 1);
+            double lastArriveEdge = last.sMeters() - STOP_EDGE_OFFSET_METERS;
+            if (lastArriveEdge > prev.s() && lastArriveEdge <= s) {
+                terminalArrivedAt = interpolate(prev.at(), tickSpanSec, prev.s(), s,
+                        lastArriveEdge);
+            }
+        }
 
-        for (RouteLine.StopPoint stop : leaderGeom.stops()) {
+        for (RouteLine.StopPoint stop : stops) {
             double departEdge = stop.sMeters() + STOP_EDGE_OFFSET_METERS;
             double arriveEdge = stop.sMeters() - STOP_EDGE_OFFSET_METERS;
 
@@ -151,7 +172,39 @@ public class SegmentObservationRecorder implements V31StopEventSink {
         }
 
         tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
-                s, now, pendingFrom, pendingDepartAt));
+                s, now, pendingFrom, pendingDepartAt, terminalArrivedAt));
+    }
+
+    static final double MIN_TERMINAL_DWELL_SECONDS = 30.0;
+    static final double MAX_TERMINAL_DWELL_SECONDS = 3600.0;
+
+    private void recordTerminalDwell(String routeNumber, int arrivedDirection,
+                                     Instant arrivedAt, Instant departedAt) {
+        double dwellSeconds =
+                (departedAt.toEpochMilli() - arrivedAt.toEpochMilli()) / 1000.0;
+        if (dwellSeconds < MIN_TERMINAL_DWELL_SECONDS
+                || dwellSeconds > MAX_TERMINAL_DWELL_SECONDS) {
+            return;
+        }
+        ZonedDateTime local = ZonedDateTime.ofInstant(arrivedAt, ASHGABAT);
+        int hourOfDay = local.getHour();
+        boolean weekend = local.getDayOfWeek().getValue() >= 6;
+        terminalDwellRepository
+                .findByKey(routeNumber, arrivedDirection, hourOfDay, weekend)
+                .map(existing -> existing.withNewSample(dwellSeconds, departedAt))
+                .switchIfEmpty(Mono.defer(() -> Mono.just(
+                        biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat
+                                .initial(routeNumber, arrivedDirection, hourOfDay, weekend)
+                                .withNewSample(dwellSeconds, departedAt))))
+                .flatMap(terminalDwellRepository::save)
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe(
+                        null,
+                        err -> log.warn("[SEGMENT_OBS] запись отстоя {} d{} не удалась: {}",
+                                routeNumber, arrivedDirection, err.getMessage()));
+        log.debug("[SEGMENT_OBS] терминальный отстой {} d{} = {}s (hour={} weekend={})",
+                routeNumber, arrivedDirection,
+                String.format(java.util.Locale.ROOT, "%.0f", dwellSeconds), hourOfDay, weekend);
     }
 
     private static Instant interpolate(Instant fromAt, double spanSec,
