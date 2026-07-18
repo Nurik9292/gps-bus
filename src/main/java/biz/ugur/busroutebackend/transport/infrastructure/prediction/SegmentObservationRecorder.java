@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
+import biz.ugur.busroutebackend.prediction.core.RouteLine;
 import biz.ugur.busroutebackend.prediction.core.StopAware;
 import biz.ugur.busroutebackend.prediction.shadow.V31Fix;
 import biz.ugur.busroutebackend.prediction.shadow.V31ShadowService;
@@ -15,13 +16,13 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Component
 public class SegmentObservationRecorder implements V31StopEventSink {
@@ -30,10 +31,15 @@ public class SegmentObservationRecorder implements V31StopEventSink {
     private static final ZoneId ASHGABAT = ZoneId.of("Asia/Ashgabat");
     static final double MIN_TRAVEL_SECONDS = 10.0;
     static final double MAX_TRAVEL_SECONDS = 1800.0;
-    private static final Duration STATE_EXPIRY = Duration.ofMinutes(30);
+    static final double STOP_EDGE_OFFSET_METERS = 15.0;
+    static final double MAX_ADVANCE_PER_TICK_METERS = 2000.0;
+    static final double BACKWARD_RESET_METERS = 30.0;
+    static final double SINGLE_TICK_SPAN_LIMIT_SECONDS = 45.0;
+    private static final long SUMMARY_EVERY_TICKS = 20_000;
 
-    private record DepartureState(String routeNumber, int direction, long tripId,
-                                  String stopId, Instant at) {
+    private record TrackState(String routeNumber, int direction, long tripId,
+                              double s, Instant at,
+                              String pendingFromStopId, Instant pendingDepartAt) {
     }
 
     private final V31ShadowService shadowService;
@@ -41,7 +47,12 @@ public class SegmentObservationRecorder implements V31StopEventSink {
     private final SegmentLiveStateRepository liveRepository;
     private final EtaLiveFactorProperties properties;
 
-    private final Map<String, DepartureState> departures = new ConcurrentHashMap<>();
+    private final Map<String, TrackState> tracks = new ConcurrentHashMap<>();
+    private final AtomicLong ticksSeen = new AtomicLong();
+    private final AtomicLong crossingsSeen = new AtomicLong();
+    private final AtomicLong observationsWritten = new AtomicLong();
+    private final AtomicLong droppedOutOfRange = new AtomicLong();
+    private final AtomicLong resetsOnJump = new AtomicLong();
 
     public SegmentObservationRecorder(V31ShadowService shadowService,
                                       SegmentTravelStatsRepository historyRepository,
@@ -56,85 +67,121 @@ public class SegmentObservationRecorder implements V31StopEventSink {
     @PostConstruct
     void register() {
         shadowService.stopEventSink(this);
-        log.info("[SEGMENT_OBS] писатель сегментных наблюдений подключён к v31-стоп-событиям");
+        log.info("[SEGMENT_OBS] детектор пересечений остановок подключён к v31-тикам");
     }
 
     @Override
-    public void accept(V31Fix fix, int direction, long tripId, List<StopAware.StopEvent> events) {
+    public void onTick(V31Fix fix, RouteLine leaderGeom, double s, int direction, long tripId,
+                       List<StopAware.StopEvent> events) {
         if (!properties.isWriteEnabled()) {
             return;
         }
         if (properties.isAxisExcluded(fix.routeNumber(), direction)) {
-            departures.remove(fix.vehicleId());
+            tracks.remove(fix.vehicleId());
             return;
         }
-        for (StopAware.StopEvent event : events) {
-            handle(fix, direction, tripId, event);
+        long ticks = ticksSeen.incrementAndGet();
+        if (ticks % SUMMARY_EVERY_TICKS == 0) {
+            log.info("[SEGMENT_OBS] сводка: тиков={} пересечений={} наблюдений={} "
+                            + "отброшено={} сбросов-скачков={}",
+                    ticks, crossingsSeen.get(), observationsWritten.get(),
+                    droppedOutOfRange.get(), resetsOnJump.get());
         }
-    }
 
-    private void handle(V31Fix fix, int direction, long tripId, StopAware.StopEvent event) {
         String vehicleId = fix.vehicleId();
-        switch (event.type()) {
-            case DWELL_ENTER -> {
-                arriveAt(fix, direction, tripId, event);
-                departures.remove(vehicleId);
+        Instant now = fix.timestamp();
+        TrackState prev = tracks.get(vehicleId);
+
+        boolean sameRun = prev != null
+                && prev.routeNumber().equals(fix.routeNumber())
+                && prev.direction() == direction
+                && prev.tripId() == tripId;
+        if (!sameRun) {
+            tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
+                    s, now, null, null));
+            return;
+        }
+
+        double advance = s - prev.s();
+        if (advance < -BACKWARD_RESET_METERS || advance > MAX_ADVANCE_PER_TICK_METERS) {
+            resetsOnJump.incrementAndGet();
+            tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
+                    s, now, null, null));
+            return;
+        }
+        if (advance <= 0) {
+            tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
+                    prev.s(), prev.at(), prev.pendingFromStopId(), prev.pendingDepartAt()));
+            return;
+        }
+
+        String pendingFrom = prev.pendingFromStopId();
+        Instant pendingDepartAt = prev.pendingDepartAt();
+        double tickSpanSec = (now.toEpochMilli() - prev.at().toEpochMilli()) / 1000.0;
+
+        for (RouteLine.StopPoint stop : leaderGeom.stops()) {
+            double departEdge = stop.sMeters() + STOP_EDGE_OFFSET_METERS;
+            double arriveEdge = stop.sMeters() - STOP_EDGE_OFFSET_METERS;
+
+            if (arriveEdge > prev.s() && arriveEdge <= s && pendingFrom != null
+                    && !pendingFrom.equals(stop.stopId())) {
+                Instant arrivedAt = interpolate(prev.at(), tickSpanSec, prev.s(), s, arriveEdge);
+                crossingsSeen.incrementAndGet();
+                boolean departWithinSameTick = !pendingDepartAt.isBefore(prev.at());
+                if (departWithinSameTick && tickSpanSec > SINGLE_TICK_SPAN_LIMIT_SECONDS) {
+                    droppedOutOfRange.incrementAndGet();
+                } else {
+                    record(fix.routeNumber(), direction, pendingFrom, stop.stopId(),
+                            pendingDepartAt, arrivedAt);
+                }
+                pendingFrom = null;
+                pendingDepartAt = null;
             }
-            case SKIP -> {
-                arriveAt(fix, direction, tripId, event);
-                departures.put(vehicleId, new DepartureState(
-                        fix.routeNumber(), direction, tripId, event.stopId(), event.at()));
-            }
-            case DWELL_EXIT -> departures.put(vehicleId, new DepartureState(
-                    fix.routeNumber(), direction, tripId, event.stopId(), event.at()));
-            case AT_TERMINAL -> departures.remove(vehicleId);
-            case DECEL_ENTER, DWELL_OUTLIER -> {
+            if (departEdge > prev.s() && departEdge <= s) {
+                pendingFrom = stop.stopId();
+                pendingDepartAt = interpolate(prev.at(), tickSpanSec, prev.s(), s, departEdge);
+                crossingsSeen.incrementAndGet();
             }
         }
+
+        tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
+                s, now, pendingFrom, pendingDepartAt));
     }
 
-    private void arriveAt(V31Fix fix, int direction, long tripId, StopAware.StopEvent arrival) {
-        DepartureState departure = departures.get(fix.vehicleId());
-        if (departure == null
-                || !departure.routeNumber().equals(fix.routeNumber())
-                || departure.direction() != direction
-                || departure.tripId() != tripId
-                || departure.stopId().equals(arrival.stopId())) {
-            return;
-        }
-        if (Duration.between(departure.at(), arrival.at()).compareTo(STATE_EXPIRY) > 0) {
-            return;
-        }
+    private static Instant interpolate(Instant fromAt, double spanSec,
+                                       double fromS, double toS, double atS) {
+        double f = toS - fromS <= 0 ? 0.0 : (atS - fromS) / (toS - fromS);
+        return fromAt.plusMillis(Math.round(f * spanSec * 1000.0));
+    }
+
+    private void record(String routeNumber, int direction, String fromStopId, String toStopId,
+                        Instant departedAt, Instant arrivedAt) {
         double elapsedSeconds =
-                (arrival.at().toEpochMilli() - departure.at().toEpochMilli()) / 1000.0;
+                (arrivedAt.toEpochMilli() - departedAt.toEpochMilli()) / 1000.0;
         if (elapsedSeconds < MIN_TRAVEL_SECONDS || elapsedSeconds > MAX_TRAVEL_SECONDS) {
+            droppedOutOfRange.incrementAndGet();
             return;
         }
-        persist(fix.routeNumber(), direction, departure.stopId(), arrival.stopId(),
-                elapsedSeconds, arrival.at());
-    }
-
-    private void persist(String routeNumber, int direction, String fromStopId, String toStopId,
-                         double elapsedSeconds, Instant observedAt) {
-        ZonedDateTime local = ZonedDateTime.ofInstant(observedAt, ASHGABAT);
+        ZonedDateTime local = ZonedDateTime.ofInstant(arrivedAt, ASHGABAT);
         int hourOfDay = local.getHour();
         boolean weekend = local.getDayOfWeek().getValue() >= 6;
 
         Mono<SegmentTravelStat> history = historyRepository
                 .findByKey(routeNumber, direction, fromStopId, toStopId, hourOfDay, weekend)
-                .map(existing -> existing.withNewSample(elapsedSeconds, observedAt))
+                .map(existing -> existing.withNewSample(elapsedSeconds, arrivedAt))
                 .switchIfEmpty(Mono.defer(() -> Mono.just(
                         SegmentTravelStat.initial(routeNumber, direction, fromStopId, toStopId,
                                         hourOfDay, weekend)
-                                .withNewSample(elapsedSeconds, observedAt))))
+                                .withNewSample(elapsedSeconds, arrivedAt))))
                 .flatMap(historyRepository::save);
 
-        history.then(liveRepository.recordTravel(fromStopId, toStopId, elapsedSeconds, observedAt))
+        history.then(liveRepository.recordTravel(fromStopId, toStopId, elapsedSeconds, arrivedAt))
                 .subscribeOn(Schedulers.boundedElastic())
                 .subscribe(
                         null,
                         err -> log.warn("[SEGMENT_OBS] запись наблюдения {} d{} {}->{} не удалась: {}",
                                 routeNumber, direction, fromStopId, toStopId, err.getMessage()));
+        observationsWritten.incrementAndGet();
         log.debug("[SEGMENT_OBS] {} d{} {}->{} elapsed={}s hour={} weekend={}",
                 routeNumber, direction, fromStopId, toStopId,
                 String.format(java.util.Locale.ROOT, "%.1f", elapsedSeconds), hourOfDay, weekend);

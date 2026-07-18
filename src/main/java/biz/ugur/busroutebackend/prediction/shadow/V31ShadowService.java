@@ -91,19 +91,19 @@ public class V31ShadowService {
         PredictionModel.Estimate est;
         int direction;
         long tripId;
+        biz.ugur.busroutebackend.prediction.core.RouteLine leaderGeom;
         java.util.List<biz.ugur.busroutebackend.prediction.core.StopAware.StopEvent> stopEvents;
         synchronized (core) {
             est = core.onFix(gpsFix, topo);
             direction = core.direction();
             tripId = core.tripId();
+            leaderGeom = core.bank().leader().geom();
             stopEvents = core.drainEvents();
         }
-        if (!stopEvents.isEmpty()) {
-            try {
-                stopEventSink.accept(fix, direction, tripId, stopEvents);
-            } catch (RuntimeException sinkFailure) {
-                log.debug("v31 stop-event sink failed: {}", sinkFailure.getMessage());
-            }
+        try {
+            stopEventSink.onTick(fix, leaderGeom, est.s(), direction, tripId, stopEvents);
+        } catch (RuntimeException sinkFailure) {
+            log.debug("v31 stop-event sink failed: {}", sinkFailure.getMessage());
         }
         writeLogs(fix, core, est);
         v31TicksProcessed.incrementAndGet();
