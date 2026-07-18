@@ -30,7 +30,7 @@ class PredictionBroadcasterUnsnappedTest {
     void broadcast_suppressesWhenRouteCoordsPresentButFractionNegative() {
         PredictionBroadcaster broadcaster = new PredictionBroadcaster(
                 directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
-                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer());
+                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer(), new LiveFactorSnapshotHolder());
 
         VehiclePredictionState state = VehiclePredictionState.builder()
                 .vehicleId("v1")
@@ -54,7 +54,7 @@ class PredictionBroadcasterUnsnappedTest {
     void broadcast_allowsWhenRouteCoordsNull_evenIfFractionNegative() {
         PredictionBroadcaster broadcaster = new PredictionBroadcaster(
                 directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
-                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer());
+                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer(), new LiveFactorSnapshotHolder());
 
         VehiclePredictionState state = VehiclePredictionState.builder()
                 .vehicleId("v1")
