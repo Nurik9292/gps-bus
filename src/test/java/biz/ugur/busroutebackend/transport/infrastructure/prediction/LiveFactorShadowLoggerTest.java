@@ -138,6 +138,32 @@ class LiveFactorShadowLoggerTest {
     }
 
     @Test
+    void liveModeAggregatesSharedEdgeAcrossRoutes() {
+        properties.setMode(
+                biz.ugur.busroutebackend.transport.infrastructure.config.EtaLiveFactorProperties.Mode.LIVE);
+        biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat r34 =
+                biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat
+                        .initial("34", 0, "A", "B", 10, false).withNewSample(60.0, NOW);
+        biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat r45 =
+                biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat
+                        .initial("45", 0, "A", "B", 10, false)
+                        .withNewSample(120.0, NOW).withNewSample(120.0, NOW)
+                        .withNewSample(120.0, NOW);
+        when(historyRepository.findByHourAndWeekend(anyInt(), anyBoolean()))
+                .thenReturn(reactor.core.publisher.Flux.just(r34, r45));
+
+        reactor.test.StepVerifier.create(logger.applyIfLive(List.of()))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        var edge = holder.edgeBaseline("A", "B");
+        org.assertj.core.api.Assertions.assertThat(edge).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(edge.n()).isEqualTo(4);
+        org.assertj.core.api.Assertions.assertThat(edge.meanSec())
+                .isCloseTo(105.0, org.assertj.core.data.Offset.offset(0.1));
+    }
+
+    @Test
     void scanFailurePropagatesForTickErrorHandling() {
         when(liveRepository.scanLiveEdges())
                 .thenReturn(Flux.error(new RuntimeException("redis down")));
