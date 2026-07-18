@@ -53,8 +53,30 @@ class SegmentObservationRecorderTest {
     void setUp() {
         properties = new EtaLiveFactorProperties();
         properties.setExcludedAxes(List.of("142:0"));
+        org.springframework.beans.factory.ObjectProvider<V31ShadowService> provider =
+                new org.springframework.beans.factory.ObjectProvider<>() {
+                    @Override
+                    public V31ShadowService getObject() {
+                        return shadowService;
+                    }
+
+                    @Override
+                    public V31ShadowService getIfAvailable() {
+                        return shadowService;
+                    }
+
+                    @Override
+                    public V31ShadowService getIfUnique() {
+                        return shadowService;
+                    }
+
+                    @Override
+                    public V31ShadowService getObject(Object... args) {
+                        return shadowService;
+                    }
+                };
         recorder = new SegmentObservationRecorder(
-                shadowService, historyRepository, liveRepository, properties);
+                provider, historyRepository, liveRepository, properties);
         when(historyRepository.findByKey(anyString(), anyInt(), anyString(), anyString(),
                 anyInt(), anyBoolean())).thenReturn(Mono.empty());
         when(historyRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
@@ -166,6 +188,36 @@ class SegmentObservationRecorderTest {
         tick("57", 120, 2100.0);
 
         verify(historyRepository, timeout(2000)).save(any());
+    }
+
+    @Test
+    void missingV31BeanDoesNotFailStartup() {
+        org.springframework.beans.factory.ObjectProvider<V31ShadowService> absent =
+                new org.springframework.beans.factory.ObjectProvider<>() {
+                    @Override
+                    public V31ShadowService getObject() {
+                        throw new IllegalStateException("no bean");
+                    }
+
+                    @Override
+                    public V31ShadowService getIfAvailable() {
+                        return null;
+                    }
+
+                    @Override
+                    public V31ShadowService getIfUnique() {
+                        return null;
+                    }
+
+                    @Override
+                    public V31ShadowService getObject(Object... args) {
+                        throw new IllegalStateException("no bean");
+                    }
+                };
+        SegmentObservationRecorder detached = new SegmentObservationRecorder(
+                absent, historyRepository, liveRepository, properties);
+        org.assertj.core.api.Assertions.assertThatCode(detached::register)
+                .doesNotThrowAnyException();
     }
 
     @Test
