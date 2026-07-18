@@ -42,7 +42,7 @@ public class SegmentObservationRecorder implements V31StopEventSink {
                               String pendingFromStopId, Instant pendingDepartAt) {
     }
 
-    private final V31ShadowService shadowService;
+    private final org.springframework.beans.factory.ObjectProvider<V31ShadowService> shadowService;
     private final SegmentTravelStatsRepository historyRepository;
     private final SegmentLiveStateRepository liveRepository;
     private final EtaLiveFactorProperties properties;
@@ -54,10 +54,11 @@ public class SegmentObservationRecorder implements V31StopEventSink {
     private final AtomicLong droppedOutOfRange = new AtomicLong();
     private final AtomicLong resetsOnJump = new AtomicLong();
 
-    public SegmentObservationRecorder(V31ShadowService shadowService,
-                                      SegmentTravelStatsRepository historyRepository,
-                                      SegmentLiveStateRepository liveRepository,
-                                      EtaLiveFactorProperties properties) {
+    public SegmentObservationRecorder(
+            org.springframework.beans.factory.ObjectProvider<V31ShadowService> shadowService,
+            SegmentTravelStatsRepository historyRepository,
+            SegmentLiveStateRepository liveRepository,
+            EtaLiveFactorProperties properties) {
         this.shadowService = shadowService;
         this.historyRepository = historyRepository;
         this.liveRepository = liveRepository;
@@ -66,7 +67,12 @@ public class SegmentObservationRecorder implements V31StopEventSink {
 
     @PostConstruct
     void register() {
-        shadowService.stopEventSink(this);
+        V31ShadowService shadow = shadowService.getIfAvailable();
+        if (shadow == null) {
+            log.info("[SEGMENT_OBS] v31 выключен — сбор сегментных наблюдений неактивен");
+            return;
+        }
+        shadow.stopEventSink(this);
         log.info("[SEGMENT_OBS] детектор пересечений остановок подключён к v31-тикам");
     }
 
