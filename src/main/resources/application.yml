@@ -138,6 +138,7 @@ app:
   eta:
     live-factor:
       write-enabled: ${ETA_LIVE_FACTOR_WRITE_ENABLED:true}
+      mode: ${ETA_LIVE_FACTOR_MODE:shadow}
       excluded-axes: "${ETA_LIVE_FACTOR_EXCLUDED_AXES:3:0,4:0,5:1,45:1,59:0,59:1,63:1,64:0,65:0,66:0,66:1,74:1,77:1,78:1,100:1,101:1,102:1,108:0,108:1,142:0}"
     position:
       max-age-minutes: ${ETA_POSITION_MAX_AGE_MINUTES:10}

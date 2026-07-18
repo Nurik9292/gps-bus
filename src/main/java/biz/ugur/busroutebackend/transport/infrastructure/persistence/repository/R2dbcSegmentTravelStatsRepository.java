@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.transport.infrastructure.persistence.repository;
 
 import biz.ugur.busroutebackend.transport.domain.repository.SegmentTravelStatsRepository;
+import biz.ugur.busroutebackend.transport.domain.valueobject.SegmentBaseline;
 import biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
@@ -113,5 +114,33 @@ public class R2dbcSegmentTravelStatsRepository implements SegmentTravelStatsRepo
                 .sampleCount(row.get("sample_count", Long.class))
                 .lastObservedAt(lastObserved != null ? lastObserved.toInstant() : null)
                 .build();
+    }
+
+    @Override
+    public Mono<SegmentBaseline> findEdgeBaseline(String fromStopId, String toStopId,
+                                                  int hourOfDay, boolean weekend) {
+        String sql = """
+                SELECT sum(avg_travel_seconds * sample_count) / nullif(sum(sample_count), 0)
+                           AS weighted_avg_seconds,
+                       coalesce(sum(sample_count), 0) AS total_samples
+                FROM segment_travel_stats
+                WHERE from_stop_id = :fromStopId
+                  AND to_stop_id = :toStopId
+                  AND hour_of_day = :hourOfDay
+                  AND is_weekend = :weekend
+                """;
+        return databaseClient.sql(sql)
+                .bind("fromStopId", fromStopId)
+                .bind("toStopId", toStopId)
+                .bind("hourOfDay", hourOfDay)
+                .bind("weekend", weekend)
+                .map(row -> {
+                    Double avg = row.get("weighted_avg_seconds", Double.class);
+                    Long n = row.get("total_samples", Long.class);
+                    return new SegmentBaseline(fromStopId, toStopId,
+                            avg == null ? 0.0 : avg, n == null ? 0L : n);
+                })
+                .one()
+                .filter(baseline -> baseline.totalSamples() > 0);
     }
 }
