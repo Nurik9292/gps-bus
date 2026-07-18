@@ -89,8 +89,21 @@ public class V31ShadowService {
                 fix.latitude(), fix.longitude(), fix.speedKmh(), fix.course(),
                 fix.inMotion(), fix.timestamp(), fix.direction(), fix.hdop(), fix.satellites(), fix.accuracy(), null);
         PredictionModel.Estimate est;
+        int direction;
+        long tripId;
+        java.util.List<biz.ugur.busroutebackend.prediction.core.StopAware.StopEvent> stopEvents;
         synchronized (core) {
             est = core.onFix(gpsFix, topo);
+            direction = core.direction();
+            tripId = core.tripId();
+            stopEvents = core.drainEvents();
+        }
+        if (!stopEvents.isEmpty()) {
+            try {
+                stopEventSink.accept(fix, direction, tripId, stopEvents);
+            } catch (RuntimeException sinkFailure) {
+                log.debug("v31 stop-event sink failed: {}", sinkFailure.getMessage());
+            }
         }
         writeLogs(fix, core, est);
         v31TicksProcessed.incrementAndGet();
@@ -170,6 +183,12 @@ public class V31ShadowService {
 
     public V31Fix lastFixOf(String vehicleId) {
         return lastFixes.get(vehicleId);
+    }
+
+    private volatile V31StopEventSink stopEventSink = V31StopEventSink.NO_OP;
+
+    public void stopEventSink(V31StopEventSink sink) {
+        this.stopEventSink = sink == null ? V31StopEventSink.NO_OP : sink;
     }
 
     public void configForRoute(java.util.function.Function<String, CoreConfig> fn) {
