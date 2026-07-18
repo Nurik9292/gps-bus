@@ -210,6 +210,19 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
     }
 
     @Override
+    public Flux<BusRoute> findActiveByRouteNumber(String routeNumber) {
+        String sql = String.format(
+                "SELECT %s FROM bus_routes br" +
+                " WHERE br.route_number = :routeNumber AND br.is_active = true",
+                selectColumns("br")
+        );
+        return databaseClient.sql(sql)
+                .bind("routeNumber", routeNumber)
+                .map(this::mapRowToBusRoute)
+                .all();
+    }
+
+    @Override
     public Mono<BusRoute> findPreferredByRouteNumber(String routeNumber) {
         String sql = String.format(
                 "SELECT %s FROM bus_routes br" +

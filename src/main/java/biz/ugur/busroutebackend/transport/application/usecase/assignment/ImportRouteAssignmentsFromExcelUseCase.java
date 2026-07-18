@@ -137,9 +137,18 @@ public class ImportRouteAssignmentsFromExcelUseCase extends BaseUseCase<Mono<Imp
                             "Route " + routeNumber + " not found in city of vehicle "
                                     + vehicle.getLicensePlate())));
         }
-        return busRouteRepository.findPreferredByRouteNumber(routeNumber)
-                .switchIfEmpty(Mono.error(new IllegalArgumentException(
-                        "Route not found: " + routeNumber)));
+        return busRouteRepository.findActiveByRouteNumber(routeNumber)
+                .collectList()
+                .flatMap(candidates -> switch (candidates.size()) {
+                    case 0 -> Mono.error(new IllegalArgumentException(
+                            "Route not found: " + routeNumber));
+                    case 1 -> Mono.just(candidates.get(0));
+                    default -> Mono.error(new IllegalArgumentException(
+                            "Vehicle " + vehicle.getLicensePlate()
+                                    + " has no city, route " + routeNumber
+                                    + " exists in " + candidates.size()
+                                    + " cities — set vehicle city first"));
+                });
     }
 
     private Mono<RouteAssignment> createAssignment(Vehicle vehicle, BusRoute route,
