@@ -1,6 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.prediction;
 
-import biz.ugur.busroutebackend.prediction.core.StopAware;
+import biz.ugur.busroutebackend.prediction.core.RouteLine;
 import biz.ugur.busroutebackend.prediction.shadow.V31Fix;
 import biz.ugur.busroutebackend.prediction.shadow.V31ShadowService;
 import biz.ugur.busroutebackend.transport.domain.repository.SegmentLiveStateRepository;
@@ -41,6 +41,8 @@ class SegmentObservationRecorderTest {
     private SegmentTravelStatsRepository historyRepository;
     @Mock
     private SegmentLiveStateRepository liveRepository;
+    @Mock
+    private RouteLine geom;
 
     private EtaLiveFactorProperties properties;
     private SegmentObservationRecorder recorder;
@@ -58,63 +60,99 @@ class SegmentObservationRecorderTest {
         when(historyRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
         when(liveRepository.recordTravel(anyString(), anyString(), anyDouble(), any()))
                 .thenReturn(Mono.empty());
+        when(geom.stops()).thenReturn(List.of(
+                new RouteLine.StopPoint("A", 1, 1000.0),
+                new RouteLine.StopPoint("B", 2, 2000.0),
+                new RouteLine.StopPoint("C", 3, 3000.0)));
     }
 
-    private static V31Fix fix(String route) {
+    private static V31Fix fix(String route, long plusSec) {
         return new V31Fix("veh-1", "1111 AGJ", route, 37.95, 58.38, 30.0, 90.0,
-                true, T0, 0, null, null, null);
+                true, T0.plusSeconds(plusSec), 0, null, null, null);
     }
 
-    private static StopAware.StopEvent ev(StopAware.StopEventType type, String stop, long plusSec) {
-        return new StopAware.StopEvent(type, stop, T0.plusSeconds(plusSec));
+    private void tick(String route, long plusSec, double s) {
+        recorder.onTick(fix(route, plusSec), geom, s, 0, 1, List.of());
     }
 
     @Test
-    void travelBetweenConsecutiveStopsIsRecordedToHistoryAndLive() {
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_EXIT, "A", 0)));
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_ENTER, "B", 90)));
+    void crossingDepartAndArriveEdgesRecordsInterpolatedTravel() {
+        tick("57", 0, 900.0);
+        tick("57", 20, 1100.0);
+        tick("57", 80, 1700.0);
+        tick("57", 120, 2100.0);
 
-        verify(liveRepository, timeout(2000)).recordTravel("A", "B", 90.0, T0.plusSeconds(90));
+        ArgumentCaptor<Double> seconds = ArgumentCaptor.forClass(Double.class);
+        verify(liveRepository, timeout(2000)).recordTravel(
+                org.mockito.ArgumentMatchers.eq("A"), org.mockito.ArgumentMatchers.eq("B"),
+                seconds.capture(), any());
+        assertThat(seconds.getValue()).isCloseTo(96.9, org.assertj.core.data.Offset.offset(1.0));
         ArgumentCaptor<SegmentTravelStat> saved = ArgumentCaptor.forClass(SegmentTravelStat.class);
         verify(historyRepository, timeout(2000)).save(saved.capture());
         assertThat(saved.getValue().getRouteNumber()).isEqualTo("57");
-        assertThat(saved.getValue().getAvgTravelSeconds()).isEqualTo(90.0);
         assertThat(saved.getValue().getSampleCount()).isEqualTo(1);
     }
 
     @Test
-    void skipCountsAsArrivalAndNextDeparture() {
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_EXIT, "A", 0)));
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.SKIP, "B", 60)));
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_ENTER, "C", 150)));
+    void multipleStopsCrossedInOneTickAllInterpolated() {
+        tick("57", 0, 900.0);
+        tick("57", 30, 1100.0);
+        tick("57", 60, 3100.0);
 
-        verify(liveRepository, timeout(2000)).recordTravel("A", "B", 60.0, T0.plusSeconds(60));
-        verify(liveRepository, timeout(2000)).recordTravel("B", "C", 90.0, T0.plusSeconds(150));
+        verify(liveRepository, timeout(2000)).recordTravel(
+                org.mockito.ArgumentMatchers.eq("A"), org.mockito.ArgumentMatchers.eq("B"),
+                anyDouble(), any());
+        verify(liveRepository, timeout(2000)).recordTravel(
+                org.mockito.ArgumentMatchers.eq("B"), org.mockito.ArgumentMatchers.eq("C"),
+                anyDouble(), any());
     }
 
     @Test
     void directionChangeDropsPendingDeparture() {
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_EXIT, "A", 0)));
-        recorder.accept(fix("57"), 1, 2, List.of(ev(StopAware.StopEventType.DWELL_ENTER, "B", 90)));
+        tick("57", 0, 900.0);
+        tick("57", 20, 1100.0);
+        recorder.onTick(fix("57", 60), geom, 2100.0, 1, 2, List.of());
 
         verify(liveRepository, never()).recordTravel(anyString(), anyString(), anyDouble(), any());
+    }
+
+    @Test
+    void backwardJumpResetsTracking() {
+        tick("57", 0, 900.0);
+        tick("57", 20, 1100.0);
+        tick("57", 40, 500.0);
+        tick("57", 100, 2100.0);
+
+        verify(liveRepository, never()).recordTravel(anyString(), anyString(), anyDouble(), any());
+    }
+
+    @Test
+    void smallGpsJitterBackwardsDoesNotResetPendingDeparture() {
+        tick("57", 0, 900.0);
+        tick("57", 20, 1100.0);
+        tick("57", 40, 1095.0);
+        tick("57", 100, 2100.0);
+
+        verify(liveRepository, timeout(2000)).recordTravel(
+                org.mockito.ArgumentMatchers.eq("A"), org.mockito.ArgumentMatchers.eq("B"),
+                anyDouble(), any());
     }
 
     @Test
     void excludedAxisIsIgnored() {
-        recorder.accept(fix("142"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_EXIT, "A", 0)));
-        recorder.accept(fix("142"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_ENTER, "B", 90)));
+        properties.setExcludedAxes(List.of("57:0"));
+        tick("57", 0, 900.0);
+        tick("57", 20, 1100.0);
+        tick("57", 120, 2100.0);
 
         verify(liveRepository, never()).recordTravel(anyString(), anyString(), anyDouble(), any());
     }
 
     @Test
-    void implausibleElapsedIsDropped() {
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_EXIT, "A", 0)));
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_ENTER, "B", 5)));
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_EXIT, "B", 10)));
-        recorder.accept(fix("57"), 0, 1,
-                List.of(ev(StopAware.StopEventType.DWELL_ENTER, "C", 10 + 2000)));
+    void tooFastCrossingIsDroppedAsOutOfRange() {
+        tick("57", 0, 900.0);
+        tick("57", 5, 1100.0);
+        tick("57", 9, 2100.0);
 
         verify(liveRepository, never()).recordTravel(anyString(), anyString(), anyDouble(), any());
     }
@@ -123,8 +161,9 @@ class SegmentObservationRecorderTest {
     void repositoryFailureDoesNotPropagate() {
         org.mockito.Mockito.doReturn(Mono.error(new RuntimeException("db down")))
                 .when(historyRepository).save(any());
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_EXIT, "A", 0)));
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_ENTER, "B", 90)));
+        tick("57", 0, 900.0);
+        tick("57", 20, 1100.0);
+        tick("57", 120, 2100.0);
 
         verify(historyRepository, timeout(2000)).save(any());
     }
@@ -132,8 +171,9 @@ class SegmentObservationRecorderTest {
     @Test
     void writeDisabledFlagStopsEverything() {
         properties.setWriteEnabled(false);
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_EXIT, "A", 0)));
-        recorder.accept(fix("57"), 0, 1, List.of(ev(StopAware.StopEventType.DWELL_ENTER, "B", 90)));
+        tick("57", 0, 900.0);
+        tick("57", 20, 1100.0);
+        tick("57", 120, 2100.0);
 
         verify(liveRepository, never()).recordTravel(anyString(), anyString(), anyDouble(), any());
     }
