@@ -22,6 +22,10 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class PredictionBroadcasterOffRouteTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-07-18T05:30:00Z");
+    private static final java.time.Clock FIXED_CLOCK =
+            java.time.Clock.fixed(FIXED_NOW, java.time.ZoneOffset.UTC);
+
     @Mock
     private DirectVehiclePositionBroadcaster directBroadcaster;
 
@@ -35,7 +39,7 @@ class PredictionBroadcasterOffRouteTest {
     void broadcast_suppressesWhenOffRouteAndRawGpsNotSet() {
         PredictionBroadcaster broadcaster = new PredictionBroadcaster(
                 directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
-                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer(), new LiveFactorSnapshotHolder());
+                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer(), new LiveFactorSnapshotHolder(), FIXED_CLOCK);
 
         VehiclePredictionState state = VehiclePredictionState.builder()
                 .vehicleId("v1")
@@ -50,7 +54,7 @@ class PredictionBroadcasterOffRouteTest {
                 .fractionOnRoute(0.25)
                 .offRoute(true)
                 .consecutiveOffRouteCount(5)
-                .lastReceivedAt(Instant.now())
+                .lastReceivedAt(FIXED_NOW)
                 .build();
 
         StepVerifier.create(broadcaster.broadcast(state)).verifyComplete();
@@ -61,7 +65,7 @@ class PredictionBroadcasterOffRouteTest {
     void broadcast_emitsRawGpsFallback_whenOffRouteAndGpsAvailable() {
         PredictionBroadcaster broadcaster = new PredictionBroadcaster(
                 directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
-                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer(), new LiveFactorSnapshotHolder());
+                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer(), new LiveFactorSnapshotHolder(), FIXED_CLOCK);
 
         VehiclePredictionState state = VehiclePredictionState.builder()
                 .vehicleId("v1")
@@ -81,7 +85,7 @@ class PredictionBroadcasterOffRouteTest {
                 .fractionOnRoute(0.25)
                 .offRoute(true)
                 .consecutiveOffRouteCount(5)
-                .lastReceivedAt(Instant.now())
+                .lastReceivedAt(FIXED_NOW)
                 .build();
 
         StepVerifier.create(broadcaster.broadcast(state)).verifyComplete();
