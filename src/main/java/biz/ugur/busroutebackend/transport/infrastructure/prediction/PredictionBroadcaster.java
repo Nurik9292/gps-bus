@@ -33,6 +33,7 @@ public class PredictionBroadcaster {
     private final PredictionProperties properties;
     private final VehiclePositionPredictor predictor;
     private final biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer;
+    private final java.time.Clock clock;
 
     private final ConcurrentHashMap<String, double[]> lastBroadcastPosition = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Double> lastMotionCourse = new ConcurrentHashMap<>();
@@ -46,7 +47,8 @@ public class PredictionBroadcaster {
                                   PredictionProperties properties,
                                   @Lazy VehiclePositionPredictor predictor,
                                   biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer,
-                                  LiveFactorSnapshotHolder liveFactorSnapshotHolder) {
+                                  LiveFactorSnapshotHolder liveFactorSnapshotHolder,
+                                  java.time.Clock clock) {
         this.directBroadcaster = directBroadcaster;
         this.routeGeometryCache = routeGeometryCache;
         this.etaProperties = etaProperties;
@@ -54,6 +56,7 @@ public class PredictionBroadcaster {
         this.predictor = predictor;
         this.pipelineTracer = pipelineTracer;
         this.liveFactorSnapshotHolder = liveFactorSnapshotHolder;
+        this.clock = clock;
     }
 
     public double[] getLastBroadcastPosition(String vehicleId) {
@@ -400,13 +403,13 @@ public class PredictionBroadcaster {
         return d > 180.0 ? 360.0 - d : d;
     }
 
-    private static double[] extrapolateDeadReckoning(double baseLat, double baseLon,
-                                                     double speedKmh, double courseDeg,
-                                                     Instant lastReceivedAt) {
+    private double[] extrapolateDeadReckoning(double baseLat, double baseLon,
+                                              double speedKmh, double courseDeg,
+                                              Instant lastReceivedAt) {
         if (lastReceivedAt == null || speedKmh < DEAD_RECKONING_MIN_SPEED_KMH) {
             return new double[]{baseLat, baseLon};
         }
-        double ageSec = (Instant.now().toEpochMilli() - lastReceivedAt.toEpochMilli()) / 1000.0;
+        double ageSec = (clock.instant().toEpochMilli() - lastReceivedAt.toEpochMilli()) / 1000.0;
         if (ageSec <= 0 || ageSec > DEAD_RECKONING_MAX_AGE_SEC) {
             return new double[]{baseLat, baseLon};
         }
