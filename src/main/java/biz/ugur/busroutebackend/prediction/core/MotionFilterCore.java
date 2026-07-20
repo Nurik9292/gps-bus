@@ -1059,6 +1059,12 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             return null;
         }
 
+        if (fix.speedKmh() < cfg.vStopKmh()) {
+            mode = Mode.AT_TERMINAL;
+            turnStreak = 0;
+            revertStreak = 0;
+            return new Estimate(heldTurnS, 0.0, Mode.AT_TERMINAL.name(), Math.max(p00, 1e-6));
+        }
         if (advancing) {
             return startNewTrip(fix, gOpp);
         }
@@ -1442,12 +1448,18 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             boolean lost = tauSinceFix > cfg.tLostSec();
             boolean frozen = tauSinceFix > cfg.tMaxSec();
             if (frozen) {
+                if (mode == Mode.TURNING) {
+                    turnStreak = 0;
+                    revertStreak = 0;
+                }
                 if (mode != Mode.NO_GPS) mode = Mode.NO_GPS;
                 v = 0;
             } else if (lost && mode == Mode.TURNING) {
-                mode = Mode.GPS_LOST;
-                turnStreak = 0;
-                revertStreak = 0;
+                if (tauSinceFix > cfg.tTurnLostSec()) {
+                    mode = Mode.GPS_LOST;
+                    turnStreak = 0;
+                    revertStreak = 0;
+                }
             } else if (lost && isTrackingLike()) {
                 mode = Mode.GPS_LOST;
             }
