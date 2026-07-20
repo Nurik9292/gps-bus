@@ -1411,10 +1411,21 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         initialized = true;
         lastFixTime = fix.timestamp();
         lastAdvancedAt = fix.timestamp();
-        mode = Mode.TRACKING;
         resyncNextStop(g);
         lastNu = 0;
         lastS = p00 + cfg.sigmaMeasDefaultMeters() * cfg.sigmaMeasDefaultMeters();
+        if (snap.dSnap() > cfg.dMaxMeters()) {
+            mode = Mode.OFF_ROUTE;
+            prevTravelMode = Mode.TRACKING;
+            offRouteTransitions++;
+            offRouteSec = 0;
+            offRouteMisses = 0;
+            offRouteExitStreak = 0;
+            resetOffRouteReacqStreak();
+            lastUpdateAccepted = false;
+            return new Estimate(x, v, Mode.OFF_ROUTE.name(), p00);
+        }
+        mode = Mode.TRACKING;
         lastUpdateAccepted = true;
         return new Estimate(x, v, Mode.ACQUIRING.name(), p00);
     }
