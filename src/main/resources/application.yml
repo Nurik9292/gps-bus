@@ -602,6 +602,8 @@ logging:
     biz.ugur.busroutebackend.transport.application.usecase.UpdateVehiclePositionsUseCase: WARN
     biz.ugur.busroutebackend.transport.application.service.GpsDataAggregatorService: WARN
     biz.ugur.busroutebackend.transport.infrastructure.messaging: INFO
+    biz.ugur.busroutebackend.transport.infrastructure.prediction.LiveFactorShadowLogger: INFO
+    biz.ugur.busroutebackend.transport.infrastructure.prediction.SegmentObservationRecorder: INFO
     biz.ugur.busroutebackend.shared.infrastructure.security: INFO
     biz.ugur.busroutebackend.admin.infrastructure.security: INFO
     biz.ugur.busroutebackend.interfaces.websocket: INFO
