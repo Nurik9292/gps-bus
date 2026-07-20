@@ -453,6 +453,7 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
                 .routeConfidence(safeGet(row, "route_confidence", Integer.class, 0))
                 .gpsDetectionEnabled(safeGet(row, "gps_detection_enabled", Boolean.class, true))
                 .gpsProvider(safeGet(row, "gps_provider", String.class, "CHINA"))
+                .cityId(safeGet(row, "city_id", String.class, null))
                 .createdAt(safeGet(row, "created_at", LocalDateTime.class, null))
                 .updatedAt(safeGet(row, "updated_at", LocalDateTime.class, null))
                 .version(safeGet(row, "version", Long.class, 0L))
