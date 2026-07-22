@@ -64,7 +64,7 @@ class FleetPresenceAlertMonitorTest {
         when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND))).thenReturn(Flux.empty());
         when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST))).thenReturn(Flux.empty());
 
-        monitor = new FleetPresenceAlertMonitor(email, props, gpsProps, assignments, vehicles, busRoutes, registry, clock);
+        monitor = new FleetPresenceAlertMonitor(email, new biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours(new biz.ugur.busroutebackend.shared.infrastructure.email.MailProperties(), java.time.Clock.fixed(java.time.Instant.parse("2026-05-12T10:00:00Z"), java.time.ZoneOffset.UTC)), props, gpsProps, assignments, vehicles, busRoutes, registry, clock);
     }
 
     private RouteAssignment assignment(String vehicleId) {

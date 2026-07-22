@@ -24,6 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class GpsProviderHealthMonitor {
 
+    private final biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours quietHours;
+
     private static final DateTimeFormatter TIMESTAMP_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -34,13 +36,18 @@ public class GpsProviderHealthMonitor {
 
     public GpsProviderHealthMonitor(EmailNotificationService emailService,
                                      GpsAlertProperties properties,
-                                     Clock clock) {
+                                     Clock clock,
+                                    biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours quietHours) {
+        this.quietHours = quietHours;
         this.emailService = emailService;
         this.properties = properties;
         this.clock = clock;
     }
 
     public void recordFetch(String tenant, FetchOutcome outcome) {
+        if (quietHours.active()) {
+            return;
+        }
         Instant now = clock.instant();
         states.compute(tenant, (k, oldOrNull) -> {
             ProviderStatus old = oldOrNull == null ? ProviderStatus.initial() : oldOrNull;
@@ -57,6 +64,9 @@ public class GpsProviderHealthMonitor {
     }
 
     public void recordError(String tenant, Throwable error) {
+        if (quietHours.active()) {
+            return;
+        }
         recordFetch(tenant, new FetchOutcome.HttpError(error));
     }
 

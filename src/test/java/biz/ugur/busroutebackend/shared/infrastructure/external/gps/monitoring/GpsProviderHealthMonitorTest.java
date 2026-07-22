@@ -45,7 +45,7 @@ class GpsProviderHealthMonitorTest {
         properties.setEnabled(true);
         properties.setRecipients("ops@example.com");
         clock = Clock.fixed(T0, ZoneOffset.UTC);
-        monitor = new GpsProviderHealthMonitor(emailService, properties, clock);
+        monitor = new GpsProviderHealthMonitor(emailService, properties, clock, new biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours(new biz.ugur.busroutebackend.shared.infrastructure.email.MailProperties(), java.time.Clock.fixed(java.time.Instant.parse("2026-05-12T10:00:00Z"), java.time.ZoneOffset.UTC)));
         when(emailService.sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString()))
                 .thenReturn(Mono.empty());
     }

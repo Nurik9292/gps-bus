@@ -53,6 +53,7 @@ public class FleetPresenceAlertMonitor {
     private static final int CONCURRENCY = 8;
 
     private final EmailNotificationService emailService;
+    private final biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours quietHours;
     private final FleetPresenceAlertProperties properties;
     private final GpsAlertProperties gpsAlertProperties;
     private final RouteAssignmentRepository assignmentRepository;
@@ -69,6 +70,7 @@ public class FleetPresenceAlertMonitor {
     private volatile Instant lastSentAt = null;
 
     public FleetPresenceAlertMonitor(EmailNotificationService emailService,
+                                     biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours quietHours,
                                      FleetPresenceAlertProperties properties,
                                      GpsAlertProperties gpsAlertProperties,
                                      RouteAssignmentRepository assignmentRepository,
@@ -77,6 +79,7 @@ public class FleetPresenceAlertMonitor {
                                      OffRouteStateRegistry offRouteStateRegistry,
                                      Clock clock) {
         this.emailService = emailService;
+        this.quietHours = quietHours;
         this.properties = properties;
         this.gpsAlertProperties = gpsAlertProperties;
         this.assignmentRepository = assignmentRepository;
@@ -94,6 +97,9 @@ public class FleetPresenceAlertMonitor {
 
     @Scheduled(fixedRateString = "${app.fleet-presence-alerts.check-interval-minutes:10}", timeUnit = TimeUnit.MINUTES)
     public void scheduledCheck() {
+        if (quietHours.active()) {
+            return;
+        }
         if (!inProgress.compareAndSet(false, true)) {
             log.debug("[FLEET_PRESENCE] previous check still running, skipping");
             return;

@@ -43,6 +43,7 @@ public class VehicleOffRouteAlertMonitor {
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final EmailNotificationService emailService;
+    private final biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours quietHours;
     private final java.util.concurrent.ConcurrentLinkedQueue<String> digestBuffer =
             new java.util.concurrent.ConcurrentLinkedQueue<>();
     private final OffRouteAlertProperties properties;
@@ -55,6 +56,7 @@ public class VehicleOffRouteAlertMonitor {
     private final Map<OffRouteAlertKey, Instant> alerted = new ConcurrentHashMap<>();
 
     public VehicleOffRouteAlertMonitor(EmailNotificationService emailService,
+                                       biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours quietHours,
                                        OffRouteAlertProperties properties,
                                        Clock clock,
                                        RouteAssignmentRepository routeAssignmentRepository,
@@ -62,6 +64,7 @@ public class VehicleOffRouteAlertMonitor {
                                        BusRouteRepository busRouteRepository,
                                        OffRouteStateRegistry offRouteStateRegistry) {
         this.emailService = emailService;
+        this.quietHours = quietHours;
         this.properties = properties;
         this.clock = clock;
         this.routeAssignmentRepository = routeAssignmentRepository;
@@ -72,6 +75,9 @@ public class VehicleOffRouteAlertMonitor {
 
     public void onWentOffRoute(String vehicleId, VehiclePredictionState state,
                                double latitude, double longitude, double distanceFromRouteMeters) {
+        if (quietHours.active()) {
+            return;
+        }
         Instant now = clock.instant();
         Optional<ShiftType> shiftOpt = currentShift(now);
         if (shiftOpt.isEmpty()) {
@@ -131,6 +137,10 @@ public class VehicleOffRouteAlertMonitor {
     @Scheduled(fixedRateString = "${app.off-route-alerts.digest-interval-minutes:15}",
             timeUnit = java.util.concurrent.TimeUnit.MINUTES)
     public void flushDigest() {
+        if (quietHours.active()) {
+            digestBuffer.clear();
+            return;
+        }
         List<String> episodes = new ArrayList<>();
         String episode;
         while ((episode = digestBuffer.poll()) != null) {

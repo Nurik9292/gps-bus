@@ -70,7 +70,9 @@ class VehicleOffRouteAlertMonitorTest {
         clock = Clock.fixed(T0, ZoneOffset.UTC);
 
         monitor = new VehicleOffRouteAlertMonitor(
-                emailService, properties, clock,
+                emailService, new biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours(
+                        new biz.ugur.busroutebackend.shared.infrastructure.email.MailProperties(),
+                        java.time.Clock.fixed(java.time.Instant.parse("2026-05-12T10:00:00Z"), java.time.ZoneOffset.UTC)), properties, clock,
                 routeAssignmentRepository, vehicleRepository, busRouteRepository,
                 new OffRouteStateRegistry());
 
@@ -126,6 +128,26 @@ class VehicleOffRouteAlertMonitorTest {
                 subject.capture(),
                 anyString());
         org.assertj.core.api.Assertions.assertThat(subject.getValue()).contains("2");
+    }
+
+    @org.junit.jupiter.api.Test
+    void quietHoursDisableOffRouteLogicEntirely() throws InterruptedException {
+        var nightQuiet = new biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours(
+                new biz.ugur.busroutebackend.shared.infrastructure.email.MailProperties(),
+                Clock.fixed(Instant.parse("2026-05-12T18:30:00Z"), ZoneOffset.UTC));
+        monitor = new VehicleOffRouteAlertMonitor(
+                emailService, nightQuiet, properties, clock,
+                routeAssignmentRepository, vehicleRepository, busRouteRepository,
+                new OffRouteStateRegistry());
+
+        monitor.onWentOffRoute(VEHICLE_ID, stateOnRouteFor(Duration.ofMinutes(30)), 39.95, 58.38, 250.0);
+        awaitAsyncDispatch();
+        monitor.flushDigest();
+
+        verify(emailService, org.mockito.Mockito.never())
+                .sendGpsAlert(any(), any(), any(), any(), any());
+        verify(routeAssignmentRepository, org.mockito.Mockito.never())
+                .findActiveByVehicleAndDateAndShift(any(), any(), any());
     }
 
     @org.junit.jupiter.api.Test
@@ -200,7 +222,9 @@ class VehicleOffRouteAlertMonitorTest {
     void skipsWhenWithinEndOfShiftBuffer() throws InterruptedException {
         clock = Clock.fixed(Instant.parse("2026-05-12T13:50:00Z"), ZoneOffset.UTC);
         monitor = new VehicleOffRouteAlertMonitor(
-                emailService, properties, clock,
+                emailService, new biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours(
+                        new biz.ugur.busroutebackend.shared.infrastructure.email.MailProperties(),
+                        java.time.Clock.fixed(java.time.Instant.parse("2026-05-12T10:00:00Z"), java.time.ZoneOffset.UTC)), properties, clock,
                 routeAssignmentRepository, vehicleRepository, busRouteRepository,
                 new OffRouteStateRegistry());
         when(emailService.sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString()))
