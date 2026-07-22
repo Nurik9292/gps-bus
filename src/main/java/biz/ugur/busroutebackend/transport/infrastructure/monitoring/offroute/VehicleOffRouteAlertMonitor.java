@@ -28,7 +28,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,6 +43,8 @@ public class VehicleOffRouteAlertMonitor {
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final EmailNotificationService emailService;
+    private final java.util.concurrent.ConcurrentLinkedQueue<String> digestBuffer =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
     private final OffRouteAlertProperties properties;
     private final Clock clock;
     private final RouteAssignmentRepository routeAssignmentRepository;
@@ -117,14 +121,33 @@ public class VehicleOffRouteAlertMonitor {
             String routeNumber = tuple.getT2();
             Map<String, String> vars = buildVars(vehicleId, licensePlate, routeNumber,
                     state, latitude, longitude, distanceFromRouteMeters, shift, now);
-            String subject = "[OFF-ROUTE] vehicle " + licensePlate + " (route " + routeNumber + ") — "
-                    + vars.get("minutesUntilShiftEnd") + "min until shift end";
-            String body = "<pre>" + renderTemplate(vars) + "</pre>";
-            log.warn("[OFF_ROUTE] {} ({}) off-route on route {} at distance {}m, alerting",
+            log.warn("[OFF_ROUTE] {} ({}) off-route on route {} at distance {}m, queued for digest",
                     licensePlate, vehicleId, routeNumber, distanceFromRouteMeters);
-            return emailService.sendGpsAlert(properties.recipientList(),
-                    vehicleId, AlertKind.VEHICLE_OFF_ROUTE, subject, body);
+            digestBuffer.add(renderTemplate(vars));
+            return Mono.<Void>empty();
         });
+    }
+
+    @Scheduled(fixedRateString = "${app.off-route-alerts.digest-interval-minutes:15}",
+            timeUnit = java.util.concurrent.TimeUnit.MINUTES)
+    public void flushDigest() {
+        List<String> episodes = new ArrayList<>();
+        String episode;
+        while ((episode = digestBuffer.poll()) != null) {
+            episodes.add(episode);
+        }
+        if (episodes.isEmpty()) {
+            return;
+        }
+        String subject = "[OFF-ROUTE] сводка: " + episodes.size() + " эпизод(ов) за "
+                + properties.getDigestIntervalMinutes() + " мин";
+        String body = "<pre>" + String.join("\n----------------\n", episodes) + "</pre>";
+        emailService.sendGpsAlert(properties.recipientList(),
+                        "off-route-digest", AlertKind.VEHICLE_OFF_ROUTE, subject, body)
+                .doOnError(err -> log.warn("[OFF_ROUTE] digest send failed: {}", err.getMessage()))
+                .onErrorResume(err -> Mono.empty())
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe();
     }
 
     private Map<String, String> buildVars(String vehicleId, String licensePlate, String routeNumber,

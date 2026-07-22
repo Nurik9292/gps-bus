@@ -17,4 +17,6 @@ public class MailProperties {
     private int port = 587;
     private String username;
     private String password;
+    private int quietFromHour = 23;
+    private int quietToHour = 7;
 }

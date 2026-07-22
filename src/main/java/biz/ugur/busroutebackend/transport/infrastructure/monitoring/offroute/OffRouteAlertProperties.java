@@ -18,6 +18,7 @@ public class OffRouteAlertProperties {
     private String recipients = "";
     private int endOfShiftBufferMinutes = 15;
     private int minOnRouteSeconds = 60;
+    private int digestIntervalMinutes = 15;
 
     public List<String> recipientList() {
         if (recipients == null || recipients.isBlank()) {
@@ -27,5 +28,13 @@ public class OffRouteAlertProperties {
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
+    }
+
+    public int getDigestIntervalMinutes() {
+        return digestIntervalMinutes;
+    }
+
+    public void setDigestIntervalMinutes(int digestIntervalMinutes) {
+        this.digestIntervalMinutes = digestIntervalMinutes;
     }
 }

@@ -88,6 +88,8 @@ app:
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
+    quiet-from-hour: ${MAIL_QUIET_FROM_HOUR:23}
+    quiet-to-hour: ${MAIL_QUIET_TO_HOUR:7}
 
   gps-alerts:
     enabled: ${GPS_ALERT_ENABLED:false}
@@ -111,7 +113,7 @@ app:
     recipients: ${OFF_ROUTE_ALERT_RECIPIENTS:${GPS_ALERT_RECIPIENTS:}}
     end-of-shift-buffer-minutes: ${OFF_ROUTE_ALERT_END_BUFFER_MIN:15}
     min-on-route-seconds: ${OFF_ROUTE_ALERT_MIN_ON_ROUTE_SEC:60}
-
+    digest-interval-minutes: ${OFF_ROUTE_ALERT_DIGEST_MINUTES:15}
   fleet-presence-alerts:
     enabled: ${FLEET_PRESENCE_ALERTS_ENABLED:false}
     check-interval-minutes: ${FLEET_PRESENCE_CHECK_INTERVAL_MINUTES:10}

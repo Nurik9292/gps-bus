@@ -20,7 +20,10 @@ import java.util.Base64;
 @ConditionalOnProperty(prefix = "app.mail", name = "enabled", havingValue = "true")
 public class SmtpEmailNotificationService implements EmailNotificationService {
 
+    private static final java.time.ZoneId ASHGABAT = java.time.ZoneId.of("Asia/Ashgabat");
+
     private final MailProperties properties;
+    private final java.time.Clock clock;
 
     @Override
     public Mono<Void> sendComplaintNotification(String title, String type, String description) {
@@ -110,6 +113,10 @@ public class SmtpEmailNotificationService implements EmailNotificationService {
             log.debug("[email/{}] skipped: no recipient", kind);
             return Mono.empty();
         }
+        if (inQuietHours(clock.instant())) {
+            log.debug("[email/{}] suppressed: quiet hours", kind);
+            return Mono.empty();
+        }
         return Mono.fromCallable(() -> {
                     sendEmail(to, subject, body);
                     return true;
@@ -121,6 +128,19 @@ public class SmtpEmailNotificationService implements EmailNotificationService {
                     return Mono.empty();
                 })
                 .then();
+    }
+
+    boolean inQuietHours(java.time.Instant now) {
+        int fromHour = properties.getQuietFromHour();
+        int toHour = properties.getQuietToHour();
+        if (fromHour == toHour) {
+            return false;
+        }
+        int hour = java.time.LocalDateTime.ofInstant(now, ASHGABAT).getHour();
+        if (fromHour < toHour) {
+            return hour >= fromHour && hour < toHour;
+        }
+        return hour >= fromHour || hour < toHour;
     }
 
     private static boolean hasRecipient(String recipientEmail) {
