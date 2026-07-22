@@ -93,9 +93,10 @@ class VehicleOffRouteAlertMonitorTest {
         monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
         awaitAsyncDispatch();
 
+        monitor.flushDigest();
         verify(emailService, times(1)).sendGpsAlert(
                 eq(java.util.List.of("ops@example.com")),
-                eq(VEHICLE_ID),
+                eq("off-route-digest"),
                 eq(AlertKind.VEHICLE_OFF_ROUTE),
                 anyString(),
                 anyString());
@@ -103,6 +104,35 @@ class VehicleOffRouteAlertMonitorTest {
 
     private void awaitAsyncDispatch() throws InterruptedException {
         Thread.sleep(500);
+    }
+
+    @org.junit.jupiter.api.Test
+    void digestBatchesMultipleEpisodesIntoOneEmail() throws InterruptedException {
+        RouteAssignment assignment = mockAssignmentForFirstShift();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+                .thenReturn(Mono.just(assignment));
+
+        monitor.onWentOffRoute(VEHICLE_ID, stateOnRouteFor(Duration.ofMinutes(30)), 39.95, 58.38, 250.0);
+        monitor.onWentOffRoute("V-002", stateOnRouteFor(Duration.ofMinutes(30)), 39.96, 58.39, 400.0);
+        awaitAsyncDispatch();
+        monitor.flushDigest();
+
+        org.mockito.ArgumentCaptor<String> subject = org.mockito.ArgumentCaptor.forClass(String.class);
+        monitor.flushDigest();
+        verify(emailService, times(1)).sendGpsAlert(
+                eq(java.util.List.of("ops@example.com")),
+                eq("off-route-digest"),
+                eq(AlertKind.VEHICLE_OFF_ROUTE),
+                subject.capture(),
+                anyString());
+        org.assertj.core.api.Assertions.assertThat(subject.getValue()).contains("2");
+    }
+
+    @org.junit.jupiter.api.Test
+    void emptyDigestBufferSendsNothing() {
+        monitor.flushDigest();
+        verify(emailService, org.mockito.Mockito.never())
+                .sendGpsAlert(any(), any(), any(), any(), any());
     }
 
     private VehiclePredictionState stateOnRouteFor(Duration onRouteDuration) {
@@ -275,6 +305,7 @@ class VehicleOffRouteAlertMonitorTest {
         monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
         awaitAsyncDispatch();
 
+        monitor.flushDigest();
         verify(emailService, times(1)).sendGpsAlert(any(), any(), any(), any(), any());
     }
 
@@ -290,9 +321,10 @@ class VehicleOffRouteAlertMonitorTest {
         monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
         awaitAsyncDispatch();
 
+        monitor.flushDigest();
         verify(emailService, times(1)).sendGpsAlert(
                 eq(java.util.List.of("ops@example.com")),
-                eq(VEHICLE_ID),
+                eq("off-route-digest"),
                 eq(AlertKind.VEHICLE_OFF_ROUTE),
                 anyString(),
                 anyString());
@@ -315,6 +347,7 @@ class VehicleOffRouteAlertMonitorTest {
 
         monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
         awaitAsyncDispatch();
+        monitor.flushDigest();
         verify(emailService, times(1)).sendGpsAlert(any(), any(), any(), any(), any());
     }
 }
