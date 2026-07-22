@@ -37,6 +37,7 @@ public class V31ShadowService {
     private final V31ShadowTap tap;
     private final Path logDirectory;
     private final long logCapBytes;
+    private boolean capWarned;
     private long bytesWritten;
     private String writerHour;
     private BufferedWriter fixWriter;
@@ -112,10 +113,6 @@ public class V31ShadowService {
     private synchronized void writeLogs(V31Fix fix, MotionFilterCore core,
                                         PredictionModel.Estimate est) {
         try {
-            if (bytesWritten >= logCapBytes) {
-                v31LogDroppedTicks.incrementAndGet();
-                return;
-            }
             String hour = java.time.ZonedDateTime.ofInstant(clock.instant(), java.time.ZoneOffset.UTC)
                     .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HH"));
             if (fixWriter == null || !hour.equals(writerHour)) {
@@ -124,11 +121,14 @@ public class V31ShadowService {
                     tickWriter.close();
                 }
                 Files.createDirectories(logDirectory);
-                if (writerHour == null) {
-                    try (var files = Files.list(logDirectory)) {
-                        bytesWritten = files.filter(Files::isRegularFile)
-                                .mapToLong(f -> f.toFile().length()).sum();
-                    }
+                try (var files = Files.list(logDirectory)) {
+                    bytesWritten = files.filter(Files::isRegularFile)
+                            .mapToLong(f -> f.toFile().length()).sum();
+                }
+                if (bytesWritten < logCapBytes && capWarned) {
+                    capWarned = false;
+                    log.info("v31 shadow log: запись возобновлена после уборки (занято {} МБ)",
+                            bytesWritten / 1_048_576);
                 }
                 writerHour = hour;
                 fixWriter = Files.newBufferedWriter(logDirectory.resolve(
@@ -136,6 +136,15 @@ public class V31ShadowService {
                 tickWriter = Files.newBufferedWriter(logDirectory.resolve(
                         "ws_pred_v31_ticks-" + hour + ".psv"));
                 tickWriter.write("vid8|ts|mode|leader|s\n");
+            }
+            if (bytesWritten >= logCapBytes) {
+                v31LogDroppedTicks.incrementAndGet();
+                if (!capWarned) {
+                    capWarned = true;
+                    log.warn("v31 shadow log: кап {} МБ достигнут — тики/фиксы не пишутся "
+                            + "до уборки каталога", logCapBytes / 1_048_576);
+                }
+                return;
             }
             String fixLine = String.format(Locale.ROOT,
                     "{\"vehicleId\":\"%s\",\"licensePlate\":\"%s\",\"routeNumber\":\"%s\","
