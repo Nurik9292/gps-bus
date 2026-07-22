@@ -35,10 +35,14 @@ class LiveFactorShadowLoggerTest {
     private SegmentLiveStateRepository liveRepository;
     @Mock
     private SegmentTravelStatsRepository historyRepository;
+    @Mock
+    private biz.ugur.busroutebackend.transport.domain.repository.TerminalDwellStatsRepository terminalDwellRepository;
 
     private biz.ugur.busroutebackend.transport.infrastructure.config.EtaLiveFactorProperties properties;
     private LiveFactorShadowLogger logger;
     private LiveFactorSnapshotHolder holder;
+    private TerminalDwellSnapshotHolder dwellHolder;
+    private biz.ugur.busroutebackend.transport.infrastructure.config.TerminalDepartureProperties terminalProperties;
 
     private static final Instant NOW = Instant.parse("2026-07-18T05:30:00Z");
 
@@ -70,8 +74,15 @@ class LiveFactorShadowLoggerTest {
                     }
                 };
         holder = new LiveFactorSnapshotHolder();
+        dwellHolder = new TerminalDwellSnapshotHolder();
+        when(terminalDwellRepository.findByHourAndWeekend(anyInt(), anyBoolean()))
+                .thenReturn(Flux.empty());
+        terminalProperties = new biz.ugur.busroutebackend.transport.infrastructure.config.TerminalDepartureProperties();
+        terminalProperties.setMode(
+                biz.ugur.busroutebackend.transport.infrastructure.config.TerminalDepartureProperties.Mode.LIVE);
         logger = new LiveFactorShadowLogger(liveRepository, historyRepository, properties,
-                Clock.fixed(NOW, ZoneOffset.UTC), holder, noShadow);
+                Clock.fixed(NOW, ZoneOffset.UTC), holder, noShadow,
+                terminalDwellRepository, dwellHolder, terminalProperties);
     }
 
     @Test
@@ -196,5 +207,64 @@ class LiveFactorShadowLoggerTest {
                 .expectErrorSatisfies(err ->
                         assertThat(err).hasMessageContaining("redis down"))
                 .verify();
+    }
+
+    @Test
+    void tickPublishesTerminalDwellSnapshotForCurrentAndPreviousHour() {
+        when(terminalDwellRepository.findByHourAndWeekend(anyInt(), anyBoolean()))
+                .thenAnswer(inv -> Flux.just(
+                        biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat
+                                .initial("57", 1, inv.getArgument(0, Integer.class), false)
+                                .withNewSample(300.0, NOW).withNewSample(320.0, NOW)));
+
+        StepVerifier.create(logger.publishTerminalDwells()).verifyComplete();
+
+        var current = dwellHolder.dwell("57", 1, 10).orElseThrow();
+        assertThat(current.avgDwellSeconds()).isCloseTo(310.0, org.assertj.core.data.Offset.offset(0.1));
+        assertThat(dwellHolder.dwell("57", 1, 9)).isPresent();
+        assertThat(dwellHolder.dwell("57", 0, 10)).isEmpty();
+    }
+
+    @Test
+    void dwellRefreshFailureDoesNotBreakFactorPublication() {
+        properties.setMode(
+                biz.ugur.busroutebackend.transport.infrastructure.config.EtaLiveFactorProperties.Mode.LIVE);
+        when(terminalDwellRepository.findByHourAndWeekend(anyInt(), anyBoolean()))
+                .thenReturn(Flux.error(new RuntimeException("db down")));
+        when(liveRepository.scanLiveEdges()).thenReturn(Flux.just(
+                new SegmentLiveSnapshot("A", "B", 90.0, 5, NOW)));
+        when(historyRepository.findEdgeBaseline(anyString(), anyString(), anyInt(), anyBoolean()))
+                .thenReturn(Mono.just(new SegmentBaseline("A", "B", 60.0, 20)));
+        when(historyRepository.findByHourAndWeekend(anyInt(), anyBoolean()))
+                .thenReturn(Flux.empty());
+
+        StepVerifier.withVirtualTime(() -> logger.tickerPipeline(
+                        Flux.interval(LiveFactorShadowLogger.TICK_PERIOD,
+                                LiveFactorShadowLogger.TICK_PERIOD)).take(1))
+                .thenAwait(java.time.Duration.ofMinutes(2))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        assertThat(holder.factor("A", "B")).isEqualTo(1.5);
+    }
+
+    @Test
+    void terminalDwellsPublishedEvenWhenLiveFactorModeOff() {
+        properties.setMode(
+                biz.ugur.busroutebackend.transport.infrastructure.config.EtaLiveFactorProperties.Mode.OFF);
+        when(terminalDwellRepository.findByHourAndWeekend(anyInt(), anyBoolean()))
+                .thenReturn(Flux.just(
+                        biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat
+                                .initial("57", 1, 10, false)
+                                .withNewSample(300.0, NOW).withNewSample(300.0, NOW)));
+
+        StepVerifier.withVirtualTime(() -> logger.tickerPipeline(
+                        Flux.interval(LiveFactorShadowLogger.TICK_PERIOD,
+                                LiveFactorShadowLogger.TICK_PERIOD)).take(1))
+                .thenAwait(java.time.Duration.ofMinutes(2))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        assertThat(dwellHolder.size()).isGreaterThan(0);
     }
 }

@@ -39,7 +39,7 @@ class PredictionBroadcasterOffRouteTest {
     void broadcast_suppressesWhenOffRouteAndRawGpsNotSet() {
         PredictionBroadcaster broadcaster = new PredictionBroadcaster(
                 directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
-                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer(), new LiveFactorSnapshotHolder(), FIXED_CLOCK);
+                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer(), new LiveFactorSnapshotHolder(), FIXED_CLOCK, org.mockito.Mockito.mock(TerminalDepartureEtaService.class));
 
         VehiclePredictionState state = VehiclePredictionState.builder()
                 .vehicleId("v1")
@@ -65,7 +65,7 @@ class PredictionBroadcasterOffRouteTest {
     void broadcast_emitsRawGpsFallback_whenOffRouteAndGpsAvailable() {
         PredictionBroadcaster broadcaster = new PredictionBroadcaster(
                 directBroadcaster, routeGeometryCache, etaProperties, new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
-                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer(), new LiveFactorSnapshotHolder(), FIXED_CLOCK);
+                new biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer(), new LiveFactorSnapshotHolder(), FIXED_CLOCK, org.mockito.Mockito.mock(TerminalDepartureEtaService.class));
 
         VehiclePredictionState state = VehiclePredictionState.builder()
                 .vehicleId("v1")

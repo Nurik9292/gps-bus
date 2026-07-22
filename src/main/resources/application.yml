@@ -162,6 +162,12 @@ app:
       evening: ${ETA_TRAFFIC_EVENING:1.1}
       night: ${ETA_TRAFFIC_NIGHT:0.9}
       weekend-factor: ${ETA_TRAFFIC_WEEKEND_FACTOR:0.8}
+    terminal-departure:
+      mode: ${TERMINAL_DEPARTURE_MODE:off}
+      min-samples: ${TERMINAL_DEPARTURE_MIN_SAMPLES:5}
+      floor-seconds: ${TERMINAL_DEPARTURE_FLOOR_SECONDS:60}
+      max-stops: ${TERMINAL_DEPARTURE_MAX_STOPS:3}
+      dwell-max-seconds: ${TERMINAL_DEPARTURE_DWELL_MAX_SECONDS:3600}
 
   admin:
     default-username: ${ADMIN_DEFAULT_USERNAME:admin}

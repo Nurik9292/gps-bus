@@ -34,6 +34,7 @@ public class PredictionBroadcaster {
     private final VehiclePositionPredictor predictor;
     private final biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer;
     private final java.time.Clock clock;
+    private final TerminalDepartureEtaService terminalDepartureEtaService;
 
     private final ConcurrentHashMap<String, double[]> lastBroadcastPosition = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Double> lastMotionCourse = new ConcurrentHashMap<>();
@@ -48,7 +49,8 @@ public class PredictionBroadcaster {
                                   @Lazy VehiclePositionPredictor predictor,
                                   biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer,
                                   LiveFactorSnapshotHolder liveFactorSnapshotHolder,
-                                  java.time.Clock clock) {
+                                  java.time.Clock clock,
+                                  TerminalDepartureEtaService terminalDepartureEtaService) {
         this.directBroadcaster = directBroadcaster;
         this.routeGeometryCache = routeGeometryCache;
         this.etaProperties = etaProperties;
@@ -57,6 +59,7 @@ public class PredictionBroadcaster {
         this.pipelineTracer = pipelineTracer;
         this.liveFactorSnapshotHolder = liveFactorSnapshotHolder;
         this.clock = clock;
+        this.terminalDepartureEtaService = terminalDepartureEtaService;
     }
 
     public double[] getLastBroadcastPosition(String vehicleId) {
@@ -67,6 +70,7 @@ public class PredictionBroadcaster {
         lastBroadcastPosition.keySet().retainAll(activeVehicleIds);
         lastMotionCourse.keySet().retainAll(activeVehicleIds);
         lastBroadcastDirection.keySet().retainAll(activeVehicleIds);
+        terminalDepartureEtaService.retainVehicles(activeVehicleIds);
     }
 
     public void resetMotionCourse(String vehicleId) {
@@ -184,7 +188,10 @@ public class PredictionBroadcaster {
                 new double[]{broadcastLat, broadcastLon});
 
         Double fractionValue = (state.getFractionOnRoute() >= 0) ? state.getFractionOnRoute() : null;
-        List<NextStopEta> nextStops = computeNextStopsEta(state, 3);
+        List<NextStopEta> aheadStops = computeNextStopsEta(state, 3);
+        List<NextStopEta> nextStops = aheadStops.isEmpty()
+                ? terminalDepartureNextStops(state)
+                : aheadStops;
 
         long msSinceGpsForBroadcast = state.getLastReceivedAt() != null
                 ? Instant.now().toEpochMilli() - state.getLastReceivedAt().toEpochMilli()
@@ -434,6 +441,23 @@ public class PredictionBroadcaster {
         return 1.0 + (factor - 1.0) * weight;
     }
 
+    private List<NextStopEta> terminalDepartureNextStops(VehiclePredictionState state) {
+        List<TerminalDepartureEtaService.DepartureStopEta> departures =
+                terminalDepartureEtaService.departureEtasForVehicle(
+                        state.getVehicleId(), state.getRouteNumber(), state.getRouteId(),
+                        clock.instant());
+        if (departures.isEmpty()) {
+            return List.of();
+        }
+        List<NextStopEta> etas = new ArrayList<>(departures.size());
+        for (TerminalDepartureEtaService.DepartureStopEta departure : departures) {
+            etas.add(new NextStopEta(departure.stopId(), departure.stopName(),
+                    (int) Math.max(1, Math.ceil(departure.cumulativeSeconds() / 60.0)),
+                    departure.distanceMeters()));
+        }
+        return etas;
+    }
+
     private List<NextStopEta> computeNextStopsEta(VehiclePredictionState state, int maxStops) {
         if (!state.isDirectionConfirmed()) {
             return List.of();
@@ -460,8 +484,11 @@ public class PredictionBroadcaster {
         boolean weekend = now.getDayOfWeek() == DayOfWeek.SATURDAY
                 || now.getDayOfWeek() == DayOfWeek.SUNDAY;
 
+        if (state.getRouteId() == null) {
+            return List.of();
+        }
         List<RouteStopInfo> stopsAhead = routeGeometryCache
-                .getStopsAhead(state.getRouteNumber(), state.getDirection(), trueFraction)
+                .getStopsAhead(state.getRouteId(), state.getDirection(), trueFraction)
                 .stream()
                 .limit(maxStops)
                 .toList();

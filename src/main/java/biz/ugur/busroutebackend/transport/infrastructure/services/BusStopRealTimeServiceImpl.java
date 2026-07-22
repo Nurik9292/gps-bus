@@ -44,6 +44,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
     private final ETAProperties etaProperties;
     private final VehiclePositionPredictionService predictionService;
     private final RouteGeometryCache routeGeometryCache;
+    private final biz.ugur.busroutebackend.transport.infrastructure.prediction.TerminalDepartureEtaService terminalDepartureEtaService;
 
     public BusStopRealTimeServiceImpl(
             BusStopRepository busStopRepository,
@@ -53,7 +54,8 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
             ObjectMapper objectMapper,
             ETAProperties etaProperties,
             VehiclePositionPredictionService predictionService,
-            RouteGeometryCache routeGeometryCache) {
+            RouteGeometryCache routeGeometryCache,
+            biz.ugur.busroutebackend.transport.infrastructure.prediction.TerminalDepartureEtaService terminalDepartureEtaService) {
         this.busStopRepository = busStopRepository;
         this.performanceLogRepository = performanceLogRepository;
         this.redisTemplate = redisTemplate;
@@ -62,6 +64,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
         this.etaProperties = etaProperties;
         this.predictionService = predictionService;
         this.routeGeometryCache = routeGeometryCache;
+        this.terminalDepartureEtaService = terminalDepartureEtaService;
     }
 
     public Mono<BusStopArrivalsResponse> getStopArrivals(String stopId) {
@@ -171,10 +174,13 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                     info.setDirection(state.getDirection());
                     return Mono.just(info);
                 })
+                .mergeWith(terminalDepartureRows(stopId))
                 .collectMultimap(BusArrivalInfo::getRouteNumber)
                 .flatMapMany(byRoute -> Flux.fromIterable(byRoute.values())
                         .map(arrivals -> arrivals.stream()
-                                .min(Comparator.comparingInt(BusArrivalInfo::getEstimatedArrivalMinutes))
+                                .min(Comparator.comparingInt(BusArrivalInfo::getEstimatedArrivalMinutes)
+                                        .thenComparing(BusArrivalInfo::getVehicleId,
+                                                Comparator.nullsLast(Comparator.naturalOrder())))
                                 .orElseThrow()));
 
         Flux<BusArrivalInfo> fromDb = busStopRepository.findArrivingVehicles(
@@ -189,6 +195,51 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                         fromDb.filter(db -> !predMap.containsKey(db.getRouteNumber()))
                                 .mergeWith(Flux.fromIterable(predMap.values()))
                 );
+    }
+
+    Flux<BusArrivalInfo> terminalDepartureRows(String stopId) {
+        if (!terminalDepartureEtaService.enabled()) {
+            return Flux.empty();
+        }
+        java.time.Instant now = java.time.Instant.now();
+        int maxEtaMinutes = etaProperties.getPosition().getMaxEtaMinutes();
+        return Flux.fromIterable(predictionService.getActiveStates())
+                .filter(s -> s.getRouteNumber() != null && s.getRouteId() != null)
+                .filter(s -> !s.isOffRoute())
+                .filter(s -> !biz.ugur.busroutebackend.transport.infrastructure.prediction.PredictionBroadcaster.isInColdStart(s))
+                .filter(s -> s.getRawGpsSpeedKmh() < etaProperties.getSpeed().getMovingThresholdKmh())
+                .flatMap(state -> Flux.fromIterable(
+                                terminalDepartureEtaService.departureEtasForVehicle(
+                                        state.getVehicleId(), state.getRouteNumber(),
+                                        state.getRouteId(), now))
+                        .filter(eta -> eta.stopId().equals(stopId))
+                        .next()
+                        .flatMap(eta -> {
+                            int etaMin = (int) Math.max(1, Math.ceil(eta.cumulativeSeconds() / 60.0));
+                            if (etaMin > maxEtaMinutes) {
+                                return Mono.empty();
+                            }
+                            BusArrivalInfo info = new BusArrivalInfo(
+                                    state.getVehicleId(),
+                                    state.getLicensePlate(),
+                                    null,
+                                    state.getRouteNumber(),
+                                    routeGeometryCache.getRouteName(state.getRouteId()),
+                                    routeGeometryCache.getRouteColor(state.getRouteId()),
+                                    etaMin,
+                                    "approaching",
+                                    state.getPredictedLatitude(),
+                                    state.getPredictedLongitude(),
+                                    0.0,
+                                    false,
+                                    "На конечной",
+                                    LocalDateTime.now(),
+                                    state.getCourse(),
+                                    eta.distanceMeters()
+                            );
+                            info.setDirection(eta.departDirection());
+                            return Mono.just(info);
+                        }));
     }
 
     private int computeEtaMinutes(double distanceMeters, double speedKmh) {

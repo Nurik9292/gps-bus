@@ -5,6 +5,7 @@ import biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat;
 import io.r2dbc.spi.Readable;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
@@ -41,6 +42,20 @@ public class R2dbcTerminalDwellStatsRepository implements TerminalDwellStatsRepo
                 .bind("weekend", weekend)
                 .map(this::mapRow)
                 .one();
+    }
+
+    @Override
+    public Flux<TerminalDwellStat> findByHourAndWeekend(int hourOfDay, boolean weekend) {
+        String sql = "SELECT " + SELECT_COLUMNS + """
+                FROM terminal_dwell_stats
+                WHERE hour_of_day = :hourOfDay
+                  AND is_weekend = :weekend
+                """;
+        return databaseClient.sql(sql)
+                .bind("hourOfDay", hourOfDay)
+                .bind("weekend", weekend)
+                .map(this::mapRow)
+                .all();
     }
 
     @Override

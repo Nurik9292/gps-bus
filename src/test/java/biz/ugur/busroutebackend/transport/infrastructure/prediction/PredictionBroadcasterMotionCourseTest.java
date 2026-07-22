@@ -43,7 +43,7 @@ class PredictionBroadcasterMotionCourseTest {
         broadcaster = new PredictionBroadcaster(
                 directBroadcaster, routeGeometryCache, etaProperties,
                 new PredictionProperties(), org.mockito.Mockito.mock(VehiclePositionPredictor.class),
-                new PipelineTracer(), new LiveFactorSnapshotHolder(), java.time.Clock.systemUTC());
+                new PipelineTracer(), new LiveFactorSnapshotHolder(), java.time.Clock.systemUTC(), org.mockito.Mockito.mock(TerminalDepartureEtaService.class));
         lenient().when(routeGeometryCache.getStopsAhead(anyString(), anyInt(), anyDouble()))
                 .thenReturn(List.of());
     }
