@@ -55,18 +55,21 @@ public class SegmentObservationRecorder implements V31StopEventSink {
     private final AtomicLong observationsWritten = new AtomicLong();
     private final AtomicLong droppedOutOfRange = new AtomicLong();
     private final AtomicLong resetsOnJump = new AtomicLong();
+    private final TerminalPresenceHolder terminalPresenceHolder;
 
     public SegmentObservationRecorder(
             org.springframework.beans.factory.ObjectProvider<V31ShadowService> shadowService,
             SegmentTravelStatsRepository historyRepository,
             SegmentLiveStateRepository liveRepository,
             biz.ugur.busroutebackend.transport.domain.repository.TerminalDwellStatsRepository terminalDwellRepository,
-            EtaLiveFactorProperties properties) {
+            EtaLiveFactorProperties properties,
+            TerminalPresenceHolder terminalPresenceHolder) {
         this.shadowService = shadowService;
         this.historyRepository = historyRepository;
         this.liveRepository = liveRepository;
         this.terminalDwellRepository = terminalDwellRepository;
         this.properties = properties;
+        this.terminalPresenceHolder = terminalPresenceHolder;
     }
 
     @PostConstruct
@@ -88,6 +91,7 @@ public class SegmentObservationRecorder implements V31StopEventSink {
         }
         if (properties.isAxisExcluded(fix.routeNumber(), direction)) {
             tracks.remove(fix.vehicleId());
+            terminalPresenceHolder.departed(fix.vehicleId());
             return;
         }
         long ticks = ticksSeen.incrementAndGet();
@@ -112,6 +116,9 @@ public class SegmentObservationRecorder implements V31StopEventSink {
                     && prev.direction() != direction) {
                 recordTerminalDwell(prev.routeNumber(), prev.direction(),
                         prev.terminalArrivedAt(), now);
+            }
+            if (prev != null) {
+                terminalPresenceHolder.departed(vehicleId);
             }
             tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
                     s, now, null, null, null));
@@ -143,6 +150,8 @@ public class SegmentObservationRecorder implements V31StopEventSink {
             if (lastArriveEdge > prev.s() && lastArriveEdge <= s) {
                 terminalArrivedAt = interpolate(prev.at(), tickSpanSec, prev.s(), s,
                         lastArriveEdge);
+                terminalPresenceHolder.arrived(vehicleId, fix.routeNumber(), direction,
+                        terminalArrivedAt);
             }
         }
 

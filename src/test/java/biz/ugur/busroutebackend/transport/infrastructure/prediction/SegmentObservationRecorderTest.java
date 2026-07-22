@@ -48,11 +48,13 @@ class SegmentObservationRecorderTest {
 
     private EtaLiveFactorProperties properties;
     private SegmentObservationRecorder recorder;
+    private TerminalPresenceHolder presenceHolder;
 
     private static final Instant T0 = Instant.parse("2026-07-18T08:00:00Z");
 
     @BeforeEach
     void setUp() {
+        presenceHolder = new TerminalPresenceHolder();
         properties = new EtaLiveFactorProperties();
         properties.setExcludedAxes(List.of("142:0"));
         org.springframework.beans.factory.ObjectProvider<V31ShadowService> provider =
@@ -81,7 +83,7 @@ class SegmentObservationRecorderTest {
                 .thenReturn(Mono.empty());
         when(terminalDwellRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
         recorder = new SegmentObservationRecorder(
-                provider, historyRepository, liveRepository, terminalDwellRepository, properties);
+                provider, historyRepository, liveRepository, terminalDwellRepository, properties, presenceHolder);
         when(historyRepository.findByKey(anyString(), anyInt(), anyString(), anyString(),
                 anyInt(), anyBoolean())).thenReturn(Mono.empty());
         when(historyRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
@@ -220,7 +222,7 @@ class SegmentObservationRecorderTest {
                     }
                 };
         SegmentObservationRecorder detached = new SegmentObservationRecorder(
-                absent, historyRepository, liveRepository, terminalDwellRepository, properties);
+                absent, historyRepository, liveRepository, terminalDwellRepository, properties, presenceHolder);
         org.assertj.core.api.Assertions.assertThatCode(detached::register)
                 .doesNotThrowAnyException();
     }
@@ -258,5 +260,35 @@ class SegmentObservationRecorderTest {
         tick("57", 120, 2100.0);
 
         verify(liveRepository, never()).recordTravel(anyString(), anyString(), anyDouble(), any());
+    }
+
+    @Test
+    void terminalArrivalPublishesPresenceAndTripBoundaryClearsIt() {
+        tick("57", 0, 2850.0);
+        tick("57", 20, 2995.0);
+        var presence = presenceHolder.presentAt("veh-1", T0.plusSeconds(120), 3600).orElseThrow();
+        assertThat(presence.routeNumber()).isEqualTo("57");
+        assertThat(presence.arrivedDirection()).isZero();
+        assertThat(presence.arrivedAt()).isAfter(T0);
+
+        recorder.onTick(fix("57", 320), geom, 10.0, 1, 2, List.of());
+        assertThat(presenceHolder.presentAt("veh-1", T0.plusSeconds(320), 3600)).isEmpty();
+    }
+
+    @Test
+    void stalePresenceIsHiddenAfterMaxDwell() {
+        tick("57", 0, 2850.0);
+        tick("57", 20, 2995.0);
+        assertThat(presenceHolder.presentAt("veh-1", T0.plusSeconds(4000), 3600)).isEmpty();
+    }
+
+    @Test
+    void excludedAxisClearsPresence() {
+        tick("57", 0, 2850.0);
+        tick("57", 20, 2995.0);
+        assertThat(presenceHolder.size()).isEqualTo(1);
+        properties.setExcludedAxes(List.of("57:0"));
+        tick("57", 40, 3000.0);
+        assertThat(presenceHolder.size()).isZero();
     }
 }

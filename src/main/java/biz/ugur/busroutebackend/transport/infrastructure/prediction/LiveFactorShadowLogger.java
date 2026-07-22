@@ -31,6 +31,7 @@ public class LiveFactorShadowLogger {
     private static final ZoneId ASHGABAT = ZoneId.of("Asia/Ashgabat");
     static final Duration TICK_PERIOD = Duration.ofSeconds(60);
     private static final Duration TICK_TIMEOUT = Duration.ofSeconds(45);
+    private static final Duration TERMINAL_DWELL_REFRESH_TIMEOUT = Duration.ofSeconds(10);
     private static final int EDGE_CONCURRENCY = 8;
     private static final int TOP_FACTORS_LOGGED = 5;
 
@@ -40,6 +41,9 @@ public class LiveFactorShadowLogger {
     private final Clock clock;
     private final LiveFactorSnapshotHolder snapshotHolder;
     private final ObjectProvider<V31ShadowService> shadowService;
+    private final biz.ugur.busroutebackend.transport.domain.repository.TerminalDwellStatsRepository terminalDwellRepository;
+    private final TerminalDwellSnapshotHolder terminalDwellSnapshotHolder;
+    private final biz.ugur.busroutebackend.transport.infrastructure.config.TerminalDepartureProperties terminalDepartureProperties;
 
     private Disposable ticker;
 
@@ -48,13 +52,19 @@ public class LiveFactorShadowLogger {
                                   EtaLiveFactorProperties properties,
                                   Clock clock,
                                   LiveFactorSnapshotHolder snapshotHolder,
-                                  ObjectProvider<V31ShadowService> shadowService) {
+                                  ObjectProvider<V31ShadowService> shadowService,
+                                  biz.ugur.busroutebackend.transport.domain.repository.TerminalDwellStatsRepository terminalDwellRepository,
+                                  TerminalDwellSnapshotHolder terminalDwellSnapshotHolder,
+                                  biz.ugur.busroutebackend.transport.infrastructure.config.TerminalDepartureProperties terminalDepartureProperties) {
         this.liveRepository = liveRepository;
         this.historyRepository = historyRepository;
         this.properties = properties;
         this.clock = clock;
         this.snapshotHolder = snapshotHolder;
         this.shadowService = shadowService;
+        this.terminalDwellRepository = terminalDwellRepository;
+        this.terminalDwellSnapshotHolder = terminalDwellSnapshotHolder;
+        this.terminalDepartureProperties = terminalDepartureProperties;
     }
 
     record EdgeFactor(String fromStopId, String toStopId,
@@ -64,9 +74,13 @@ public class LiveFactorShadowLogger {
 
     @PostConstruct
     void start() {
-        if (properties.getMode() == EtaLiveFactorProperties.Mode.OFF) {
+        if (properties.getMode() == EtaLiveFactorProperties.Mode.OFF && !terminalDwellsEnabled()) {
             log.info("[ETA_LIVE_FACTOR] режим OFF — shadow-логгер не запущен");
             return;
+        }
+        if (terminalDwellsEnabled() && !properties.isWriteEnabled()) {
+            log.warn("[TERMINAL_DEPARTURE] режим live при выключенном сборе "
+                    + "(ETA_LIVE_FACTOR_WRITE_ENABLED=false) — присутствие и отстои не пишутся");
         }
         ticker = tickerPipeline(Flux.interval(TICK_PERIOD, TICK_PERIOD))
                 .subscribe(
@@ -86,12 +100,31 @@ public class LiveFactorShadowLogger {
     }
 
     private Mono<List<EdgeFactor>> wholeTickWithTimeout() {
-        return collectFactors()
-                .doOnNext(this::logSummary)
-                .flatMap(this::applyIfLive)
+        Mono<List<EdgeFactor>> factorsPart = properties.getMode() == EtaLiveFactorProperties.Mode.OFF
+                ? Mono.just(List.of())
+                : collectFactors().doOnNext(this::logSummary).flatMap(this::applyIfLive);
+        return isolatedTerminalDwellsRefresh()
+                .then(factorsPart)
                 .timeout(TICK_TIMEOUT)
                 .onErrorResume(err -> {
                     log.warn("[ETA_LIVE_FACTOR] тик не удался: {}", err.getMessage());
+                    return Mono.empty();
+                });
+    }
+
+    private boolean terminalDwellsEnabled() {
+        return terminalDepartureProperties.getMode()
+                == biz.ugur.busroutebackend.transport.infrastructure.config.TerminalDepartureProperties.Mode.LIVE;
+    }
+
+    private Mono<Void> isolatedTerminalDwellsRefresh() {
+        if (!terminalDwellsEnabled()) {
+            return Mono.empty();
+        }
+        return publishTerminalDwells()
+                .timeout(TERMINAL_DWELL_REFRESH_TIMEOUT)
+                .onErrorResume(err -> {
+                    log.warn("[TERMINAL_DEPARTURE] обновление отстоев не удалось: {}", err.getMessage());
                     return Mono.empty();
                 });
     }
@@ -101,6 +134,28 @@ public class LiveFactorShadowLogger {
         if (ticker != null) {
             ticker.dispose();
         }
+    }
+
+    Mono<Void> publishTerminalDwells() {
+        ZonedDateTime now = ZonedDateTime.ofInstant(clock.instant(), ASHGABAT);
+        ZonedDateTime prevHour = now.minusHours(1);
+        return Flux.concat(
+                        dwellStatsOfHour(prevHour.getHour(), prevHour.getDayOfWeek().getValue() >= 6),
+                        dwellStatsOfHour(now.getHour(), now.getDayOfWeek().getValue() >= 6))
+                .collectMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue,
+                        java.util.HashMap::new)
+                .doOnNext(terminalDwellSnapshotHolder::publish)
+                .then();
+    }
+
+    private Flux<java.util.Map.Entry<String, TerminalDwellSnapshotHolder.DwellStat>> dwellStatsOfHour(
+            int hourOfDay, boolean weekend) {
+        return terminalDwellRepository.findByHourAndWeekend(hourOfDay, weekend)
+                .map(stat -> java.util.Map.entry(
+                        TerminalDwellSnapshotHolder.key(stat.getRouteNumber(), stat.getDirection(),
+                                stat.getHourOfDay()),
+                        new TerminalDwellSnapshotHolder.DwellStat(
+                                stat.getAvgDwellSeconds(), stat.getSampleCount())));
     }
 
     Mono<List<EdgeFactor>> collectFactors() {
