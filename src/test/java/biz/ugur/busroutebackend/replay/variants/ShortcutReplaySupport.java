@@ -23,6 +23,7 @@ final class ShortcutReplaySupport {
                             long maxContinuousSecondsAbove,
                             int directionChanges,
                             long tripIncrements,
+                            long shortcutJumps,
                             String finalMode) {
     }
 
@@ -71,6 +72,7 @@ final class ShortcutReplaySupport {
         Integer prevDir = null;
         int dirChanges = 0;
         long tripStart = -1;
+        long tripEnd = -1;
         Instant prevTs = null;
         String finalMode = "";
         for (GpsFix fx : fixes) {
@@ -84,15 +86,19 @@ final class ShortcutReplaySupport {
             prevTs = fx.timestamp();
             var est = core.onFix(fx, topo);
             finalMode = est.mode();
-            if (prevDir != null && core.direction() != prevDir) {
+            boolean inWindow = !fx.timestamp().isBefore(windowFrom)
+                    && !fx.timestamp().isAfter(windowTo);
+            if (inWindow && prevDir != null && core.direction() != prevDir) {
                 dirChanges++;
             }
             prevDir = core.direction();
-            if (tripStart < 0) {
+            if (inWindow && tripStart < 0) {
                 tripStart = core.tripId();
             }
-
-            if (fx.timestamp().isBefore(windowFrom) || fx.timestamp().isAfter(windowTo)) {
+            if (!inWindow) {
+                if (tripStart >= 0 && tripEnd < 0) {
+                    tripEnd = core.tripId();
+                }
                 aboveSince = null;
                 continue;
             }
@@ -111,7 +117,9 @@ final class ShortcutReplaySupport {
                 aboveSince = null;
             }
         }
+        long tripsInWindow = (tripEnd >= 0 ? tripEnd : core.tripId())
+                - Math.max(tripStart, 0);
         return new DivergenceReport(maxDivergence, maxContinuous, dirChanges,
-                core.tripId() - tripStart, finalMode);
+                tripsInWindow, core.shortcutJumps(), finalMode);
     }
 }

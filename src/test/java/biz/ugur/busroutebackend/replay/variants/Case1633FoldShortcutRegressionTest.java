@@ -29,5 +29,8 @@ class Case1633FoldShortcutRegressionTest {
         assertThat(report.tripIncrements())
                 .as("перескок не рождает trip++")
                 .isZero();
+        assertThat(report.shortcutJumps())
+                .as("перескок ровно один — без прыгающего поведения")
+                .isEqualTo(1);
     }
 }
