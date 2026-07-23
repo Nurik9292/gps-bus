@@ -70,6 +70,7 @@ public class RouteDataMapper {
                 activeVehicleCount != null ? activeVehicleCount : 0L,
                 busRoute.getCreatedAt(),
                 busRoute.getUpdatedAt(),
+                busRoute.getUpdatedBy(),
                 forwardStops,
                 backwardStops
         );

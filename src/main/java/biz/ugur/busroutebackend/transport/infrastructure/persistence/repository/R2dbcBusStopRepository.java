@@ -36,7 +36,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
     private static final String SELECT_COLUMNS = String.join(", ",
             "id", "stop_name", "name_en", "name_tm", "stop_code",
             "latitude", "longitude", "is_active", "is_major_stop", "city_id",
-            "created_at", "updated_at", "version"
+            "created_at", "updated_at", "updated_by", "version"
     );
 
     private final BusStopEntityMapper entityMapper;
@@ -79,6 +79,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
         columns.put("is_active", persistenceEntity.getIsActive());
         columns.put("is_major_stop", persistenceEntity.getIsMajorStop());
         columns.put("city_id", persistenceEntity.getCityId());
+        columns.put("updated_by", persistenceEntity.getUpdatedBy());
         return columns;
     }
 
@@ -231,6 +232,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 .servingRoutesCount(safeGet(row, "serving_routes_count", Integer.class, 0))
                 .createdAt(safeGet(row, "created_at", java.time.LocalDateTime.class, null))
                 .updatedAt(safeGet(row, "updated_at", java.time.LocalDateTime.class, null))
+                .updatedBy(safeGet(row, "updated_by", String.class, null))
                 .version(safeGet(row, "version", Long.class, 0L))
                 .build();
 

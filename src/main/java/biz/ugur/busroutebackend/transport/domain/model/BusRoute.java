@@ -39,8 +39,17 @@ public class BusRoute extends AggregateRoot<BusRoute, BusRouteId> {
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String updatedBy;
     private Long version;
 
+
+    public BusRoute editedBy(String adminUsername) {
+        return this.toBuilder().updatedBy(adminUsername).build();
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
 
     public static BusRoute create(
             String routeNumber,

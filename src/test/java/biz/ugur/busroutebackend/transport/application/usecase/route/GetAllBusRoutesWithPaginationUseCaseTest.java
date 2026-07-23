@@ -114,9 +114,9 @@ class GetAllBusRoutesWithPaginationUseCaseTest {
         when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
         when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
-        when(busRouteRepository.searchWithRelevance(anyString(), any(), any(Pageable.class)))
+        when(busRouteRepository.searchWithRelevance(anyString(), any(), any(), any(Pageable.class)))
                 .thenReturn(Flux.just(route));
-        when(busRouteRepository.countBySearch(anyString(), any())).thenReturn(Mono.just(1L));
+        when(busRouteRepository.countBySearch(anyString(), any(), any())).thenReturn(Mono.just(1L));
         when(busRouteRepository.countActiveRoutes()).thenReturn(Mono.just(1L));
         when(routeStopsService.getForwardStopsDTO(anyString())).thenReturn(Mono.just(List.of()));
         when(routeStopsService.getBackwardStopsDTO(anyString())).thenReturn(Mono.just(List.of()));

@@ -43,12 +43,17 @@ class UpdateBusStopUseCaseTest {
     @Mock
     private EventBus eventBus;
 
+    @Mock
+    private biz.ugur.busroutebackend.shared.application.SecurityContextService securityContextService;
+
     private BusStop existing;
 
     @BeforeEach
     void setUp() {
         org.mockito.Mockito.lenient().when(nameHistoryRecorder.recordStopChanges(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(reactor.core.publisher.Mono.empty());
+        org.mockito.Mockito.lenient().when(securityContextService.getCurrentUsername())
+                .thenReturn(Mono.just("admin-timur"));
         existing = BusStop.create(
                 "Central Station", "Central EN", "Merkez", StopCode.of("AS001"),
                 new BigDecimal("37.96"), new BigDecimal("58.33"),
@@ -73,7 +78,32 @@ class UpdateBusStopUseCaseTest {
                 .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
         StepVerifier.create(useCase.execute(Mono.just(cmd)))
-                .assertNext(result -> assertEquals("Central Station", result.stopName()))
+                .assertNext(result -> {
+                    assertEquals("Central Station", result.stopName());
+                    assertEquals("admin-timur", result.updatedBy());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void fallsBackToSystemWhenNoAuthenticatedUser() {
+        UpdateStop cmd = new UpdateStop(
+                existing.getId().getValue(),
+                "Central Station", "Central EN", "Merkez",
+                new BigDecimal("37.96"), new BigDecimal("58.33"),
+                true, true, "ashgabat"
+        );
+
+        when(securityContextService.getCurrentUsername()).thenReturn(Mono.empty());
+        when(correlationService.getCurrentCorrelationId()).thenReturn(Mono.just(CorrelationId.generate()));
+        when(correlationService.executeWithCorrelation(any(Mono.class), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(busStopRepository.findById(existing.getId())).thenReturn(Mono.just(existing));
+        when(busStopRepository.save(any(BusStop.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.execute(Mono.just(cmd)))
+                .assertNext(result -> assertEquals("system", result.updatedBy()))
                 .verifyComplete();
     }
 

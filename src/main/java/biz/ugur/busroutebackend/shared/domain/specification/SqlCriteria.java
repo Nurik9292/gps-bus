@@ -19,6 +19,10 @@ public class SqlCriteria {
         return new SqlCriteria("1=1", Collections.emptyMap());
     }
 
+    public static SqlCriteria of(String whereClause, Map<String, Object> parameters) {
+        return new SqlCriteria(whereClause, new HashMap<>(parameters));
+    }
+
     public static SqlCriteria of(String whereClause, String paramName, Object paramValue) {
         Map<String, Object> params = new HashMap<>();
         params.put(paramName, paramValue);

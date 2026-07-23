@@ -38,7 +38,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
             "route_color", "is_active", "city_id", "estimated_duration_minutes",
             "route_geometry_forward", "route_geometry_backward",
             "total_distance_forward_meters", "total_distance_backward_meters",
-            "version", "created_at", "updated_at"
+            "version", "created_at", "updated_at", "updated_by"
     );
 
     private final BusRouteEntityMapper entityMapper;
@@ -75,6 +75,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
         columns.put("route_color", persistenceEntity.getRouteColor());
         columns.put("is_active", persistenceEntity.getIsActive());
         columns.put("city_id", persistenceEntity.getCityId());
+        columns.put("updated_by", persistenceEntity.getUpdatedBy());
         columns.put("estimated_duration_minutes", persistenceEntity.getEstimatedDurationMinutes());
         columns.put("route_geometry_forward", persistenceEntity.getRouteGeometryForward());
         columns.put("route_geometry_backward", persistenceEntity.getRouteGeometryBackward());
@@ -97,7 +98,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 route_geometry_forward, route_geometry_backward,
                 geometry_forward, geometry_backward,
                 total_distance_forward_meters, total_distance_backward_meters,
-                created_at, updated_at, version
+                created_at, updated_at, updated_by, version
             ) VALUES (
                 :id, :route_number, :route_name, :name_tm, :name_en, :route_color,
                 :is_active, :city_id, :estimated_duration_minutes,
@@ -113,7 +114,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                     ELSE NULL
                 END,
                 :total_distance_forward_meters, :total_distance_backward_meters,
-                :created_at, :updated_at, :version
+                :created_at, :updated_at, :updated_by, :version
             ) RETURNING %s
             """.formatted(selectColumns());
 
@@ -166,6 +167,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 total_distance_forward_meters = :total_distance_forward_meters,
                 total_distance_backward_meters = :total_distance_backward_meters,
                 updated_at = :updated_at,
+                updated_by = :updated_by,
                 version = :version
             WHERE id = :id AND version = :old_version
             RETURNING %s
@@ -460,6 +462,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 .totalDistanceBackwardMeters(row.get("total_distance_backward_meters", Integer.class))
                 .createdAt(row.get("created_at", LocalDateTime.class))
                 .updatedAt(row.get("updated_at", LocalDateTime.class))
+                .updatedBy(row.get("updated_by", String.class))
                 .version(row.get("version", Long.class))
                 .build();
 
@@ -580,7 +583,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
     }
 
     @Override
-    public Flux<BusRoute> searchWithRelevance(String query, Boolean isActive, Pageable pageable) {
+    public Flux<BusRoute> searchWithRelevance(String query, Boolean isActive, String cityId, Pageable pageable) {
         String searchQuery = query.trim().toLowerCase();
         String searchPattern = "%" + searchQuery + "%";
 
@@ -590,11 +593,15 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
             WHERE (LOWER(route_number) LIKE :searchPattern
                    OR LOWER(route_name) LIKE :searchPattern
                    OR LOWER(name_tm) LIKE :searchPattern
-                   OR LOWER(name_en) LIKE :searchPattern)
+                   OR LOWER(name_en) LIKE :searchPattern
+                   OR id = :exactId)
             """, selectColumns()));
 
         if (isActive != null) {
             sqlBuilder.append(" AND is_active = :isActive");
+        }
+        if (cityId != null && !cityId.isBlank()) {
+            sqlBuilder.append(" AND city_id = :cityId");
         }
 
         sqlBuilder.append("""
@@ -615,11 +622,15 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
                 .bind("searchPattern", searchPattern)
                 .bind("exactQuery", searchQuery)
                 .bind("startsWithPattern", searchQuery + "%")
+                .bind("exactId", query.trim())
                 .bind("limit", pageable.getPageSize())
                 .bind("offset", pageable.getOffset());
 
         if (isActive != null) {
             executeSpec = executeSpec.bind("isActive", isActive);
+        }
+        if (cityId != null && !cityId.isBlank()) {
+            executeSpec = executeSpec.bind("cityId", cityId);
         }
 
         return executeSpec
@@ -629,7 +640,7 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
     }
 
     @Override
-    public Mono<Long> countBySearch(String query, Boolean isActive) {
+    public Mono<Long> countBySearch(String query, Boolean isActive, String cityId) {
         String searchPattern = "%" + query.trim().toLowerCase() + "%";
 
         StringBuilder sqlBuilder = new StringBuilder();
@@ -638,18 +649,26 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
             WHERE (LOWER(route_number) LIKE :searchPattern
                    OR LOWER(route_name) LIKE :searchPattern
                    OR LOWER(name_tm) LIKE :searchPattern
-                   OR LOWER(name_en) LIKE :searchPattern)
+                   OR LOWER(name_en) LIKE :searchPattern
+                   OR id = :exactId)
             """);
 
         if (isActive != null) {
             sqlBuilder.append(" AND is_active = :isActive");
         }
+        if (cityId != null && !cityId.isBlank()) {
+            sqlBuilder.append(" AND city_id = :cityId");
+        }
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sqlBuilder.toString())
-                .bind("searchPattern", searchPattern);
+                .bind("searchPattern", searchPattern)
+                .bind("exactId", query.trim());
 
         if (isActive != null) {
             executeSpec = executeSpec.bind("isActive", isActive);
+        }
+        if (cityId != null && !cityId.isBlank()) {
+            executeSpec = executeSpec.bind("cityId", cityId);
         }
 
         return executeSpec

@@ -19,6 +19,7 @@ public record StopData(
         Integer servingRouteCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
+        String updatedBy,
         String cityId,
 
 
@@ -41,6 +42,7 @@ public record StopData(
                 stop.getServingRoutesCount(),
                 stop.getCreatedAt(),
                 stop.getUpdatedAt(),
+                stop.getUpdatedBy(),
                 stop.getCityId(),
                 stop.toCoordinates().toArray()
         );
@@ -61,6 +63,7 @@ public record StopData(
                 stop.getServingRoutesCount(),
                 stop.getCreatedAt(),
                 stop.getUpdatedAt(),
+                stop.getUpdatedBy(),
                 stop.getCityId(),
                 null
         );

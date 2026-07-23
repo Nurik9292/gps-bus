@@ -33,6 +33,7 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String updatedBy;
     private Long version;
 
 
@@ -117,6 +118,14 @@ public class BusStop extends AggregateRoot<BusStop, BusStopId> {
                 .build();
     }
 
+
+    public BusStop editedBy(String adminUsername) {
+        return this.toBuilder().updatedBy(adminUsername).build();
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
 
     public BusStop updateInfo(
             String stopName,

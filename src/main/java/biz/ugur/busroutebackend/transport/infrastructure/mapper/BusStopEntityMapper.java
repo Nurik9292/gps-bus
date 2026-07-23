@@ -29,6 +29,7 @@ public class BusStopEntityMapper {
                 .servingRoutesCount(domain.getServingRoutesCount())
                 .createdAt(domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt())
+                .updatedBy(domain.getUpdatedBy())
                 .version(domain.getVersion())
                 .build();
     }
@@ -38,7 +39,7 @@ public class BusStopEntityMapper {
             return null;
         }
 
-        return BusStop.restore(
+        BusStop restored = BusStop.restore(
                 BusStopId.of(entity.getId()),
                 entity.getStopName(),
                 entity.getNameEn(),
@@ -53,5 +54,8 @@ public class BusStopEntityMapper {
                 entity.getUpdatedAt(),
                 entity.getVersion()
         );
+        return entity.getUpdatedBy() != null
+                ? restored.editedBy(entity.getUpdatedBy())
+                : restored;
     }
 }

@@ -21,14 +21,17 @@ public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopData
 
     private final BusStopRepository busStopRepository;
     private final biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder;
+    private final biz.ugur.busroutebackend.shared.application.SecurityContextService securityContextService;
 
     public UpdateBusStopUseCase(BusStopRepository busStopRepository,
                                 biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder,
+                                biz.ugur.busroutebackend.shared.application.SecurityContextService securityContextService,
                                 EventBus eventBus,
                                 CorrelationContextService correlationService) {
         super(correlationService, eventBus);
         this.busStopRepository = busStopRepository;
         this.nameHistoryRecorder = nameHistoryRecorder;
+        this.securityContextService = securityContextService;
     }
 
     @Override
@@ -78,7 +81,10 @@ public class UpdateBusStopUseCase extends BaseUseCase<Mono<UpdateStop>, StopData
                     command.cityId()
             );
 
-            return busStopRepository.save(updatedStop)
+            return securityContextService.getCurrentUsername()
+                    .defaultIfEmpty("system")
+                    .map(updatedStop::editedBy)
+                    .flatMap(busStopRepository::save)
                     .flatMap(saved -> nameHistoryRecorder.recordStopChanges(existingStop, saved)
                             .thenReturn(saved));
         } catch (Exception e) {

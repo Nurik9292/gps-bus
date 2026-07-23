@@ -27,18 +27,21 @@ public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteD
     private final RouteStopsService routeStopsService;
     private final RouteDataMapper routeDataMapper;
     private final biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder;
+    private final biz.ugur.busroutebackend.shared.application.SecurityContextService securityContextService;
 
     public UpdateBusRouteUseCase(BusRouteRepository busRouteRepository,
                                  EventBus eventBus,
                                  CorrelationContextService correlationService,
                                  RouteStopsService routeStopsService,
                                  RouteDataMapper routeDataMapper,
-                                 biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder) {
+                                 biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder,
+                                 biz.ugur.busroutebackend.shared.application.SecurityContextService securityContextService) {
         super(correlationService, eventBus);
         this.busRouteRepository = busRouteRepository;
         this.routeStopsService = routeStopsService;
         this.routeDataMapper = routeDataMapper;
         this.nameHistoryRecorder = nameHistoryRecorder;
+        this.securityContextService = securityContextService;
     }
 
 
@@ -94,7 +97,11 @@ public class UpdateBusRouteUseCase extends BaseUseCase<Mono<UpdateRoute>, RouteD
             updatedRoute = updateRouteGeometry(updatedRoute, command);
         }
 
-        return busRouteRepository.save(updatedRoute)
+        BusRoute routeToSave = updatedRoute;
+        return securityContextService.getCurrentUsername()
+                .defaultIfEmpty("system")
+                .map(routeToSave::editedBy)
+                .flatMap(busRouteRepository::save)
                 .flatMap(saved -> nameHistoryRecorder.recordRouteChanges(exsistBusRoute, saved)
                         .thenReturn(saved));
     }

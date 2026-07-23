@@ -68,11 +68,11 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
                 .then(
                         Mono.zip(
                                 hasSearchQuery
-                                        ? fetchRoutesWithRelevance(query.query(), query.isActivate(), pageable)
+                                        ? fetchRoutesWithRelevance(query.query(), query.isActivate(), query.cityId(), pageable)
                                         : fetchRoutesWithSpecification(query, pageable),
                                 busRouteRepository.countActiveRoutes(),
                                 hasSearchQuery
-                                        ? busRouteRepository.countBySearch(query.query(), query.isActivate())
+                                        ? busRouteRepository.countBySearch(query.query(), query.isActivate(), query.cityId())
                                         : countRoutesWithSpecification(query)
                         )
                 )
@@ -102,8 +102,8 @@ public class GetAllBusRoutesWithPaginationUseCase extends BaseUseCase<Mono<GetAl
                 });
     }
 
-    private Mono<List<BusRoute>> fetchRoutesWithRelevance(String query, Boolean isActive, Pageable pageable) {
-        return busRouteRepository.searchWithRelevance(query, isActive, pageable).collectList();
+    private Mono<List<BusRoute>> fetchRoutesWithRelevance(String query, Boolean isActive, String cityId, Pageable pageable) {
+        return busRouteRepository.searchWithRelevance(query, isActive, cityId, pageable).collectList();
     }
 
     private Mono<List<BusRoute>> fetchRoutesWithSpecification(GetAllRoutePaginationQuery query, Pageable pageable) {
