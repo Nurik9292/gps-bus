@@ -26,6 +26,7 @@ public class GpsOutlierDetector {
     private final long maxTimeDifferenceSeconds;
     private final double minDistanceMeters;
     private final double minSpeedForFrozenDetectionKmh;
+    private final FrozenCoordsRegistry frozenCoordsRegistry;
 
     public GpsOutlierDetector() {
         this(true, DEFAULT_MAX_IMPLIED_SPEED_KMH, DEFAULT_MIN_TIME_DIFF_SECONDS,
@@ -43,6 +44,18 @@ public class GpsOutlierDetector {
     public GpsOutlierDetector(boolean enabled, double maxImpliedSpeedKmh,
                                long minTimeDifferenceSeconds, long maxTimeDifferenceSeconds,
                                double minDistanceMeters, double minSpeedForFrozenDetectionKmh) {
+        this(enabled, maxImpliedSpeedKmh, minTimeDifferenceSeconds, maxTimeDifferenceSeconds,
+                minDistanceMeters, minSpeedForFrozenDetectionKmh,
+                new FrozenCoordsRegistry(java.time.Duration.ofMinutes(10),
+                        java.time.Duration.ofMinutes(10), java.time.Duration.ofMinutes(30),
+                        java.time.Clock.systemUTC()));
+    }
+
+    public GpsOutlierDetector(boolean enabled, double maxImpliedSpeedKmh,
+                               long minTimeDifferenceSeconds, long maxTimeDifferenceSeconds,
+                               double minDistanceMeters, double minSpeedForFrozenDetectionKmh,
+                               FrozenCoordsRegistry frozenCoordsRegistry) {
+        this.frozenCoordsRegistry = frozenCoordsRegistry;
         this.enabled = enabled;
         this.maxImpliedSpeedKmh = maxImpliedSpeedKmh;
         this.minTimeDifferenceSeconds = minTimeDifferenceSeconds;
@@ -151,10 +164,16 @@ public class GpsOutlierDetector {
                     newLatitude, newLongitude
             );
 
-            log.warn("[GPS_ANOMALY|SOURCE:PROVIDER] FROZEN_COORDS_WITH_MOTION: " +
-                            "device={}, distance={}m, reportedSpeed={}km/h — stale GPS fix",
-                    deviceId, String.format("%.1f", distanceMeters),
-                    String.format("%.1f", reportedSpeedKmh));
+            FrozenCoordsRegistry.FrozenEpisode episode =
+                    frozenCoordsRegistry.recordFrozenEvent(deviceId, null, null, reportedSpeedKmh);
+            if (episode.warnAllowed()) {
+                log.warn("[GPS_ANOMALY|SOURCE:PROVIDER] FROZEN_COORDS_WITH_MOTION: " +
+                                "device={}, distance={}m, reportedSpeed={}km/h, "
+                                + "frozenSince={}, detections={} — stale GPS fix",
+                        deviceId, String.format("%.1f", distanceMeters),
+                        String.format("%.1f", reportedSpeedKmh),
+                        episode.firstFrozenAt(), episode.detectionCount());
+            }
 
             return OutlierDetectionResult.frozenCoordinatesWithMotion(deviceId, distanceMeters, reportedSpeedKmh);
         }

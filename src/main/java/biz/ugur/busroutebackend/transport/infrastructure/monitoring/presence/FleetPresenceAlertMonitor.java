@@ -10,6 +10,7 @@ import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteAssignmentRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
+import biz.ugur.busroutebackend.transport.domain.service.FrozenCoordsRegistry;
 import biz.ugur.busroutebackend.transport.domain.valueobject.VehicleId;
 import biz.ugur.busroutebackend.transport.infrastructure.monitoring.offroute.OffRouteRecord;
 import biz.ugur.busroutebackend.transport.infrastructure.monitoring.offroute.OffRouteStateRegistry;
@@ -58,6 +59,7 @@ public class FleetPresenceAlertMonitor {
     private final VehicleRepository vehicleRepository;
     private final BusRouteRepository busRouteRepository;
     private final OffRouteStateRegistry offRouteStateRegistry;
+    private final FrozenCoordsRegistry frozenCoordsRegistry;
     private final Clock clock;
     private final String emailTemplate;
     private final String emptyRoutesTemplate;
@@ -75,6 +77,7 @@ public class FleetPresenceAlertMonitor {
                                      VehicleRepository vehicleRepository,
                                      BusRouteRepository busRouteRepository,
                                      OffRouteStateRegistry offRouteStateRegistry,
+                                     FrozenCoordsRegistry frozenCoordsRegistry,
                                      Clock clock) {
         this.emailService = emailService;
         this.quietHours = quietHours;
@@ -84,6 +87,7 @@ public class FleetPresenceAlertMonitor {
         this.vehicleRepository = vehicleRepository;
         this.busRouteRepository = busRouteRepository;
         this.offRouteStateRegistry = offRouteStateRegistry;
+        this.frozenCoordsRegistry = frozenCoordsRegistry;
         this.clock = clock;
         this.emailTemplate = loadTemplate("/email-templates/assigned-not-on-line.txt",
                 "Назначенные автобусы не на линии:\n{rows}");
@@ -154,7 +158,8 @@ public class FleetPresenceAlertMonitor {
                     List<UnassignedVehicle> unassigned = UnassignedVehicleDetector.detect(vehicles,
                             assignedTodayIds, nowUtc, properties.getSilentThresholdMinutes());
 
-                    return dispatchIfNeeded(problems, emptyRoutes, unassigned, shift, now);
+                    return dispatchIfNeeded(problems, emptyRoutes, unassigned,
+                            frozenCoordsRegistry.chronicallyFrozen(), shift, now);
                 });
     }
 
@@ -207,11 +212,13 @@ public class FleetPresenceAlertMonitor {
     }
 
     private Mono<Void> dispatchIfNeeded(List<FleetProblem> problems, List<EmptyRoute> emptyRoutes,
-                                        List<UnassignedVehicle> unassigned, ShiftType shift, Instant now) {
-        if (problems.isEmpty() && emptyRoutes.isEmpty() && unassigned.isEmpty()) {
+                                        List<UnassignedVehicle> unassigned,
+                                        List<FrozenCoordsRegistry.FrozenEpisode> frozen,
+                                        ShiftType shift, Instant now) {
+        if (problems.isEmpty() && emptyRoutes.isEmpty() && unassigned.isEmpty() && frozen.isEmpty()) {
             return Mono.empty();
         }
-        String hash = combinedHash(problems, emptyRoutes, unassigned);
+        String hash = combinedHash(problems, emptyRoutes, unassigned, frozen);
         boolean changed = !hash.equals(lastSentHash);
         boolean cooldownPassed = lastSentAt == null
                 || Duration.between(lastSentAt, now).toMinutes() >= properties.getMinResendCooldownMinutes();
@@ -220,10 +227,10 @@ public class FleetPresenceAlertMonitor {
             return Mono.empty();
         }
 
-        String subject = buildSubject(problems, emptyRoutes, unassigned, shift);
-        String body = "<pre>" + renderBody(problems, emptyRoutes, unassigned, shift, now) + "</pre>";
-        log.warn("[FLEET_PRESENCE] dispatching: assigned={}, emptyRoutes={}, unassigned={}, shift={}",
-                problems.size(), emptyRoutes.size(), unassigned.size(), shift);
+        String subject = buildSubject(problems, emptyRoutes, unassigned, frozen, shift);
+        String body = "<pre>" + renderBody(problems, emptyRoutes, unassigned, frozen, shift, now) + "</pre>";
+        log.warn("[FLEET_PRESENCE] dispatching: assigned={}, emptyRoutes={}, unassigned={}, frozen={}, shift={}",
+                problems.size(), emptyRoutes.size(), unassigned.size(), frozen.size(), shift);
 
         return emailService.sendGpsAlert(gpsAlertProperties.recipientList(), "ASSIGNED_FLEET",
                         AlertKind.ASSIGNED_NOT_ON_LINE, subject, body)
@@ -238,7 +245,8 @@ public class FleetPresenceAlertMonitor {
     }
 
     private String buildSubject(List<FleetProblem> problems, List<EmptyRoute> emptyRoutes,
-                                List<UnassignedVehicle> unassigned, ShiftType shift) {
+                                List<UnassignedVehicle> unassigned,
+                                List<FrozenCoordsRegistry.FrozenEpisode> frozen, ShiftType shift) {
         List<String> parts = new ArrayList<>();
         if (!problems.isEmpty()) {
             parts.add("не на линии: " + problems.size());
@@ -249,22 +257,30 @@ public class FleetPresenceAlertMonitor {
         if (!unassigned.isEmpty()) {
             parts.add("без маршрута: " + unassigned.size());
         }
+        if (!frozen.isEmpty()) {
+            parts.add("замороженный GPS: " + frozen.size());
+        }
         return "[FLEET] " + String.join(" | ", parts) + " (смена " + shift.name() + ")";
     }
 
     private String combinedHash(List<FleetProblem> problems, List<EmptyRoute> emptyRoutes,
-                                List<UnassignedVehicle> unassigned) {
+                                List<UnassignedVehicle> unassigned,
+                                List<FrozenCoordsRegistry.FrozenEpisode> frozen) {
         String a = problems.stream().map(p -> "A:" + p.vehicleId() + ":" + p.status().name())
                 .sorted().collect(Collectors.joining("|"));
         String b = emptyRoutes.stream().map(r -> "B:" + r.routeNumber() + ":" + r.reason().name())
                 .sorted().collect(Collectors.joining("|"));
         String c = unassigned.stream().map(u -> "C:" + u.licensePlate() + ":" + u.live())
                 .sorted().collect(Collectors.joining("|"));
-        return a + "#" + b + "#" + c;
+        String d = frozen.stream().map(f -> "D:" + f.deviceId())
+                .sorted().collect(Collectors.joining("|"));
+        return a + "#" + b + "#" + c + "#" + d;
     }
 
     private String renderBody(List<FleetProblem> problems, List<EmptyRoute> emptyRoutes,
-                             List<UnassignedVehicle> unassigned, ShiftType shift, Instant now) {
+                             List<UnassignedVehicle> unassigned,
+                             List<FrozenCoordsRegistry.FrozenEpisode> frozen,
+                             ShiftType shift, Instant now) {
         StringBuilder sb = new StringBuilder();
         if (!problems.isEmpty()) {
             sb.append(renderAssigned(problems, shift, now));
@@ -275,7 +291,23 @@ public class FleetPresenceAlertMonitor {
         if (!unassigned.isEmpty()) {
             appendSection(sb, renderUnassigned(unassigned, shift, now));
         }
+        if (!frozen.isEmpty()) {
+            appendSection(sb, renderFrozen(frozen, now));
+        }
         return sb.toString();
+    }
+
+    private String renderFrozen(List<FrozenCoordsRegistry.FrozenEpisode> frozen, Instant now) {
+        List<String> rows = new ArrayList<>();
+        for (FrozenCoordsRegistry.FrozenEpisode f : frozen) {
+            String plate = f.licensePlate() != null ? f.licensePlate() : f.deviceId();
+            String route = f.routeNumber() != null ? f.routeNumber() : "-";
+            rows.add(plate + " | " + route + " | device=" + f.deviceId()
+                    + " | заморожен " + humanDuration(Duration.between(f.firstFrozenAt(), now))
+                    + " | детекций " + f.detectionCount());
+        }
+        return "Датчики шлют скорость при замороженных координатах (" + frozen.size() + "):\n"
+                + String.join("\n", rows);
     }
 
     private void appendSection(StringBuilder sb, String section) {

@@ -41,6 +41,7 @@ class FleetPresenceAlertMonitorTest {
     private OffRouteStateRegistry registry;
     private GpsAlertProperties gpsProps;
     private FleetPresenceAlertProperties props;
+    private biz.ugur.busroutebackend.transport.domain.service.FrozenCoordsRegistry frozenRegistry;
     private FleetPresenceAlertMonitor monitor;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-09T10:00:00Z"), ZoneOffset.UTC);
@@ -64,7 +65,9 @@ class FleetPresenceAlertMonitorTest {
         when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND))).thenReturn(Flux.empty());
         when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST))).thenReturn(Flux.empty());
 
-        monitor = new FleetPresenceAlertMonitor(email, new biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours(new biz.ugur.busroutebackend.shared.infrastructure.email.MailProperties(), java.time.Clock.fixed(java.time.Instant.parse("2026-05-12T10:00:00Z"), java.time.ZoneOffset.UTC)), props, gpsProps, assignments, vehicles, busRoutes, registry, clock);
+        frozenRegistry = mock(biz.ugur.busroutebackend.transport.domain.service.FrozenCoordsRegistry.class);
+        org.mockito.Mockito.lenient().when(frozenRegistry.chronicallyFrozen()).thenReturn(List.of());
+        monitor = new FleetPresenceAlertMonitor(email, new biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours(new biz.ugur.busroutebackend.shared.infrastructure.email.MailProperties(), java.time.Clock.fixed(java.time.Instant.parse("2026-05-12T10:00:00Z"), java.time.ZoneOffset.UTC)), props, gpsProps, assignments, vehicles, busRoutes, registry, frozenRegistry, clock);
     }
 
     private RouteAssignment assignment(String vehicleId) {
@@ -241,7 +244,7 @@ class FleetPresenceAlertMonitorTest {
                 new biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours(
                         new biz.ugur.busroutebackend.shared.infrastructure.email.MailProperties(),
                         Clock.fixed(Instant.parse("2026-05-12T10:00:00Z"), ZoneOffset.UTC)),
-                props, gpsProps, assignments, vehicles, busRoutes, registry, customClock);
+                props, gpsProps, assignments, vehicles, busRoutes, registry, frozenRegistry, customClock);
     }
 
     @Test
@@ -286,6 +289,24 @@ class FleetPresenceAlertMonitorTest {
         verify(email).sendGpsAlert(anyList(), anyString(), eq(AlertKind.ASSIGNED_NOT_ON_LINE),
                 anyString(), body.capture());
         assertThat(body.getValue()).contains("NOT_STARTED");
+    }
+
+    @Test
+    void chronicallyFrozenVehiclesAppearInAlert() {
+        when(frozenRegistry.chronicallyFrozen()).thenReturn(List.of(
+                new biz.ugur.busroutebackend.transport.domain.service.FrozenCoordsRegistry.FrozenEpisode(
+                        "dev-1", "1315 AGJ", "110",
+                        Instant.parse("2026-06-09T02:00:00Z"), Instant.parse("2026-06-09T09:59:00Z"),
+                        500, 71.0, false)));
+
+        StepVerifier.create(monitor.checkNow()).verifyComplete();
+
+        ArgumentCaptor<String> subject = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(email).sendGpsAlert(anyList(), anyString(), eq(AlertKind.ASSIGNED_NOT_ON_LINE),
+                subject.capture(), body.capture());
+        assertThat(subject.getValue()).contains("замороженный GPS: 1");
+        assertThat(body.getValue()).contains("1315 AGJ").contains("dev-1");
     }
 
     @Test
