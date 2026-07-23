@@ -11,6 +11,7 @@ import biz.ugur.busroutebackend.transport.application.usecase.pipeline.GpsValida
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.OutlierFilterStage;
 import biz.ugur.busroutebackend.transport.application.usecase.pipeline.PersistAndBroadcastStage;
 import biz.ugur.busroutebackend.transport.domain.model.Vehicle;
+import biz.ugur.busroutebackend.transport.domain.service.FrozenCoordsRegistry;
 import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import biz.ugur.busroutebackend.transport.domain.service.LicensePlateExtractor;
 import biz.ugur.busroutebackend.transport.domain.service.PositionChangeDetector;
@@ -38,6 +39,7 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
 
     private final VehicleRepository vehicleRepository;
     private final PositionChangeDetector positionChangeDetector;
+    private final FrozenCoordsRegistry frozenCoordsRegistry;
     private final LicensePlateExtractor licensePlateExtractor;
     private final GpsUpdateDeadLetterQueue deadLetterQueue;
     private final biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer pipelineTracer;
@@ -58,8 +60,10 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                                          OutlierFilterStage outlierFilterStage,
                                          GpsPositionResolver positionResolver,
                                          DirectionGarageStage directionGarageStage,
-                                         PersistAndBroadcastStage persistAndBroadcastStage) {
+                                         PersistAndBroadcastStage persistAndBroadcastStage,
+                                         FrozenCoordsRegistry frozenCoordsRegistry) {
         super(correlationContextService, eventBus);
+        this.frozenCoordsRegistry = frozenCoordsRegistry;
         this.vehicleRepository = vehicleRepository;
         this.positionChangeDetector = positionChangeDetector;
         this.licensePlateExtractor = licensePlateExtractor;
@@ -218,25 +222,39 @@ public class UpdateVehiclePositionsUseCase extends BaseUseCase<List<GpsPositionD
                             updatedVehicle.getSpeedKmh()
                     );
 
-                    boolean frozenCoordsWithMotion = hasSignificantChange
-                            && Boolean.TRUE.equals(updatedVehicle.getIsInMotion())
-                            && oldLatitude != null && oldLongitude != null
-                            && !positionChangeDetector.hasSignificantPositionChange(
+                    boolean coordsMovedSignificantly = oldLatitude != null && oldLongitude != null
+                            && positionChangeDetector.hasSignificantPositionChange(
                                     oldLatitude, oldLongitude,
                                     updatedVehicle.getCurrentLatitude(),
                                     updatedVehicle.getCurrentLongitude());
 
+                    boolean frozenCoordsWithMotion = hasSignificantChange
+                            && Boolean.TRUE.equals(updatedVehicle.getIsInMotion())
+                            && oldLatitude != null && oldLongitude != null
+                            && !coordsMovedSignificantly;
+
                     if (frozenCoordsWithMotion) {
-                        log.warn("[GPS_ANOMALY|SOURCE:SERVER] FROZEN_COORDS_WITH_MOTION: " +
-                                        "device={}, plate={}, speed={}km/h, coords=({},{}) — suppressing WS publish",
-                                gpsPosition.getDeviceId(),
-                                updatedVehicle.getLicensePlate(),
-                                String.format("%.1f", updatedVehicle.getSpeedKmh()),
-                                String.format("%.6f", updatedVehicle.getCurrentLatitude()),
-                                String.format("%.6f", updatedVehicle.getCurrentLongitude()));
                         if (gpsPosition.getDeviceId() != null) {
+                            var episode = frozenCoordsRegistry.recordFrozenEvent(
+                                    gpsPosition.getDeviceId(),
+                                    updatedVehicle.getLicensePlate(),
+                                    updatedVehicle.getRouteNumber(),
+                                    updatedVehicle.getSpeedKmh());
+                            if (episode.warnAllowed()) {
+                                log.warn("[GPS_ANOMALY|SOURCE:SERVER] FROZEN_COORDS_WITH_MOTION: " +
+                                                "device={}, plate={}, speed={}km/h, coords=({},{}), "
+                                                + "frozenSince={}, detections={} — suppressing WS publish",
+                                        gpsPosition.getDeviceId(),
+                                        updatedVehicle.getLicensePlate(),
+                                        String.format("%.1f", updatedVehicle.getSpeedKmh()),
+                                        String.format("%.6f", updatedVehicle.getCurrentLatitude()),
+                                        String.format("%.6f", updatedVehicle.getCurrentLongitude()),
+                                        episode.firstFrozenAt(), episode.detectionCount());
+                            }
                             frozenCoordsDeviceIds.add(gpsPosition.getDeviceId());
                         }
+                    } else if (coordsMovedSignificantly && gpsPosition.getDeviceId() != null) {
+                        frozenCoordsRegistry.recordCoordinatesMoved(gpsPosition.getDeviceId());
                     }
 
                     pipelineTracer.traceDbSave(

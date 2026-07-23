@@ -87,8 +87,8 @@ class VehicleOffRouteAlertMonitorTest {
 
     @Test
     void sendsAlertWhenAllConditionsMet() throws InterruptedException {
-        RouteAssignment assignment = mockAssignmentForFirstShift();
-        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+        RouteAssignment assignment = mockActiveAssignment();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.SECOND)))
                 .thenReturn(Mono.just(assignment));
 
         VehiclePredictionState state = stateOnRouteFor(Duration.ofMinutes(30));
@@ -110,8 +110,8 @@ class VehicleOffRouteAlertMonitorTest {
 
     @org.junit.jupiter.api.Test
     void digestBatchesMultipleEpisodesIntoOneEmail() throws InterruptedException {
-        RouteAssignment assignment = mockAssignmentForFirstShift();
-        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+        RouteAssignment assignment = mockActiveAssignment();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.SECOND)))
                 .thenReturn(Mono.just(assignment));
 
         monitor.onWentOffRoute(VEHICLE_ID, stateOnRouteFor(Duration.ofMinutes(30)), 39.95, 58.38, 250.0);
@@ -170,7 +170,7 @@ class VehicleOffRouteAlertMonitorTest {
                 .build();
     }
 
-    private RouteAssignment mockAssignmentForFirstShift() {
+    private RouteAssignment mockActiveAssignment() {
         RouteAssignment a = org.mockito.Mockito.mock(RouteAssignment.class);
         when(a.getVehicleId()).thenReturn(VehicleId.of(VEHICLE_ID));
         when(a.getRouteId()).thenReturn(BusRouteId.of(ROUTE_ID));
@@ -206,9 +206,9 @@ class VehicleOffRouteAlertMonitorTest {
 
     @Test
     void skipsWhenAssignmentNotActiveAtNow() throws InterruptedException {
-        RouteAssignment assignment = mockAssignmentForFirstShift();
+        RouteAssignment assignment = mockActiveAssignment();
         when(assignment.shouldBeActiveAt(any(LocalTime.class))).thenReturn(false);
-        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.SECOND)))
                 .thenReturn(Mono.just(assignment));
 
         VehiclePredictionState state = stateOnRouteFor(Duration.ofMinutes(30));
@@ -220,7 +220,7 @@ class VehicleOffRouteAlertMonitorTest {
 
     @Test
     void skipsWhenWithinEndOfShiftBuffer() throws InterruptedException {
-        clock = Clock.fixed(Instant.parse("2026-05-12T13:50:00Z"), ZoneOffset.UTC);
+        clock = Clock.fixed(Instant.parse("2026-05-12T17:50:00Z"), ZoneOffset.UTC);
         monitor = new VehicleOffRouteAlertMonitor(
                 emailService, new biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours(
                         new biz.ugur.busroutebackend.shared.infrastructure.email.MailProperties(),
@@ -230,8 +230,8 @@ class VehicleOffRouteAlertMonitorTest {
         when(emailService.sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString()))
                 .thenReturn(Mono.empty());
 
-        RouteAssignment assignment = mockAssignmentForFirstShift();
-        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+        RouteAssignment assignment = mockActiveAssignment();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.SECOND)))
                 .thenReturn(Mono.just(assignment));
 
         VehiclePredictionState state = VehiclePredictionState.builder()
@@ -239,8 +239,8 @@ class VehicleOffRouteAlertMonitorTest {
                 .licensePlate(LICENSE)
                 .routeNumber(ROUTE_NUMBER)
                 .offRoute(true)
-                .firstOnRouteAtCurrentShift(Instant.parse("2026-05-12T11:50:00Z"))
-                .lastOnRouteAt(Instant.parse("2026-05-12T13:40:00Z"))
+                .firstOnRouteAtCurrentShift(Instant.parse("2026-05-12T15:50:00Z"))
+                .lastOnRouteAt(Instant.parse("2026-05-12T17:40:00Z"))
                 .lastRawToSnapDistanceMeters(250.0)
                 .build();
         monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);
@@ -251,8 +251,8 @@ class VehicleOffRouteAlertMonitorTest {
 
     @Test
     void skipsWhenVehicleNeverWasOnRoute() throws InterruptedException {
-        RouteAssignment assignment = mockAssignmentForFirstShift();
-        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+        RouteAssignment assignment = mockActiveAssignment();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.SECOND)))
                 .thenReturn(Mono.just(assignment));
 
         VehiclePredictionState state = VehiclePredictionState.builder()
@@ -269,8 +269,8 @@ class VehicleOffRouteAlertMonitorTest {
 
     @Test
     void skipsWhenOnRouteLessThanMinSeconds() throws InterruptedException {
-        RouteAssignment assignment = mockAssignmentForFirstShift();
-        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+        RouteAssignment assignment = mockActiveAssignment();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.SECOND)))
                 .thenReturn(Mono.just(assignment));
 
         VehiclePredictionState state = stateOnRouteFor(Duration.ofSeconds(30));
@@ -317,8 +317,8 @@ class VehicleOffRouteAlertMonitorTest {
 
     @Test
     void skipsSecondAlertForSameVehicleInSameShift() throws InterruptedException {
-        RouteAssignment assignment = mockAssignmentForFirstShift();
-        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+        RouteAssignment assignment = mockActiveAssignment();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.SECOND)))
                 .thenReturn(Mono.just(assignment));
 
         VehiclePredictionState state = stateOnRouteFor(Duration.ofMinutes(30));
@@ -335,9 +335,9 @@ class VehicleOffRouteAlertMonitorTest {
 
     @Test
     void fallsBackToFullDayShiftWhenPrimaryShiftAssignmentMissing() throws InterruptedException {
-        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.SECOND)))
                 .thenReturn(Mono.empty());
-        RouteAssignment fullDayAssignment = mockAssignmentForFirstShift();
+        RouteAssignment fullDayAssignment = mockActiveAssignment();
         when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FULL_DAY)))
                 .thenReturn(Mono.just(fullDayAssignment));
 
@@ -365,8 +365,8 @@ class VehicleOffRouteAlertMonitorTest {
         verify(emailService, never()).sendGpsAlert(any(), any(), any(), any(), any());
 
         org.mockito.Mockito.reset(routeAssignmentRepository);
-        RouteAssignment retryAssignment = mockAssignmentForFirstShift();
-        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.FIRST)))
+        RouteAssignment retryAssignment = mockActiveAssignment();
+        when(routeAssignmentRepository.findActiveByVehicleAndDateAndShift(any(), any(), eq(ShiftType.SECOND)))
                 .thenReturn(Mono.just(retryAssignment));
 
         monitor.onWentOffRoute(VEHICLE_ID, state, 39.95, 58.38, 250.0);

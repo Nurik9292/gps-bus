@@ -342,7 +342,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
 
     @Override
     public Flux<BusArrivalInfo> findArrivingVehicles(BusStopId stopId, Double stopLatitude, Double stopLongitude) {
-        int maxAgeMinutes = etaProperties.getPosition().getMaxAgeMinutes();
+        int maxFixAgeSeconds = etaProperties.getPosition().getMaxFixAgeSeconds();
         int maxEtaMinutes = etaProperties.getPosition().getMaxEtaMinutes();
         int atStopDistance = etaProperties.getPosition().getAtStopDistanceMeters();
 
@@ -445,7 +445,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
             JOIN target_stop_routes tsr ON v.assigned_route_id = tsr.route_id
                 AND (v.current_direction IS NULL OR v.current_direction = tsr.direction)
             WHERE v.is_active = true
-            AND v.last_position_update > CURRENT_TIMESTAMP - (INTERVAL '1 minute' * :maxAgeMinutes)
+            AND v.last_position_update > CURRENT_TIMESTAMP - (INTERVAL '1 second' * :maxFixAgeSeconds)
             AND v.current_latitude IS NOT NULL
             AND v.current_longitude IS NOT NULL
             AND (v.last_stop_sequence IS NULL OR v.last_stop_sequence < tsr.target_sequence)
@@ -612,7 +612,7 @@ public class R2dbcBusStopRepository extends BaseR2dbcRepository<BusStop, BusStop
                 .bind("stopId", stopId.getValue())
                 .bind("stopLat", stopLatitude)
                 .bind("stopLon", stopLongitude)
-                .bind("maxAgeMinutes", maxAgeMinutes)
+                .bind("maxFixAgeSeconds", maxFixAgeSeconds)
                 .bind("maxEtaMinutes", maxEtaMinutes)
                 .bind("atStopDistance", atStopDistance)
                 .bind("movingThreshold", movingThreshold)

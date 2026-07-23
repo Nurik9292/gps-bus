@@ -32,4 +32,10 @@ public class GpsOutlierDetectionProperties {
     private double minSpeedForFrozenDetectionKmh = 10.0;
 
     private boolean rejectFrozenMotion = false;
+
+    private Duration frozenWarnDedupInterval = Duration.ofMinutes(10);
+
+    private Duration frozenChronicThreshold = Duration.ofMinutes(10);
+
+    private Duration frozenEpisodeRetention = Duration.ofMinutes(30);
 }

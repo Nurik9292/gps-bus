@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.transport.infrastructure.config;
 
+import biz.ugur.busroutebackend.transport.domain.service.FrozenCoordsRegistry;
 import biz.ugur.busroutebackend.transport.domain.service.GpsOutlierDetector;
 import biz.ugur.busroutebackend.transport.domain.service.LicensePlateExtractor;
 import biz.ugur.busroutebackend.transport.domain.service.PositionChangeDetector;
@@ -32,14 +33,26 @@ public class TransportDomainConfig {
     }
 
     @Bean
-    public GpsOutlierDetector gpsOutlierDetector(GpsOutlierDetectionProperties properties) {
+    public FrozenCoordsRegistry frozenCoordsRegistry(GpsOutlierDetectionProperties properties) {
+        return new FrozenCoordsRegistry(
+                properties.getFrozenWarnDedupInterval(),
+                properties.getFrozenChronicThreshold(),
+                properties.getFrozenEpisodeRetention(),
+                java.time.Clock.systemUTC()
+        );
+    }
+
+    @Bean
+    public GpsOutlierDetector gpsOutlierDetector(GpsOutlierDetectionProperties properties,
+                                                 FrozenCoordsRegistry frozenCoordsRegistry) {
         return new GpsOutlierDetector(
                 properties.isEnabled(),
                 properties.getMaxImpliedSpeedKmh(),
                 properties.getMinTimeDifference().toSeconds(),
                 properties.getMaxTimeDifference().toSeconds(),
                 properties.getMinDistanceMeters(),
-                properties.getMinSpeedForFrozenDetectionKmh()
+                properties.getMinSpeedForFrozenDetectionKmh(),
+                frozenCoordsRegistry
         );
     }
 

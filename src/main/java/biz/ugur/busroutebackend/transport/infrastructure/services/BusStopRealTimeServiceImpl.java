@@ -131,13 +131,14 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 });
     }
 
-    private Flux<BusArrivalInfo> findArrivingVehicles(BusStop targetStop) {
+    Flux<BusArrivalInfo> findArrivingVehicles(BusStop targetStop) {
         String stopId = targetStop.getId().getValue();
         int maxEtaMinutes = etaProperties.getPosition().getMaxEtaMinutes();
 
         Flux<BusArrivalInfo> fromPrediction = Flux.fromIterable(predictionService.getActiveStates())
                 .filter(s -> s.getRouteNumber() != null && s.getTotalRouteDistanceMeters() > 0)
                 .filter(s -> !biz.ugur.busroutebackend.transport.infrastructure.prediction.PredictionBroadcaster.isInColdStart(s))
+                .filter(this::hasFreshRealGpsFix)
                 .flatMap(state -> {
                     OptionalDouble stopFracOpt = routeGeometryCache.getStopFraction(
                             state.getRouteId(), state.getDirection(), stopId);
@@ -240,6 +241,13 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                             info.setDirection(eta.departDirection());
                             return Mono.just(info);
                         }));
+    }
+
+    private boolean hasFreshRealGpsFix(VehiclePredictionState state) {
+        java.time.Instant lastFix = state.getLastGpsUpdate();
+        return lastFix != null
+                && Duration.between(lastFix, java.time.Instant.now()).getSeconds()
+                        <= etaProperties.getPosition().getMaxFixAgeSeconds();
     }
 
     private int computeEtaMinutes(double distanceMeters, double speedKmh) {
