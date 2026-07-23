@@ -25,6 +25,8 @@ public class ETAProperties {
 
         private int maxAgeMinutes = 10;
 
+        private int maxFixAgeSeconds = 120;
+
         private int atStopDistanceMeters = 200;
 
         private int maxEtaMinutes = 60;

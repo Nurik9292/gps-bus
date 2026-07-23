@@ -104,4 +104,27 @@ class BusStopRealTimeServiceTerminalRowsTest {
                         new TerminalDepartureEtaService.DepartureStopEta("T", "Конечная", 4000, 0, 1)));
         StepVerifier.create(service.terminalDepartureRows("T")).verifyComplete();
     }
+
+    @Test
+    void terminalRowEmittedEvenWhenLastFixIsStale() {
+        VehiclePredictionState staleState = VehiclePredictionState.builder()
+                .vehicleId("veh-1")
+                .licensePlate("5670 AGJ")
+                .routeNumber("23")
+                .routeId("route-legacy-31")
+                .direction(0)
+                .predictedLatitude(37.94)
+                .predictedLongitude(58.40)
+                .lastGpsUpdate(java.time.Instant.now().minusSeconds(600))
+                .build();
+        when(predictionService.getActiveStates()).thenReturn(List.of(staleState));
+        when(terminalDepartureEtaService.departureEtasForVehicle(eq("veh-1"),
+                eq("23"), eq("route-legacy-31"), any()))
+                .thenReturn(List.of(
+                        new TerminalDepartureEtaService.DepartureStopEta("S1", "Первая", 270, 800, 1)));
+
+        StepVerifier.create(service.terminalDepartureRows("S1"))
+                .assertNext(row -> assertThat(row.getCurrentStopName()).isEqualTo("На конечной"))
+                .verifyComplete();
+    }
 }
