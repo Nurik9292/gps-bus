@@ -31,6 +31,7 @@ public class BusRouteEntityMapper {
                 .totalDistanceBackwardMeters(domain.getTotalDistanceBackwardMeters())
                 .createdAt(domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt())
+                .updatedBy(domain.getUpdatedBy())
                 .version(domain.getVersion())
                 .build();
     }
@@ -41,7 +42,7 @@ public class BusRouteEntityMapper {
             return null;
         }
 
-        return BusRoute.restore(
+        BusRoute restored = BusRoute.restore(
                 BusRouteId.of(entity.getId()),
                 entity.getRouteNumber(),
                 entity.getRouteName(),
@@ -59,5 +60,8 @@ public class BusRouteEntityMapper {
                 entity.getUpdatedAt(),
                 entity.getVersion()
         );
+        return entity.getUpdatedBy() != null
+                ? restored.editedBy(entity.getUpdatedBy())
+                : restored;
     }
 }

@@ -40,10 +40,15 @@ class UpdateBusRouteUseCaseTest {
     @Mock
     private biz.ugur.busroutebackend.transport.application.services.NameHistoryRecorder nameHistoryRecorder;
 
+    @Mock
+    private biz.ugur.busroutebackend.shared.application.SecurityContextService securityContextService;
+
     @org.junit.jupiter.api.BeforeEach
     void stubNameHistory() {
         org.mockito.Mockito.lenient().when(nameHistoryRecorder.recordRouteChanges(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(reactor.core.publisher.Mono.empty());
+        org.mockito.Mockito.lenient().when(securityContextService.getCurrentUsername())
+                .thenReturn(Mono.just("admin-timur"));
     }
 
     @Mock
@@ -79,6 +84,10 @@ class UpdateBusRouteUseCaseTest {
         StepVerifier.create(useCase.execute(Mono.just(cmd)))
                 .expectNext(data)
                 .verifyComplete();
+
+        org.mockito.ArgumentCaptor<BusRoute> savedRoute = org.mockito.ArgumentCaptor.forClass(BusRoute.class);
+        org.mockito.Mockito.verify(busRouteRepository).save(savedRoute.capture());
+        assertEquals("admin-timur", savedRoute.getValue().getUpdatedBy());
     }
 
     @Test

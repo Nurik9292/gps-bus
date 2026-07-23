@@ -20,7 +20,7 @@ class RouteDetailV2Test {
                 "route-legacy-60", "3", "Awtokombinat - Täze zaman", "tm", "en",
                 "#7B1FA2", "city-001", true, 140, 1, 0,
                 new BigDecimal("43.61"), new BigDecimal("34.81"),
-                List.of(), List.of(), 3L, null, null,
+                List.of(), List.of(), 3L, null, null, null,
                 List.of(stop), List.of());
     }
 

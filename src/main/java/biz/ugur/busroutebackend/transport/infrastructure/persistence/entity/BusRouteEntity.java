@@ -63,6 +63,7 @@ public class BusRouteEntity {
 
     @Column("updated_at")
     private LocalDateTime updatedAt;
+    private String updatedBy;
 
     @Column("version")
     private Long version;

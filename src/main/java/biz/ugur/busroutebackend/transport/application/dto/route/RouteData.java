@@ -26,6 +26,7 @@ public record RouteData(
         Long activeVehiclesCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
+        String updatedBy,
         List<RouteStopDTO> forwardStops,
         List<RouteStopDTO> backwardStops
 ) {
@@ -35,7 +36,7 @@ public record RouteData(
                 id, routeNumber, routeName, nameTm, nameEn, routeColor, cityId, isActive,
                 estimatedDurationMinutes, forwardStops.size(), backwardStops.size(),
                 totalDistanceForwardKm, totalDistanceBackwardKm, backwardGeometry, forwardGeometry,
-                activeVehiclesCount, createdAt, updatedAt, forwardStops, backwardStops
+                activeVehiclesCount, createdAt, updatedAt, updatedBy, forwardStops, backwardStops
         );
     }
 
@@ -44,7 +45,7 @@ public record RouteData(
                 id, routeNumber, routeName, nameTm, nameEn, routeColor, cityId, isActive,
                 estimatedDurationMinutes, forwardStopsCount, backwardStopsCount,
                 totalDistanceForwardKm, totalDistanceBackwardKm, backwardGeometry, forwardGeometry,
-                activeVehiclesCount, createdAt, updatedAt, forwardStops, backwardStops
+                activeVehiclesCount, createdAt, updatedAt, updatedBy, forwardStops, backwardStops
         );
     }
 
