@@ -27,7 +27,6 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -79,12 +78,12 @@ public class VehicleOffRouteAlertMonitor {
             return;
         }
         Instant now = clock.instant();
-        Optional<ShiftType> shiftOpt = currentShift(now);
+        Optional<ShiftType> shiftOpt = ShiftType.operationalShiftAt(now);
         if (shiftOpt.isEmpty()) {
             return;
         }
         ShiftType shift = shiftOpt.get();
-        LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);
+        LocalDate today = ShiftType.operationalDateAt(now);
         OffRouteAlertKey key = new OffRouteAlertKey(vehicleId, today, shift);
         offRouteStateRegistry.record(vehicleId, today, shift,
                 new OffRouteRecord(now, distanceFromRouteMeters, latitude, longitude));
@@ -97,7 +96,7 @@ public class VehicleOffRouteAlertMonitor {
                 .findActiveByVehicleAndDateAndShift(VehicleId.of(vehicleId), today, shift)
                 .switchIfEmpty(Mono.defer(() -> routeAssignmentRepository
                         .findActiveByVehicleAndDateAndShift(VehicleId.of(vehicleId), today, ShiftType.FULL_DAY)))
-                .filter(a -> a.shouldBeActiveAt(LocalTime.ofInstant(now, ZoneOffset.UTC)))
+                .filter(a -> a.shouldBeActiveAt(LocalTime.ofInstant(now, ShiftType.ASHGABAT_ZONE)))
                 .filter(a -> minutesUntilShiftEnd(shift, now) >= properties.getEndOfShiftBufferMinutes())
                 .filter(a -> hasBeenOnRouteLongEnough(state, now))
                 .switchIfEmpty(Mono.fromRunnable(() -> alerted.remove(key)).then(Mono.empty()))
@@ -190,15 +189,8 @@ public class VehicleOffRouteAlertMonitor {
         return vars;
     }
 
-    private Optional<ShiftType> currentShift(Instant now) {
-        LocalTime t = LocalTime.ofInstant(now, ZoneOffset.UTC);
-        return Arrays.stream(ShiftType.values())
-                .filter(s -> s.isActiveAt(t))
-                .findFirst();
-    }
-
     private long minutesUntilShiftEnd(ShiftType shift, Instant now) {
-        LocalTime t = LocalTime.ofInstant(now, ZoneOffset.UTC);
+        LocalTime t = LocalTime.ofInstant(now, ShiftType.ASHGABAT_ZONE);
         return Duration.between(t, shift.getEndTime()).toMinutes();
     }
 
@@ -251,7 +243,7 @@ public class VehicleOffRouteAlertMonitor {
 
     @Scheduled(cron = "0 5 0 * * *", zone = "UTC")
     public void cleanupOldEntries() {
-        LocalDate cutoff = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC).minusDays(1);
+        LocalDate cutoff = ShiftType.operationalDateAt(clock.instant()).minusDays(1);
         int removed = 0;
         var it = alerted.entrySet().iterator();
         while (it.hasNext()) {
