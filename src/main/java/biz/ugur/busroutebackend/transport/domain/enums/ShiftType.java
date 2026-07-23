@@ -2,9 +2,13 @@ package biz.ugur.busroutebackend.transport.domain.enums;
 
 import lombok.Getter;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Arrays;
+import java.util.Optional;
 
 @Getter
 public enum ShiftType {
@@ -55,5 +59,21 @@ public enum ShiftType {
     public boolean isActive() {
         LocalTime now = ZonedDateTime.now(ASHGABAT_ZONE).toLocalTime();
         return isActiveAt(now);
+    }
+
+    public static Optional<ShiftType> operationalShiftAt(Instant instant) {
+        LocalTime ashgabatTime = LocalTime.ofInstant(instant, ASHGABAT_ZONE);
+        return Arrays.stream(values())
+                .filter(shift -> shift != FULL_DAY)
+                .filter(shift -> shift.isActiveAt(ashgabatTime))
+                .findFirst();
+    }
+
+    public static LocalDate operationalDateAt(Instant instant) {
+        return LocalDate.ofInstant(instant, ASHGABAT_ZONE);
+    }
+
+    public Instant startInstantOn(LocalDate operationalDate) {
+        return operationalDate.atTime(startTime).atZone(ASHGABAT_ZONE).toInstant();
     }
 }
