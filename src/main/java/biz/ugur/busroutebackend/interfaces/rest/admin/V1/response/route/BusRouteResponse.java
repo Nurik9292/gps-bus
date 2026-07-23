@@ -80,6 +80,9 @@ public class BusRouteResponse {
     @JsonProperty("updated_at")
     private LocalDateTime updatedAt;
 
+    @JsonProperty("updated_by")
+    private String updatedBy;
+
     public BusRouteResponse(String id,
                             String routeNumber,
                             String routeName,
@@ -147,6 +150,7 @@ public class BusRouteResponse {
         );
         response.setForwardStops(result.forwardStops().stream().map(RouteStopV2::fromDto).toList());
         response.setBackwardStops(result.backwardStops().stream().map(RouteStopV2::fromDto).toList());
+        response.setUpdatedBy(result.updatedBy());
         return response;
     }
 }

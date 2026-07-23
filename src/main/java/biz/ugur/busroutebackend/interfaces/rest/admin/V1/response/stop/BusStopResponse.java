@@ -49,6 +49,9 @@ public class BusStopResponse {
     @JsonProperty("updated_at")
     private LocalDateTime updatedAt;
 
+    @JsonProperty("updated_by")
+    private String updatedBy;
+
     public BusStopResponse(String id,
                            String stopName,
                            String nameEn,
@@ -87,7 +90,7 @@ public class BusStopResponse {
     }
 
     public static BusStopResponse fromResult(StopData result) {
-        return new BusStopResponse(
+        BusStopResponse response = new BusStopResponse(
                 result.id(),
                 result.stopName(),
                 result.nameEn(),
@@ -102,5 +105,7 @@ public class BusStopResponse {
                 result.updatedAt(),
                 result.cityId()
         );
+        response.setUpdatedBy(result.updatedBy());
+        return response;
     }
 }
