@@ -89,6 +89,17 @@ class BusStopSpecificationsTest {
         }
 
         @Test
+        void nameContainsSqlCriteriaSearchesIdAndStopCodeExactly() {
+            var criteria = BusStopSpecifications.nameContains("  STOP-42  ").toSqlCriteria();
+
+            assertTrue(criteria.getWhereClause().contains("id = :exactText"));
+            assertTrue(criteria.getWhereClause().contains("stop_code = :exactText"));
+            assertTrue(criteria.getWhereClause().contains("LOWER(stop_name) LIKE :searchText"));
+            assertEquals("STOP-42", criteria.getParameters().get("exactText"));
+            assertEquals("%  stop-42  %", criteria.getParameters().get("searchText"));
+        }
+
+        @Test
         void hasEnglishTranslationTrueForNonBlankEnglish() {
             assertTrue(BusStopSpecifications.hasEnglishTranslation().isSatisfiedBy(majorStop()));
             BusStop noEn = BusStop.create("Stop", "", "tm",

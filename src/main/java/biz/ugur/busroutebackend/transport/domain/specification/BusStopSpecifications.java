@@ -105,10 +105,13 @@ public class BusStopSpecifications {
 
             @Override
             public SqlCriteria toSqlCriteria() {
+                java.util.Map<String, Object> params = new java.util.HashMap<>();
+                params.put("searchText", "%" + searchText.toLowerCase() + "%");
+                params.put("exactText", searchText.trim());
                 return SqlCriteria.of(
-                    "LOWER(stop_name) LIKE :searchText OR LOWER(name_en) LIKE :searchText OR LOWER(name_tm) LIKE :searchText",
-                    "searchText",
-                    "%" + searchText.toLowerCase() + "%"
+                    "LOWER(stop_name) LIKE :searchText OR LOWER(name_en) LIKE :searchText "
+                        + "OR LOWER(name_tm) LIKE :searchText OR id = :exactText OR stop_code = :exactText",
+                    params
                 );
             }
         };

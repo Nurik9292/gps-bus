@@ -48,7 +48,7 @@ public interface BusRouteRepository extends BaseRepository<BusRoute, BusRouteId>
 
     Mono<Long> countBySpecification(Specification<BusRoute> specification);
 
-    Flux<BusRoute> searchWithRelevance(String query, Boolean isActive, Pageable pageable);
+    Flux<BusRoute> searchWithRelevance(String query, Boolean isActive, String cityId, Pageable pageable);
 
-    Mono<Long> countBySearch(String query, Boolean isActive);
+    Mono<Long> countBySearch(String query, Boolean isActive, String cityId);
 }
