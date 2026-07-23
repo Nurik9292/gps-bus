@@ -57,6 +57,11 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
     private int offRouteExitStreak;
     private double offRouteExitLastZx = Double.NaN;
     private double lastLeaderSnapAtMs = Double.NaN;
+    private int shortcutStreak;
+    private double shortcutLastFwdS = Double.NaN;
+    private double shortcutLastX = Double.NaN;
+    private double lastShortcutJumpEpochSec = Double.NaN;
+    private long shortcutJumps;
     private int offRouteReacqStreak;
     private double offRouteReacqSign;
     private double offRouteReacqFirstS = Double.NaN;
@@ -142,6 +147,8 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         offRouteExitStreak = 0;
         offRouteExitLastZx = Double.NaN;
         lastLeaderSnapAtMs = Double.NaN;
+        lastShortcutJumpEpochSec = Double.NaN;
+        resetShortcutState();
         resetOffRouteReacqStreak();
         prevTravelMode = Mode.TRACKING;
         termDepartMoveTicks = 0;
@@ -413,6 +420,7 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
             recomputeEtas(fix, g);
             return new Estimate(x, v, Mode.OFF_ROUTE.name(), Math.max(p00, 1e-6));
         }
+        shortcutStep(fix, g, snap, dtSinceLastFix);
         if (g.stops().isEmpty()) {
             stepModeBySpeed(fix, dtSinceLastFix);
         } else {
@@ -421,6 +429,84 @@ public class MotionFilterCore implements PredictionModel, InnovationAware, StopA
         recomputeEtas(fix, g);
 
         return new Estimate(x, v, mode.name(), Math.max(p00, 1e-6));
+    }
+
+    private void shortcutStep(GpsFix fix, RouteLine g, Snap currentSnap, double dtSinceLastFix) {
+        boolean travelLike = mode == Mode.TRACKING || mode == Mode.DECELERATING
+                || mode == Mode.GPS_LOST || mode == Mode.RECOVERING;
+        if (!travelLike || fix.speedKmh() < cfg.vMoveKmh()) {
+            resetShortcutState();
+            return;
+        }
+        double nowSec = fix.timestamp().toEpochMilli() / 1000.0;
+        if (!Double.isNaN(lastShortcutJumpEpochSec)
+                && nowSec - lastShortcutJumpEpochSec < cfg.tShortcutCooldownSec()) {
+            return;
+        }
+        double windowFrom = x + cfg.dShortcutMinMeters();
+        double windowTo = Math.min(x + cfg.dShortcutMaxMeters(), g.totalMeters());
+        if (windowFrom >= windowTo) {
+            resetShortcutState();
+            return;
+        }
+        Snap forward = snapBetween(fix, g, windowFrom, windowTo);
+        if (!forward.snapped()) {
+            resetShortcutState();
+            return;
+        }
+        if (shortcutStreak == 0) {
+            shortcutStreak = 1;
+            shortcutLastFwdS = forward.sOnLine();
+            shortcutLastX = x;
+            return;
+        }
+        double expected = (fix.speedKmh() / 3.6) * Math.max(dtSinceLastFix, 1.0);
+        double dsForward = forward.sOnLine() - shortcutLastFwdS;
+        double previousGap = shortcutLastFwdS - shortcutLastX;
+        double currentGap = forward.sOnLine() - x;
+        double trackingWindow = cfg.w0Meters()
+                + cfg.kWindowPerSpeed() * Math.max(v, 1.0) * Math.max(dtSinceLastFix, cfg.dtSec());
+        boolean candidateSplitFromCurrent =
+                Math.abs(currentSnap.sOnLine() - forward.sOnLine()) > cfg.gapShortcutMeters();
+        boolean splitConfirm = candidateSplitFromCurrent
+                && currentSnap.snapped()
+                && Math.abs(currentSnap.sOnLine() - x) <= trackingWindow
+                && forward.dSnap() <= currentSnap.dSnap() + cfg.gapShortcutMeters();
+        boolean mergeConfirm = !candidateSplitFromCurrent && shortcutStreak >= 2;
+        boolean forwardMovesWithBus = dsForward > 0
+                && dsForward >= 0.5 * expected - 30.0
+                && dsForward <= 3.0 * expected + 100.0;
+        boolean gapPersists = currentGap >= cfg.dShortcutMinMeters()
+                && currentGap >= 0.8 * previousGap;
+        if ((splitConfirm || mergeConfirm) && forwardMovesWithBus && gapPersists) {
+            shortcutStreak++;
+        } else {
+            shortcutStreak = 1;
+        }
+        shortcutLastFwdS = forward.sOnLine();
+        shortcutLastX = x;
+        int requiredConfirms = mode == Mode.RECOVERING
+                ? cfg.nShortcutConfirm() + 1
+                : cfg.nShortcutConfirm();
+        if (shortcutStreak >= requiredConfirms) {
+            System.out.printf("срезка заезда: перескок x̂ %.1f → %.1f (скачок %.1f м, "
+                            + "латераль %.1f м) — reinit без trip/направления%n",
+                    x, forward.sOnLine(), forward.sOnLine() - x, forward.dSnap());
+            reinitAt(forward.sOnLine(), fix);
+            lastShortcutJumpEpochSec = nowSec;
+            shortcutJumps++;
+            resetShortcutState();
+        }
+    }
+
+    public long shortcutJumps() {
+        return shortcutJumps;
+    }
+
+    private void resetShortcutState() {
+        shortcutStreak = 0;
+        shortcutLastFwdS = Double.NaN;
+        shortcutLastX = Double.NaN;
     }
 
     private boolean leaderPinnedAtVariantTerminal() {
