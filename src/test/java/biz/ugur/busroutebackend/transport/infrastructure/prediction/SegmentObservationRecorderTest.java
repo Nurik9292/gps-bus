@@ -175,6 +175,35 @@ class SegmentObservationRecorderTest {
         tick("57", 120, 2100.0);
 
         verify(liveRepository, never()).recordTravel(anyString(), anyString(), anyDouble(), any());
+        verify(historyRepository, never()).save(any());
+    }
+
+    @Test
+    void excludedAxisStillRecordsTerminalDwell() {
+        properties.setExcludedAxes(List.of("57:0", "57:1"));
+        tick("57", 0, 2850.0);
+        tick("57", 20, 2995.0);
+        recorder.onTick(fix("57", 320), geom, 100.0, 1, 2, List.of());
+
+        ArgumentCaptor<biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat> saved =
+                ArgumentCaptor.forClass(
+                        biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat.class);
+        verify(terminalDwellRepository, timeout(2000)).save(saved.capture());
+        assertThat(saved.getValue().getRouteNumber()).isEqualTo("57");
+        assertThat(saved.getValue().getDirection()).isZero();
+        assertThat(saved.getValue().getAvgDwellSeconds())
+                .isCloseTo(301.4, org.assertj.core.data.Offset.offset(1.0));
+    }
+
+    @Test
+    void excludedAxisStillPublishesTerminalPresence() {
+        properties.setExcludedAxes(List.of("57:0"));
+        tick("57", 0, 2850.0);
+        tick("57", 20, 2995.0);
+
+        var presence = presenceHolder.presentAt("veh-1", T0.plusSeconds(120), 3600).orElseThrow();
+        assertThat(presence.routeNumber()).isEqualTo("57");
+        assertThat(presence.arrivedDirection()).isZero();
     }
 
     @Test
@@ -283,12 +312,14 @@ class SegmentObservationRecorderTest {
     }
 
     @Test
-    void excludedAxisClearsPresence() {
+    void exclusionKeepsPresenceUntilTripBoundary() {
         tick("57", 0, 2850.0);
         tick("57", 20, 2995.0);
         assertThat(presenceHolder.size()).isEqualTo(1);
         properties.setExcludedAxes(List.of("57:0"));
         tick("57", 40, 3000.0);
+        assertThat(presenceHolder.size()).isEqualTo(1);
+        recorder.onTick(fix("57", 320), geom, 10.0, 1, 2, List.of());
         assertThat(presenceHolder.size()).isZero();
     }
 }

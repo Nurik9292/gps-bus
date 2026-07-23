@@ -89,11 +89,6 @@ public class SegmentObservationRecorder implements V31StopEventSink {
         if (!properties.isWriteEnabled()) {
             return;
         }
-        if (properties.isAxisExcluded(fix.routeNumber(), direction)) {
-            tracks.remove(fix.vehicleId());
-            terminalPresenceHolder.departed(fix.vehicleId());
-            return;
-        }
         long ticks = ticksSeen.incrementAndGet();
         if (ticks % SUMMARY_EVERY_TICKS == 0) {
             log.info("[SEGMENT_OBS] сводка: тиков={} пересечений={} наблюдений={} "
@@ -153,6 +148,12 @@ public class SegmentObservationRecorder implements V31StopEventSink {
                 terminalPresenceHolder.arrived(vehicleId, fix.routeNumber(), direction,
                         terminalArrivedAt);
             }
+        }
+
+        if (properties.isAxisExcluded(fix.routeNumber(), direction)) {
+            tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
+                    s, now, null, null, terminalArrivedAt));
+            return;
         }
 
         for (RouteLine.StopPoint stop : stops) {
