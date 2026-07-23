@@ -69,11 +69,16 @@ public class FrozenCoordsRegistry {
     }
 
     private boolean tryAcquireWarnSlot(String deviceId, Instant now) {
-        Instant granted = warnSlotsByDevice.compute(deviceId, (id, lastWarnAt) ->
-                lastWarnAt == null
-                        || Duration.between(lastWarnAt, now).compareTo(warnDedupInterval) >= 0
-                        ? now : lastWarnAt);
-        return granted.equals(now);
+        boolean[] acquired = new boolean[1];
+        warnSlotsByDevice.compute(deviceId, (id, lastWarnAt) -> {
+            if (lastWarnAt == null
+                    || Duration.between(lastWarnAt, now).compareTo(warnDedupInterval) >= 0) {
+                acquired[0] = true;
+                return now;
+            }
+            return lastWarnAt;
+        });
+        return acquired[0];
     }
 
     private boolean isEpisodeStale(FrozenEpisode episode, Instant now) {
