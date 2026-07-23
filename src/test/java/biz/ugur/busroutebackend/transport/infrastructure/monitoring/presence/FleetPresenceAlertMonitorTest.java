@@ -87,7 +87,7 @@ class FleetPresenceAlertMonitorTest {
     void sendsSummaryWhenAssignedVehicleWentSilent() {
         RouteAssignment a = assignment("v1");
         Vehicle v = silentVehicle("v1");
-        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND)))
                 .thenReturn(Flux.just(a));
         when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v));
 
@@ -104,7 +104,7 @@ class FleetPresenceAlertMonitorTest {
         when(online.getIsActive()).thenReturn(true);
         when(online.getLastPositionUpdate()).thenReturn(LocalDateTime.of(2026, 6, 9, 9, 59));
         RouteAssignment a = assignment("v1");
-        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND)))
                 .thenReturn(Flux.just(a));
         when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(online));
 
@@ -121,10 +121,10 @@ class FleetPresenceAlertMonitorTest {
         when(v.getLicensePlate()).thenReturn("AG-v1");
         when(v.getRouteNumber()).thenReturn("12");
         when(v.getLastPositionUpdate()).thenReturn(LocalDateTime.of(2026, 6, 9, 9, 59));
-        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND)))
                 .thenReturn(Flux.just(a));
         when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v));
-        registry.record("v1", LocalDate.of(2026, 6, 9), ShiftType.FIRST,
+        registry.record("v1", LocalDate.of(2026, 6, 9), ShiftType.SECOND,
                 new OffRouteRecord(Instant.parse("2026-06-09T09:40:00Z"), 280.0, 37.9, 58.3));
 
         StepVerifier.create(monitor.checkNow()).verifyComplete();
@@ -137,7 +137,7 @@ class FleetPresenceAlertMonitorTest {
     void doesNotResendSameSetWithinCooldown() {
         RouteAssignment a = assignment("v1");
         Vehicle v = silentVehicle("v1");
-        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND)))
                 .thenReturn(Flux.just(a));
         when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v));
 
@@ -151,14 +151,14 @@ class FleetPresenceAlertMonitorTest {
     void doesNotResendChangedSetWithinCooldown() {
         RouteAssignment a1 = assignment("v1");
         Vehicle v1 = silentVehicle("v1");
-        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND)))
                 .thenReturn(Flux.just(a1));
         when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v1));
         StepVerifier.create(monitor.checkNow()).verifyComplete();
 
         RouteAssignment a2 = assignment("v2");
         Vehicle v2 = silentVehicle("v2");
-        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.FIRST)))
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND)))
                 .thenReturn(Flux.just(a1, a2));
         when(vehicles.findById(VehicleId.of("v2"))).thenReturn(Mono.just(v2));
         StepVerifier.create(monitor.checkNow()).verifyComplete();
@@ -234,5 +234,68 @@ class FleetPresenceAlertMonitorTest {
         StepVerifier.create(monitor.checkNow()).verifyComplete();
 
         verify(email, times(1)).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
+    }
+
+    private FleetPresenceAlertMonitor monitorWithClock(Clock customClock) {
+        return new FleetPresenceAlertMonitor(email,
+                new biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours(
+                        new biz.ugur.busroutebackend.shared.infrastructure.email.MailProperties(),
+                        Clock.fixed(Instant.parse("2026-05-12T10:00:00Z"), ZoneOffset.UTC)),
+                props, gpsProps, assignments, vehicles, busRoutes, registry, customClock);
+    }
+
+    @Test
+    void flagsSilentSecondShiftVehicleDuringAshgabatEvening() {
+        FleetPresenceAlertMonitor evening = monitorWithClock(
+                Clock.fixed(Instant.parse("2026-07-22T12:57:00Z"), ZoneOffset.UTC));
+        RouteAssignment a = assignment("v1");
+        Vehicle v = mock(Vehicle.class);
+        when(v.getIsActive()).thenReturn(true);
+        when(v.getLicensePlate()).thenReturn("AG-v1");
+        when(v.getRouteNumber()).thenReturn("12");
+        when(v.getLastPositionUpdate()).thenReturn(LocalDateTime.of(2026, 7, 22, 9, 30));
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND)))
+                .thenReturn(Flux.just(a));
+        when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v));
+
+        StepVerifier.create(evening.checkNow()).verifyComplete();
+
+        ArgumentCaptor<String> subject = ArgumentCaptor.forClass(String.class);
+        verify(email).sendGpsAlert(anyList(), anyString(), eq(AlertKind.ASSIGNED_NOT_ON_LINE),
+                subject.capture(), anyString());
+        assertThat(subject.getValue()).contains("SECOND");
+    }
+
+    @Test
+    void flagsNotStartedSecondShiftVehicleAfterGrace() {
+        FleetPresenceAlertMonitor afterGrace = monitorWithClock(
+                Clock.fixed(Instant.parse("2026-07-22T09:40:00Z"), ZoneOffset.UTC));
+        RouteAssignment a = assignment("v1");
+        Vehicle v = mock(Vehicle.class);
+        when(v.getIsActive()).thenReturn(true);
+        when(v.getLicensePlate()).thenReturn("AG-v1");
+        when(v.getRouteNumber()).thenReturn("12");
+        when(v.getLastPositionUpdate()).thenReturn(null);
+        when(assignments.findActiveByDateAndShift(any(), eq(ShiftType.SECOND)))
+                .thenReturn(Flux.just(a));
+        when(vehicles.findById(VehicleId.of("v1"))).thenReturn(Mono.just(v));
+
+        StepVerifier.create(afterGrace.checkNow()).verifyComplete();
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(email).sendGpsAlert(anyList(), anyString(), eq(AlertKind.ASSIGNED_NOT_ON_LINE),
+                anyString(), body.capture());
+        assertThat(body.getValue()).contains("NOT_STARTED");
+    }
+
+    @Test
+    void skipsCheckDuringAshgabatNight() {
+        FleetPresenceAlertMonitor night = monitorWithClock(
+                Clock.fixed(Instant.parse("2026-07-22T19:30:00Z"), ZoneOffset.UTC));
+
+        StepVerifier.create(night.checkNow()).verifyComplete();
+
+        verify(assignments, never()).findActiveByDateAndShift(any(), any());
+        verify(email, never()).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
     }
 }
