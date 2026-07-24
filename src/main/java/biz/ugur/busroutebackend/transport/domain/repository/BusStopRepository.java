@@ -3,7 +3,6 @@ package biz.ugur.busroutebackend.transport.domain.repository;
 import biz.ugur.busroutebackend.shared.base.BaseRepository;
 import biz.ugur.busroutebackend.shared.domain.specification.Specification;
 import biz.ugur.busroutebackend.transport.application.dto.BusArrivalInfo;
-import biz.ugur.busroutebackend.transport.domain.valueobject.StopWithRouteDistance;
 import biz.ugur.busroutebackend.transport.domain.model.BusStop;
 import biz.ugur.busroutebackend.transport.domain.valueobject.BusStopId;
 import org.springframework.data.domain.Pageable;
@@ -37,13 +36,5 @@ public interface BusStopRepository extends BaseRepository<BusStop, BusStopId> {
     Flux<BusArrivalInfo> findArrivingVehicles(BusStopId stopId, Double stopLatitude, Double stopLongitude);
 
 
-    Flux<BusStop> findStopsOnRouteAhead(String routeNumber, Double vehicleLat, Double vehicleLon, int maxStops);
 
-    Flux<StopWithRouteDistance> findStopsOnRouteAheadWithRouteDistance(
-            String routeNumber,
-            Double vehicleLat,
-            Double vehicleLon,
-            Integer direction,
-            int maxStops
-    );
 }

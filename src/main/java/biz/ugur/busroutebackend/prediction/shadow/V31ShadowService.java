@@ -30,8 +30,8 @@ public class V31ShadowService {
     private final Path tickLogPath;
     private final Map<String, MotionFilterCore> cores = new ConcurrentHashMap<>();
     private final Map<String, V31Fix> lastFixes = new ConcurrentHashMap<>();
-    private java.util.function.Function<String, CoreConfig> configForRoute =
-            r -> CoreConfig.defaults();
+    private java.util.function.BiFunction<String, String, CoreConfig> configForRoute =
+            (routeKey, routeNumber) -> CoreConfig.defaults();
     private final AtomicLong v31TicksProcessed = new AtomicLong();
     private final AtomicLong v31LogDroppedTicks = new AtomicLong();
     private final V31ShadowTap tap;
@@ -81,7 +81,7 @@ public class V31ShadowService {
         RouteTopology topo = routeLines.topologyFor(fix.routeCacheKey(), fix.routeNumber());
         if (topo == null) return;
         MotionFilterCore core = cores.computeIfAbsent(fix.vehicleId(), id -> {
-            MotionFilterCore c = new MotionFilterCore(configForRoute.apply(fix.routeNumber()));
+            MotionFilterCore c = new MotionFilterCore(configForRoute.apply(fix.routeCacheKey(), fix.routeNumber()));
             c.reset();
             return c;
         });
@@ -200,7 +200,7 @@ public class V31ShadowService {
         this.stopEventSink = sink == null ? V31StopEventSink.NO_OP : sink;
     }
 
-    public void configForRoute(java.util.function.Function<String, CoreConfig> fn) {
+    public void configForRoute(java.util.function.BiFunction<String, String, CoreConfig> fn) {
         this.configForRoute = fn;
     }
 

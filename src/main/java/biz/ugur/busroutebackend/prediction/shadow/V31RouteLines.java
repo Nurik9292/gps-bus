@@ -33,9 +33,10 @@ public class V31RouteLines {
         this.strictS5 = strictS5;
     }
 
-    private java.util.function.Function<String, RouteTopology.CityZone> zoneForRoute = r -> null;
+    private java.util.function.BiFunction<String, String, RouteTopology.CityZone> zoneForRoute =
+            (routeKey, routeNumber) -> null;
 
-    public void zoneForRoute(java.util.function.Function<String, RouteTopology.CityZone> fn) {
+    public void zoneForRoute(java.util.function.BiFunction<String, String, RouteTopology.CityZone> fn) {
         this.zoneForRoute = fn;
     }
 
@@ -55,7 +56,7 @@ public class V31RouteLines {
                 RouteLine d1 = build(r, routeNumber, 1);
                 if (d0 == null || d1 == null) return null;
                 RouteTopology topo = RouteTopology.thereAndBack(d0, d1);
-                RouteTopology.CityZone zone = zoneForRoute.apply(routeNumber);
+                RouteTopology.CityZone zone = zoneForRoute.apply(routeCacheKey, routeNumber);
                 return zone != null ? topo.withCityZone(zone) : topo;
             } catch (IllegalStateException s5) {
                 if (strictS5) throw s5;

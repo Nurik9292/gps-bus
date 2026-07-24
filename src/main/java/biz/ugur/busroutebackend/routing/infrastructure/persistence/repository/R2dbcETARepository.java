@@ -70,7 +70,7 @@ public class R2dbcETARepository implements ETARepository {
             WITH route_activity AS (
                 -- Динамическое определение активности маршрутов на основе реальных данных
                 SELECT
-                    route_number,
+                    route_id,
                     active_vehicles,
                     moving_vehicles,
                     CASE
@@ -86,7 +86,7 @@ public class R2dbcETARepository implements ETARepository {
                     COALESCE(ra.route_category, 'regular') as category,
                     COALESCE(ra.active_vehicles, 0) as vehicles_count
                 FROM bus_routes br
-                LEFT JOIN route_activity ra ON br.route_number = ra.route_number
+                LEFT JOIN route_activity ra ON br.id = ra.route_id
                 WHERE br.id = :routeId
                 AND br.is_active = true
                 LIMIT 1
