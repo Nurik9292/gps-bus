@@ -16,6 +16,9 @@ public class WebSocketClientMessage {
     @JsonProperty("routes")
     private List<String> routes;
 
+    @JsonProperty("cityId")
+    private String cityId;
+
     @JsonProperty("bounds")
     private List<Double> bounds;
 

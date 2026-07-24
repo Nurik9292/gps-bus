@@ -131,7 +131,7 @@ public class RouteResolutionServiceImpl implements RouteResolutionService {
 
         Mono<List<RouteStopDTO>> forwardStops = routeStopsService.getForwardStopsDTO(routeId);
         Mono<List<RouteStopDTO>> backwardStops = routeStopsService.getBackwardStopsDTO(routeId);
-        Mono<Long> activeVehiclesCount = getActiveVehiclesCount(route.getRouteNumber());
+        Mono<Long> activeVehiclesCount = getActiveVehiclesCount(route);
 
         return Mono.zip(forwardStops, backwardStops, activeVehiclesCount)
                 .flatMap(tuple -> routeDataMapper.toRouteDataWithStops(
@@ -142,11 +142,11 @@ public class RouteResolutionServiceImpl implements RouteResolutionService {
                 ));
     }
 
-    private Mono<Long> getActiveVehiclesCount(String routeNumber) {
-        return vehicleRepository.countActiveVehiclesRouteNumber(routeNumber)
+    private Mono<Long> getActiveVehiclesCount(BusRoute route) {
+        return vehicleRepository.countActiveByAssignedRouteId(route.getId())
                 .onErrorResume(error -> {
                     log.warn("Error counting active vehicles for route {}: {}",
-                            routeNumber, error.getMessage());
+                            route.getRouteNumber(), error.getMessage());
                     return Mono.just(0L);
                 });
     }

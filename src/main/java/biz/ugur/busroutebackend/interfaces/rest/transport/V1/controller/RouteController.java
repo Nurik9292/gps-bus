@@ -44,9 +44,10 @@ public class RouteController extends BaseController {
 
     @GetMapping("/{routeNumber}/geometry")
     public Mono<ResponseEntity<ApiResponse<RouteData>>> getRouteGeometry(
-            @PathVariable String routeNumber) {
+            @PathVariable String routeNumber,
+            @RequestParam(required = false) String cityId) {
 
-        return ok(getRouteWithGeometryUseCase.execute(routeNumber));
+        return ok(getRouteWithGeometryUseCase.execute(routeNumber, cityId));
     }
 
 
@@ -69,9 +70,10 @@ public class RouteController extends BaseController {
 
     @GetMapping("/{routeNumber}/info")
     public Mono<ResponseEntity<ApiResponse<RouteInfoDTO>>> getRouteInfo(
-            @PathVariable String routeNumber) {
+            @PathVariable String routeNumber,
+            @RequestParam(required = false) String cityId) {
 
-        return ok(getRouteWithGeometryUseCase.execute(routeNumber)
+        return ok(getRouteWithGeometryUseCase.execute(routeNumber, cityId)
                 .map(this::toRouteInfo));
     }
 
@@ -79,18 +81,20 @@ public class RouteController extends BaseController {
     @GetMapping("/{routeNumber}/stops")
     public Mono<ResponseEntity<ApiResponse<List<RouteStopDTO>>>> getRouteStops(
             @PathVariable String routeNumber,
-            @RequestParam(defaultValue = "0") @Min(0) @Max(1) Integer direction) {
+            @RequestParam(defaultValue = "0") @Min(0) @Max(1) Integer direction,
+            @RequestParam(required = false) String cityId) {
 
-        return okList(getRouteWithGeometryUseCase.getRouteStops(routeNumber, direction));
+        return okList(getRouteWithGeometryUseCase.getRouteStops(routeNumber, direction, cityId));
     }
 
 
     @PutMapping("/{routeNumber}/geometry")
     public Mono<ResponseEntity<ApiResponse<RouteGeometryUpdateResponse>>> updateRouteGeometry(
             @PathVariable String routeNumber,
-            @Valid @RequestBody RouteGeometryRequest request) {
+            @Valid @RequestBody RouteGeometryRequest request,
+            @RequestParam(required = false) String cityId) {
 
-        return ok(getRouteWithGeometryUseCase.updateRouteGeometry(routeNumber, request)
+        return ok(getRouteWithGeometryUseCase.updateRouteGeometry(routeNumber, request, cityId)
                 .map(result -> new RouteGeometryUpdateResponse(
                         true, "Route geometry updated successfully", result)));
     }
@@ -98,9 +102,10 @@ public class RouteController extends BaseController {
 
     @GetMapping("/{routeNumber}/statistics")
     public Mono<ResponseEntity<ApiResponse<RouteStatisticsDTO>>> getRouteStatistics(
-            @PathVariable String routeNumber) {
+            @PathVariable String routeNumber,
+            @RequestParam(required = false) String cityId) {
 
-        return ok(getRouteWithGeometryUseCase.execute(routeNumber)
+        return ok(getRouteWithGeometryUseCase.execute(routeNumber, cityId)
                 .map(this::toRouteStatistics));
     }
 

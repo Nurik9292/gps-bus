@@ -22,6 +22,10 @@ class SessionConfig {
     @Getter
     private Set<String> routeFilter;
 
+    @Getter
+    @Setter
+    private volatile String cityFilter;
+
     private Double northBound, southBound, eastBound, westBound;
 
     @Getter

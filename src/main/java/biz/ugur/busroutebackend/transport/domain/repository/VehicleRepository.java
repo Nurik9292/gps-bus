@@ -43,6 +43,8 @@ public interface VehicleRepository extends BaseRepository<Vehicle, VehicleId> {
 
     Mono<Long> countActiveVehiclesRouteNumber(String routeNumber);
 
+    Mono<Long> countActiveByAssignedRouteId(BusRouteId routeId);
+
 
     Mono<Map<String, Vehicle>> findByDeviceIds(List<String> deviceIds);
 

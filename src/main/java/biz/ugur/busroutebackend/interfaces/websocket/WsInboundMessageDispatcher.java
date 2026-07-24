@@ -77,6 +77,8 @@ public class WsInboundMessageDispatcher {
 
         Set<String> oldFilter = config.getRouteFilter();
         config.setRouteFilter(Set.copyOf(message.getRoutes()));
+        config.setCityFilter(message.getCityId() != null && !message.getCityId().isBlank()
+                ? message.getCityId() : null);
         config.setSubscriptionType("routes");
 
         log.info("Session {} updated route subscription: {} -> {} (total active sessions: {})",
