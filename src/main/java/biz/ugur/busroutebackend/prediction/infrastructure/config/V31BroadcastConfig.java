@@ -49,13 +49,13 @@ public class V31BroadcastConfig {
                                              Clock v31Clock,
                                              @Value("${app.prediction.v31.log-dir:logs/ws_pred_v31}")
                                              String logDir) {
-        lines.zoneForRoute(route -> {
-            V31CityZoneProperties.Zone z = zones.getRoutes().get(route);
+        lines.zoneForRoute((routeKey, routeNumber) -> {
+            V31CityZoneProperties.Zone z = zoneOf(zones, routeKey, routeNumber);
             return z == null ? null
                     : new RouteTopology.CityZone(z.getDLat(), z.getDLon(), z.getPLat(), z.getPLon());
         });
-        shadow.configForRoute(route -> {
-            V31CityZoneProperties.Zone z = zones.getRoutes().get(route);
+        shadow.configForRoute((routeKey, routeNumber) -> {
+            V31CityZoneProperties.Zone z = zoneOf(zones, routeKey, routeNumber);
             return z == null ? CoreConfig.defaults()
                     : CoreConfig.defaults().withCityZoneParams(z.getRDeep(), z.getRPlateau(),
                         z.getTDwellSec(), z.getM(), z.getGSec(), z.getTCityExitMinSpanSec(),
@@ -63,6 +63,12 @@ public class V31BroadcastConfig {
                         z.getKConfirmPostBoundary(), z.getEpsMidlineMeters());
         });
         return new V31BroadcastLoop(shadow, props, sink, mapper, v31Clock, Path.of(logDir));
+    }
+
+    private static V31CityZoneProperties.Zone zoneOf(V31CityZoneProperties zones,
+                                                     String routeKey, String routeNumber) {
+        V31CityZoneProperties.Zone byId = zones.getRoutes().get(routeKey);
+        return byId != null ? byId : zones.getRoutes().get(routeNumber);
     }
 
     @Bean(destroyMethod = "dispose")

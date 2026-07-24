@@ -140,10 +140,12 @@ public class DiagnosticsController {
     }
 
     @GetMapping("/route-stops")
-    public Flux<RouteStopItem> routeStops(@RequestParam("route") String routeNumber) {
+    public Flux<RouteStopItem> routeStops(@RequestParam("route") String routeNumber,
+                                          @RequestParam(required = false) String cityId) {
         if (routeNumber == null || routeNumber.isBlank()) {
             return Flux.empty();
         }
+        boolean cityScoped = cityId != null && !cityId.isBlank();
         String sql = """
                 SELECT rs.direction          AS direction,
                        rs.stop_sequence      AS stop_sequence,
@@ -156,10 +158,15 @@ public class DiagnosticsController {
                   JOIN bus_stops bs   ON bs.id = rs.stop_id
                   JOIN bus_routes br  ON br.id = rs.route_id
                  WHERE br.route_number = :routeNumber
+                """ + (cityScoped ? " AND br.city_id = :cityId\n" : "") + """
                  ORDER BY rs.direction, rs.stop_sequence
                 """;
-        return databaseClient.sql(sql)
-                .bind("routeNumber", routeNumber)
+        var spec = databaseClient.sql(sql)
+                .bind("routeNumber", routeNumber);
+        if (cityScoped) {
+            spec = spec.bind("cityId", cityId);
+        }
+        return spec
                 .map((row, meta) -> new RouteStopItem(
                         row.get("stop_id", String.class),
                         row.get("stop_name", String.class),
