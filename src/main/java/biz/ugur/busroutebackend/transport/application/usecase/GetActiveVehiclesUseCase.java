@@ -49,7 +49,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
 
         return switch (query.getType()) {
             case ALL -> getAllActiveVehicles();
-            case BY_ROUTE -> getVehiclesByRoute(query.getRouteNumber());
+            case BY_ROUTE -> getVehiclesByRoute(query.getRouteNumber(), query.getCityId());
             case BY_AREA -> getVehiclesInArea(query.getMinLat(), query.getMinLon(),
                     query.getMaxLat(), query.getMaxLon());
             case BY_RADIUS -> getVehiclesInRadius(query.getCenterLat(), query.getCenterLon(),
@@ -76,7 +76,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
 
             return switch (effectiveQuery.getType()) {
                 case ALL -> getAllActiveVehicles();
-                case BY_ROUTE -> getVehiclesByRoute(effectiveQuery.getRouteNumber());
+                case BY_ROUTE -> getVehiclesByRoute(effectiveQuery.getRouteNumber(), effectiveQuery.getCityId());
                 case BY_AREA -> getVehiclesInArea(effectiveQuery.getMinLat(), effectiveQuery.getMinLon(),
                         effectiveQuery.getMaxLat(), effectiveQuery.getMaxLon());
                 case BY_RADIUS -> getVehiclesInRadius(effectiveQuery.getCenterLat(), effectiveQuery.getCenterLon(),
@@ -104,16 +104,19 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
                 .doOnNext(vehicle -> log.trace("Active vehicle: {}", vehicle.getLicensePlate()));
     }
 
-    private Flux<VehiclePositionDTO> getVehiclesByRoute(String routeNumber) {
+    private Flux<VehiclePositionDTO> getVehiclesByRoute(String routeNumber, String cityId) {
         if (routeNumber == null || routeNumber.trim().isEmpty()) {
             return Flux.empty();
         }
 
-        String cacheKey = "active_vehicles:route:" + routeNumber;
+        boolean cityScoped = cityId != null && !cityId.isBlank();
+        String cacheKey = "active_vehicles:route:" + (cityScoped ? cityId : "any") + ":" + routeNumber;
 
         return cacheRepository.getCached(cacheKey)
                 .switchIfEmpty(
-                        busRouteRepository.findPreferredByRouteNumber(routeNumber)
+                        (cityScoped
+                                ? busRouteRepository.findByRouteNumberAndCityId(routeNumber, cityId)
+                                : busRouteRepository.findPreferredByRouteNumber(routeNumber))
                                 .flatMapMany(route ->
                                         vehicleRepository.findByAssignedRouteId(route.getId())
                                                 .filter(Vehicle::getIsActive)
@@ -206,6 +209,7 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
     public static class Query {
         private QueryType type;
         private String routeNumber;
+        private String cityId;
         private Double minLat, minLon, maxLat, maxLon;
         private Double centerLat, centerLon;
         private Integer radiusMeters;
@@ -221,9 +225,14 @@ public class GetActiveVehiclesUseCase extends BaseFluxUseCase<GetActiveVehiclesU
         }
 
         public static Query byRoute(String routeNumber) {
+            return byRoute(routeNumber, null);
+        }
+
+        public static Query byRoute(String routeNumber, String cityId) {
             Query query = new Query();
             query.type = QueryType.BY_ROUTE;
             query.routeNumber = routeNumber;
+            query.cityId = cityId;
             return query;
         }
 

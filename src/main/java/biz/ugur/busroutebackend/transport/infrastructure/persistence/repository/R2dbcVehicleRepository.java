@@ -420,6 +420,17 @@ public class R2dbcVehicleRepository extends BaseR2dbcRepository<Vehicle, Vehicle
     }
 
     @Override
+    public Mono<Long> countActiveByAssignedRouteId(BusRouteId routeId) {
+        String sql = "SELECT COUNT(*) FROM vehicles WHERE is_active = true AND assigned_route_id = :routeId";
+
+        return databaseClient.sql(sql)
+                .bind("routeId", routeId.getValue())
+                .map(row -> row.get(0, Long.class))
+                .one()
+                .doOnNext(count -> log.debug("Active vehicles count for route id {}: {}", routeId, count));
+    }
+
+    @Override
     public Flux<String> findAllDeviceIds() {
         String sql = "SELECT device_id FROM vehicles WHERE device_id IS NOT NULL AND is_active = true";
 

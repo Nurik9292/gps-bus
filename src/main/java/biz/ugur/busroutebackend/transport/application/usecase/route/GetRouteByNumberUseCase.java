@@ -42,7 +42,9 @@ public class GetRouteByNumberUseCase implements UseCase<Mono<GetRouteByNumberUse
                 .flatMap(correlationId -> {
                     log.debug("Getting route by route number - Correlation {}: routeNumber={}", correlationId, query.routeNumber);
 
-                    return busRouteRepository.findPreferredByRouteNumber(query.routeNumber)
+                    return (query.cityId == null || query.cityId.isBlank()
+                                    ? busRouteRepository.findPreferredByRouteNumber(query.routeNumber)
+                                    : busRouteRepository.findByRouteNumberAndCityId(query.routeNumber, query.cityId))
                             .flatMap(this::enrichRouteWithStops)
                             .doOnSuccess(result -> log.debug("Retrieved route: {}", result.routeNumber()))
                             .onErrorMap(error -> {
@@ -57,7 +59,7 @@ public class GetRouteByNumberUseCase implements UseCase<Mono<GetRouteByNumberUse
         String routeId = route.getId().getValue();
         Mono<List<RouteStopDTO>> forwardStops = routeStopsService.getForwardStopsDTO(routeId);
         Mono<List<RouteStopDTO>> backwardStops = routeStopsService.getBackwardStopsDTO(routeId);
-        Mono<Long> activeVehiclesCount = getActiveVehiclesCount(route.getRouteNumber());
+        Mono<Long> activeVehiclesCount = getActiveVehiclesCount(route);
 
         return Mono.zip(forwardStops, backwardStops, activeVehiclesCount)
                 .flatMap(tuple -> routeDataMapper.toRouteDataWithStops(
@@ -70,13 +72,18 @@ public class GetRouteByNumberUseCase implements UseCase<Mono<GetRouteByNumberUse
                 .doOnError(error -> log.error("Failed to enrich route {} with stops", route.getRouteNumber(), error));
     }
 
-    private Mono<Long> getActiveVehiclesCount(String routeNumber) {
-        return vehicleRepository.countActiveVehiclesRouteNumber(routeNumber)
+    private Mono<Long> getActiveVehiclesCount(BusRoute route) {
+        return vehicleRepository.countActiveByAssignedRouteId(route.getId())
                 .onErrorResume(error -> {
-                    log.warn("Error counting active vehicles for route {}: {}", routeNumber, error.getMessage());
+                    log.warn("Error counting active vehicles for route {}: {}",
+                            route.getRouteNumber(), error.getMessage());
                     return Mono.just(0L);
                 });
     }
 
-    public record Query(String routeNumber) {}
+    public record Query(String routeNumber, String cityId) {
+        public Query(String routeNumber) {
+            this(routeNumber, null);
+        }
+    }
 }

@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
@@ -34,9 +35,10 @@ public class DuralgaTmpController extends BaseController {
 
     @GetMapping("/{routeNumber}")
     public Mono<ResponseEntity<ApiResponse<MobileRouteResponse>>> getRouteByNumber(
-            @PathVariable String routeNumber
+            @PathVariable String routeNumber,
+            @RequestParam(required = false) String cityId
     ) {
-        return Mono.just(new GetRouteByNumberUseCase.Query(routeNumber))
+        return Mono.just(new GetRouteByNumberUseCase.Query(routeNumber, cityId))
                 .as(getRouteByNumberUseCase::execute)
                 .map(result -> MobileRouteResponse.from(result, true))
                 .map(ApiResponse::success)

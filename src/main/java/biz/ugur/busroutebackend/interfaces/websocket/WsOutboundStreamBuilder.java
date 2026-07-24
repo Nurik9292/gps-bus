@@ -42,6 +42,7 @@ public class WsOutboundStreamBuilder {
     private final ObjectMapper objectMapper;
     private final WsBroadcastSink broadcastSink;
     private final PipelineTracer pipelineTracer;
+    private final biz.ugur.busroutebackend.transport.application.services.VehicleCityIndex vehicleCityIndex;
     private final java.util.concurrent.atomic.AtomicInteger activeSessions =
             new java.util.concurrent.atomic.AtomicInteger();
     private java.util.function.Supplier<reactor.core.publisher.Flux<
@@ -60,11 +61,13 @@ public class WsOutboundStreamBuilder {
     public WsOutboundStreamBuilder(GetActiveVehiclesUseCase getActiveVehiclesUseCase,
                                    ObjectMapper objectMapper,
                                    WsBroadcastSink broadcastSink,
-                                   PipelineTracer pipelineTracer) {
+                                   PipelineTracer pipelineTracer,
+                                   biz.ugur.busroutebackend.transport.application.services.VehicleCityIndex vehicleCityIndex) {
         this.getActiveVehiclesUseCase = getActiveVehiclesUseCase;
         this.objectMapper = objectMapper;
         this.broadcastSink = broadcastSink;
         this.pipelineTracer = pipelineTracer;
+        this.vehicleCityIndex = vehicleCityIndex;
     }
 
     public Flux<WebSocketMessage> buildFor(WebSocketSession session, SessionConfig config) {
@@ -75,7 +78,8 @@ public class WsOutboundStreamBuilder {
         Flux<WebSocketMessage> v31Live = v31Frames.get()
                 .takeUntilOther(session.closeStatus().then())
                 .map(batch -> batch.stream()
-                        .filter(env -> isRouteInScope(env.routeNumber(), config))
+                        .filter(env -> isRouteInScope(env.routeNumber(), config)
+                                && sessionCityAllows(env.vehicleId(), config))
                         .map(biz.ugur.busroutebackend.prediction.broadcast.V31FrameEnvelope::json)
                         .toList())
                 .filter(jsons -> !jsons.isEmpty())
@@ -192,6 +196,16 @@ public class WsOutboundStreamBuilder {
         return config.getRouteFilter() != null && config.getRouteFilter().contains(routeNumber);
     }
 
+    boolean sessionCityAllows(String vehicleId, SessionConfig config) {
+        String cityFilter = config.getCityFilter();
+        if (cityFilter == null) {
+            return true;
+        }
+        return vehicleCityIndex.cityOf(vehicleId)
+                .map(cityFilter::equals)
+                .orElse(true);
+    }
+
     private Flux<WebSocketMessage> liveUpdatesStream(WebSocketSession session, SessionConfig config) {
         Mono<Void> closed = session.closeStatus().then();
         return broadcastSink.asFlux()
@@ -258,7 +272,8 @@ public class WsOutboundStreamBuilder {
             }
             result = Flux.fromIterable(routes)
                     .flatMap(routeNumber ->
-                            getActiveVehiclesUseCase.execute(GetActiveVehiclesUseCase.Query.byRoute(routeNumber)))
+                            getActiveVehiclesUseCase.execute(
+                                    GetActiveVehiclesUseCase.Query.byRoute(routeNumber, config.getCityFilter())))
                     .distinct(VehiclePositionDTO::getVehicleId);
         } else if ("bounds".equals(subscriptionType)) {
             result = getActiveVehiclesUseCase.execute(null)
@@ -305,7 +320,8 @@ public class WsOutboundStreamBuilder {
                     if (routeNumber == null || routeNumber.trim().isEmpty()) {
                         yield false;
                     }
-                    yield routeFilter.contains(routeNumber.trim());
+                    yield routeFilter.contains(routeNumber.trim())
+                            && sessionCityAllows(position.getVehicleId(), config);
                 }
                 case "bounds" -> {
                     Double lat = position.getLatitude();

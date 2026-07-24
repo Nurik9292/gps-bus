@@ -30,21 +30,31 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteDa
 
     @Override
     public Mono<RouteData> execute(String routeNumber) {
+        return execute(routeNumber, null);
+    }
+
+    public Mono<RouteData> execute(String routeNumber, String cityId) {
         return correlationContextService.executeWithCorrelation(
-                Mono.just(routeNumber).flatMap(this::executeWithCorrelation),
+                Mono.just(routeNumber).flatMap(number -> executeWithCorrelation(number, cityId)),
                 "transport"
         );
     }
 
-    private Mono<RouteData> executeWithCorrelation(String routeNumber) {
+    private Mono<BusRoute> resolveByNumberAndOptionalCity(String routeNumber, String cityId) {
+        return cityId == null || cityId.isBlank()
+                ? busRouteRepository.findPreferredByRouteNumber(routeNumber)
+                : busRouteRepository.findByRouteNumberAndCityId(routeNumber, cityId);
+    }
+
+    private Mono<RouteData> executeWithCorrelation(String routeNumber, String cityId) {
         return correlationContextService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.debug("Getting route with geometry - CorrelationId: {} - RouteNumber: {}",
                             correlationId, routeNumber);
 
-                    return busRouteRepository.findPreferredByRouteNumber(routeNumber)
+                    return resolveByNumberAndOptionalCity(routeNumber, cityId)
                             .flatMap(this::enrichWithStopsAndVehicles)
-                            .doOnSuccess(route -> log.info("Route {} geometry retrieved - CorrelationId: {} - ForwardStops: {} - BackwardStops: {}",
+                            .doOnNext(route -> log.info("Route {} geometry retrieved - CorrelationId: {} - ForwardStops: {} - BackwardStops: {}",
                                     routeNumber, correlationId, route.getForwardStopsCount(), route.getBackwardStopsCount()))
                             .doOnError(error -> log.error("Failed to get route geometry - CorrelationId: {} - RouteNumber: {} - Error: {}",
                                     correlationId, routeNumber, error.getMessage()));
@@ -75,19 +85,23 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteDa
     }
 
     public Flux<RouteStopDTO> getRouteStops(String routeNumber, Integer direction) {
+        return getRouteStops(routeNumber, direction, null);
+    }
+
+    public Flux<RouteStopDTO> getRouteStops(String routeNumber, Integer direction, String cityId) {
         return correlationContextService.executeWithCorrelation(
-                this.getRouteStopsWithCorrelation(routeNumber, direction),
+                this.getRouteStopsWithCorrelation(routeNumber, direction, cityId),
                 "transport"
         ).flux().flatMap(Flux::fromIterable);
     }
 
-    private Mono<List<RouteStopDTO>> getRouteStopsWithCorrelation(String routeNumber, Integer direction) {
+    private Mono<List<RouteStopDTO>> getRouteStopsWithCorrelation(String routeNumber, Integer direction, String cityId) {
         return correlationContextService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.debug("Getting route stops - CorrelationId: {} - RouteNumber: {} - Direction: {}",
                             correlationId, routeNumber, direction);
 
-                    return busRouteRepository.findPreferredByRouteNumber(routeNumber)
+                    return resolveByNumberAndOptionalCity(routeNumber, cityId)
                             .flatMapMany(route -> busRouteRepository.getRouteStopsInfoByRouteId(route.getId().getValue(), direction))
                             .map(routeDtoMappingService::toRouteStopDto)
                             .collectList()
@@ -97,18 +111,22 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteDa
     }
 
     public Mono<String> updateRouteGeometry(String routeNumber, RouteGeometryRequest request) {
+        return updateRouteGeometry(routeNumber, request, null);
+    }
+
+    public Mono<String> updateRouteGeometry(String routeNumber, RouteGeometryRequest request, String cityId) {
         return correlationContextService.executeWithCorrelation(
-                this.updateRouteGeometryWithCorrelation(routeNumber, request),
+                this.updateRouteGeometryWithCorrelation(routeNumber, request, cityId),
                 "transport"
         );
     }
 
-    private Mono<String> updateRouteGeometryWithCorrelation(String routeNumber, RouteGeometryRequest request) {
+    private Mono<String> updateRouteGeometryWithCorrelation(String routeNumber, RouteGeometryRequest request, String cityId) {
         return correlationContextService.getCurrentCorrelationId()
                 .flatMap(correlationId -> {
                     log.info("Updating route geometry - CorrelationId: {} - RouteNumber: {}", correlationId, routeNumber);
 
-                    return busRouteRepository.findPreferredByRouteNumber(routeNumber)
+                    return resolveByNumberAndOptionalCity(routeNumber, cityId)
                             .flatMap(route -> {
                                 try {
                                     var forwardGeometry = createRouteGeometry(request.getForwardCoordinates());

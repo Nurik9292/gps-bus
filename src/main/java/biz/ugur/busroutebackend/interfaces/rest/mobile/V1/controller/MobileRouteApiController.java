@@ -128,29 +128,6 @@ public class MobileRouteApiController extends BaseMobileController {
         ));
     }
 
-    @GetMapping("/by-city/{cityId}")
-    public Mono<ResponseEntity<ApiResponse<MobileRouteListResponse>>> getRoutesByCity(@PathVariable String cityId) {
-
-        return ok(getOptionalClientId()
-                .flatMap(optionalClientId ->
-                        routeResolutionService.resolveAllRoutes(cityId)
-                                .flatMap(resolvedRoute ->
-                                        optionalClientId
-                                                .map(clientId -> routeIsFavoriteUseCase
-                                                        .execute(new RouteIsFavoriteUseCase.Request(clientId, resolvedRoute.routeData().id())))
-                                                .orElse(Mono.just(false))
-                                                .map(isFavorite -> MobileRouteResponse.fromResolved(resolvedRoute, isFavorite))
-                                )
-                                .collectList()
-                                .map(mobileRoutes ->
-                                        MobileRouteListResponse.builder()
-                                                .routes(mobileRoutes)
-                                                .activeCount((long) mobileRoutes.size())
-                                                .build()
-                                )
-                ));
-    }
-
     @GetMapping("/{routeNumber}")
     public Mono<ResponseEntity<ApiResponse<MobileRouteResponse>>> getRouteByNumber(@PathVariable String routeNumber,
             @org.springframework.web.bind.annotation.RequestParam(required = false) String cityId) {
