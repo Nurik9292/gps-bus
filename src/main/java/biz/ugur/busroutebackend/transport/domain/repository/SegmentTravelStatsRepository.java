@@ -7,7 +7,7 @@ import reactor.core.publisher.Mono;
 
 public interface SegmentTravelStatsRepository {
 
-    Mono<SegmentTravelStat> findByKey(String routeNumber, int direction,
+    Mono<SegmentTravelStat> findByKey(String routeId, int direction,
                                       String fromStopId, String toStopId,
                                       int hourOfDay, boolean weekend);
 

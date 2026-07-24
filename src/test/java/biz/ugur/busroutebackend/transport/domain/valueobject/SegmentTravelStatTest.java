@@ -21,7 +21,7 @@ class SegmentTravelStatTest {
 
         @Test
         void zeroSampleCount() {
-            SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND);
+            SegmentTravelStat stat = SegmentTravelStat.initial("route-legacy-1", ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND);
 
             assertThat(stat.getSampleCount()).isZero();
             assertThat(stat.getAvgTravelSeconds()).isZero();
@@ -30,7 +30,7 @@ class SegmentTravelStatTest {
 
         @Test
         void preservesKeyFields() {
-            SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND);
+            SegmentTravelStat stat = SegmentTravelStat.initial("route-legacy-1", ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND);
 
             assertThat(stat.getRouteNumber()).isEqualTo(ROUTE);
             assertThat(stat.getDirection()).isEqualTo(DIRECTION);
@@ -46,7 +46,7 @@ class SegmentTravelStatTest {
 
         @Test
         void firstSampleSetsAvgAndCount() {
-            SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND);
+            SegmentTravelStat stat = SegmentTravelStat.initial("route-legacy-1", ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND);
             Instant observedAt = Instant.parse("2026-04-27T10:00:00Z");
 
             SegmentTravelStat updated = stat.withNewSample(120.0, observedAt);
@@ -58,7 +58,7 @@ class SegmentTravelStatTest {
 
         @Test
         void rollingAverageOverMultipleSamples() {
-            SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
+            SegmentTravelStat stat = SegmentTravelStat.initial("route-legacy-1", ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
                     .withNewSample(100.0, Instant.now())
                     .withNewSample(200.0, Instant.now())
                     .withNewSample(150.0, Instant.now());
@@ -69,7 +69,7 @@ class SegmentTravelStatTest {
 
         @Test
         void preservesKeyFieldsAcrossSamples() {
-            SegmentTravelStat updated = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
+            SegmentTravelStat updated = SegmentTravelStat.initial("route-legacy-1", ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
                     .withNewSample(60.0, Instant.now())
                     .withNewSample(180.0, Instant.now());
 
@@ -83,7 +83,7 @@ class SegmentTravelStatTest {
 
         @Test
         void incrementalConvergesToTrueAverage() {
-            SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND);
+            SegmentTravelStat stat = SegmentTravelStat.initial("route-legacy-1", ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND);
             double[] samples = {100.0, 110.0, 90.0, 105.0, 95.0, 120.0, 80.0, 100.0};
             for (double s : samples) {
                 stat = stat.withNewSample(s, Instant.now());
@@ -96,7 +96,7 @@ class SegmentTravelStatTest {
 
         @Test
         void zeroSampleAccepted() {
-            SegmentTravelStat updated = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
+            SegmentTravelStat updated = SegmentTravelStat.initial("route-legacy-1", ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
                     .withNewSample(0.0, Instant.now());
 
             assertThat(updated.getSampleCount()).isEqualTo(1);
@@ -108,7 +108,7 @@ class SegmentTravelStatTest {
             Instant first = Instant.parse("2026-04-27T08:00:00Z");
             Instant second = Instant.parse("2026-04-27T10:00:00Z");
 
-            SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
+            SegmentTravelStat stat = SegmentTravelStat.initial("route-legacy-1", ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
                     .withNewSample(100.0, first)
                     .withNewSample(120.0, second);
 
@@ -121,8 +121,8 @@ class SegmentTravelStatTest {
 
         @Test
         void weekendFlagPreservedOnInitial() {
-            SegmentTravelStat weekendStat = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, true);
-            SegmentTravelStat weekdayStat = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, false);
+            SegmentTravelStat weekendStat = SegmentTravelStat.initial("route-legacy-1", ROUTE, DIRECTION, FROM, TO, HOUR, true);
+            SegmentTravelStat weekdayStat = SegmentTravelStat.initial("route-legacy-1", ROUTE, DIRECTION, FROM, TO, HOUR, false);
 
             assertThat(weekendStat.isWeekend()).isTrue();
             assertThat(weekdayStat.isWeekend()).isFalse();

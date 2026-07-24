@@ -47,7 +47,7 @@ class TerminalDepartureEtaServiceTest {
     }
 
     private static TerminalPresenceHolder.TerminalPresence presence() {
-        return new TerminalPresenceHolder.TerminalPresence("23", 0, ARRIVED);
+        return new TerminalPresenceHolder.TerminalPresence(ROUTE_ID, "23", 0, ARRIVED);
     }
 
     @BeforeEach
@@ -61,7 +61,7 @@ class TerminalDepartureEtaServiceTest {
                 routeGeometryCache, predictor, liveHolder);
 
         dwellHolder.publish(Map.of(
-                TerminalDwellSnapshotHolder.key("23", 0, 10),
+                TerminalDwellSnapshotHolder.key(ROUTE_ID, 0, 10),
                 new TerminalDwellSnapshotHolder.DwellStat(300.0, 10)));
         when(routeGeometryCache.getRouteStops(eq(ROUTE_ID), eq(1))).thenReturn(List.of(
                 stop("T", "Конечная", 0),
@@ -74,8 +74,8 @@ class TerminalDepartureEtaServiceTest {
 
     @Test
     void remainingDwellPlusSegmentsWithHistoricalStats() {
-        when(predictor.getSegmentTravelStat(eq("23"), eq(1), eq("T"), eq("S1"), anyInt(), anyBoolean()))
-                .thenReturn(SegmentTravelStat.initial("23", 1, "T", "S1", 10, false)
+        when(predictor.getSegmentTravelStat(eq(ROUTE_ID), eq(1), eq("T"), eq("S1"), anyInt(), anyBoolean()))
+                .thenReturn(SegmentTravelStat.initial(ROUTE_ID, "23", 1, "T", "S1", 10, false)
                         .withNewSample(90.0, ARRIVED).withNewSample(90.0, ARRIVED)
                         .withNewSample(90.0, ARRIVED));
 
@@ -94,7 +94,7 @@ class TerminalDepartureEtaServiceTest {
     @Test
     void thinDwellSamplesProduceNothing() {
         dwellHolder.publish(Map.of(
-                TerminalDwellSnapshotHolder.key("23", 0, 10),
+                TerminalDwellSnapshotHolder.key(ROUTE_ID, 0, 10),
                 new TerminalDwellSnapshotHolder.DwellStat(300.0, 4)));
         assertThat(service.departureEtas(presence(), ROUTE_ID, ARRIVED.plusSeconds(60))).isEmpty();
     }
@@ -120,8 +120,8 @@ class TerminalDepartureEtaServiceTest {
     @Test
     void liveFactorStretchesFirstSegment() {
         liveHolder.publish(Map.of("T|S1", 2.0));
-        when(predictor.getSegmentTravelStat(eq("23"), eq(1), eq("T"), eq("S1"), anyInt(), anyBoolean()))
-                .thenReturn(SegmentTravelStat.initial("23", 1, "T", "S1", 10, false)
+        when(predictor.getSegmentTravelStat(eq(ROUTE_ID), eq(1), eq("T"), eq("S1"), anyInt(), anyBoolean()))
+                .thenReturn(SegmentTravelStat.initial(ROUTE_ID, "23", 1, "T", "S1", 10, false)
                         .withNewSample(100.0, ARRIVED).withNewSample(100.0, ARRIVED)
                         .withNewSample(100.0, ARRIVED));
 
@@ -133,18 +133,18 @@ class TerminalDepartureEtaServiceTest {
 
     @Test
     void vehicleLookupPathUsesPresenceHolder() {
-        presenceHolder.arrived("veh-9", "23", 0, ARRIVED);
-        var etas = service.departureEtasForVehicle("veh-9", "23", ROUTE_ID, ARRIVED.plusSeconds(120));
+        presenceHolder.arrived("veh-9", ROUTE_ID, "23", 0, ARRIVED);
+        var etas = service.departureEtasForVehicle("veh-9", ROUTE_ID, ARRIVED.plusSeconds(120));
         assertThat(etas).isNotEmpty();
         assertThat(etas.get(0).departDirection()).isEqualTo(1);
-        assertThat(service.departureEtasForVehicle("veh-unknown", "23", ROUTE_ID,
+        assertThat(service.departureEtasForVehicle("veh-unknown", ROUTE_ID,
                 ARRIVED.plusSeconds(120))).isEmpty();
     }
 
     @Test
     void reassignedVehicleWithStalePresenceIsSilent() {
-        presenceHolder.arrived("veh-9", "57", 0, ARRIVED);
-        assertThat(service.departureEtasForVehicle("veh-9", "23", ROUTE_ID,
+        presenceHolder.arrived("veh-9", "route-legacy-57", "57", 0, ARRIVED);
+        assertThat(service.departureEtasForVehicle("veh-9", ROUTE_ID,
                 ARRIVED.plusSeconds(120))).isEmpty();
     }
 
@@ -154,7 +154,7 @@ class TerminalDepartureEtaServiceTest {
         var nowNextHour = Instant.parse("2026-07-22T06:10:00Z");
         assertThat(java.time.LocalDateTime.ofInstant(nowNextHour,
                 java.time.ZoneId.of("Asia/Ashgabat")).getHour()).isEqualTo(11);
-        var lateArrival = new TerminalPresenceHolder.TerminalPresence("23", 0, arrivedLateInHour);
+        var lateArrival = new TerminalPresenceHolder.TerminalPresence(ROUTE_ID, "23", 0, arrivedLateInHour);
         var etas = service.departureEtas(lateArrival, ROUTE_ID, nowNextHour);
         assertThat(etas).as("отстой ищется по часу прибытия (10), не по текущему (11)")
                 .isNotEmpty();

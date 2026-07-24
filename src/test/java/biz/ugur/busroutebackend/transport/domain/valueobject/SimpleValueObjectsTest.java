@@ -97,7 +97,7 @@ class SimpleValueObjectsTest {
 
         @Test
         void initialProducesBaselineWithDefaultAvg() {
-            StopDwellStat stat = StopDwellStat.initial("s1", "15", 0);
+            StopDwellStat stat = StopDwellStat.initial("s1", "route-legacy-15", "15", 0);
 
             assertThat(stat.getStopId()).isEqualTo("s1");
             assertThat(stat.getRouteNumber()).isEqualTo("15");
@@ -110,7 +110,7 @@ class SimpleValueObjectsTest {
 
         @Test
         void withNewSampleSetsMinMaxAndUpdatesAvg() {
-            StopDwellStat empty = StopDwellStat.initial("s1", "15", 0);
+            StopDwellStat empty = StopDwellStat.initial("s1", "route-legacy-15", "15", 0);
             Instant t = Instant.now();
 
             StopDwellStat withOne = empty.withNewSample(20.0, t);
@@ -123,7 +123,7 @@ class SimpleValueObjectsTest {
 
         @Test
         void minMaxUpdateOnSubsequentSamples() {
-            StopDwellStat stat = StopDwellStat.initial("s1", "15", 0)
+            StopDwellStat stat = StopDwellStat.initial("s1", "route-legacy-15", "15", 0)
                     .withNewSample(20.0, Instant.now())
                     .withNewSample(10.0, Instant.now())
                     .withNewSample(40.0, Instant.now());

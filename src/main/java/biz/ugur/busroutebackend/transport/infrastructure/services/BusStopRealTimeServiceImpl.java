@@ -211,8 +211,7 @@ public class BusStopRealTimeServiceImpl implements BusStopRealTimeService {
                 .filter(s -> s.getRawGpsSpeedKmh() < etaProperties.getSpeed().getMovingThresholdKmh())
                 .flatMap(state -> Flux.fromIterable(
                                 terminalDepartureEtaService.departureEtasForVehicle(
-                                        state.getVehicleId(), state.getRouteNumber(),
-                                        state.getRouteId(), now))
+                                        state.getVehicleId(), state.getRouteId(), now))
                         .filter(eta -> eta.stopId().equals(stopId))
                         .next()
                         .flatMap(eta -> {

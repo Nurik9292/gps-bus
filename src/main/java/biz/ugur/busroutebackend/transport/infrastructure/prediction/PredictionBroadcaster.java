@@ -444,8 +444,7 @@ public class PredictionBroadcaster {
     private List<NextStopEta> terminalDepartureNextStops(VehiclePredictionState state) {
         List<TerminalDepartureEtaService.DepartureStopEta> departures =
                 terminalDepartureEtaService.departureEtasForVehicle(
-                        state.getVehicleId(), state.getRouteNumber(), state.getRouteId(),
-                        clock.instant());
+                        state.getVehicleId(), state.getRouteId(), clock.instant());
         if (departures.isEmpty()) {
             return List.of();
         }
@@ -507,7 +506,7 @@ public class PredictionBroadcaster {
 
             double segmentSeconds;
             SegmentTravelStat historical = prevStopId != null
-                    ? predictor.getSegmentTravelStat(state.getRouteNumber(), state.getDirection(),
+                    ? predictor.getSegmentTravelStat(state.getRouteId(), state.getDirection(),
                             prevStopId, stop.getStopId(), hourOfDay, weekend)
                     : null;
             biz.ugur.busroutebackend.prediction.core.history.SegmentDwellHistory.Stat sharedEdge =

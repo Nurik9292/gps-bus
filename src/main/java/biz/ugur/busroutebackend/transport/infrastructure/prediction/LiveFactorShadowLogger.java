@@ -152,7 +152,7 @@ public class LiveFactorShadowLogger {
             int hourOfDay, boolean weekend) {
         return terminalDwellRepository.findByHourAndWeekend(hourOfDay, weekend)
                 .map(stat -> java.util.Map.entry(
-                        TerminalDwellSnapshotHolder.key(stat.getRouteNumber(), stat.getDirection(),
+                        TerminalDwellSnapshotHolder.key(stat.getRouteId(), stat.getDirection(),
                                 stat.getHourOfDay()),
                         new TerminalDwellSnapshotHolder.DwellStat(
                                 stat.getAvgDwellSeconds(), stat.getSampleCount())));

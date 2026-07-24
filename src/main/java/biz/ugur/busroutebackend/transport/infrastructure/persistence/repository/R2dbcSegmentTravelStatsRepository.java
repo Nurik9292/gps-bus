@@ -19,7 +19,7 @@ import java.time.ZoneOffset;
 public class R2dbcSegmentTravelStatsRepository implements SegmentTravelStatsRepository {
 
     private static final String SELECT_COLUMNS = """
-            route_number, direction, from_stop_id, to_stop_id,
+            route_id, route_number, direction, from_stop_id, to_stop_id,
             hour_of_day, is_weekend,
             avg_travel_seconds, sample_count, last_observed_at
             """;
@@ -31,12 +31,12 @@ public class R2dbcSegmentTravelStatsRepository implements SegmentTravelStatsRepo
     }
 
     @Override
-    public Mono<SegmentTravelStat> findByKey(String routeNumber, int direction,
+    public Mono<SegmentTravelStat> findByKey(String routeId, int direction,
                                              String fromStopId, String toStopId,
                                              int hourOfDay, boolean weekend) {
         String sql = "SELECT " + SELECT_COLUMNS + """
                 FROM segment_travel_stats
-                WHERE route_number = :routeNumber
+                WHERE route_id = :routeId
                   AND direction = :direction
                   AND from_stop_id = :fromStopId
                   AND to_stop_id = :toStopId
@@ -44,7 +44,7 @@ public class R2dbcSegmentTravelStatsRepository implements SegmentTravelStatsRepo
                   AND is_weekend = :weekend
                 """;
         return databaseClient.sql(sql)
-                .bind("routeNumber", routeNumber)
+                .bind("routeId", routeId)
                 .bind("direction", direction)
                 .bind("fromStopId", fromStopId)
                 .bind("toStopId", toStopId)
@@ -64,15 +64,15 @@ public class R2dbcSegmentTravelStatsRepository implements SegmentTravelStatsRepo
     public Mono<SegmentTravelStat> save(SegmentTravelStat stat) {
         String sql = """
                 INSERT INTO segment_travel_stats (
-                    route_number, direction, from_stop_id, to_stop_id,
+                    route_id, route_number, direction, from_stop_id, to_stop_id,
                     hour_of_day, is_weekend,
                     avg_travel_seconds, sample_count, last_observed_at, updated_at
                 ) VALUES (
-                    :routeNumber, :direction, :fromStopId, :toStopId,
+                    :routeId, :routeNumber, :direction, :fromStopId, :toStopId,
                     :hourOfDay, :weekend,
                     :avgTravel, :sampleCount, :lastObservedAt, CURRENT_TIMESTAMP
                 )
-                ON CONFLICT (route_number, direction, from_stop_id, to_stop_id, hour_of_day, is_weekend)
+                ON CONFLICT (route_id, direction, from_stop_id, to_stop_id, hour_of_day, is_weekend)
                 DO UPDATE SET
                     avg_travel_seconds = EXCLUDED.avg_travel_seconds,
                     sample_count       = EXCLUDED.sample_count,
@@ -85,6 +85,7 @@ public class R2dbcSegmentTravelStatsRepository implements SegmentTravelStatsRepo
                 : null;
 
         var spec = databaseClient.sql(sql)
+                .bind("routeId", stat.getRouteId())
                 .bind("routeNumber", stat.getRouteNumber())
                 .bind("direction", stat.getDirection())
                 .bind("fromStopId", stat.getFromStopId())
@@ -104,6 +105,7 @@ public class R2dbcSegmentTravelStatsRepository implements SegmentTravelStatsRepo
     private SegmentTravelStat mapRow(Row row, RowMetadata meta) {
         OffsetDateTime lastObserved = row.get("last_observed_at", OffsetDateTime.class);
         return SegmentTravelStat.builder()
+                .routeId(row.get("route_id", String.class))
                 .routeNumber(row.get("route_number", String.class))
                 .direction(row.get("direction", Integer.class))
                 .fromStopId(row.get("from_stop_id", String.class))

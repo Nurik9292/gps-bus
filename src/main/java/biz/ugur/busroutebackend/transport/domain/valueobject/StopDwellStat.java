@@ -11,6 +11,7 @@ import java.time.Instant;
 public class StopDwellStat {
 
     String stopId;
+    String routeId;
     String routeNumber;
     int direction;
 
@@ -38,9 +39,10 @@ public class StopDwellStat {
                 .build();
     }
 
-    public static StopDwellStat initial(String stopId, String routeNumber, int direction) {
+    public static StopDwellStat initial(String stopId, String routeId, String routeNumber, int direction) {
         return StopDwellStat.builder()
                 .stopId(stopId)
+                .routeId(routeId)
                 .routeNumber(routeNumber)
                 .direction(direction)
                 .avgDwellSeconds(15.0)

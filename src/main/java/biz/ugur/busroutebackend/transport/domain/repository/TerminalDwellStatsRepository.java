@@ -6,7 +6,7 @@ import reactor.core.publisher.Mono;
 
 public interface TerminalDwellStatsRepository {
 
-    Mono<TerminalDwellStat> findByKey(String routeNumber, int direction,
+    Mono<TerminalDwellStat> findByKey(String routeId, int direction,
                                       int hourOfDay, boolean weekend);
 
     Flux<TerminalDwellStat> findByHourAndWeekend(int hourOfDay, boolean weekend);

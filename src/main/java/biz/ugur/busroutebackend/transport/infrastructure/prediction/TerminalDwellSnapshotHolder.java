@@ -19,13 +19,13 @@ public class TerminalDwellSnapshotHolder {
         byRouteDirectionHour.set(Map.copyOf(stats));
     }
 
-    public Optional<DwellStat> dwell(String routeNumber, int arrivedDirection, int arrivalHour) {
+    public Optional<DwellStat> dwell(String routeId, int arrivedDirection, int arrivalHour) {
         return Optional.ofNullable(
-                byRouteDirectionHour.get().get(key(routeNumber, arrivedDirection, arrivalHour)));
+                byRouteDirectionHour.get().get(key(routeId, arrivedDirection, arrivalHour)));
     }
 
-    public static String key(String routeNumber, int arrivedDirection, int arrivalHour) {
-        return routeNumber + "|" + arrivedDirection + "|" + arrivalHour;
+    public static String key(String routeId, int arrivedDirection, int arrivalHour) {
+        return routeId + "|" + arrivedDirection + "|" + arrivalHour;
     }
 
     public int size() {

@@ -37,7 +37,7 @@ public class SegmentObservationRecorder implements V31StopEventSink {
     static final double SINGLE_TICK_SPAN_LIMIT_SECONDS = 45.0;
     private static final long SUMMARY_EVERY_TICKS = 20_000;
 
-    private record TrackState(String routeNumber, int direction, long tripId,
+    private record TrackState(String routeId, String routeNumber, int direction, long tripId,
                               double s, Instant at,
                               String pendingFromStopId, Instant pendingDepartAt,
                               Instant terminalArrivedAt) {
@@ -55,6 +55,7 @@ public class SegmentObservationRecorder implements V31StopEventSink {
     private final AtomicLong observationsWritten = new AtomicLong();
     private final AtomicLong droppedOutOfRange = new AtomicLong();
     private final AtomicLong resetsOnJump = new AtomicLong();
+    private final AtomicLong ticksWithoutRouteId = new AtomicLong();
     private final TerminalPresenceHolder terminalPresenceHolder;
 
     public SegmentObservationRecorder(
@@ -92,9 +93,16 @@ public class SegmentObservationRecorder implements V31StopEventSink {
         long ticks = ticksSeen.incrementAndGet();
         if (ticks % SUMMARY_EVERY_TICKS == 0) {
             log.info("[SEGMENT_OBS] сводка: тиков={} пересечений={} наблюдений={} "
-                            + "отброшено={} сбросов-скачков={}",
+                            + "отброшено={} сбросов-скачков={} без-routeId={}",
                     ticks, crossingsSeen.get(), observationsWritten.get(),
-                    droppedOutOfRange.get(), resetsOnJump.get());
+                    droppedOutOfRange.get(), resetsOnJump.get(), ticksWithoutRouteId.get());
+        }
+
+        if (fix.routeId() == null || fix.routeId().isBlank()) {
+            ticksWithoutRouteId.incrementAndGet();
+            tracks.remove(fix.vehicleId());
+            terminalPresenceHolder.departed(fix.vehicleId());
+            return;
         }
 
         String vehicleId = fix.vehicleId();
@@ -102,20 +110,20 @@ public class SegmentObservationRecorder implements V31StopEventSink {
         TrackState prev = tracks.get(vehicleId);
 
         boolean sameRun = prev != null
-                && prev.routeNumber().equals(fix.routeNumber())
+                && prev.routeId().equals(fix.routeId())
                 && prev.direction() == direction
                 && prev.tripId() == tripId;
         if (!sameRun) {
             if (prev != null && prev.terminalArrivedAt() != null
-                    && prev.routeNumber().equals(fix.routeNumber())
+                    && prev.routeId().equals(fix.routeId())
                     && prev.direction() != direction) {
-                recordTerminalDwell(prev.routeNumber(), prev.direction(),
+                recordTerminalDwell(prev.routeId(), prev.routeNumber(), prev.direction(),
                         prev.terminalArrivedAt(), now);
             }
             if (prev != null) {
                 terminalPresenceHolder.departed(vehicleId);
             }
-            tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
+            tracks.put(vehicleId, new TrackState(fix.routeId(), fix.routeNumber(), direction, tripId,
                     s, now, null, null, null));
             return;
         }
@@ -123,12 +131,12 @@ public class SegmentObservationRecorder implements V31StopEventSink {
         double advance = s - prev.s();
         if (advance < -BACKWARD_RESET_METERS || advance > MAX_ADVANCE_PER_TICK_METERS) {
             resetsOnJump.incrementAndGet();
-            tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
+            tracks.put(vehicleId, new TrackState(fix.routeId(), fix.routeNumber(), direction, tripId,
                     s, now, null, null, prev.terminalArrivedAt()));
             return;
         }
         if (advance <= 0) {
-            tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
+            tracks.put(vehicleId, new TrackState(fix.routeId(), fix.routeNumber(), direction, tripId,
                     prev.s(), prev.at(), prev.pendingFromStopId(), prev.pendingDepartAt(),
                     prev.terminalArrivedAt()));
             return;
@@ -145,13 +153,13 @@ public class SegmentObservationRecorder implements V31StopEventSink {
             if (lastArriveEdge > prev.s() && lastArriveEdge <= s) {
                 terminalArrivedAt = interpolate(prev.at(), tickSpanSec, prev.s(), s,
                         lastArriveEdge);
-                terminalPresenceHolder.arrived(vehicleId, fix.routeNumber(), direction,
-                        terminalArrivedAt);
+                terminalPresenceHolder.arrived(vehicleId, fix.routeId(), fix.routeNumber(),
+                        direction, terminalArrivedAt);
             }
         }
 
         if (properties.isAxisExcluded(fix.routeNumber(), direction)) {
-            tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
+            tracks.put(vehicleId, new TrackState(fix.routeId(), fix.routeNumber(), direction, tripId,
                     s, now, null, null, terminalArrivedAt));
             return;
         }
@@ -168,7 +176,7 @@ public class SegmentObservationRecorder implements V31StopEventSink {
                 if (departWithinSameTick && tickSpanSec > SINGLE_TICK_SPAN_LIMIT_SECONDS) {
                     droppedOutOfRange.incrementAndGet();
                 } else {
-                    record(fix.routeNumber(), direction, pendingFrom, stop.stopId(),
+                    record(fix.routeId(), fix.routeNumber(), direction, pendingFrom, stop.stopId(),
                             pendingDepartAt, arrivedAt);
                 }
                 pendingFrom = null;
@@ -181,14 +189,14 @@ public class SegmentObservationRecorder implements V31StopEventSink {
             }
         }
 
-        tracks.put(vehicleId, new TrackState(fix.routeNumber(), direction, tripId,
+        tracks.put(vehicleId, new TrackState(fix.routeId(), fix.routeNumber(), direction, tripId,
                 s, now, pendingFrom, pendingDepartAt, terminalArrivedAt));
     }
 
     static final double MIN_TERMINAL_DWELL_SECONDS = 30.0;
     static final double MAX_TERMINAL_DWELL_SECONDS = 3600.0;
 
-    private void recordTerminalDwell(String routeNumber, int arrivedDirection,
+    private void recordTerminalDwell(String routeId, String routeNumber, int arrivedDirection,
                                      Instant arrivedAt, Instant departedAt) {
         double dwellSeconds =
                 (departedAt.toEpochMilli() - arrivedAt.toEpochMilli()) / 1000.0;
@@ -200,11 +208,11 @@ public class SegmentObservationRecorder implements V31StopEventSink {
         int hourOfDay = local.getHour();
         boolean weekend = local.getDayOfWeek().getValue() >= 6;
         terminalDwellRepository
-                .findByKey(routeNumber, arrivedDirection, hourOfDay, weekend)
+                .findByKey(routeId, arrivedDirection, hourOfDay, weekend)
                 .map(existing -> existing.withNewSample(dwellSeconds, departedAt))
                 .switchIfEmpty(Mono.defer(() -> Mono.just(
                         biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat
-                                .initial(routeNumber, arrivedDirection, hourOfDay, weekend)
+                                .initial(routeId, routeNumber, arrivedDirection, hourOfDay, weekend)
                                 .withNewSample(dwellSeconds, departedAt))))
                 .flatMap(terminalDwellRepository::save)
                 .subscribeOn(Schedulers.boundedElastic())
@@ -223,7 +231,8 @@ public class SegmentObservationRecorder implements V31StopEventSink {
         return fromAt.plusMillis(Math.round(f * spanSec * 1000.0));
     }
 
-    private void record(String routeNumber, int direction, String fromStopId, String toStopId,
+    private void record(String routeId, String routeNumber, int direction,
+                        String fromStopId, String toStopId,
                         Instant departedAt, Instant arrivedAt) {
         double elapsedSeconds =
                 (arrivedAt.toEpochMilli() - departedAt.toEpochMilli()) / 1000.0;
@@ -236,11 +245,11 @@ public class SegmentObservationRecorder implements V31StopEventSink {
         boolean weekend = local.getDayOfWeek().getValue() >= 6;
 
         Mono<SegmentTravelStat> history = historyRepository
-                .findByKey(routeNumber, direction, fromStopId, toStopId, hourOfDay, weekend)
+                .findByKey(routeId, direction, fromStopId, toStopId, hourOfDay, weekend)
                 .map(existing -> existing.withNewSample(elapsedSeconds, arrivedAt))
                 .switchIfEmpty(Mono.defer(() -> Mono.just(
-                        SegmentTravelStat.initial(routeNumber, direction, fromStopId, toStopId,
-                                        hourOfDay, weekend)
+                        SegmentTravelStat.initial(routeId, routeNumber, direction,
+                                        fromStopId, toStopId, hourOfDay, weekend)
                                 .withNewSample(elapsedSeconds, arrivedAt))))
                 .flatMap(historyRepository::save);
 

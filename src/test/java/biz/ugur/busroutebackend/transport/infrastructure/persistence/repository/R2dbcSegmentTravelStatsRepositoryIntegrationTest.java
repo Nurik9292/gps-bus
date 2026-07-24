@@ -38,6 +38,7 @@ class R2dbcSegmentTravelStatsRepositoryIntegrationTest {
     }
 
     private static final String ROUTE = "160";
+    private static final String ROUTE_ID = "route-legacy-160";
     private static final int DIRECTION = 0;
     private static final String FROM = "stop-A";
     private static final String TO = "stop-B";
@@ -58,6 +59,7 @@ class R2dbcSegmentTravelStatsRepositoryIntegrationTest {
         String createTableSql = """
                 CREATE TABLE IF NOT EXISTS segment_travel_stats (
                     id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    route_id              VARCHAR(100) NOT NULL,
                     route_number          VARCHAR(32)  NOT NULL,
                     direction             INTEGER      NOT NULL,
                     from_stop_id          VARCHAR(100) NOT NULL,
@@ -70,7 +72,7 @@ class R2dbcSegmentTravelStatsRepositoryIntegrationTest {
                     created_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     CONSTRAINT segment_travel_stats_unique UNIQUE
-                        (route_number, direction, from_stop_id, to_stop_id, hour_of_day, is_weekend)
+                        (route_id, direction, from_stop_id, to_stop_id, hour_of_day, is_weekend)
                 )
                 """;
 
@@ -84,7 +86,7 @@ class R2dbcSegmentTravelStatsRepositoryIntegrationTest {
 
     @Test
     void save_persistsNewStat() {
-        SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
+        SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE_ID, ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
                 .withNewSample(120.5, Instant.parse("2026-04-27T10:00:00Z"));
 
         StepVerifier.create(repository.save(stat))
@@ -98,11 +100,11 @@ class R2dbcSegmentTravelStatsRepositoryIntegrationTest {
 
     @Test
     void findByKey_retrievesPersistedStat() {
-        SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
+        SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE_ID, ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
                 .withNewSample(180.0, Instant.parse("2026-04-27T08:30:00Z"));
         repository.save(stat).block();
 
-        StepVerifier.create(repository.findByKey(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND))
+        StepVerifier.create(repository.findByKey(ROUTE_ID, DIRECTION, FROM, TO, HOUR, WEEKEND))
                 .assertNext(found -> {
                     assertThat(found.getRouteNumber()).isEqualTo(ROUTE);
                     assertThat(found.getDirection()).isEqualTo(DIRECTION);
@@ -120,13 +122,13 @@ class R2dbcSegmentTravelStatsRepositoryIntegrationTest {
 
     @Test
     void findByKey_returnsEmptyWhenNotFound() {
-        StepVerifier.create(repository.findByKey("999", 1, "missing-from", "missing-to", 23, true))
+        StepVerifier.create(repository.findByKey("route-legacy-999", 1, "missing-from", "missing-to", 23, true))
                 .verifyComplete();
     }
 
     @Test
     void save_upsertUpdatesExistingKeyInPlace() {
-        SegmentTravelStat first = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
+        SegmentTravelStat first = SegmentTravelStat.initial(ROUTE_ID, ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND)
                 .withNewSample(100.0, Instant.parse("2026-04-27T08:00:00Z"));
         repository.save(first).block();
 
@@ -134,7 +136,7 @@ class R2dbcSegmentTravelStatsRepositoryIntegrationTest {
                 .withNewSample(140.0, Instant.parse("2026-04-27T09:00:00Z"));
         repository.save(updated).block();
 
-        StepVerifier.create(repository.findByKey(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND))
+        StepVerifier.create(repository.findByKey(ROUTE_ID, DIRECTION, FROM, TO, HOUR, WEEKEND))
                 .assertNext(found -> {
                     assertThat(found.getSampleCount()).isEqualTo(2);
                     assertThat(found.getAvgTravelSeconds()).isEqualTo(120.0);
@@ -150,13 +152,13 @@ class R2dbcSegmentTravelStatsRepositoryIntegrationTest {
 
     @Test
     void findAll_returnsAllPersistedStats() {
-        repository.save(SegmentTravelStat.initial(ROUTE, 0, FROM, TO, 8, false)
+        repository.save(SegmentTravelStat.initial(ROUTE_ID, ROUTE, 0, FROM, TO, 8, false)
                 .withNewSample(100.0, Instant.now())).block();
-        repository.save(SegmentTravelStat.initial(ROUTE, 1, FROM, TO, 8, false)
+        repository.save(SegmentTravelStat.initial(ROUTE_ID, ROUTE, 1, FROM, TO, 8, false)
                 .withNewSample(110.0, Instant.now())).block();
-        repository.save(SegmentTravelStat.initial(ROUTE, 0, FROM, TO, 17, false)
+        repository.save(SegmentTravelStat.initial(ROUTE_ID, ROUTE, 0, FROM, TO, 17, false)
                 .withNewSample(150.0, Instant.now())).block();
-        repository.save(SegmentTravelStat.initial(ROUTE, 0, FROM, TO, 8, true)
+        repository.save(SegmentTravelStat.initial(ROUTE_ID, ROUTE, 0, FROM, TO, 8, true)
                 .withNewSample(80.0, Instant.now())).block();
 
         StepVerifier.create(repository.findAll().count())
@@ -166,46 +168,46 @@ class R2dbcSegmentTravelStatsRepositoryIntegrationTest {
 
     @Test
     void differentTimeBucketsAreIsolatedEntries() {
-        SegmentTravelStat morning = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, 8, false)
+        SegmentTravelStat morning = SegmentTravelStat.initial(ROUTE_ID, ROUTE, DIRECTION, FROM, TO, 8, false)
                 .withNewSample(120.0, Instant.now());
-        SegmentTravelStat evening = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, 17, false)
+        SegmentTravelStat evening = SegmentTravelStat.initial(ROUTE_ID, ROUTE, DIRECTION, FROM, TO, 17, false)
                 .withNewSample(180.0, Instant.now());
         repository.save(morning).block();
         repository.save(evening).block();
 
-        StepVerifier.create(repository.findByKey(ROUTE, DIRECTION, FROM, TO, 8, false))
+        StepVerifier.create(repository.findByKey(ROUTE_ID, DIRECTION, FROM, TO, 8, false))
                 .assertNext(found -> assertThat(found.getAvgTravelSeconds()).isEqualTo(120.0))
                 .verifyComplete();
 
-        StepVerifier.create(repository.findByKey(ROUTE, DIRECTION, FROM, TO, 17, false))
+        StepVerifier.create(repository.findByKey(ROUTE_ID, DIRECTION, FROM, TO, 17, false))
                 .assertNext(found -> assertThat(found.getAvgTravelSeconds()).isEqualTo(180.0))
                 .verifyComplete();
     }
 
     @Test
     void weekendVsWeekdayAreSeparateEntries() {
-        SegmentTravelStat weekday = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, false)
+        SegmentTravelStat weekday = SegmentTravelStat.initial(ROUTE_ID, ROUTE, DIRECTION, FROM, TO, HOUR, false)
                 .withNewSample(100.0, Instant.now());
-        SegmentTravelStat weekend = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, true)
+        SegmentTravelStat weekend = SegmentTravelStat.initial(ROUTE_ID, ROUTE, DIRECTION, FROM, TO, HOUR, true)
                 .withNewSample(140.0, Instant.now());
         repository.save(weekday).block();
         repository.save(weekend).block();
 
-        StepVerifier.create(repository.findByKey(ROUTE, DIRECTION, FROM, TO, HOUR, false))
+        StepVerifier.create(repository.findByKey(ROUTE_ID, DIRECTION, FROM, TO, HOUR, false))
                 .assertNext(found -> assertThat(found.getAvgTravelSeconds()).isEqualTo(100.0))
                 .verifyComplete();
 
-        StepVerifier.create(repository.findByKey(ROUTE, DIRECTION, FROM, TO, HOUR, true))
+        StepVerifier.create(repository.findByKey(ROUTE_ID, DIRECTION, FROM, TO, HOUR, true))
                 .assertNext(found -> assertThat(found.getAvgTravelSeconds()).isEqualTo(140.0))
                 .verifyComplete();
     }
 
     @Test
     void roundTripPreservesNullLastObservedAt() {
-        SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND);
+        SegmentTravelStat stat = SegmentTravelStat.initial(ROUTE_ID, ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND);
         repository.save(stat).block();
 
-        StepVerifier.create(repository.findByKey(ROUTE, DIRECTION, FROM, TO, HOUR, WEEKEND))
+        StepVerifier.create(repository.findByKey(ROUTE_ID, DIRECTION, FROM, TO, HOUR, WEEKEND))
                 .assertNext(found -> {
                     assertThat(found.getSampleCount()).isZero();
                     assertThat(found.getAvgTravelSeconds()).isZero();
