@@ -76,6 +76,7 @@ public class TripOptionDTOConverter {
                 .filter(s -> s.getType() == SegmentType.BUS_RIDE && s.getRouteNumber() != null)
                 .findFirst()
                 .map(busSegment -> realTimeETAService.findNearestBus(
+                                busSegment.getRouteId(),
                                 busSegment.getRouteNumber(),
                                 busSegment.getFromLocationName() != null
                                         ? busSegment.getFromLocationName()
@@ -152,6 +153,7 @@ public class TripOptionDTOConverter {
                 segment.getInstruction()
         );
 
+        dto.setRouteId(segment.getRouteId());
         dto.setFromLocation(createLocationPointDTO(segment.getFromLocation(), segment.getFromLocationName(), segment.getFromStopId()));
         dto.setToLocation(createLocationPointDTO(segment.getToLocation(), segment.getToLocationName(), segment.getToStopId()));
 

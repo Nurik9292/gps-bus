@@ -22,6 +22,9 @@ public class RouteSegmentDTO {
     @JsonProperty("route_number")
     private String routeNumber;
 
+    @JsonProperty("route_id")
+    private String routeId;
+
     @JsonProperty("instruction")
     private String instruction;
 

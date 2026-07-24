@@ -25,18 +25,20 @@ public class RealTimeETAService {
     }
 
 
-    public Mono<NearestBusInfo> findNearestBus(String routeNumber, String stopName) {
-        return findNearestBus(routeNumber, stopName, Double.NaN, Double.NaN);
+    public Mono<NearestBusInfo> findNearestBus(String routeId, String routeNumber, String stopName) {
+        return findNearestBus(routeId, routeNumber, stopName, Double.NaN, Double.NaN);
     }
 
-    public Mono<NearestBusInfo> findNearestBus(String routeNumber, String stopName,
+    public Mono<NearestBusInfo> findNearestBus(String routeId, String routeNumber, String stopName,
                                                 double stopLat, double stopLon) {
         return Mono.fromCallable(() -> {
             List<VehiclePredictionState> allStates = predictionService.getActiveStates();
             if (allStates.isEmpty()) return null;
 
             List<VehiclePredictionState> onRoute = allStates.stream()
-                    .filter(s -> routeNumber.equals(s.getRouteNumber()))
+                    .filter(s -> routeId != null && !routeId.isBlank()
+                            ? routeId.equals(s.getRouteId())
+                            : routeNumber.equals(s.getRouteNumber()))
                     .filter(s -> s.isInMotion() && s.getSpeedKmh() > 0)
                     .filter(s -> s.getLastGpsFraction() >= 0)
                     .toList();
@@ -50,24 +52,24 @@ public class RealTimeETAService {
             java.util.Map<String, OptionalDouble> stopFracByRouteDir = new java.util.HashMap<>();
 
             for (VehiclePredictionState vehicle : onRoute) {
-                    String routeId = vehicle.getRouteId();
-                    if (routeId == null) continue;
+                    String vehicleRouteId = vehicle.getRouteId();
+                    if (vehicleRouteId == null) continue;
                     int direction = vehicle.getDirection();
 
                     OptionalDouble stopFracOpt = stopFracByRouteDir.computeIfAbsent(
-                            routeId + "#" + direction, key -> {
+                            vehicleRouteId + "#" + direction, key -> {
                                 OptionalDouble byName = routeGeometryCache
-                                        .getStopFractionByName(routeId, direction, stopName);
+                                        .getStopFractionByName(vehicleRouteId, direction, stopName);
                                 if (byName.isEmpty() && !Double.isNaN(stopLat) && !Double.isNaN(stopLon)) {
                                     return routeGeometryCache.getStopFractionByCoordinates(
-                                            routeId, direction, stopLat, stopLon, 80.0);
+                                            vehicleRouteId, direction, stopLat, stopLon, 80.0);
                                 }
                                 return byName;
                             });
                     if (stopFracOpt.isEmpty()) continue;
 
                     double stopFrac = stopFracOpt.getAsDouble();
-                    double totalDist = routeGeometryCache.getTotalDistance(routeId, direction);
+                    double totalDist = routeGeometryCache.getTotalDistance(vehicleRouteId, direction);
                     if (totalDist <= 0) continue;
 
                     double vehicleFrac = vehicle.getLastGpsFraction();
@@ -110,8 +112,8 @@ public class RealTimeETAService {
     }
 
 
-    public Mono<Integer> getWaitingTimeMinutes(String routeNumber, String stopName) {
-        return findNearestBus(routeNumber, stopName)
+    public Mono<Integer> getWaitingTimeMinutes(String routeId, String routeNumber, String stopName) {
+        return findNearestBus(routeId, routeNumber, stopName)
                 .map(NearestBusInfo::etaMinutes);
     }
 

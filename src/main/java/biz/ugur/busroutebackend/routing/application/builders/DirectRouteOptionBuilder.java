@@ -75,11 +75,11 @@ public class DirectRouteOptionBuilder {
         LocalDateTime departureTime = LocalDateTime.now();
         long startTime = System.currentTimeMillis();
 
-        Mono<Integer> travelTime = etaCalculationService.calculateTravelTimeMinutes(routeNumber, fromStopName, toStopName)
+        Mono<Integer> travelTime = etaCalculationService.calculateTravelTimeMinutes(directRoute.route().getId().getValue(), routeNumber, fromStopName, toStopName)
                 .doOnSuccess(t -> log.info("[{}] ETA travelTime completed for route {} in {}ms",
                         context.searchId(), routeNumber, System.currentTimeMillis() - startTime));
 
-        Mono<Integer> waitingTime = etaCalculationService.calculateWaitingTimeMinutes(routeNumber, fromStopName, departureTime)
+        Mono<Integer> waitingTime = etaCalculationService.calculateWaitingTimeMinutes(directRoute.route().getId().getValue(), routeNumber, fromStopName, departureTime)
                 .doOnSuccess(t -> log.info("[{}] ETA waitingTime completed for route {} in {}ms",
                         context.searchId(), routeNumber, System.currentTimeMillis() - startTime));
 
@@ -119,6 +119,7 @@ public class DirectRouteOptionBuilder {
             busSeg.setToLocationName(toStopName);
             busSeg.setFromStopId(directRoute.fromStop().getId().toString());
             busSeg.setToStopId(directRoute.toStop().getId().toString());
+            busSeg.setRouteId(directRoute.route().getId().getValue());
 
             RouteSegment walkFromSeg = routeSegmentFactory.createWalkingSegment(toStopLocation, context.toLocation(), walkingFromStop, walkFromStop);
             walkFromSeg.setFromLocationName(toStopName);
