@@ -96,7 +96,7 @@ class SegmentObservationRecorderTest {
     }
 
     private static V31Fix fix(String route, long plusSec) {
-        return new V31Fix("veh-1", "1111 AGJ", route, 37.95, 58.38, 30.0, 90.0,
+        return new V31Fix("veh-1", "1111 AGJ", route, "route-id-" + route, 37.95, 58.38, 30.0, 90.0,
                 true, T0.plusSeconds(plusSec), 0, null, null, null);
     }
 
@@ -118,8 +118,22 @@ class SegmentObservationRecorderTest {
         assertThat(seconds.getValue()).isCloseTo(96.9, org.assertj.core.data.Offset.offset(1.0));
         ArgumentCaptor<SegmentTravelStat> saved = ArgumentCaptor.forClass(SegmentTravelStat.class);
         verify(historyRepository, timeout(2000)).save(saved.capture());
+        assertThat(saved.getValue().getRouteId()).isEqualTo("route-id-57");
         assertThat(saved.getValue().getRouteNumber()).isEqualTo("57");
         assertThat(saved.getValue().getSampleCount()).isEqualTo(1);
+    }
+
+    @Test
+    void fixWithoutRouteIdIsFullyIgnored() {
+        recorder.onTick(new V31Fix("veh-1", "1111 AGJ", "57", null, 37.95, 58.38, 30.0, 90.0,
+                true, T0, 0, null, null, null), geom, 2850.0, 0, 1, List.of());
+        recorder.onTick(new V31Fix("veh-1", "1111 AGJ", "57", null, 37.95, 58.38, 30.0, 90.0,
+                true, T0.plusSeconds(20), 0, null, null, null), geom, 2995.0, 0, 1, List.of());
+
+        assertThat(presenceHolder.size()).isZero();
+        verify(liveRepository, never()).recordTravel(anyString(), anyString(), anyDouble(), any());
+        verify(historyRepository, never()).save(any());
+        verify(terminalDwellRepository, never()).save(any());
     }
 
     @Test
@@ -189,6 +203,7 @@ class SegmentObservationRecorderTest {
                 ArgumentCaptor.forClass(
                         biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat.class);
         verify(terminalDwellRepository, timeout(2000)).save(saved.capture());
+        assertThat(saved.getValue().getRouteId()).isEqualTo("route-id-57");
         assertThat(saved.getValue().getRouteNumber()).isEqualTo("57");
         assertThat(saved.getValue().getDirection()).isZero();
         assertThat(saved.getValue().getAvgDwellSeconds())

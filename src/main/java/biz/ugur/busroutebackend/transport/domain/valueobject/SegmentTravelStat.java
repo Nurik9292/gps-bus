@@ -9,6 +9,7 @@ import java.time.Instant;
 @Builder(toBuilder = true)
 public class SegmentTravelStat {
 
+    String routeId;
     String routeNumber;
     int direction;
     String fromStopId;
@@ -30,10 +31,11 @@ public class SegmentTravelStat {
                 .build();
     }
 
-    public static SegmentTravelStat initial(String routeNumber, int direction,
+    public static SegmentTravelStat initial(String routeId, String routeNumber, int direction,
                                             String fromStopId, String toStopId,
                                             int hourOfDay, boolean weekend) {
         return SegmentTravelStat.builder()
+                .routeId(routeId)
                 .routeNumber(routeNumber)
                 .direction(direction)
                 .fromStopId(fromStopId)

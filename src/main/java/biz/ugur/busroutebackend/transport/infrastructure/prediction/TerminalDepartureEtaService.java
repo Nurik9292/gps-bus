@@ -55,13 +55,12 @@ public class TerminalDepartureEtaService {
     }
 
     public List<DepartureStopEta> departureEtasForVehicle(String vehicleId,
-                                                          String expectedRouteNumber,
                                                           String routeIdForGeometry, Instant now) {
         if (!enabled()) {
             return List.of();
         }
         return presenceHolder.presentAt(vehicleId, now, properties.getDwellMaxSeconds())
-                .filter(presence -> presence.routeNumber().equals(expectedRouteNumber))
+                .filter(presence -> presence.routeId().equals(routeIdForGeometry))
                 .map(presence -> departureEtas(presence, routeIdForGeometry, now))
                 .orElse(List.of());
     }
@@ -72,7 +71,7 @@ public class TerminalDepartureEtaService {
             return List.of();
         }
         int arrivalHour = LocalDateTime.ofInstant(presence.arrivedAt(), ASHGABAT).getHour();
-        var dwellOpt = dwellSnapshotHolder.dwell(presence.routeNumber(),
+        var dwellOpt = dwellSnapshotHolder.dwell(presence.routeId(),
                 presence.arrivedDirection(), arrivalHour);
         if (dwellOpt.isEmpty() || dwellOpt.get().sampleCount() < properties.getMinSamples()) {
             return List.of();
@@ -110,7 +109,7 @@ public class TerminalDepartureEtaService {
                 break;
             }
             if (prevStopId != null) {
-                cumulativeSeconds += segmentSeconds(presence.routeNumber(), departDirection,
+                cumulativeSeconds += segmentSeconds(presence.routeId(), departDirection,
                         prevStopId, stop.getStopId(), hourOfDay, weekend,
                         distanceMeters - prevDistanceMeters, fallbackSpeedKmh,
                         trafficMultiplier, etas.size() - 1);
@@ -123,14 +122,14 @@ public class TerminalDepartureEtaService {
         return etas;
     }
 
-    private double segmentSeconds(String routeNumber, int direction,
+    private double segmentSeconds(String routeId, int direction,
                                   String fromStopId, String toStopId,
                                   int hourOfDay, boolean weekend,
                                   int distanceMeters, double fallbackSpeedKmh,
                                   double trafficMultiplier, int segmentIndexAhead) {
         double seconds;
         SegmentTravelStat historical = predictor.getSegmentTravelStat(
-                routeNumber, direction, fromStopId, toStopId, hourOfDay, weekend);
+                routeId, direction, fromStopId, toStopId, hourOfDay, weekend);
         var sharedEdge = liveFactorSnapshotHolder.edgeBaseline(fromStopId, toStopId);
         if (historical != null && historical.getSampleCount() >= HISTORICAL_ETA_MIN_SAMPLES) {
             seconds = historical.getAvgTravelSeconds();

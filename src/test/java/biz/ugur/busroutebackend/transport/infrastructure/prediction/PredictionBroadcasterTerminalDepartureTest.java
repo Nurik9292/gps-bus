@@ -54,7 +54,7 @@ class PredictionBroadcasterTerminalDepartureTest {
                 terminalDepartureEtaService);
         when(routeGeometryCache.getStopsAhead(anyString(), anyInt(), anyDouble()))
                 .thenReturn(List.of());
-        when(terminalDepartureEtaService.departureEtasForVehicle(anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.any()))
+        when(terminalDepartureEtaService.departureEtasForVehicle(anyString(), anyString(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(List.of());
     }
 
@@ -90,7 +90,7 @@ class PredictionBroadcasterTerminalDepartureTest {
     @Test
     void terminalBusEmitsDepartureEtasForReverseDirection() {
         when(terminalDepartureEtaService.departureEtasForVehicle(eq("veh-1"),
-                eq("23"), eq("route-legacy-31"), eq(NOW)))
+                eq("route-legacy-31"), eq(NOW)))
                 .thenReturn(List.of(
                         new TerminalDepartureEtaService.DepartureStopEta("T", "Конечная", 180, 0, 1),
                         new TerminalDepartureEtaService.DepartureStopEta("S1", "Первая", 270, 800, 1)));

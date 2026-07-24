@@ -15,7 +15,7 @@ import java.time.ZoneOffset;
 public class R2dbcTerminalDwellStatsRepository implements TerminalDwellStatsRepository {
 
     private static final String SELECT_COLUMNS = """
-            route_number, direction, hour_of_day, is_weekend,
+            route_id, route_number, direction, hour_of_day, is_weekend,
             avg_dwell_seconds, sample_count, last_observed_at
             """;
 
@@ -26,17 +26,17 @@ public class R2dbcTerminalDwellStatsRepository implements TerminalDwellStatsRepo
     }
 
     @Override
-    public Mono<TerminalDwellStat> findByKey(String routeNumber, int direction,
+    public Mono<TerminalDwellStat> findByKey(String routeId, int direction,
                                              int hourOfDay, boolean weekend) {
         String sql = "SELECT " + SELECT_COLUMNS + """
                 FROM terminal_dwell_stats
-                WHERE route_number = :routeNumber
+                WHERE route_id = :routeId
                   AND direction = :direction
                   AND hour_of_day = :hourOfDay
                   AND is_weekend = :weekend
                 """;
         return databaseClient.sql(sql)
-                .bind("routeNumber", routeNumber)
+                .bind("routeId", routeId)
                 .bind("direction", direction)
                 .bind("hourOfDay", hourOfDay)
                 .bind("weekend", weekend)
@@ -62,13 +62,13 @@ public class R2dbcTerminalDwellStatsRepository implements TerminalDwellStatsRepo
     public Mono<TerminalDwellStat> save(TerminalDwellStat stat) {
         String sql = """
                 INSERT INTO terminal_dwell_stats (
-                    route_number, direction, hour_of_day, is_weekend,
+                    route_id, route_number, direction, hour_of_day, is_weekend,
                     avg_dwell_seconds, sample_count, last_observed_at, updated_at
                 ) VALUES (
-                    :routeNumber, :direction, :hourOfDay, :weekend,
+                    :routeId, :routeNumber, :direction, :hourOfDay, :weekend,
                     :avgDwell, :sampleCount, :lastObservedAt, CURRENT_TIMESTAMP
                 )
-                ON CONFLICT (route_number, direction, hour_of_day, is_weekend)
+                ON CONFLICT (route_id, direction, hour_of_day, is_weekend)
                 DO UPDATE SET
                     avg_dwell_seconds = EXCLUDED.avg_dwell_seconds,
                     sample_count      = EXCLUDED.sample_count,
@@ -79,6 +79,7 @@ public class R2dbcTerminalDwellStatsRepository implements TerminalDwellStatsRepo
                 ? stat.getLastObservedAt().atOffset(ZoneOffset.UTC)
                 : null;
         var spec = databaseClient.sql(sql)
+                .bind("routeId", stat.getRouteId())
                 .bind("routeNumber", stat.getRouteNumber())
                 .bind("direction", stat.getDirection())
                 .bind("hourOfDay", stat.getHourOfDay())
@@ -94,6 +95,7 @@ public class R2dbcTerminalDwellStatsRepository implements TerminalDwellStatsRepo
     private TerminalDwellStat mapRow(Readable row) {
         OffsetDateTime last = row.get("last_observed_at", OffsetDateTime.class);
         return TerminalDwellStat.builder()
+                .routeId(row.get("route_id", String.class))
                 .routeNumber(row.get("route_number", String.class))
                 .direction(row.get("direction", Integer.class))
                 .hourOfDay(row.get("hour_of_day", Integer.class))

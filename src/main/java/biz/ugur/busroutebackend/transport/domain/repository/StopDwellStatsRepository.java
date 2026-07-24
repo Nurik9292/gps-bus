@@ -6,9 +6,9 @@ import reactor.core.publisher.Mono;
 
 public interface StopDwellStatsRepository {
 
-    Mono<StopDwellStat> findByStopRouteDirection(String stopId, String routeNumber, int direction);
+    Mono<StopDwellStat> findByStopRouteDirection(String stopId, String routeId, int direction);
   
-    Flux<StopDwellStat> findByRouteAndDirection(String routeNumber, int direction);
+    Flux<StopDwellStat> findByRouteAndDirection(String routeId, int direction);
   
     Mono<StopDwellStat> save(StopDwellStat stat);
 

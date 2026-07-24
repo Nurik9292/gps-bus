@@ -69,7 +69,7 @@ class BusStopRealTimeServiceTerminalRowsTest {
     @Test
     void terminalRowEmittedForStopServedByDepartingDirection() {
         when(terminalDepartureEtaService.departureEtasForVehicle(eq("veh-1"),
-                eq("23"), eq("route-legacy-31"), any()))
+                eq("route-legacy-31"), any()))
                 .thenReturn(List.of(
                         new TerminalDepartureEtaService.DepartureStopEta("T", "Конечная", 180, 0, 1),
                         new TerminalDepartureEtaService.DepartureStopEta("S1", "Первая", 270, 800, 1)));
@@ -88,7 +88,7 @@ class BusStopRealTimeServiceTerminalRowsTest {
 
     @Test
     void noRowForForeignStopOrDisabledMode() {
-        when(terminalDepartureEtaService.departureEtasForVehicle(anyString(), anyString(), anyString(), any()))
+        when(terminalDepartureEtaService.departureEtasForVehicle(anyString(), anyString(), any()))
                 .thenReturn(List.of(
                         new TerminalDepartureEtaService.DepartureStopEta("T", "Конечная", 180, 0, 1)));
         StepVerifier.create(service.terminalDepartureRows("S-foreign")).verifyComplete();
@@ -99,7 +99,7 @@ class BusStopRealTimeServiceTerminalRowsTest {
 
     @Test
     void rowBeyondMaxEtaMinutesIsDropped() {
-        when(terminalDepartureEtaService.departureEtasForVehicle(anyString(), anyString(), anyString(), any()))
+        when(terminalDepartureEtaService.departureEtasForVehicle(anyString(), anyString(), any()))
                 .thenReturn(List.of(
                         new TerminalDepartureEtaService.DepartureStopEta("T", "Конечная", 4000, 0, 1)));
         StepVerifier.create(service.terminalDepartureRows("T")).verifyComplete();
@@ -119,7 +119,7 @@ class BusStopRealTimeServiceTerminalRowsTest {
                 .build();
         when(predictionService.getActiveStates()).thenReturn(List.of(staleState));
         when(terminalDepartureEtaService.departureEtasForVehicle(eq("veh-1"),
-                eq("23"), eq("route-legacy-31"), any()))
+                eq("route-legacy-31"), any()))
                 .thenReturn(List.of(
                         new TerminalDepartureEtaService.DepartureStopEta("S1", "Первая", 270, 800, 1)));
 

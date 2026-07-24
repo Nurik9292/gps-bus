@@ -73,11 +73,11 @@ class VehiclePositionPredictor {
                                 segmentTravelStatsCache.size())));
     }
 
-    SegmentTravelStat getSegmentTravelStat(String routeNumber, int direction,
+    SegmentTravelStat getSegmentTravelStat(String routeId, int direction,
                                            String fromStopId, String toStopId,
                                            int hourOfDay, boolean weekend) {
         return segmentTravelStatsCache.get(
-                segmentKey(routeNumber, direction, fromStopId, toStopId, hourOfDay, weekend));
+                segmentKey(routeId, direction, fromStopId, toStopId, hourOfDay, weekend));
     }
 
     VehiclePredictionState advance(VehiclePredictionState state) {
@@ -292,7 +292,7 @@ class VehiclePositionPredictor {
     private VehiclePredictionState advanceDuringDwell(VehiclePredictionState state) {
         long dwellMs = Instant.now().toEpochMilli() - state.getDwellStartedAt().toEpochMilli();
         double expectedDwellSec = getHistoricalDwellSeconds(
-                state.getDwellStopId(), state.getRouteNumber(), state.getDirection());
+                state.getDwellStopId(), state.getRouteId(), state.getDirection());
         boolean dwellExpired = dwellMs >= (long) (expectedDwellSec * 1000);
         boolean gpsShowsMovement = state.getRawGpsSpeedKmh() >= properties.getDwellSpeedThresholdKmh();
         if (!dwellExpired && !gpsShowsMovement) {
@@ -369,15 +369,15 @@ class VehiclePositionPredictor {
                 .build();
     }
 
-    private String dwellKey(String stopId, String routeNumber, int direction) {
-        return stopId + ":" + routeNumber + ":" + direction;
+    private String dwellKey(String stopId, String routeId, int direction) {
+        return stopId + ":" + routeId + ":" + direction;
     }
 
-    private double getHistoricalDwellSeconds(String stopId, String routeNumber, int direction) {
-        if (stopId == null || routeNumber == null) {
+    private double getHistoricalDwellSeconds(String stopId, String routeId, int direction) {
+        if (stopId == null || routeId == null) {
             return properties.getDwellTimeSeconds();
         }
-        var stat = dwellStatsCache.get(dwellKey(stopId, routeNumber, direction));
+        var stat = dwellStatsCache.get(dwellKey(stopId, routeId, direction));
         if (stat == null || stat.getSampleCount() < properties.getDwellMinSamples()) {
             return properties.getDwellTimeSeconds();
         }
@@ -385,15 +385,15 @@ class VehiclePositionPredictor {
     }
 
     private static String segmentKey(SegmentTravelStat stat) {
-        return segmentKey(stat.getRouteNumber(), stat.getDirection(),
+        return segmentKey(stat.getRouteId(), stat.getDirection(),
                 stat.getFromStopId(), stat.getToStopId(),
                 stat.getHourOfDay(), stat.isWeekend());
     }
 
-    private static String segmentKey(String routeNumber, int direction,
+    private static String segmentKey(String routeId, int direction,
                                       String fromStopId, String toStopId,
                                       int hourOfDay, boolean weekend) {
-        return routeNumber + ":" + direction + ":" + fromStopId + "->" + toStopId
+        return routeId + ":" + direction + ":" + fromStopId + "->" + toStopId
                 + ":h" + hourOfDay + ":" + (weekend ? "we" : "wd");
     }
 
@@ -402,6 +402,7 @@ class VehiclePositionPredictor {
         Instant departureAt = state.getLastSegmentDepartureAt();
         if (fromStopId == null || departureAt == null
                 || state.getRouteNumber() == null
+                || state.getRouteId() == null
                 || toStopId == null
                 || fromStopId.equals(toStopId)) {
             return;
@@ -420,14 +421,14 @@ class VehiclePositionPredictor {
         int hourOfDay = now.getHour();
         boolean weekend = now.getDayOfWeek() == DayOfWeek.SATURDAY
                 || now.getDayOfWeek() == DayOfWeek.SUNDAY;
-        String key = segmentKey(state.getRouteNumber(), state.getDirection(),
+        String key = segmentKey(state.getRouteId(), state.getDirection(),
                 fromStopId, toStopId, hourOfDay, weekend);
 
         SegmentTravelStat existing = segmentTravelStatsCache.get(key);
         SegmentTravelStat updated = (existing != null
                 ? existing
-                : SegmentTravelStat.initial(state.getRouteNumber(), state.getDirection(),
-                        fromStopId, toStopId, hourOfDay, weekend))
+                : SegmentTravelStat.initial(state.getRouteId(), state.getRouteNumber(),
+                        state.getDirection(), fromStopId, toStopId, hourOfDay, weekend))
                 .withNewSample(elapsedSec, Instant.now());
 
         segmentTravelStatsCache.put(key, updated);
@@ -450,7 +451,7 @@ class VehiclePositionPredictor {
 
     private void recordDwellObservation(VehiclePredictionState state, long dwellMs) {
         String stopId = state.getDwellStopId();
-        if (stopId == null || state.getRouteNumber() == null) {
+        if (stopId == null || state.getRouteNumber() == null || state.getRouteId() == null) {
             return;
         }
         double dwellSec = dwellMs / 1000.0;
@@ -459,11 +460,12 @@ class VehiclePositionPredictor {
             return;
         }
 
-        String key = dwellKey(stopId, state.getRouteNumber(), state.getDirection());
+        String key = dwellKey(stopId, state.getRouteId(), state.getDirection());
         var existing = dwellStatsCache.get(key);
         var updated = existing != null
                 ? existing.withNewSample(dwellSec, Instant.now())
-                : StopDwellStat.initial(stopId, state.getRouteNumber(), state.getDirection())
+                : StopDwellStat.initial(stopId, state.getRouteId(), state.getRouteNumber(),
+                        state.getDirection())
                         .withNewSample(dwellSec, Instant.now());
 
         dwellStatsCache.put(key, updated);

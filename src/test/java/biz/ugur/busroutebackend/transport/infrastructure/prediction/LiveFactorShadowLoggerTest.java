@@ -154,10 +154,10 @@ class LiveFactorShadowLoggerTest {
                 biz.ugur.busroutebackend.transport.infrastructure.config.EtaLiveFactorProperties.Mode.LIVE);
         biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat r34 =
                 biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat
-                        .initial("34", 0, "A", "B", 10, false).withNewSample(60.0, NOW);
+                        .initial("route-id-34", "34", 0, "A", "B", 10, false).withNewSample(60.0, NOW);
         biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat r45 =
                 biz.ugur.busroutebackend.transport.domain.valueobject.SegmentTravelStat
-                        .initial("45", 0, "A", "B", 10, false)
+                        .initial("route-id-45", "45", 0, "A", "B", 10, false)
                         .withNewSample(120.0, NOW).withNewSample(120.0, NOW)
                         .withNewSample(120.0, NOW);
         when(historyRepository.findByHourAndWeekend(anyInt(), anyBoolean()))
@@ -214,15 +214,15 @@ class LiveFactorShadowLoggerTest {
         when(terminalDwellRepository.findByHourAndWeekend(anyInt(), anyBoolean()))
                 .thenAnswer(inv -> Flux.just(
                         biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat
-                                .initial("57", 1, inv.getArgument(0, Integer.class), false)
+                                .initial("route-id-57", "57", 1, inv.getArgument(0, Integer.class), false)
                                 .withNewSample(300.0, NOW).withNewSample(320.0, NOW)));
 
         StepVerifier.create(logger.publishTerminalDwells()).verifyComplete();
 
-        var current = dwellHolder.dwell("57", 1, 10).orElseThrow();
+        var current = dwellHolder.dwell("route-id-57", 1, 10).orElseThrow();
         assertThat(current.avgDwellSeconds()).isCloseTo(310.0, org.assertj.core.data.Offset.offset(0.1));
-        assertThat(dwellHolder.dwell("57", 1, 9)).isPresent();
-        assertThat(dwellHolder.dwell("57", 0, 10)).isEmpty();
+        assertThat(dwellHolder.dwell("route-id-57", 1, 9)).isPresent();
+        assertThat(dwellHolder.dwell("route-id-57", 0, 10)).isEmpty();
     }
 
     @Test
@@ -255,7 +255,7 @@ class LiveFactorShadowLoggerTest {
         when(terminalDwellRepository.findByHourAndWeekend(anyInt(), anyBoolean()))
                 .thenReturn(Flux.just(
                         biz.ugur.busroutebackend.transport.domain.valueobject.TerminalDwellStat
-                                .initial("57", 1, 10, false)
+                                .initial("route-id-57", "57", 1, 10, false)
                                 .withNewSample(300.0, NOW).withNewSample(300.0, NOW)));
 
         StepVerifier.withVirtualTime(() -> logger.tickerPipeline(

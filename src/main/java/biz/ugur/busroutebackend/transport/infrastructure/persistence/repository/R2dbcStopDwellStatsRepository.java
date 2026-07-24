@@ -23,31 +23,31 @@ public class R2dbcStopDwellStatsRepository implements StopDwellStatsRepository {
     }
 
     @Override
-    public Mono<StopDwellStat> findByStopRouteDirection(String stopId, String routeNumber, int direction) {
+    public Mono<StopDwellStat> findByStopRouteDirection(String stopId, String routeId, int direction) {
         String sql = """
-            SELECT stop_id, route_number, direction, avg_dwell_seconds,
+            SELECT stop_id, route_id, route_number, direction, avg_dwell_seconds,
                    min_dwell_seconds, max_dwell_seconds, sample_count, last_dwell_at
             FROM stop_dwell_stats
-            WHERE stop_id = :stopId AND route_number = :routeNumber AND direction = :direction
+            WHERE stop_id = :stopId AND route_id = :routeId AND direction = :direction
             """;
         return databaseClient.sql(sql)
                 .bind("stopId", stopId)
-                .bind("routeNumber", routeNumber)
+                .bind("routeId", routeId)
                 .bind("direction", direction)
                 .map(this::mapRow)
                 .one();
     }
 
     @Override
-    public Flux<StopDwellStat> findByRouteAndDirection(String routeNumber, int direction) {
+    public Flux<StopDwellStat> findByRouteAndDirection(String routeId, int direction) {
         String sql = """
-            SELECT stop_id, route_number, direction, avg_dwell_seconds,
+            SELECT stop_id, route_id, route_number, direction, avg_dwell_seconds,
                    min_dwell_seconds, max_dwell_seconds, sample_count, last_dwell_at
             FROM stop_dwell_stats
-            WHERE route_number = :routeNumber AND direction = :direction
+            WHERE route_id = :routeId AND direction = :direction
             """;
         return databaseClient.sql(sql)
-                .bind("routeNumber", routeNumber)
+                .bind("routeId", routeId)
                 .bind("direction", direction)
                 .map(this::mapRow)
                 .all();
@@ -56,7 +56,7 @@ public class R2dbcStopDwellStatsRepository implements StopDwellStatsRepository {
     @Override
     public Flux<StopDwellStat> findAll() {
         String sql = """
-            SELECT stop_id, route_number, direction, avg_dwell_seconds,
+            SELECT stop_id, route_id, route_number, direction, avg_dwell_seconds,
                    min_dwell_seconds, max_dwell_seconds, sample_count, last_dwell_at
             FROM stop_dwell_stats
             """;
@@ -67,15 +67,15 @@ public class R2dbcStopDwellStatsRepository implements StopDwellStatsRepository {
     public Mono<StopDwellStat> save(StopDwellStat stat) {
         String sql = """
             INSERT INTO stop_dwell_stats (
-                stop_id, route_number, direction,
+                stop_id, route_id, route_number, direction,
                 avg_dwell_seconds, min_dwell_seconds, max_dwell_seconds,
                 sample_count, last_dwell_at, updated_at
             ) VALUES (
-                :stopId, :routeNumber, :direction,
+                :stopId, :routeId, :routeNumber, :direction,
                 :avgDwell, :minDwell, :maxDwell,
                 :sampleCount, :lastDwellAt, CURRENT_TIMESTAMP
             )
-            ON CONFLICT (stop_id, route_number, direction) DO UPDATE SET
+            ON CONFLICT (stop_id, route_id, direction) DO UPDATE SET
                 avg_dwell_seconds = EXCLUDED.avg_dwell_seconds,
                 min_dwell_seconds = EXCLUDED.min_dwell_seconds,
                 max_dwell_seconds = EXCLUDED.max_dwell_seconds,
@@ -90,6 +90,7 @@ public class R2dbcStopDwellStatsRepository implements StopDwellStatsRepository {
 
         var spec = databaseClient.sql(sql)
                 .bind("stopId", stat.getStopId())
+                .bind("routeId", stat.getRouteId())
                 .bind("routeNumber", stat.getRouteNumber())
                 .bind("direction", stat.getDirection())
                 .bind("avgDwell", stat.getAvgDwellSeconds())
@@ -114,6 +115,7 @@ public class R2dbcStopDwellStatsRepository implements StopDwellStatsRepository {
         Double maxD = row.get("max_dwell_seconds", Double.class);
         return StopDwellStat.builder()
                 .stopId(row.get("stop_id", String.class))
+                .routeId(row.get("route_id", String.class))
                 .routeNumber(row.get("route_number", String.class))
                 .direction(row.get("direction", Integer.class))
                 .avgDwellSeconds(row.get("avg_dwell_seconds", Double.class))

@@ -11,13 +11,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class TerminalPresenceHolder {
 
-    public record TerminalPresence(String routeNumber, int arrivedDirection, Instant arrivedAt) {
+    public record TerminalPresence(String routeId, String routeNumber, int arrivedDirection, Instant arrivedAt) {
     }
 
     private final Map<String, TerminalPresence> byVehicleId = new ConcurrentHashMap<>();
 
-    public void arrived(String vehicleId, String routeNumber, int arrivedDirection, Instant arrivedAt) {
-        byVehicleId.put(vehicleId, new TerminalPresence(routeNumber, arrivedDirection, arrivedAt));
+    public void arrived(String vehicleId, String routeId, String routeNumber,
+                        int arrivedDirection, Instant arrivedAt) {
+        byVehicleId.put(vehicleId, new TerminalPresence(routeId, routeNumber, arrivedDirection, arrivedAt));
     }
 
     public void departed(String vehicleId) {

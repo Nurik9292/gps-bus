@@ -9,6 +9,7 @@ import java.time.Instant;
 @Builder(toBuilder = true)
 public class TerminalDwellStat {
 
+    String routeId;
     String routeNumber;
     int direction;
     int hourOfDay;
@@ -28,9 +29,10 @@ public class TerminalDwellStat {
                 .build();
     }
 
-    public static TerminalDwellStat initial(String routeNumber, int direction,
+    public static TerminalDwellStat initial(String routeId, String routeNumber, int direction,
                                             int hourOfDay, boolean weekend) {
         return TerminalDwellStat.builder()
+                .routeId(routeId)
                 .routeNumber(routeNumber)
                 .direction(direction)
                 .hourOfDay(hourOfDay)
