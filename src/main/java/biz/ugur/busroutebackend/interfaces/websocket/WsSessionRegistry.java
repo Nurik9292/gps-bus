@@ -123,6 +123,9 @@ public class WsSessionRegistry {
             log.info("Initial-chunked mode enabled for session");
         }
 
+        String cityId = params.get("cityId");
+        config.setCityFilter(cityId != null && !cityId.isBlank() ? cityId : null);
+
         if (params.containsKey("bounds")) {
             String[] bounds = params.get("bounds").split(",");
             if (bounds.length == 4) {
@@ -144,7 +147,8 @@ public class WsSessionRegistry {
             String[] routes = params.get("routes").split(",");
             config.setRouteFilter(Set.of(routes));
             config.setSubscriptionType("routes");
-            log.info("Configured routes subscription: routes={}", config.getRouteFilter());
+            log.info("Configured routes subscription: routes={} cityId={}",
+                    config.getRouteFilter(), config.getCityFilter());
         }
         else {
             config.setSubscriptionType("all");

@@ -47,6 +47,30 @@ class WsSessionRegistryTest {
         assertThat(cfg.getSubscriptionType()).isEqualTo("routes");
         assertThat(cfg.getRouteFilter()).containsExactlyInAnyOrder("160", "1", "2");
         assertThat(cfg.getClientIp()).isEqualTo("192.168.0.1");
+        assertThat(cfg.getCityFilter()).isNull();
+    }
+
+    @Test
+    void registerWithRoutesAndCityQueryParsesCityFilter() {
+        when(handshakeInfo.getUri())
+                .thenReturn(URI.create("http://host/api/v1/ws/vehicle-positions?routes=160&cityId=city-006"));
+
+        String sessionId = registry.register(session);
+
+        SessionConfig cfg = registry.get(sessionId).orElseThrow();
+        assertThat(cfg.getSubscriptionType()).isEqualTo("routes");
+        assertThat(cfg.getRouteFilter()).containsExactly("160");
+        assertThat(cfg.getCityFilter()).isEqualTo("city-006");
+    }
+
+    @Test
+    void registerWithBlankCityQueryLeavesCityFilterEmpty() {
+        when(handshakeInfo.getUri())
+                .thenReturn(URI.create("http://host/api/v1/ws/vehicle-positions?routes=160&cityId="));
+
+        String sessionId = registry.register(session);
+
+        assertThat(registry.get(sessionId).orElseThrow().getCityFilter()).isNull();
     }
 
     @Test
