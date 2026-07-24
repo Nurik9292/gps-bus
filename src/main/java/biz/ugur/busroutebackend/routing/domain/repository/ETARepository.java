@@ -6,11 +6,11 @@ import java.time.LocalDateTime;
 
 public interface ETARepository {
 
-    Mono<Integer> getVehicleBasedWaitingTime(String routeNumber, String stopName);
+    Mono<Integer> getVehicleBasedWaitingTime(String routeId, String stopName);
 
-    Mono<Integer> getStatisticalWaitingTime(String routeNumber, LocalDateTime currentTime);
+    Mono<Integer> getStatisticalWaitingTime(String routeId, LocalDateTime currentTime);
 
-    Mono<Integer> calculateTravelTimeFromDatabase(String routeNumber, String fromStopName, String toStopName);
+    Mono<Integer> calculateTravelTimeFromDatabase(String routeId, String fromStopName, String toStopName);
 
-    Mono<Integer> countStopsBetween(String routeNumber, String fromStopName, String toStopName);
+    Mono<Integer> countStopsBetween(String routeId, String fromStopName, String toStopName);
 }

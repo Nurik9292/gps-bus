@@ -94,7 +94,7 @@ public class TransferRouteOptionBuilder {
                         : walkingRouteService.getWalkingRoute(transferStopLocation, secondBoardStopLocation);
 
         return Mono.zip(
-                etaCalculationService.calculateWaitingTimeMinutes(firstRouteNumber, fromStopName, departureTime),
+                etaCalculationService.calculateWaitingTimeMinutes(transferRoute.firstRoute().getId().getValue(), firstRouteNumber, fromStopName, departureTime),
                 walkingRouteService.getWalkingRoute(context.fromLocation(), firstStopLocation),
                 walkingRouteService.getWalkingRoute(lastStopLocation, context.toLocation()),
                 transferWalk
@@ -144,6 +144,7 @@ public class TransferRouteOptionBuilder {
             firstBusSeg.setToLocationName(transferStopName);
             firstBusSeg.setFromStopId(transferRoute.fromStop().getId().toString());
             firstBusSeg.setToStopId(transferRoute.transferStop().getId().toString());
+            firstBusSeg.setRouteId(transferRoute.firstRoute().getId().getValue());
 
             List<RouteSegment> transferSegments = transferSegmentBuilder.build(
                     transferStopLocation, transferStopName,
@@ -155,6 +156,7 @@ public class TransferRouteOptionBuilder {
             secondBusSeg.setToLocationName(lastStopName);
             secondBusSeg.setFromStopId(transferRoute.secondBoardStop().getId().toString());
             secondBusSeg.setToStopId(transferRoute.toStop().getId().toString());
+            secondBusSeg.setRouteId(transferRoute.secondRoute().getId().getValue());
 
             RouteSegment walkFromSeg = routeSegmentFactory.createWalkingSegment(lastStopLocation, context.toLocation(), walkingFromLast, walkFromLast);
             walkFromSeg.setFromLocationName(lastStopName);
@@ -206,7 +208,7 @@ public class TransferRouteOptionBuilder {
                         : walkingRouteService.getWalkingRoute(secondTransferLocation, thirdBoardLocation);
 
         return Mono.zip(
-                etaCalculationService.calculateWaitingTimeMinutes(firstRouteNumber, fromStopName, departureTime),
+                etaCalculationService.calculateWaitingTimeMinutes(twoTransferRoute.firstRoute().getId().getValue(), firstRouteNumber, fromStopName, departureTime),
                 walkingRouteService.getWalkingRoute(context.fromLocation(), firstStopLocation),
                 walkingRouteService.getWalkingRoute(finalStopLocation, context.toLocation()),
                 transferWalk1,

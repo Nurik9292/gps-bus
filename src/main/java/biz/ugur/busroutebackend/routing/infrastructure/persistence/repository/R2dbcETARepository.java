@@ -21,7 +21,7 @@ public class R2dbcETARepository implements ETARepository {
     private final ETAProperties etaProperties;
 
     @Override
-    public Mono<Integer> getVehicleBasedWaitingTime(String routeNumber, String stopName) {
+    public Mono<Integer> getVehicleBasedWaitingTime(String routeId, String stopName) {
         int maxAgeMinutes = etaProperties.getPosition().getMaxAgeMinutes();
 
         return databaseClient.sql("""
@@ -37,7 +37,7 @@ public class R2dbcETARepository implements ETARepository {
                 JOIN bus_routes br ON v.assigned_route_id = br.id
                 JOIN route_stops rs ON br.id = rs.route_id
                 JOIN bus_stops bs ON rs.stop_id = bs.id
-                WHERE br.route_number = :routeNumber
+                WHERE br.id = :routeId
                 AND bs.stop_name ILIKE :stopName
                 AND v.is_active = true
                 AND v.last_position_update > CURRENT_TIMESTAMP - (INTERVAL '1 minute' * :maxAgeMinutes)
@@ -54,18 +54,18 @@ public class R2dbcETARepository implements ETARepository {
                 END as estimated_wait_minutes
             FROM route_vehicles
             """)
-                .bind("routeNumber", routeNumber)
+                .bind("routeId", routeId)
                 .bind("stopName", "%" + stopName + "%")
                 .bind("maxAgeMinutes", maxAgeMinutes)
                 .map(row -> row.get("estimated_wait_minutes", Integer.class))
                 .one()
                 .filter(waitTime -> waitTime != null)
                 .doOnNext(waitTime -> log.debug("Vehicle-based wait time for route {}: {} minutes",
-                        routeNumber, waitTime));
+                        routeId, waitTime));
     }
 
     @Override
-    public Mono<Integer> getStatisticalWaitingTime(String routeNumber, LocalDateTime currentTime) {
+    public Mono<Integer> getStatisticalWaitingTime(String routeId, LocalDateTime currentTime) {
         return databaseClient.sql("""
             WITH route_activity AS (
                 -- Динамическое определение активности маршрутов на основе реальных данных
@@ -87,7 +87,7 @@ public class R2dbcETARepository implements ETARepository {
                     COALESCE(ra.active_vehicles, 0) as vehicles_count
                 FROM bus_routes br
                 LEFT JOIN route_activity ra ON br.route_number = ra.route_number
-                WHERE br.route_number = :routeNumber
+                WHERE br.id = :routeId
                 AND br.is_active = true
                 LIMIT 1
             )
@@ -108,7 +108,7 @@ public class R2dbcETARepository implements ETARepository {
                 tr.category
             FROM target_route tr
             """)
-                .bind("routeNumber", routeNumber)
+                .bind("routeId", routeId)
                 .bind("hour", currentTime.getHour())
                 .map(row -> {
                     Integer baseTime = row.get("base_wait_time", Integer.class);
@@ -119,17 +119,17 @@ public class R2dbcETARepository implements ETARepository {
                     int waitTime = (baseTime != null ? baseTime : 10) + (adjustment != null ? adjustment : 0);
 
                     log.debug("Statistical wait for route {}: category={}, vehicles={}, base={}min, adj={}min, total={}min",
-                            routeNumber, category, vehiclesCount, baseTime, adjustment, waitTime);
+                            routeId, category, vehiclesCount, baseTime, adjustment, waitTime);
 
                     return waitTime;
                 })
                 .one()
                 .doOnNext(waitTime -> log.debug("Statistical wait time for route {}: {} minutes",
-                        routeNumber, waitTime));
+                        routeId, waitTime));
     }
 
     @Override
-    public Mono<Integer> calculateTravelTimeFromDatabase(String routeNumber, String fromStopName, String toStopName) {
+    public Mono<Integer> calculateTravelTimeFromDatabase(String routeId, String fromStopName, String toStopName) {
         return databaseClient.sql("""
             WITH route_segments AS (
                 SELECT
@@ -146,7 +146,7 @@ public class R2dbcETARepository implements ETARepository {
                 JOIN bus_routes br ON rs1.route_id = br.id
                 JOIN bus_stops bs1 ON rs1.stop_id = bs1.id
                 JOIN bus_stops bs2 ON rs2.stop_id = bs2.id
-                WHERE br.route_number = :routeNumber
+                WHERE br.id = :routeId
                 AND bs1.stop_name ILIKE :fromStopName
                 AND bs2.stop_name ILIKE :toStopName
                 AND br.is_active = true
@@ -159,7 +159,7 @@ public class R2dbcETARepository implements ETARepository {
                 distance_meters
             FROM route_segments
             """)
-                .bind("routeNumber", routeNumber)
+                .bind("routeId", routeId)
                 .bind("fromStopName", "%" + fromStopName + "%")
                 .bind("toStopName", "%" + toStopName + "%")
                 .map(row -> {
@@ -182,7 +182,7 @@ public class R2dbcETARepository implements ETARepository {
                 })
                 .one()
                 .doOnNext(travelTime -> log.debug("Travel time for route {} from {} to {}: {} minutes",
-                        routeNumber, fromStopName, toStopName, travelTime));
+                        routeId, fromStopName, toStopName, travelTime));
     }
 
 
@@ -203,7 +203,7 @@ public class R2dbcETARepository implements ETARepository {
     }
 
     @Override
-    public Mono<Integer> countStopsBetween(String routeNumber, String fromStopName, String toStopName) {
+    public Mono<Integer> countStopsBetween(String routeId, String fromStopName, String toStopName) {
         String sql = """
             SELECT ABS(rs_from.stop_sequence - rs_to.stop_sequence) AS stop_count
             FROM route_stops rs_from
@@ -211,14 +211,14 @@ public class R2dbcETARepository implements ETARepository {
             JOIN route_stops rs_to ON rs_from.route_id = rs_to.route_id AND rs_from.direction = rs_to.direction
             JOIN bus_stops bs_to ON rs_to.stop_id = bs_to.id
             JOIN bus_routes br ON rs_from.route_id = br.id
-            WHERE br.route_number = :routeNumber
+            WHERE br.id = :routeId
               AND bs_from.stop_name = :fromStopName
               AND bs_to.stop_name = :toStopName
             ORDER BY stop_count ASC
             LIMIT 1
             """;
         return databaseClient.sql(sql)
-                .bind("routeNumber", routeNumber)
+                .bind("routeId", routeId)
                 .bind("fromStopName", fromStopName)
                 .bind("toStopName", toStopName)
                 .map(row -> row.get("stop_count", Integer.class))

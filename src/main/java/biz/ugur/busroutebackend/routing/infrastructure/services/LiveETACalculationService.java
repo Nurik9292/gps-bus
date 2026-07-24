@@ -47,12 +47,12 @@ public class LiveETACalculationService implements ETACalculationService {
     }
 
     @Override
-    public Mono<LocalDateTime> calculateEstimatedArrival(String routeNumber, String fromStopName,
+    public Mono<LocalDateTime> calculateEstimatedArrival(String routeId, String routeNumber, String fromStopName,
                                                          String toStopName, LocalDateTime departureTime) {
         log.debug("Calculating ETA for route {} from {} to {} departing at {}",
                 routeNumber, fromStopName, toStopName, departureTime);
 
-        return calculateTravelTimeMinutes(routeNumber, fromStopName, toStopName)
+        return calculateTravelTimeMinutes(routeId, routeNumber, fromStopName, toStopName)
                 .map(travelMinutes -> {
                     int waitingTime = calculateBaseWaitingTime(departureTime);
                     return departureTime.plusMinutes(waitingTime + travelMinutes);
@@ -80,13 +80,13 @@ public class LiveETACalculationService implements ETACalculationService {
     }
 
     @Override
-    public Mono<Integer> calculateWaitingTimeMinutes(String routeNumber, String stopName, LocalDateTime currentTime) {
+    public Mono<Integer> calculateWaitingTimeMinutes(String routeId, String routeNumber, String stopName, LocalDateTime currentTime) {
         log.debug("Calculating wait time for route {} at stop {} at {}", routeNumber, stopName, currentTime);
 
         TimePeriod period = TimePeriod.fromDateTime(currentTime);
         boolean isWeekend = TimePeriod.isWeekend(currentTime);
         String periodKey = period.name() + (isWeekend ? "_WE" : "_WD");
-        String cacheKey = String.format("wait_time:%s:%s:%s", routeNumber, stopName, periodKey);
+        String cacheKey = String.format("wait_time:%s:%s:%s", routeId, stopName, periodKey);
         int cacheTtlMinutes = etaProperties.getCache().getWaitingTimeTtlMinutes();
 
         return redisTemplate.opsForValue()
@@ -94,7 +94,7 @@ public class LiveETACalculationService implements ETACalculationService {
                 .cast(Integer.class)
                 .timeout(Duration.ofSeconds(2), Mono.empty())
                 .switchIfEmpty(
-                        calculateWaitingTimeFromData(routeNumber, stopName, currentTime)
+                        calculateWaitingTimeFromData(routeId, routeNumber, stopName, currentTime)
                                 .timeout(Duration.ofSeconds(3), getFrequencyBasedWaitingTime(routeNumber, currentTime))
                                 .flatMap(waitTime ->
                                         redisTemplate.opsForValue()
@@ -108,7 +108,7 @@ public class LiveETACalculationService implements ETACalculationService {
     }
 
     @Override
-    public Mono<Integer> calculateTravelTimeMinutes(String routeNumber, String fromStopName, String toStopName) {
+    public Mono<Integer> calculateTravelTimeMinutes(String routeId, String routeNumber, String fromStopName, String toStopName) {
         log.debug("Calculating travel time for route {} from {} to {}", routeNumber, fromStopName, toStopName);
 
         LocalDateTime now = LocalDateTime.now();
@@ -116,7 +116,7 @@ public class LiveETACalculationService implements ETACalculationService {
         boolean isWeekend = TimePeriod.isWeekend(now);
         double trafficMult = period.getTrafficMultiplier(isWeekend);
 
-        String cacheKey = String.format("travel_time:%s:%s:%s:%s", routeNumber, fromStopName, toStopName, period.name());
+        String cacheKey = String.format("travel_time:%s:%s:%s:%s", routeId, fromStopName, toStopName, period.name());
         int cacheTtlMinutes = etaProperties.getCache().getTravelTimeTtlMinutes();
 
         return redisTemplate.opsForValue()
@@ -124,7 +124,7 @@ public class LiveETACalculationService implements ETACalculationService {
                 .cast(Integer.class)
                 .timeout(Duration.ofSeconds(2), Mono.empty())
                 .switchIfEmpty(
-                        calculateTravelTimeFromDatabase(routeNumber, fromStopName, toStopName)
+                        calculateTravelTimeFromDatabase(routeId, routeNumber, fromStopName, toStopName)
                                 .timeout(Duration.ofSeconds(3), Mono.fromCallable(() -> etaProperties.getFallback().getDefaultTravelTimeMinutes()))
                                 .map(baseTravelTime -> {
                                     int adjusted = (int) Math.ceil(baseTravelTime * trafficMult);
@@ -171,14 +171,14 @@ public class LiveETACalculationService implements ETACalculationService {
         return totalTransferTime;
     }
 
-    private Mono<Integer> calculateWaitingTimeFromData(String routeNumber, String stopName, LocalDateTime currentTime) {
-        return getVehicleBasedWaitingTime(routeNumber, stopName)
+    private Mono<Integer> calculateWaitingTimeFromData(String routeId, String routeNumber, String stopName, LocalDateTime currentTime) {
+        return getVehicleBasedWaitingTime(routeId, routeNumber, stopName)
                 .onErrorResume(e -> {
                     log.warn("Vehicle-based wait time failed for route {}: {}", routeNumber, e.getMessage());
                     return Mono.empty();
                 })
                 .switchIfEmpty(
-                        getStatisticalWaitingTime(routeNumber, currentTime)
+                        getStatisticalWaitingTime(routeId, currentTime)
                                 .onErrorResume(e -> {
                                     log.warn("Statistical wait time failed for route {}: {}", routeNumber, e.getMessage());
                                     return Mono.empty();
@@ -191,16 +191,16 @@ public class LiveETACalculationService implements ETACalculationService {
 
 
 
-    private Mono<Integer> getVehicleBasedWaitingTime(String routeNumber, String stopName) {
-        return realTimeETAService.getWaitingTimeMinutes(routeNumber, stopName)
+    private Mono<Integer> getVehicleBasedWaitingTime(String routeId, String routeNumber, String stopName) {
+        return realTimeETAService.getWaitingTimeMinutes(routeId, routeNumber, stopName)
                 .switchIfEmpty(
-                        etaRepository.getVehicleBasedWaitingTime(routeNumber, stopName)
+                        etaRepository.getVehicleBasedWaitingTime(routeId, stopName)
                 );
     }
 
 
-    private Mono<Integer> getStatisticalWaitingTime(String routeNumber, LocalDateTime currentTime) {
-        return etaRepository.getStatisticalWaitingTime(routeNumber, currentTime);
+    private Mono<Integer> getStatisticalWaitingTime(String routeId, LocalDateTime currentTime) {
+        return etaRepository.getStatisticalWaitingTime(routeId, currentTime);
     }
 
 
@@ -221,10 +221,10 @@ public class LiveETACalculationService implements ETACalculationService {
 
 
 
-    private Mono<Integer> calculateTravelTimeFromDatabase(String routeNumber, String fromStopName, String toStopName) {
-        return etaRepository.calculateTravelTimeFromDatabase(routeNumber, fromStopName, toStopName)
+    private Mono<Integer> calculateTravelTimeFromDatabase(String routeId, String routeNumber, String fromStopName, String toStopName) {
+        return etaRepository.calculateTravelTimeFromDatabase(routeId, fromStopName, toStopName)
                 .switchIfEmpty(
-                    etaRepository.countStopsBetween(routeNumber, fromStopName, toStopName)
+                    etaRepository.countStopsBetween(routeId, fromStopName, toStopName)
                         .map(stopCount -> {
                             int perStop = etaProperties.getFallback().getMinutesPerStop();
                             int estimated = Math.max(3, stopCount * perStop);

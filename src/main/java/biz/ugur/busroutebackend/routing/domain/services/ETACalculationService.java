@@ -7,14 +7,14 @@ import java.time.LocalDateTime;
 
 public interface ETACalculationService {
 
-    Mono<LocalDateTime> calculateEstimatedArrival(String routeNumber, String fromStopName,
+    Mono<LocalDateTime> calculateEstimatedArrival(String routeId, String routeNumber, String fromStopName,
                                                   String toStopName, LocalDateTime departureTime);
 
     int calculateWalkingTimeMinutes(Coordinates from, Coordinates to);
 
-    Mono<Integer> calculateWaitingTimeMinutes(String routeNumber, String stopName, LocalDateTime currentTime);
+    Mono<Integer> calculateWaitingTimeMinutes(String routeId, String routeNumber, String stopName, LocalDateTime currentTime);
 
-    Mono<Integer> calculateTravelTimeMinutes(String routeNumber, String fromStopName, String toStopName);
+    Mono<Integer> calculateTravelTimeMinutes(String routeId, String routeNumber, String fromStopName, String toStopName);
 
     int calculateTransferTimeMinutes(String stopName, boolean isMajorStop);
 }
