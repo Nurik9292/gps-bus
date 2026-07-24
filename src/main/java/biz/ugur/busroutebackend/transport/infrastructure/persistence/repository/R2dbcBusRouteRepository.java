@@ -598,10 +598,10 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
             """, selectColumns()));
 
         if (isActive != null) {
-            sqlBuilder.append(" AND is_active = :isActive");
+            sqlBuilder.append(" AND is_active = :isActive\n");
         }
         if (cityId != null && !cityId.isBlank()) {
-            sqlBuilder.append(" AND city_id = :cityId");
+            sqlBuilder.append(" AND city_id = :cityId\n");
         }
 
         sqlBuilder.append("""
@@ -654,10 +654,10 @@ public class R2dbcBusRouteRepository extends BaseR2dbcRepository<BusRoute, BusRo
             """);
 
         if (isActive != null) {
-            sqlBuilder.append(" AND is_active = :isActive");
+            sqlBuilder.append(" AND is_active = :isActive\n");
         }
         if (cityId != null && !cityId.isBlank()) {
-            sqlBuilder.append(" AND city_id = :cityId");
+            sqlBuilder.append(" AND city_id = :cityId\n");
         }
 
         DatabaseClient.GenericExecuteSpec executeSpec = databaseClient.sql(sqlBuilder.toString())
