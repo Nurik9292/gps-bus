@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
@@ -32,9 +33,12 @@ public class RouteV2Controller extends BaseController {
     }
 
     @GetMapping
-    public Mono<ResponseEntity<ApiResponse<List<RouteSummaryV2>>>> getAllRoutes() {
+    public Mono<ResponseEntity<ApiResponse<List<RouteSummaryV2>>>> getAllRoutes(
+            @RequestParam(required = false) String cityId) {
+        boolean cityScoped = cityId != null && !cityId.isBlank();
         return ok(getAllBusRoutesUseCase.execute(Mono.empty())
                 .map(routeList -> routeList.items().stream()
+                        .filter(route -> !cityScoped || cityId.equals(route.cityId()))
                         .map(RouteSummaryV2::fromRouteData)
                         .toList()));
     }
