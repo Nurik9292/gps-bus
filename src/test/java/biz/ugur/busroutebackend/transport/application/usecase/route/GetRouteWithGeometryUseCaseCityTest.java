@@ -43,6 +43,9 @@ class GetRouteWithGeometryUseCaseCityTest {
     @Mock
     private CorrelationContextService correlationContextService;
 
+    @Mock
+    private biz.ugur.busroutebackend.shared.application.SecurityContextService securityContextService;
+
     private BusRoute arkadagRoute;
     private RouteData routeData;
 
@@ -86,6 +89,29 @@ class GetRouteWithGeometryUseCaseCityTest {
 
         verify(busRouteRepository).findPreferredByRouteNumber("1");
         verify(busRouteRepository, never()).findByRouteNumberAndCityId(anyString(), anyString());
+    }
+
+    @Test
+    void geometryUpdateStampsEditor() {
+        org.mockito.Mockito.when(securityContextService.getCurrentUsername())
+                .thenReturn(Mono.just("admin-timur"));
+        when(busRouteRepository.findByRouteNumberAndCityId("1", "city-006"))
+                .thenReturn(Mono.just(arkadagRoute));
+        when(busRouteRepository.save(any(BusRoute.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        var request = new biz.ugur.busroutebackend.interfaces.rest.transport.V1.request.RouteGeometryRequest();
+        request.setForwardCoordinates(java.util.List.of(
+                new Double[]{58.38, 37.95}, new Double[]{58.39, 37.96}));
+
+        StepVerifier.create(useCase.updateRouteGeometry("1", request, "city-006"))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        org.mockito.ArgumentCaptor<BusRoute> saved =
+                org.mockito.ArgumentCaptor.forClass(BusRoute.class);
+        org.mockito.Mockito.verify(busRouteRepository).save(saved.capture());
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getUpdatedBy())
+                .isEqualTo("admin-timur");
     }
 
     @Test
