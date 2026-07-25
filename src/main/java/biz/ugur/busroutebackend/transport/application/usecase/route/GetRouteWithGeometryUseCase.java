@@ -27,6 +27,7 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteDa
     private final BusRouteRepository busRouteRepository;
     private final RouteDtoMappingService routeDtoMappingService;
     private final CorrelationContextService correlationContextService;
+    private final biz.ugur.busroutebackend.shared.application.SecurityContextService securityContextService;
 
     @Override
     public Mono<RouteData> execute(String routeNumber) {
@@ -135,7 +136,10 @@ public class GetRouteWithGeometryUseCase implements UseCase<String, Mono<RouteDa
 
                                     route.updateRouteGeometry(forwardGeometry, backwardGeometry);
 
-                                    return busRouteRepository.save(route)
+                                    return securityContextService.getCurrentUsername()
+                                            .defaultIfEmpty("system")
+                                            .map(route::editedBy)
+                                            .flatMap(busRouteRepository::save)
                                             .map(savedRoute -> "Route geometry updated successfully")
                                             .doOnSuccess(result -> log.info("Route geometry updated successfully - CorrelationId: {} - RouteNumber: {}",
                                                     correlationId, routeNumber));
