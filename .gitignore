@@ -94,3 +94,4 @@ scratchpad/
 !docs/data/
 !docs/data/**
 __pycache__/
+reports/
