@@ -15,11 +15,14 @@ public class RouteGeometryCacheEventHandler {
 
     private final ReactiveEventBus eventBus;
     private final RouteGeometryCache routeGeometryCache;
+    private final org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.prediction.shadow.V31RouteLines> v31RouteLinesProvider;
     private Disposable subscription;
 
-    public RouteGeometryCacheEventHandler(ReactiveEventBus eventBus, RouteGeometryCache routeGeometryCache) {
+    public RouteGeometryCacheEventHandler(ReactiveEventBus eventBus, RouteGeometryCache routeGeometryCache,
+                                          org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.prediction.shadow.V31RouteLines> v31RouteLinesProvider) {
         this.eventBus = eventBus;
         this.routeGeometryCache = routeGeometryCache;
+        this.v31RouteLinesProvider = v31RouteLinesProvider;
     }
 
     @PostConstruct
@@ -35,11 +38,22 @@ public class RouteGeometryCacheEventHandler {
     private Mono<Void> refreshGeometryFor(RouteGeometryUpdatedEvent event) {
         String routeId = event.getRouteId();
         return routeGeometryCache.refreshRoute(routeId)
+                .doOnSuccess(ignored -> evictV31Topology(event))
                 .onErrorResume(err -> {
                     log.error("[GPS_PIPELINE] Failed to refresh route geometry cache for route {} after geometry change",
                             routeId, err);
                     return Mono.empty();
                 });
+    }
+
+    private void evictV31Topology(RouteGeometryUpdatedEvent event) {
+        biz.ugur.busroutebackend.prediction.shadow.V31RouteLines lines =
+                v31RouteLinesProvider.getIfAvailable();
+        if (lines != null) {
+            lines.evict(event.getRouteId(), event.getRouteNumber());
+            log.info("[GPS_PIPELINE] v31 topology evicted for route {} ({}) after geometry change",
+                    event.getRouteId(), event.getRouteNumber());
+        }
     }
 
     @PreDestroy
