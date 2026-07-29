@@ -73,13 +73,17 @@ public class DiagnosticsController {
 
     @GetMapping("/gps-trail")
     public Flux<GpsTrailItem> gpsTrail(@RequestParam("route") String routeNumber,
-                                        @RequestParam(value = "minutes", defaultValue = "10") int minutes) {
+                                        @RequestParam(value = "minutes", defaultValue = "10") int minutes,
+                                        @RequestParam(required = false) String cityId) {
         if (routeNumber == null || routeNumber.isBlank()) {
             return Flux.empty();
         }
+        boolean cityScoped = cityId != null && !cityId.isBlank();
         int effectiveMinutes = Math.min(Math.max(1, minutes), MAX_TRAIL_MINUTES);
         long cutoffEpochMs = System.currentTimeMillis() - (long) effectiveMinutes * 60_000L;
         return vehicleRepository.findByRouteNumber(routeNumber)
+                .filter(vehicle -> !cityScoped || vehicle.getCityId() != null
+                        && cityId.equals(vehicle.getCityId().getValue()))
                 .flatMap(vehicle -> gpsHistoryService.getHistoryList(vehicle.getDeviceId(), DEFAULT_TRAIL_LIMIT_POINTS)
                         .map(points -> trailFor(vehicle, points, cutoffEpochMs)))
                 .filter(item -> !item.points().isEmpty());
@@ -103,21 +107,25 @@ public class DiagnosticsController {
     }
 
     @GetMapping("/route-geometry")
-    public Flux<RouteGeometryItem> routeGeometry(@RequestParam(value = "route", required = false) String routeNumber) {
+    public Flux<RouteGeometryItem> routeGeometry(@RequestParam(value = "route", required = false) String routeNumber,
+                                                 @RequestParam(required = false) String cityId) {
         boolean hasFilter = routeNumber != null && !routeNumber.isBlank();
+        boolean cityScoped = cityId != null && !cityId.isBlank();
         String sql = """
                 SELECT route_number, dir, ST_AsGeoJSON(geom) AS geom_json
                   FROM (
-                      SELECT route_number, 0 AS dir, geometry_forward AS geom
+                      SELECT route_number, city_id, 0 AS dir, geometry_forward AS geom
                         FROM bus_routes WHERE is_active = true AND geometry_forward IS NOT NULL
                       UNION ALL
-                      SELECT route_number, 1 AS dir, geometry_backward AS geom
+                      SELECT route_number, city_id, 1 AS dir, geometry_backward AS geom
                         FROM bus_routes WHERE is_active = true AND geometry_backward IS NOT NULL
                   ) t
                  WHERE (:routeFilter IS NULL OR route_number = :routeFilter)
+                   AND (:cityFilter IS NULL OR city_id = :cityFilter)
                 """;
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
         spec = hasFilter ? spec.bind("routeFilter", routeNumber) : spec.bindNull("routeFilter", String.class);
+        spec = cityScoped ? spec.bind("cityFilter", cityId) : spec.bindNull("cityFilter", String.class);
         return spec
                 .map((row, meta) -> new RouteGeometryItem(
                         row.get("route_number", String.class),
