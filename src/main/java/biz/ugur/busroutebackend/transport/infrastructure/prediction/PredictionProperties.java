@@ -24,6 +24,8 @@ public class PredictionProperties {
 
     private double decayFactor = 0.98;
 
+    private double maxAdvanceLeashMeters = 250.0;
+
     private double conservativeSpeedFactor = 0.92;
 
     private boolean snapToRoute = true;

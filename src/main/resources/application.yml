@@ -691,6 +691,7 @@ ugur:
     max-age-ms: ${PREDICTION_MAX_AGE_MS:180000}
     min-speed-kmh: ${PREDICTION_MIN_SPEED_KMH:3.0}
     decay-factor: ${PREDICTION_DECAY_FACTOR:0.98}
+    max-advance-leash-meters: ${PREDICTION_MAX_ADVANCE_LEASH_METERS:250.0}
     correction-factor: ${PREDICTION_CORRECTION_FACTOR:0.7}
     snap-to-route: ${PREDICTION_SNAP_TO_ROUTE:true}
     stop-deceleration-zone-meters: ${PREDICTION_STOP_DECEL_ZONE:80.0}
