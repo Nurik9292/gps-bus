@@ -260,6 +260,15 @@ class VehiclePositionPredictor {
                     ? DistanceCalculationService.haversineDistanceMeters(
                             coords[0], coords[1], state.getGpsLatitude(), state.getGpsLongitude())
                     : 0.0;
+            if (leashExceeded(driftFromRawGps)) {
+                log.debug("[GPS_PIPELINE] ADVANCE_LEASH_HOLD vehicle={} plate={} drift={}m leash={}m — holding position until fresh GPS",
+                        state.getVehicleId(), state.getLicensePlate(),
+                        String.format("%.0f", driftFromRawGps),
+                        String.format("%.0f", properties.getMaxAdvanceLeashMeters()));
+                return state.toBuilder()
+                        .speedKmh(decayedSpeedKmh)
+                        .build();
+            }
             pipelineTracer.tracePredictorAdvance(
                     state.getVehicleId(), state.getLicensePlate(), state.getRouteNumber(),
                     state.getDirection(),
@@ -362,11 +371,28 @@ class VehiclePositionPredictor {
         double dLat = dNorth / METRES_PER_DEGREE_LAT;
         double dLon = dEast / (METRES_PER_DEGREE_LAT * Math.cos(Math.toRadians(state.getPredictedLatitude())));
 
+        double newLat = state.getPredictedLatitude() + dLat;
+        double newLon = state.getPredictedLongitude() + dLon;
+        double driftFromRawGps = (state.getGpsLatitude() != 0.0 && state.getGpsLongitude() != 0.0)
+                ? DistanceCalculationService.haversineDistanceMeters(
+                        newLat, newLon, state.getGpsLatitude(), state.getGpsLongitude())
+                : 0.0;
+        if (leashExceeded(driftFromRawGps)) {
+            return state.toBuilder()
+                    .speedKmh(decayedSpeedKmh)
+                    .build();
+        }
+
         return state.toBuilder()
                 .speedKmh(decayedSpeedKmh)
-                .predictedLatitude(state.getPredictedLatitude() + dLat)
-                .predictedLongitude(state.getPredictedLongitude() + dLon)
+                .predictedLatitude(newLat)
+                .predictedLongitude(newLon)
                 .build();
+    }
+
+    private boolean leashExceeded(double driftFromRawGps) {
+        double leash = properties.getMaxAdvanceLeashMeters();
+        return leash > 0 && driftFromRawGps > leash;
     }
 
     private String dwellKey(String stopId, String routeId, int direction) {
