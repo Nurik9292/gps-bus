@@ -24,6 +24,14 @@ public class V31RouteLines {
     private final java.util.Set<String> disabledRoutes = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final java.util.concurrent.atomic.AtomicLong v31DisabledRoutes = new java.util.concurrent.atomic.AtomicLong();
 
+    public void evict(String... routeKeys) {
+        for (String key : routeKeys) {
+            if (key == null || key.isBlank()) continue;
+            topologies.remove(key);
+            disabledRoutes.remove(key);
+        }
+    }
+
     public V31RouteLines(RouteGeometryCache cache) {
         this(cache, false);
     }
