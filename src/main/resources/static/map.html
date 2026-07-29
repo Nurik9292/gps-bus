@@ -425,6 +425,14 @@
 
     <!-- WS Subscribe section -->
     <div class="ws-subscribe">
+        <select id="city-select" title="Город для подписки, полилиний и трейлов"
+                style="background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:6px; padding:4px 6px; font-size:12px;"
+                onchange="onCitySelectChange()">
+            <option value="">Все города</option>
+            <option value="city-001">Ашхабад</option>
+            <option value="city-004">Балканабат</option>
+            <option value="city-006">Аркадаг</option>
+        </select>
         <span class="ws-subscribe-label">WS:</span>
         <input type="text" id="ws-route-input" placeholder="160, 29..." title="Enter — подписаться на маршрут через WebSocket">
         <div class="ws-route-tags" id="ws-route-tags"></div>
@@ -543,6 +551,21 @@
     let stops = [];
     let activeRouteFilters = new Set();
     let wsSubscribedRoutes = new Set();
+    let selectedCityId = '';
+
+    function cityQuerySuffix() {
+        return selectedCityId ? '&cityId=' + encodeURIComponent(selectedCityId) : '';
+    }
+
+    function onCitySelectChange() {
+        selectedCityId = document.getElementById('city-select').value;
+        routesGeoJsonCache = null;
+        routesGeoJsonLoading = null;
+        reconnectWebSocket();
+        renderRoutePolylines();
+        loadAndDrawGpsTrails();
+        loadAndDrawRouteStops();
+    }
     let updateCounter = 0;
     let lastCounterReset = Date.now();
 
@@ -728,10 +751,12 @@
     }
 
     function buildWsUrl() {
+        const cityParam = selectedCityId ? 'cityId=' + encodeURIComponent(selectedCityId) : '';
         if (wsSubscribedRoutes.size > 0) {
-            return WS_URL + '?routes=' + [...wsSubscribedRoutes].join(',');
+            const base = WS_URL + '?routes=' + [...wsSubscribedRoutes].join(',');
+            return cityParam ? base + '&' + cityParam : base;
         }
-        return WS_URL;
+        return cityParam ? WS_URL + '?' + cityParam : WS_URL;
     }
 
     let wsLastMessageAt = 0;
@@ -838,7 +863,7 @@
     function loadRoutesGeoJson() {
         if (routesGeoJsonCache) return Promise.resolve(routesGeoJsonCache);
         if (routesGeoJsonLoading) return routesGeoJsonLoading;
-        routesGeoJsonLoading = fetch(`${API_BASE}/diagnostics/route-geometry`)
+        routesGeoJsonLoading = fetch(`${API_BASE}/diagnostics/route-geometry?_=1${cityQuerySuffix()}`)
             .then(r => r.json())
             .then(items => {
                 const byRoute = {};
@@ -906,7 +931,7 @@
         let vehicleColorIdx = 0;
         for (const routeNum of selected) {
             try {
-                const url = `${API_BASE}/diagnostics/gps-trail?route=${encodeURIComponent(routeNum)}&minutes=${GPS_TRAIL_MINUTES}`;
+                const url = `${API_BASE}/diagnostics/gps-trail?route=${encodeURIComponent(routeNum)}&minutes=${GPS_TRAIL_MINUTES}${cityQuerySuffix()}`;
                 const res = await fetch(url);
                 if (!res.ok) {
                     console.warn('[map] gps-trail HTTP', res.status, 'for route', routeNum);
@@ -972,7 +997,7 @@
 
         for (const routeNum of selected) {
             try {
-                const url = `${API_BASE}/diagnostics/route-stops?route=${encodeURIComponent(routeNum)}`;
+                const url = `${API_BASE}/diagnostics/route-stops?route=${encodeURIComponent(routeNum)}${cityQuerySuffix()}`;
                 const res = await fetch(url);
                 if (!res.ok) {
                     console.warn('[map] route-stops HTTP', res.status, 'for route', routeNum);
