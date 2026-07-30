@@ -46,6 +46,8 @@ public class RouteSwapGeoDictionary {
     private final BusRouteRepository busRouteRepository;
     private final RouteSwapProperties properties;
     private final AtomicBoolean buildInProgress = new AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicLong generation = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong lastBuildAttemptMs = new java.util.concurrent.atomic.AtomicLong();
     private volatile BuiltSnapshot snapshot;
 
     public RouteSwapGeoDictionary(BusRouteRepository busRouteRepository, RouteSwapProperties properties) {
@@ -58,12 +60,17 @@ public class RouteSwapGeoDictionary {
     }
 
     public void invalidate() {
+        generation.incrementAndGet();
         snapshot = null;
         log.info("[ROUTE_SWAP] geo dictionary invalidated, will rebuild lazily");
     }
 
     public void ensureBuilt() {
-        if (snapshot != null || !buildInProgress.compareAndSet(false, true)) {
+        long now = System.currentTimeMillis();
+        long lastAttempt = lastBuildAttemptMs.get();
+        if (snapshot != null || now - lastAttempt < 30_000
+                || !lastBuildAttemptMs.compareAndSet(lastAttempt, now)
+                || !buildInProgress.compareAndSet(false, true)) {
             return;
         }
         snapshot()
@@ -71,7 +78,7 @@ public class RouteSwapGeoDictionary {
                 .subscribe(
                         built -> {
                         },
-                        error -> log.error("[ROUTE_SWAP] geo dictionary build failed: {}", error.getMessage()));
+                        error -> log.error("[ROUTE_SWAP] geo dictionary build failed", error));
     }
 
     public Mono<Snapshot> snapshot() {
@@ -79,6 +86,8 @@ public class RouteSwapGeoDictionary {
         if (existing != null) {
             return Mono.just(existing);
         }
+        long buildGeneration = generation.get();
+        long startedAtMs = System.currentTimeMillis();
         return busRouteRepository.findActiveRoutes()
                 .filter(route -> Boolean.TRUE.equals(route.getIsActive()) && route.hasGeometry())
                 .collectList()
@@ -86,9 +95,14 @@ public class RouteSwapGeoDictionary {
                 .map(this::build)
                 .timeout(BUILD_TIMEOUT)
                 .doOnNext(built -> {
+                    if (generation.get() != buildGeneration) {
+                        log.info("[ROUTE_SWAP] stale geo dictionary build discarded (geometry changed mid-build)");
+                        return;
+                    }
                     snapshot = built;
-                    log.info("[ROUTE_SWAP] geo dictionary built: axes={} families={}",
-                            built.axes.size(), built.familyLabels.size());
+                    log.info("[ROUTE_SWAP] geo dictionary built: axes={} families={} elapsedMs={}",
+                            built.axes.size(), built.familyLabels.size(),
+                            System.currentTimeMillis() - startedAtMs);
                 })
                 .cast(Snapshot.class);
     }
@@ -166,7 +180,7 @@ public class RouteSwapGeoDictionary {
     }
 
     private static boolean sameCity(Axis a, Axis b) {
-        return a.cityId == null || b.cityId == null || a.cityId.equals(b.cityId);
+        return a.cityId != null && a.cityId.equals(b.cityId);
     }
 
     private static int find(int[] parent, int i) {

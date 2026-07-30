@@ -180,12 +180,24 @@ class RouteSwapMonitorTest {
     }
 
     @Test
-    void quietHoursClearDigestWithoutSending() {
+    void quietHoursDeferDigestUntilMorningFlush() {
         drive("axis-a", 5.0, 0.0, 8.0, SHIFT_START, Duration.ofMinutes(80));
         when(quietHours.active()).thenReturn(true);
 
         monitor.flushDigest();
+        verify(emailService, never()).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
+
         when(quietHours.active()).thenReturn(false);
+        monitor.flushDigest();
+        verify(emailService, times(1)).sendGpsAlert(
+                anyList(), anyString(), eq(AlertKind.ROUTE_SWAP), anyString(), anyString());
+    }
+
+    @Test
+    void modeOffSuppressesProcessingAndDigest() {
+        properties.setMode(RouteSwapProperties.Mode.OFF);
+
+        drive("axis-a", 5.0, 0.0, 8.0, SHIFT_START, Duration.ofMinutes(80));
         monitor.flushDigest();
 
         verify(emailService, never()).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());

@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import reactor.core.Disposable;
 import reactor.core.scheduler.Schedulers;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayDeque;
@@ -27,14 +28,16 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 public class RouteSwapMonitor {
 
-    private static final double ESTIMATED_MINUTES_PER_FIX = 0.5;
+    private static final double FIRST_FIX_CREDIT_MINUTES = 0.5;
+    private static final double MAX_FIX_GAP_CREDIT_SECONDS = 90.0;
+    private static final Duration DIGEST_SEND_TIMEOUT = Duration.ofSeconds(30);
 
     private final RouteSwapProperties properties;
     private final RouteSwapGeoDictionary dictionary;
     private final EmailNotificationService emailService;
     private final AlertQuietHours quietHours;
     private final Map<String, VehicleState> vehicleStates = new ConcurrentHashMap<>();
-    private final Map<String, Boolean> alertedEpisodes = new ConcurrentHashMap<>();
+    private final Map<EpisodeKey, Boolean> alertedEpisodes = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<String> digestBuffer = new ConcurrentLinkedQueue<>();
     private final AtomicLong skippedNoDictionary = new AtomicLong();
     private volatile Disposable tapSubscription;
@@ -62,7 +65,7 @@ public class RouteSwapMonitor {
                                         fix.vehicleId(), e.getMessage());
                             }
                         },
-                        error -> log.error("[ROUTE_SWAP] tap stream failed: {}", error.getMessage()));
+                        error -> log.error("[ROUTE_SWAP] tap stream failed", error));
     }
 
     public void shutdown() {
@@ -73,6 +76,9 @@ public class RouteSwapMonitor {
     }
 
     public void onFix(RouteSwapFix fix) {
+        if (properties.getMode() == RouteSwapProperties.Mode.OFF) {
+            return;
+        }
         if (fix.routeId() == null || fix.routeId().isBlank()) {
             return;
         }
@@ -96,7 +102,13 @@ public class RouteSwapMonitor {
     }
 
     private void processFix(VehicleState state, RouteSwapFix fix, RouteSwapGeoDictionary.Snapshot snapshot) {
-        if (state.routeId != null && !state.routeId.equals(fix.routeId())) {
+        Instant lastFix = state.lastFixAt;
+        if (lastFix != null && !fix.timestamp().isAfter(lastFix)) {
+            return;
+        }
+        if (state.routeId == null) {
+            state.graceUntil = fix.timestamp().plusSeconds(properties.getAssignmentGraceMinutes() * 60L);
+        } else if (!state.routeId.equals(fix.routeId())) {
             state.resetWindows();
             state.graceUntil = fix.timestamp().plusSeconds(properties.getAssignmentGraceMinutes() * 60L);
         }
@@ -114,12 +126,12 @@ public class RouteSwapMonitor {
         }
         double familyDistance = snapshot.familyDistanceMeters(fix.routeId(), fix.latitude(), fix.longitude());
         double axisDistance = snapshot.axisDistanceMeters(fix.routeId(), fix.latitude(), fix.longitude());
-        WindowSample sample = new WindowSample(familyDistance, axisDistance, null, false);
+        WindowSample sample = new WindowSample(fix.timestamp(), familyDistance, axisDistance, null, false);
         if (familyDistance > properties.getOffAssignedMeters()) {
             Optional<RouteSwapGeoDictionary.ForeignMatch> foreign =
                     snapshot.bestForeign(fix.routeId(), fix.latitude(), fix.longitude());
             if (foreign.isPresent() && foreign.get().distanceMeters() <= properties.getOnRouteMeters()) {
-                sample = new WindowSample(familyDistance, axisDistance,
+                sample = new WindowSample(fix.timestamp(), familyDistance, axisDistance,
                         foreign.get().familyKey(), foreign.get().uniqueVisit());
             }
         }
@@ -168,7 +180,7 @@ public class RouteSwapMonitor {
         double uniqueMinutes = bestForeign
                 .map(e -> windows.stream()
                         .filter(w -> e.getKey().equals(w.foreignTopKey))
-                        .mapToDouble(w -> w.foreignUniqueCount * ESTIMATED_MINUTES_PER_FIX)
+                        .mapToDouble(w -> w.foreignUniqueMinutes)
                         .sum())
                 .orElse(0.0);
 
@@ -188,7 +200,7 @@ public class RouteSwapMonitor {
                             assignedCoverage * 100, foreignCoverage * 100));
             return;
         }
-        if (assignedCoverage >= properties.getSwapForeignCoverageMin()
+        if (assignedCoverage >= properties.getIntraFamilyCoverageMin()
                 && axisCoverage <= properties.getSwapAssignedCoverageMax()) {
             emit(state, lastFix, "INTRA_FAMILY_MISMATCH",
                     String.format("familyCov=%.0f%% assignedAxisCov=%.0f%%",
@@ -199,7 +211,7 @@ public class RouteSwapMonitor {
     private void emit(VehicleState state, Instant at, String verdict, String detail) {
         LocalDate operationalDate = ShiftType.operationalDateAt(at);
         String shift = ShiftType.operationalShiftAt(at).map(Enum::name).orElse("OUTSIDE");
-        String episodeKey = state.licensePlate + "|" + operationalDate + "|" + shift + "|" + verdict;
+        EpisodeKey episodeKey = new EpisodeKey(state.licensePlate, operationalDate, shift, verdict);
         if (alertedEpisodes.putIfAbsent(episodeKey, Boolean.TRUE) != null) {
             return;
         }
@@ -213,8 +225,11 @@ public class RouteSwapMonitor {
     @Scheduled(fixedRateString = "${business.route-swap-detector.digest-interval-minutes:30}",
             timeUnit = TimeUnit.MINUTES)
     public void flushDigest() {
-        if (quietHours.active()) {
+        if (properties.getMode() == RouteSwapProperties.Mode.OFF) {
             digestBuffer.clear();
+            return;
+        }
+        if (quietHours.active() || digestBuffer.isEmpty()) {
             return;
         }
         List<String> lines = new ArrayList<>();
@@ -222,25 +237,24 @@ public class RouteSwapMonitor {
         while ((line = digestBuffer.poll()) != null) {
             lines.add(line);
         }
-        if (lines.isEmpty()) {
-            return;
-        }
         String subject = "[ROUTE_SWAP] " + lines.size() + " episode(s), mode=" + properties.getMode();
         String body = "<pre>" + String.join("\n", lines) + "</pre>";
         emailService.sendGpsAlert(properties.recipientList(), "route-swap-digest",
                         AlertKind.ROUTE_SWAP, subject, body)
-                .doOnError(error -> log.error("[ROUTE_SWAP] digest send failed: {}", error.getMessage()))
+                .timeout(DIGEST_SEND_TIMEOUT)
+                .doOnError(error -> log.error("[ROUTE_SWAP] digest send failed", error))
                 .onErrorResume(error -> reactor.core.publisher.Mono.empty())
                 .subscribe();
     }
 
     @Scheduled(cron = "0 20 0 * * *", zone = "UTC")
     public void cleanupOldEpisodes() {
-        String cutoff = ShiftType.operationalDateAt(Instant.now()).minusDays(1).toString();
-        alertedEpisodes.keySet().removeIf(key -> key.split("\\|")[1].compareTo(cutoff) < 0);
+        LocalDate cutoff = ShiftType.operationalDateAt(Instant.now()).minusDays(1);
+        alertedEpisodes.keySet().removeIf(key -> key.operationalDate().isBefore(cutoff));
+        Instant staleBefore = Instant.now().minusSeconds(24 * 3600L);
         vehicleStates.entrySet().removeIf(entry -> {
             Instant lastFix = entry.getValue().lastFixAt;
-            return lastFix == null || lastFix.isBefore(Instant.now().minusSeconds(24 * 3600L));
+            return lastFix == null || lastFix.isBefore(staleBefore);
         });
     }
 
@@ -248,8 +262,11 @@ public class RouteSwapMonitor {
         return skippedNoDictionary.get();
     }
 
-    private record WindowSample(double familyMeters, double axisMeters, String foreignFamilyKey,
-                                boolean uniqueVisit) {
+    private record EpisodeKey(String licensePlate, LocalDate operationalDate, String shift, String verdict) {
+    }
+
+    private record WindowSample(Instant timestamp, double familyMeters, double axisMeters,
+                                String foreignFamilyKey, boolean uniqueVisit) {
     }
 
     private static final class WindowVerdict {
@@ -257,36 +274,53 @@ public class RouteSwapMonitor {
         private final double medianAxisMeters;
         private final String foreignTopKey;
         private final int foreignTopOnCount;
-        private final int foreignUniqueCount;
+        private final double foreignUniqueMinutes;
 
         private WindowVerdict(double medianFamilyMeters, double medianAxisMeters,
-                              String foreignTopKey, int foreignTopOnCount, int foreignUniqueCount) {
+                              String foreignTopKey, int foreignTopOnCount, double foreignUniqueMinutes) {
             this.medianFamilyMeters = medianFamilyMeters;
             this.medianAxisMeters = medianAxisMeters;
             this.foreignTopKey = foreignTopKey;
             this.foreignTopOnCount = foreignTopOnCount;
-            this.foreignUniqueCount = foreignUniqueCount;
+            this.foreignUniqueMinutes = foreignUniqueMinutes;
         }
 
         static WindowVerdict of(List<WindowSample> samples) {
             Map<String, Integer> foreignCounts = new HashMap<>();
-            Map<String, Integer> uniqueCounts = new HashMap<>();
             for (WindowSample sample : samples) {
                 if (sample.foreignFamilyKey() != null) {
                     foreignCounts.merge(sample.foreignFamilyKey(), 1, Integer::sum);
-                    if (sample.uniqueVisit()) {
-                        uniqueCounts.merge(sample.foreignFamilyKey(), 1, Integer::sum);
-                    }
                 }
             }
             Optional<Map.Entry<String, Integer>> top = foreignCounts.entrySet().stream()
                     .max(Comparator.comparingInt(Map.Entry::getValue));
+            String topKey = top.map(Map.Entry::getKey).orElse(null);
             return new WindowVerdict(
                     median(samples.stream().mapToDouble(WindowSample::familyMeters).sorted().toArray()),
                     median(samples.stream().mapToDouble(WindowSample::axisMeters).sorted().toArray()),
-                    top.map(Map.Entry::getKey).orElse(null),
+                    topKey,
                     top.map(Map.Entry::getValue).orElse(0),
-                    top.map(e -> uniqueCounts.getOrDefault(e.getKey(), 0)).orElse(0));
+                    uniqueMinutes(samples, topKey));
+        }
+
+        private static double uniqueMinutes(List<WindowSample> samples, String topKey) {
+            if (topKey == null) {
+                return 0.0;
+            }
+            double minutes = 0.0;
+            Instant previous = null;
+            for (WindowSample sample : samples) {
+                if (topKey.equals(sample.foreignFamilyKey()) && sample.uniqueVisit()) {
+                    if (previous == null) {
+                        minutes += FIRST_FIX_CREDIT_MINUTES;
+                    } else {
+                        double gapSeconds = Duration.between(previous, sample.timestamp()).toMillis() / 1000.0;
+                        minutes += Math.clamp(gapSeconds, 0.0, MAX_FIX_GAP_CREDIT_SECONDS) / 60.0;
+                    }
+                }
+                previous = sample.timestamp();
+            }
+            return minutes;
         }
 
         private static double median(double[] sorted) {
@@ -302,7 +336,7 @@ public class RouteSwapMonitor {
         private String routeNumber;
         private String licensePlate;
         private Instant graceUntil;
-        private Instant lastFixAt;
+        private volatile Instant lastFixAt;
         private long currentBucket = Long.MIN_VALUE;
         private List<WindowSample> windowSamples = new ArrayList<>();
         private final Deque<WindowVerdict> completedWindows = new ArrayDeque<>();

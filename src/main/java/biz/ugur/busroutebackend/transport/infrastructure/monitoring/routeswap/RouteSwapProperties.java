@@ -28,6 +28,7 @@ public class RouteSwapProperties {
     private double competitorClearanceMeters = 250.0;
     private double swapAssignedCoverageMax = 0.3;
     private double swapForeignCoverageMin = 0.6;
+    private double intraFamilyCoverageMin = 0.6;
     private int uniqueMinutesMin = 10;
     private int assignmentGraceMinutes = 60;
     private double familyMutualShare = 0.6;

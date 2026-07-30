@@ -273,7 +273,7 @@ public class VehiclePositionPredictionService {
             }
         }
 
-        if (routeSwapTap != null) {
+        if (routeSwapTap != null && !isBuffered) {
             biz.ugur.busroutebackend.transport.infrastructure.monitoring.routeswap.RouteSwapTap swapTap = null;
             try {
                 swapTap = routeSwapTap.getIfAvailable();
