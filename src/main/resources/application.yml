@@ -396,6 +396,26 @@ business:
     min-confidence-percentage: 70.0
     max-distance-for-match-meters: 100
 
+  route-swap-detector:
+    enabled: ${ROUTE_SWAP_DETECTOR_ENABLED:false}
+    mode: ${ROUTE_SWAP_DETECTOR_MODE:off}
+    window-minutes: ${ROUTE_SWAP_WINDOW_MINUTES:10}
+    verdict-windows: 6
+    min-windows-for-verdict: 5
+    min-moving-points-per-window: 3
+    min-speed-kmh: 5.0
+    on-route-meters: 100.0
+    off-assigned-meters: 300.0
+    competitor-clearance-meters: 250.0
+    swap-assigned-coverage-max: 0.3
+    swap-foreign-coverage-min: 0.6
+    unique-minutes-min: 10
+    assignment-grace-minutes: ${ROUTE_SWAP_ASSIGNMENT_GRACE_MINUTES:60}
+    family-mutual-share: 0.6
+    overlap-tolerance-meters: 120.0
+    digest-interval-minutes: ${ROUTE_SWAP_DIGEST_INTERVAL_MINUTES:30}
+    recipients: ${ROUTE_SWAP_ALERT_RECIPIENTS:${GPS_ALERT_RECIPIENTS:}}
+
   gps-history:
     max-points: 100
     ttl-minutes: 30
