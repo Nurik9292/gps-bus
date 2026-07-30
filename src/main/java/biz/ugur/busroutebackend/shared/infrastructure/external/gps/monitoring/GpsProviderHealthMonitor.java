@@ -174,6 +174,7 @@ public class GpsProviderHealthMonitor {
             case RECOVERY -> "восстановлен";
             case VEHICLE_OFF_ROUTE -> "автобус уехал с маршрута";
             case ASSIGNED_NOT_ON_LINE -> "назначенные автобусы не на линии";
+            case ROUTE_SWAP -> "автобус ездит не назначенный маршрут";
         };
     }
 
