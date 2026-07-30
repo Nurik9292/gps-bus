@@ -37,6 +37,13 @@ public class VehiclePositionPredictionService {
         this.v31ShadowTap = tap;
     }
 
+    private volatile org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.transport.infrastructure.monitoring.routeswap.RouteSwapTap> routeSwapTap;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setRouteSwapTap(org.springframework.beans.factory.ObjectProvider<biz.ugur.busroutebackend.transport.infrastructure.monitoring.routeswap.RouteSwapTap> tap) {
+        this.routeSwapTap = tap;
+    }
+
 
     private static final double METRES_PER_DEGREE_LAT = 111_320.0;
     private static final double DT_SECONDS = 1.0;
@@ -262,6 +269,22 @@ public class VehiclePositionPredictionService {
             } catch (RuntimeException v31InjectionFailure) {
                 if (tap != null) {
                     tap.recordError();
+                }
+            }
+        }
+
+        if (routeSwapTap != null && !isBuffered) {
+            biz.ugur.busroutebackend.transport.infrastructure.monitoring.routeswap.RouteSwapTap swapTap = null;
+            try {
+                swapTap = routeSwapTap.getIfAvailable();
+                if (swapTap != null) {
+                    swapTap.accept(new biz.ugur.busroutebackend.transport.infrastructure.monitoring.routeswap.RouteSwapFix(
+                            vehicleId, licensePlate, routeId, routeNumber,
+                            latitude, longitude, speedKmh, inGarage, timestamp));
+                }
+            } catch (RuntimeException routeSwapInjectionFailure) {
+                if (swapTap != null) {
+                    swapTap.recordError();
                 }
             }
         }

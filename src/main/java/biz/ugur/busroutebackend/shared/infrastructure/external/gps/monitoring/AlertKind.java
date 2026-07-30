@@ -7,5 +7,6 @@ public enum AlertKind {
     STALE,
     RECOVERY,
     VEHICLE_OFF_ROUTE,
-    ASSIGNED_NOT_ON_LINE
+    ASSIGNED_NOT_ON_LINE,
+    ROUTE_SWAP
 }
