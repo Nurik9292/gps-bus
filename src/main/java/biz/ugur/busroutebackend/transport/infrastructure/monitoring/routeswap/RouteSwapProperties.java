@@ -31,6 +31,8 @@ public class RouteSwapProperties {
     private double intraFamilyCoverageMin = 0.6;
     private int uniqueMinutesMin = 10;
     private int assignmentGraceMinutes = 60;
+    private int maxWindowGapMinutes = 20;
+    private int endOfShiftBufferMinutes = 20;
     private double familyMutualShare = 0.6;
     private double overlapToleranceMeters = 120.0;
     private int digestIntervalMinutes = 30;

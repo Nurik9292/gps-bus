@@ -36,23 +36,28 @@ public class RouteSwapMonitor {
     private final RouteSwapGeoDictionary dictionary;
     private final EmailNotificationService emailService;
     private final AlertQuietHours quietHours;
+    private final biz.ugur.busroutebackend.transport.domain.repository.RouteSwapAuditRepository auditRepository;
     private final Map<String, VehicleState> vehicleStates = new ConcurrentHashMap<>();
     private final Map<EpisodeKey, Boolean> alertedEpisodes = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<String> digestBuffer = new ConcurrentLinkedQueue<>();
     private final AtomicLong skippedNoDictionary = new AtomicLong();
+    private volatile RouteSwapTap attachedTap;
     private volatile Disposable tapSubscription;
 
     public RouteSwapMonitor(RouteSwapProperties properties,
                             RouteSwapGeoDictionary dictionary,
                             EmailNotificationService emailService,
-                            AlertQuietHours quietHours) {
+                            AlertQuietHours quietHours,
+                            biz.ugur.busroutebackend.transport.domain.repository.RouteSwapAuditRepository auditRepository) {
         this.properties = properties;
         this.dictionary = dictionary;
         this.emailService = emailService;
         this.quietHours = quietHours;
+        this.auditRepository = auditRepository;
     }
 
     public void attachTo(RouteSwapTap tap) {
+        attachedTap = tap;
         tapSubscription = tap.flux()
                 .publishOn(Schedulers.boundedElastic())
                 .subscribe(
@@ -109,12 +114,14 @@ public class RouteSwapMonitor {
         if (state.routeId == null) {
             state.graceUntil = fix.timestamp().plusSeconds(properties.getAssignmentGraceMinutes() * 60L);
         } else if (!state.routeId.equals(fix.routeId())) {
+            logAssignmentChange(fix, state.routeId);
             state.resetWindows();
             state.graceUntil = fix.timestamp().plusSeconds(properties.getAssignmentGraceMinutes() * 60L);
         }
         state.routeId = fix.routeId();
         state.routeNumber = fix.routeNumber();
         state.licensePlate = fix.licensePlate();
+        state.vehicleId = fix.vehicleId();
 
         long bucket = fix.timestamp().getEpochSecond() / 60 / properties.getWindowMinutes();
         if (state.currentBucket != bucket) {
@@ -139,11 +146,25 @@ public class RouteSwapMonitor {
         state.lastFixAt = fix.timestamp();
     }
 
+    private void logAssignmentChange(RouteSwapFix fix, String previousRouteId) {
+        auditRepository.logAssignmentChange(fix.vehicleId(), fix.licensePlate(), previousRouteId, fix.routeId())
+                .doOnError(error -> log.warn("[ROUTE_SWAP] assignment-log write failed for {}: {}",
+                        fix.licensePlate(), error.getMessage()))
+                .onErrorResume(error -> reactor.core.publisher.Mono.empty())
+                .subscribe();
+    }
+
     private void finalizeWindow(VehicleState state, RouteSwapGeoDictionary.Snapshot snapshot) {
         List<WindowSample> samples = state.windowSamples;
         if (state.currentBucket != Long.MIN_VALUE
                 && samples.size() >= properties.getMinMovingPointsPerWindow()) {
+            long gapBuckets = Math.max(1, properties.getMaxWindowGapMinutes() / properties.getWindowMinutes());
+            if (state.lastFinalizedBucket != Long.MIN_VALUE
+                    && state.currentBucket - state.lastFinalizedBucket > gapBuckets) {
+                state.completedWindows.clear();
+            }
             state.completedWindows.addLast(WindowVerdict.of(samples));
+            state.lastFinalizedBucket = state.currentBucket;
             while (state.completedWindows.size() > properties.getVerdictWindows()) {
                 state.completedWindows.removeFirst();
             }
@@ -195,9 +216,11 @@ public class RouteSwapMonitor {
         }
         if (assignedCoverage <= properties.getSwapAssignedCoverageMax()
                 && foreignCoverage < properties.getSwapForeignCoverageMin()) {
-            emit(state, lastFix, "NO_AXIS_FITS",
-                    String.format("asgCov=%.0f%% bestForeignCov=%.0f%%",
-                            assignedCoverage * 100, foreignCoverage * 100));
+            if (!nearShiftEnd(lastFix)) {
+                emit(state, lastFix, "NO_AXIS_FITS",
+                        String.format("asgCov=%.0f%% bestForeignCov=%.0f%%",
+                                assignedCoverage * 100, foreignCoverage * 100));
+            }
             return;
         }
         if (assignedCoverage >= properties.getIntraFamilyCoverageMin()
@@ -208,18 +231,50 @@ public class RouteSwapMonitor {
         }
     }
 
+    private boolean nearShiftEnd(Instant at) {
+        return ShiftType.operationalShiftAt(at)
+                .map(shift -> {
+                    java.time.LocalTime local = java.time.LocalTime.ofInstant(at, ShiftType.ASHGABAT_ZONE);
+                    java.time.LocalTime bufferStart = shift.getEndTime()
+                            .minusMinutes(properties.getEndOfShiftBufferMinutes());
+                    return !local.isBefore(bufferStart);
+                })
+                .orElse(false);
+    }
+
     private void emit(VehicleState state, Instant at, String verdict, String detail) {
         LocalDate operationalDate = ShiftType.operationalDateAt(at);
         String shift = ShiftType.operationalShiftAt(at).map(Enum::name).orElse("OUTSIDE");
+        if ("NO_AXIS_FITS".equals(verdict) && alertedEpisodes.containsKey(
+                new EpisodeKey(state.licensePlate, operationalDate, shift, "SWAP_SUSPECTED"))) {
+            return;
+        }
         EpisodeKey episodeKey = new EpisodeKey(state.licensePlate, operationalDate, shift, verdict);
         if (alertedEpisodes.putIfAbsent(episodeKey, Boolean.TRUE) != null) {
             return;
         }
-        String line = String.format("%s | assigned r%s | %s | %s | windows=%d | %s %s",
+        String supersedes = "SWAP_SUSPECTED".equals(verdict) && alertedEpisodes.containsKey(
+                new EpisodeKey(state.licensePlate, operationalDate, shift, "NO_AXIS_FITS"))
+                ? " | supersedes NO_AXIS_FITS" : "";
+        String line = String.format("%s | assigned r%s | %s | %s | windows=%d | %s %s%s",
                 state.licensePlate, state.routeNumber, verdict, detail,
-                state.completedWindows.size(), operationalDate, shift);
-        digestBuffer.add(line);
-        log.warn("[ROUTE_SWAP] {}", line);
+                state.completedWindows.size(), operationalDate, shift, supersedes);
+        auditRepository.tryRecordVerdict(state.licensePlate, state.vehicleId, state.routeNumber,
+                        verdict, detail, operationalDate, shift)
+                .subscribe(
+                        inserted -> {
+                            if (inserted) {
+                                digestBuffer.add(line);
+                                log.warn("[ROUTE_SWAP] {}", line);
+                            } else {
+                                log.info("[ROUTE_SWAP] verdict already persisted earlier, digest skip: {}", line);
+                            }
+                        },
+                        error -> {
+                            digestBuffer.add(line);
+                            log.warn("[ROUTE_SWAP] verdict persist failed (fail-open): {} — {}",
+                                    line, error.getMessage());
+                        });
     }
 
     @Scheduled(fixedRateString = "${business.route-swap-detector.digest-interval-minutes:30}",
@@ -229,6 +284,12 @@ public class RouteSwapMonitor {
             digestBuffer.clear();
             return;
         }
+        RouteSwapTap tap = attachedTap;
+        log.info("[ROUTE_SWAP] stats: buffered={} tapDropped={} tapErrors={} skippedNoDictionary={} states={}",
+                digestBuffer.size(),
+                tap != null ? tap.droppedCount() : -1,
+                tap != null ? tap.errorCount() : -1,
+                skippedNoDictionary.get(), vehicleStates.size());
         if (quietHours.active() || digestBuffer.isEmpty()) {
             return;
         }
@@ -335,9 +396,11 @@ public class RouteSwapMonitor {
         private String routeId;
         private String routeNumber;
         private String licensePlate;
+        private String vehicleId;
         private Instant graceUntil;
         private volatile Instant lastFixAt;
         private long currentBucket = Long.MIN_VALUE;
+        private long lastFinalizedBucket = Long.MIN_VALUE;
         private List<WindowSample> windowSamples = new ArrayList<>();
         private final Deque<WindowVerdict> completedWindows = new ArrayDeque<>();
 
@@ -345,6 +408,7 @@ public class RouteSwapMonitor {
             windowSamples = new ArrayList<>();
             completedWindows.clear();
             currentBucket = Long.MIN_VALUE;
+            lastFinalizedBucket = Long.MIN_VALUE;
         }
     }
 }
