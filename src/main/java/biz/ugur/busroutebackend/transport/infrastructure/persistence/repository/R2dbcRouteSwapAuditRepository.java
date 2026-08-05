@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.transport.domain.repository.RouteSwapAuditReposi
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDate;
@@ -55,5 +56,21 @@ public class R2dbcRouteSwapAuditRepository implements RouteSwapAuditRepository {
         spec = detail == null
                 ? spec.bindNull("detail", String.class) : spec.bind("detail", detail);
         return spec.fetch().rowsUpdated().map(rows -> rows > 0);
+    }
+
+    @Override
+    public Flux<VerdictKey> findVerdictKeysSince(LocalDate sinceDate) {
+        return db.sql("""
+                        SELECT license_plate, operational_date, shift, verdict
+                          FROM route_swap_verdicts
+                         WHERE operational_date >= :sinceDate
+                        """)
+                .bind("sinceDate", sinceDate)
+                .map((row, meta) -> new VerdictKey(
+                        row.get("license_plate", String.class),
+                        row.get("operational_date", LocalDate.class),
+                        row.get("shift", String.class),
+                        row.get("verdict", String.class)))
+                .all();
     }
 }

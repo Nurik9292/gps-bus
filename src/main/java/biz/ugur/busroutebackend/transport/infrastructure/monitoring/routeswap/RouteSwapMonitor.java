@@ -4,14 +4,17 @@ import biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours;
 import biz.ugur.busroutebackend.shared.infrastructure.email.EmailNotificationService;
 import biz.ugur.busroutebackend.shared.infrastructure.external.gps.monitoring.AlertKind;
 import biz.ugur.busroutebackend.transport.domain.enums.ShiftType;
+import biz.ugur.busroutebackend.transport.domain.repository.RouteSwapAuditRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import reactor.core.Disposable;
+import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -36,7 +39,7 @@ public class RouteSwapMonitor {
     private final RouteSwapGeoDictionary dictionary;
     private final EmailNotificationService emailService;
     private final AlertQuietHours quietHours;
-    private final biz.ugur.busroutebackend.transport.domain.repository.RouteSwapAuditRepository auditRepository;
+    private final RouteSwapAuditRepository auditRepository;
     private final Map<String, VehicleState> vehicleStates = new ConcurrentHashMap<>();
     private final Map<EpisodeKey, Boolean> alertedEpisodes = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<String> digestBuffer = new ConcurrentLinkedQueue<>();
@@ -48,7 +51,7 @@ public class RouteSwapMonitor {
                             RouteSwapGeoDictionary dictionary,
                             EmailNotificationService emailService,
                             AlertQuietHours quietHours,
-                            biz.ugur.busroutebackend.transport.domain.repository.RouteSwapAuditRepository auditRepository) {
+                            RouteSwapAuditRepository auditRepository) {
         this.properties = properties;
         this.dictionary = dictionary;
         this.emailService = emailService;
@@ -150,7 +153,7 @@ public class RouteSwapMonitor {
         auditRepository.logAssignmentChange(fix.vehicleId(), fix.licensePlate(), previousRouteId, fix.routeId())
                 .doOnError(error -> log.warn("[ROUTE_SWAP] assignment-log write failed for {}: {}",
                         fix.licensePlate(), error.getMessage()))
-                .onErrorResume(error -> reactor.core.publisher.Mono.empty())
+                .onErrorResume(error -> Mono.empty())
                 .subscribe();
     }
 
@@ -158,9 +161,10 @@ public class RouteSwapMonitor {
         List<WindowSample> samples = state.windowSamples;
         if (state.currentBucket != Long.MIN_VALUE
                 && samples.size() >= properties.getMinMovingPointsPerWindow()) {
-            long gapBuckets = Math.max(1, properties.getMaxWindowGapMinutes() / properties.getWindowMinutes());
+            long silentMinutes = (state.currentBucket - state.lastFinalizedBucket - 1)
+                    * properties.getWindowMinutes();
             if (state.lastFinalizedBucket != Long.MIN_VALUE
-                    && state.currentBucket - state.lastFinalizedBucket > gapBuckets) {
+                    && silentMinutes > properties.getMaxWindowGapMinutes()) {
                 state.completedWindows.clear();
             }
             state.completedWindows.addLast(WindowVerdict.of(samples));
@@ -234,12 +238,23 @@ public class RouteSwapMonitor {
     private boolean nearShiftEnd(Instant at) {
         return ShiftType.operationalShiftAt(at)
                 .map(shift -> {
-                    java.time.LocalTime local = java.time.LocalTime.ofInstant(at, ShiftType.ASHGABAT_ZONE);
-                    java.time.LocalTime bufferStart = shift.getEndTime()
+                    LocalTime local = LocalTime.ofInstant(at, ShiftType.ASHGABAT_ZONE);
+                    LocalTime bufferStart = shift.getEndTime()
                             .minusMinutes(properties.getEndOfShiftBufferMinutes());
                     return !local.isBefore(bufferStart);
                 })
-                .orElse(false);
+                .orElse(true);
+    }
+
+    public void warmupFromPersistedVerdicts() {
+        auditRepository.findVerdictKeysSince(ShiftType.operationalDateAt(Instant.now()).minusDays(1))
+                .doOnNext(key -> alertedEpisodes.putIfAbsent(
+                        new EpisodeKey(key.licensePlate(), key.operationalDate(), key.shift(), key.verdict()),
+                        Boolean.TRUE))
+                .count()
+                .subscribe(
+                        loaded -> log.info("[ROUTE_SWAP] warmed up {} persisted verdict keys", loaded),
+                        error -> log.warn("[ROUTE_SWAP] verdict warmup failed: {}", error.getMessage()));
     }
 
     private void emit(VehicleState state, Instant at, String verdict, String detail) {
@@ -304,7 +319,7 @@ public class RouteSwapMonitor {
                         AlertKind.ROUTE_SWAP, subject, body)
                 .timeout(DIGEST_SEND_TIMEOUT)
                 .doOnError(error -> log.error("[ROUTE_SWAP] digest send failed", error))
-                .onErrorResume(error -> reactor.core.publisher.Mono.empty())
+                .onErrorResume(error -> Mono.empty())
                 .subscribe();
     }
 

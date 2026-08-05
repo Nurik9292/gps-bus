@@ -36,6 +36,7 @@ public class RouteSwapDetectorConfig {
         RouteSwapMonitor monitor = new RouteSwapMonitor(properties, dictionary, emailService, quietHours,
                 auditRepository);
         monitor.attachTo(tap);
+        monitor.warmupFromPersistedVerdicts();
         dictionary.ensureBuilt();
         return monitor;
     }
