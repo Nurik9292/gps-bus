@@ -411,6 +411,8 @@ business:
     swap-foreign-coverage-min: 0.6
     unique-minutes-min: 10
     assignment-grace-minutes: ${ROUTE_SWAP_ASSIGNMENT_GRACE_MINUTES:60}
+    max-window-gap-minutes: ${ROUTE_SWAP_MAX_WINDOW_GAP_MINUTES:20}
+    end-of-shift-buffer-minutes: ${ROUTE_SWAP_END_OF_SHIFT_BUFFER_MINUTES:20}
     family-mutual-share: 0.6
     overlap-tolerance-meters: 120.0
     digest-interval-minutes: ${ROUTE_SWAP_DIGEST_INTERVAL_MINUTES:30}

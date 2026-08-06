@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.transport.infrastructure.monitoring.routeswap;
 import biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours;
 import biz.ugur.busroutebackend.shared.infrastructure.email.EmailNotificationService;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
+import biz.ugur.busroutebackend.transport.domain.repository.RouteSwapAuditRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -30,9 +31,12 @@ public class RouteSwapDetectorConfig {
                                              RouteSwapGeoDictionary dictionary,
                                              EmailNotificationService emailService,
                                              AlertQuietHours quietHours,
+                                             RouteSwapAuditRepository auditRepository,
                                              RouteSwapTap tap) {
-        RouteSwapMonitor monitor = new RouteSwapMonitor(properties, dictionary, emailService, quietHours);
+        RouteSwapMonitor monitor = new RouteSwapMonitor(properties, dictionary, emailService, quietHours,
+                auditRepository);
         monitor.attachTo(tap);
+        monitor.warmupFromPersistedVerdicts();
         dictionary.ensureBuilt();
         return monitor;
     }
