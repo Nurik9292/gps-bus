@@ -77,6 +77,7 @@ class RouteSwapMonitorTest {
                 anyString(), any(), anyString())).thenReturn(Mono.just(true));
         when(auditRepository.logAssignmentChange(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(Mono.empty());
+        when(auditRepository.findVerdictKeysSince(any())).thenReturn(reactor.core.publisher.Flux.empty());
         monitor = new RouteSwapMonitor(properties, dictionary, emailService, quietHours, auditRepository);
     }
 
@@ -283,6 +284,43 @@ class RouteSwapMonitorTest {
         Instant nightStart = Instant.parse("2026-07-30T18:00:00Z");
         drive("axis-a", 2.5, 0.0, 13.0, nightStart, Duration.ofMinutes(130));
 
+        monitor.flushDigest();
+
+        verify(emailService, never()).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void persistFailureIsFailOpenAndStillDigests() {
+        when(auditRepository.tryRecordVerdict(anyString(), anyString(), anyString(), anyString(),
+                anyString(), any(), anyString())).thenReturn(Mono.error(new RuntimeException("db down")));
+
+        drive("axis-a", 5.0, 0.0, 8.0, SHIFT_START, Duration.ofMinutes(80));
+        monitor.flushDigest();
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(emailService, times(1)).sendGpsAlert(
+                anyList(), anyString(), eq(AlertKind.ROUTE_SWAP), anyString(), body.capture());
+        assertTrue(body.getValue().contains("SWAP_SUSPECTED"), body.getValue());
+    }
+
+    @Test
+    void verdictsSuppressedOutsideOperationalShifts() {
+        Instant nightStart = Instant.parse("2026-07-30T18:00:00Z");
+        drive("axis-a", 2.5, 0.0, 8.0, nightStart, Duration.ofMinutes(130));
+
+        monitor.flushDigest();
+
+        verify(emailService, never()).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void warmupFromPersistedVerdictsDeduplicatesAfterRestart() {
+        when(auditRepository.findVerdictKeysSince(any())).thenReturn(reactor.core.publisher.Flux.just(
+                new biz.ugur.busroutebackend.transport.domain.repository.RouteSwapAuditRepository.VerdictKey(
+                        "1903 AGH", java.time.LocalDate.of(2026, 7, 30), "FIRST", "SWAP_SUSPECTED")));
+        monitor.warmupFromPersistedVerdicts();
+
+        drive("axis-a", 5.0, 0.0, 8.0, SHIFT_START, Duration.ofMinutes(80));
         monitor.flushDigest();
 
         verify(emailService, never()).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
