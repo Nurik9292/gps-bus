@@ -152,9 +152,20 @@ public class AdminRouteController extends BasePaginatedController {
     }
 
     @PostMapping("/{routeNumber}/refresh-cache")
-    public Mono<ResponseEntity<Void>> refreshRouteCache(@PathVariable String routeNumber) {
-        return routeGeometryCache.refreshRoute(routeNumber)
+    public Mono<ResponseEntity<Void>> refreshRouteCache(@PathVariable String routeNumber,
+                                                        @RequestParam(required = false) String cityId) {
+        return resolveCacheKey(routeNumber, cityId)
+                .flatMap(routeGeometryCache::refreshRoute)
                 .then(noContent());
+    }
+
+    private Mono<String> resolveCacheKey(String routeNumber, String cityId) {
+        if (cityId == null || cityId.isBlank()) {
+            return Mono.just(routeNumber);
+        }
+        return busRouteRepository.findByRouteNumberAndCityId(routeNumber, cityId)
+                .map(route -> route.getId().getValue())
+                .defaultIfEmpty(routeNumber);
     }
 
     public record RestoreNameRequest(String field) {
