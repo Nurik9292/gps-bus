@@ -59,6 +59,55 @@ public class R2dbcRouteSwapAuditRepository implements RouteSwapAuditRepository {
     }
 
     @Override
+    public Flux<VerdictRecord> findVerdicts(LocalDate fromDate, LocalDate toDate, String verdict, int limit) {
+        String verdictFilter = verdict == null || verdict.isBlank() ? "" : " AND verdict = :verdict";
+        DatabaseClient.GenericExecuteSpec spec = db.sql("""
+                        SELECT id, license_plate, vehicle_id, assigned_route_number, verdict, detail,
+                               operational_date, shift, created_at
+                          FROM route_swap_verdicts
+                         WHERE operational_date BETWEEN :fromDate AND :toDate
+                        """ + verdictFilter + """
+                         ORDER BY created_at DESC
+                         LIMIT :limit
+                        """)
+                .bind("fromDate", fromDate)
+                .bind("toDate", toDate)
+                .bind("limit", limit);
+        if (!verdictFilter.isEmpty()) {
+            spec = spec.bind("verdict", verdict);
+        }
+        return spec.map((row, meta) -> new VerdictRecord(
+                        row.get("id", Long.class),
+                        row.get("license_plate", String.class),
+                        row.get("vehicle_id", String.class),
+                        row.get("assigned_route_number", String.class),
+                        row.get("verdict", String.class),
+                        row.get("detail", String.class),
+                        row.get("operational_date", LocalDate.class),
+                        row.get("shift", String.class),
+                        row.get("created_at", java.time.OffsetDateTime.class).toInstant()))
+                .all();
+    }
+
+    @Override
+    public Flux<VerdictCount> countVerdictsByType(LocalDate operationalDate, String shift) {
+        DatabaseClient.GenericExecuteSpec spec = db.sql("""
+                        SELECT verdict, COUNT(*) AS cnt
+                          FROM route_swap_verdicts
+                         WHERE operational_date = :operationalDate
+                           AND (:shift IS NULL OR shift = :shift)
+                         GROUP BY verdict
+                        """)
+                .bind("operationalDate", operationalDate);
+        spec = shift == null
+                ? spec.bindNull("shift", String.class) : spec.bind("shift", shift);
+        return spec.map((row, meta) -> new VerdictCount(
+                        row.get("verdict", String.class),
+                        row.get("cnt", Long.class)))
+                .all();
+    }
+
+    @Override
     public Flux<VerdictKey> findVerdictKeysSince(LocalDate sinceDate) {
         return db.sql("""
                         SELECT license_plate, operational_date, shift, verdict
