@@ -2,8 +2,10 @@ package biz.ugur.busroutebackend.transport.infrastructure.monitoring.routeswap;
 
 import biz.ugur.busroutebackend.shared.infrastructure.email.AlertQuietHours;
 import biz.ugur.busroutebackend.shared.infrastructure.email.EmailNotificationService;
+import biz.ugur.busroutebackend.transport.application.services.ExternalApiService;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteSwapAuditRepository;
+import biz.ugur.busroutebackend.transport.domain.repository.VehicleRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -39,5 +41,16 @@ public class RouteSwapDetectorConfig {
         monitor.warmupFromPersistedVerdicts();
         dictionary.ensureBuilt();
         return monitor;
+    }
+
+    @Bean
+    public ProviderAssignmentCrossCheck providerAssignmentCrossCheck(RouteSwapProperties properties,
+                                                                     ExternalApiService externalApiService,
+                                                                     VehicleRepository vehicleRepository,
+                                                                     RouteSwapAuditRepository auditRepository,
+                                                                     EmailNotificationService emailService,
+                                                                     AlertQuietHours quietHours) {
+        return new ProviderAssignmentCrossCheck(properties, externalApiService, vehicleRepository,
+                auditRepository, emailService, quietHours, java.time.Clock.systemUTC());
     }
 }

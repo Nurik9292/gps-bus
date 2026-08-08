@@ -53,7 +53,8 @@ public class ApiClientConfig {
             @Value("${external.api.bus-info.connect-timeout:10s}") Duration connectTimeout,
             @Value("${external.api.bus-info.read-timeout:30s}") Duration readTimeout,
             @Value("${external.api.bus-info.write-timeout:10s}") Duration writeTimeout,
-            @Value("${external.api.bus-info.max-in-memory-bytes:2097152}") int maxInMemoryBytes) {
+            @Value("${external.api.bus-info.max-in-memory-bytes:2097152}") int maxInMemoryBytes,
+            @Value("${external.api.bus-info.insecure-tls:false}") boolean insecureTls) {
 
         HttpClient httpClient = HttpClient.create()
                 .responseTimeout(timeout)
@@ -61,6 +62,18 @@ public class ApiClientConfig {
                 .doOnConnected(conn -> conn
                         .addHandlerLast(new ReadTimeoutHandler(readTimeout.toSeconds(), TimeUnit.SECONDS))
                         .addHandlerLast(new WriteTimeoutHandler(writeTimeout.toSeconds(), TimeUnit.SECONDS)));
+        if (insecureTls) {
+            httpClient = httpClient.secure(spec -> {
+                try {
+                    spec.sslContext(io.netty.handler.ssl.SslContextBuilder.forClient()
+                            .trustManager(io.netty.handler.ssl.util.InsecureTrustManagerFactory.INSTANCE)
+                            .build());
+                } catch (javax.net.ssl.SSLException e) {
+                    throw new IllegalStateException("Failed to build insecure SSL context for bus-info API", e);
+                }
+            });
+            log.warn("Bus Info API WebClient uses INSECURE TLS trust (broken provider certificate chain)");
+        }
 
         log.info("Bus Info API WebClient configured: baseUrl={}, responseTimeout={}s, connectTimeout={}s, readTimeout={}s, writeTimeout={}s",
                 baseUrl, timeout.toSeconds(), connectTimeout.toSeconds(), readTimeout.toSeconds(), writeTimeout.toSeconds());

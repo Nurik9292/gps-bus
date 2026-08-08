@@ -298,23 +298,25 @@ external:
         requests-per-minute: 60
 
     # ============================================================================
-    # ЗАКОММЕНТИРОВАНО 2025-12-23: Bus Info API (Имдат) больше не используется
-    # Причина: Переход на автономную систему (GPS + Shift Assignments)
-    # Для восстановления: раскомментировать этот блок и код в VehicleDataScheduler
+    # ВКЛЮЧЕНО ОБРАТНО 2026-08-08 (только чтение): реестр «борт → маршрут»
+    # для route-swap provider cross-check. Auto-sync назначений (SyncBusRoute
+    # AssignmentsUseCase) НЕ включать — unassign-ит все борта вне реестра.
+    # insecure-tls: у edu.ayauk.gov.tm некорректная TLS-цепочка (проверено 29.07).
     # ============================================================================
-    # bus-info:
-    #   base-url: ${BUS_INFO_API_BASE_URL:https://edu.ayauk.gov.tm}
-    #   username: ${BUS_INFO_API_USERNAME:duralga}
-    #   password: ${BUS_INFO_API_PASSWORD:S[A$@gmm.)-5yTzh}
-    #   timeout: 10s
-    #   connect-timeout: ${BUS_INFO_API_CONNECT_TIMEOUT:10s}
-    #   read-timeout: ${BUS_INFO_API_READ_TIMEOUT:30s}
-    #   write-timeout: ${BUS_INFO_API_WRITE_TIMEOUT:10s}
-    #   retry:
-    #     max-attempts: 3
-    #     initial-interval: 1s
-    #     multiplier: 2.0
-    #     max-interval: 10s
+    bus-info:
+      base-url: ${BUS_INFO_API_BASE_URL:https://edu.ayauk.gov.tm}
+      username: ${BUS_INFO_API_USERNAME:}
+      password: ${BUS_INFO_API_PASSWORD:}
+      insecure-tls: ${BUS_INFO_API_INSECURE_TLS:false}
+      timeout: 10s
+      connect-timeout: ${BUS_INFO_API_CONNECT_TIMEOUT:10s}
+      read-timeout: ${BUS_INFO_API_READ_TIMEOUT:30s}
+      write-timeout: ${BUS_INFO_API_WRITE_TIMEOUT:10s}
+      retry:
+        max-attempts: 3
+        initial-interval: 1s
+        multiplier: 2.0
+        max-interval: 10s
 
     nominatim:
       enabled: ${NOMINATIM_ENABLED:true}
@@ -416,6 +418,8 @@ business:
     family-mutual-share: 0.6
     overlap-tolerance-meters: 120.0
     digest-interval-minutes: ${ROUTE_SWAP_DIGEST_INTERVAL_MINUTES:30}
+    provider-check-enabled: ${ROUTE_SWAP_PROVIDER_CHECK_ENABLED:false}
+    provider-check-cron: ${ROUTE_SWAP_PROVIDER_CHECK_CRON:0 30 7,15 * * *}
     recipients: ${ROUTE_SWAP_ALERT_RECIPIENTS:${GPS_ALERT_RECIPIENTS:}}
 
   gps-history:
