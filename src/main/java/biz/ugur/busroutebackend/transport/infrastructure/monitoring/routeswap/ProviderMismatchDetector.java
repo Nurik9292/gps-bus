@@ -17,12 +17,16 @@ public final class ProviderMismatchDetector {
     private ProviderMismatchDetector() {
     }
 
+    private static String normalizePlate(String plate) {
+        return plate.trim().replaceAll("\\s+", " ").toUpperCase();
+    }
+
     public static List<Mismatch> detect(List<BusInfoDTO> providerRegistry, List<Vehicle> vehicles) {
         Map<String, String> providerByPlate = new HashMap<>();
         for (BusInfoDTO entry : providerRegistry) {
             if (entry.getCarNumber() != null && entry.getRouteNumber() != null
                     && !entry.getRouteNumber().isBlank()) {
-                providerByPlate.put(entry.getCarNumber().trim(), entry.getRouteNumber().trim());
+                providerByPlate.put(normalizePlate(entry.getCarNumber()), entry.getRouteNumber().trim());
             }
         }
         List<Mismatch> mismatches = new ArrayList<>();
@@ -30,7 +34,7 @@ public final class ProviderMismatchDetector {
             if (!Boolean.TRUE.equals(vehicle.getIsActive()) || vehicle.getLicensePlate() == null) {
                 continue;
             }
-            String providerRoute = providerByPlate.get(vehicle.getLicensePlate().trim());
+            String providerRoute = providerByPlate.get(normalizePlate(vehicle.getLicensePlate()));
             if (providerRoute == null) {
                 continue;
             }

@@ -51,6 +51,6 @@ public class RouteSwapDetectorConfig {
                                                                      EmailNotificationService emailService,
                                                                      AlertQuietHours quietHours) {
         return new ProviderAssignmentCrossCheck(properties, externalApiService, vehicleRepository,
-                auditRepository, emailService, quietHours);
+                auditRepository, emailService, quietHours, java.time.Clock.systemUTC());
     }
 }

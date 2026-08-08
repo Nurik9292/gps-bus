@@ -66,7 +66,9 @@ class ProviderAssignmentCrossCheckTest {
         when(auditRepository.tryRecordVerdict(anyString(), any(), any(), anyString(), anyString(),
                 any(), anyString())).thenReturn(Mono.just(true));
         crossCheck = new ProviderAssignmentCrossCheck(properties, externalApiService, vehicleRepository,
-                auditRepository, emailService, quietHours);
+                auditRepository, emailService, quietHours,
+                java.time.Clock.fixed(java.time.Instant.parse("2026-08-08T06:00:00Z"),
+                        java.time.ZoneOffset.UTC));
     }
 
     private static BusInfoDTO registryEntry(String plate, String route) {
@@ -142,6 +144,47 @@ class ProviderAssignmentCrossCheckTest {
         StepVerifier.create(crossCheck.checkNow()).verifyComplete();
 
         verify(emailService, never()).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void persistFailureOfOneMismatchDoesNotBlockOthers() {
+        when(externalApiService.fetchAllBusInfo()).thenReturn(Mono.just(List.of(
+                registryEntry("1128 AGJ", "103"),
+                registryEntry("1146 AGG", "25"))));
+        when(vehicleRepository.findActiveVehicles()).thenReturn(Flux.just(
+                vehicle("veh-1", "1128 AGJ", "29"),
+                vehicle("veh-3", "1146 AGG", "49")));
+        when(auditRepository.tryRecordVerdict(eq("1128 AGJ"), any(), any(), anyString(), anyString(),
+                any(), anyString())).thenReturn(Mono.error(new IllegalStateException("db down")));
+        when(auditRepository.tryRecordVerdict(eq("1146 AGG"), any(), any(), anyString(), anyString(),
+                any(), anyString())).thenReturn(Mono.just(true));
+
+        StepVerifier.create(crossCheck.checkNow()).verifyComplete();
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(emailService, times(1)).sendGpsAlert(anyList(), anyString(), any(), anyString(), body.capture());
+        assertTrue(body.getValue().contains("1146 AGG"), body.getValue());
+    }
+
+    @Test
+    void quietHoursBufferLinesUntilNextRun() {
+        when(externalApiService.fetchAllBusInfo()).thenReturn(Mono.just(List.of(
+                registryEntry("1128 AGJ", "103"))));
+        when(vehicleRepository.findActiveVehicles()).thenReturn(Flux.just(
+                vehicle("veh-1", "1128 AGJ", "29")));
+        when(quietHours.active()).thenReturn(true);
+
+        StepVerifier.create(crossCheck.checkNow()).verifyComplete();
+        verify(emailService, never()).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
+
+        when(quietHours.active()).thenReturn(false);
+        when(auditRepository.tryRecordVerdict(anyString(), any(), any(), anyString(), anyString(),
+                any(), anyString())).thenReturn(Mono.just(false));
+
+        StepVerifier.create(crossCheck.checkNow()).verifyComplete();
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(emailService, times(1)).sendGpsAlert(anyList(), anyString(), any(), anyString(), body.capture());
+        assertTrue(body.getValue().contains("1128 AGJ"), body.getValue());
     }
 
     @Test

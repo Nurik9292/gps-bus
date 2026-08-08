@@ -305,9 +305,9 @@ external:
     # ============================================================================
     bus-info:
       base-url: ${BUS_INFO_API_BASE_URL:https://edu.ayauk.gov.tm}
-      username: ${BUS_INFO_API_USERNAME:duralga}
-      password: ${BUS_INFO_API_PASSWORD:S[A$@gmm.)-5yTzh}
-      insecure-tls: ${BUS_INFO_API_INSECURE_TLS:true}
+      username: ${BUS_INFO_API_USERNAME:}
+      password: ${BUS_INFO_API_PASSWORD:}
+      insecure-tls: ${BUS_INFO_API_INSECURE_TLS:false}
       timeout: 10s
       connect-timeout: ${BUS_INFO_API_CONNECT_TIMEOUT:10s}
       read-timeout: ${BUS_INFO_API_READ_TIMEOUT:30s}
@@ -419,7 +419,7 @@ business:
     overlap-tolerance-meters: 120.0
     digest-interval-minutes: ${ROUTE_SWAP_DIGEST_INTERVAL_MINUTES:30}
     provider-check-enabled: ${ROUTE_SWAP_PROVIDER_CHECK_ENABLED:false}
-    provider-check-cron: ${ROUTE_SWAP_PROVIDER_CHECK_CRON:0 30 6,15 * * *}
+    provider-check-cron: ${ROUTE_SWAP_PROVIDER_CHECK_CRON:0 30 7,15 * * *}
     recipients: ${ROUTE_SWAP_ALERT_RECIPIENTS:${GPS_ALERT_RECIPIENTS:}}
 
   gps-history:
