@@ -84,6 +84,17 @@ class ProviderAssignmentCrossCheckTest {
                 .licensePlate(plate)
                 .routeNumber(routeNumber)
                 .isActive(true)
+                .lastPositionUpdate(java.time.LocalDateTime.now())
+                .build();
+    }
+
+    private static Vehicle offlineVehicle(String id, String plate) {
+        return Vehicle.builder()
+                .id(new VehicleId(id))
+                .licensePlate(plate)
+                .routeNumber(null)
+                .isActive(true)
+                .lastPositionUpdate(java.time.LocalDateTime.now().minusHours(5))
                 .build();
     }
 
@@ -185,6 +196,19 @@ class ProviderAssignmentCrossCheckTest {
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(emailService, times(1)).sendGpsAlert(anyList(), anyString(), any(), anyString(), body.capture());
         assertTrue(body.getValue().contains("1128 AGJ"), body.getValue());
+    }
+
+    @Test
+    void offlineUnassignedVehicleIsNotReported() {
+        when(externalApiService.fetchAllBusInfo()).thenReturn(Mono.just(List.of(
+                registryEntry("1662 AGG", "71"))));
+        when(vehicleRepository.findActiveVehicles()).thenReturn(Flux.just(
+                offlineVehicle("veh-9", "1662 AGG")));
+
+        StepVerifier.create(crossCheck.checkNow()).verifyComplete();
+
+        verify(auditRepository, never()).tryRecordVerdict(anyString(), any(), any(), anyString(),
+                anyString(), any(), anyString());
     }
 
     @Test
