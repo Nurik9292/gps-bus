@@ -36,6 +36,7 @@ public class RouteSwapProperties {
     private double familyMutualShare = 0.6;
     private double overlapToleranceMeters = 120.0;
     private int digestIntervalMinutes = 30;
+    private boolean providerCheckEnabled = false;
     private String recipients = "";
 
     public List<String> recipientList() {
