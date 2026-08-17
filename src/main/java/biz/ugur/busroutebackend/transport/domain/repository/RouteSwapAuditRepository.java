@@ -11,18 +11,29 @@ public interface RouteSwapAuditRepository {
     }
 
     record VerdictRecord(Long id, String licensePlate, String vehicleId, String assignedRouteNumber,
-                         String verdict, String detail, LocalDate operationalDate, String shift,
-                         java.time.Instant createdAt) {
+                         String verdict, String detail, String factualRouteNumbers,
+                         LocalDate operationalDate, String shift, java.time.Instant createdAt) {
     }
 
     record VerdictCount(String verdict, long count) {
     }
 
+    record AssignmentChange(String vehicleId, String licensePlate, String previousRouteId,
+                            String newRouteId, String source, String actor, java.time.Instant observedAt) {
+    }
+
     Mono<Void> logAssignmentChange(String vehicleId, String licensePlate,
                                    String previousRouteId, String newRouteId);
 
+    Mono<Void> logOperatorAssignmentChange(String vehicleId, String licensePlate,
+                                           String previousRouteId, String newRouteId,
+                                           String source, String actor);
+
+    Mono<AssignmentChange> findLastOperatorReassign(String vehicleId, java.time.Instant since);
+
     Mono<Boolean> tryRecordVerdict(String licensePlate, String vehicleId,
                                    String assignedRouteNumber, String verdict, String detail,
+                                   String factualRouteNumbers,
                                    LocalDate operationalDate, String shift);
 
     Flux<VerdictKey> findVerdictKeysSince(LocalDate sinceDate);
