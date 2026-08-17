@@ -15,7 +15,13 @@ public record RouteSwapSummaryDTO(
         @JsonProperty("no_axis_fits") long noAxisFits,
         @JsonProperty("intra_family_mismatch") long intraFamilyMismatch,
         @JsonProperty("provider_mismatch") long providerMismatch,
-        long total) {
+        long total,
+        @JsonProperty("reassign_enabled") boolean reassignEnabled) {
+
+    public RouteSwapSummaryDTO withReassignEnabled(boolean enabled) {
+        return new RouteSwapSummaryDTO(operationalDate, shift, swapSuspected, noAxisFits,
+                intraFamilyMismatch, providerMismatch, total, enabled);
+    }
 
     public static RouteSwapSummaryDTO of(LocalDate operationalDate, String shift, List<VerdictCount> counts) {
         Map<String, Long> byVerdict = counts.stream()
@@ -25,6 +31,6 @@ public record RouteSwapSummaryDTO(
         long intra = byVerdict.getOrDefault("INTRA_FAMILY_MISMATCH", 0L);
         long provider = byVerdict.getOrDefault("PROVIDER_MISMATCH", 0L);
         return new RouteSwapSummaryDTO(operationalDate, shift, swap, noAxis, intra, provider,
-                swap + noAxis + intra + provider);
+                swap + noAxis + intra + provider, false);
     }
 }

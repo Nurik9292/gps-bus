@@ -81,6 +81,28 @@ public class R2dbcRouteSwapAuditRepository implements RouteSwapAuditRepository {
     }
 
     @Override
+    public Flux<AssignmentChange> findOperatorChangesSince(Instant since) {
+        return db.sql("""
+                        SELECT vehicle_id, license_plate, previous_route_id, new_route_id,
+                               source, actor, observed_at
+                          FROM vehicle_assignment_log
+                         WHERE observed_at >= :since
+                           AND source IN ('OPERATOR_REASSIGN', 'OPERATOR_REVERT')
+                         ORDER BY observed_at ASC
+                        """)
+                .bind("since", since)
+                .map((row, meta) -> new AssignmentChange(
+                        row.get("vehicle_id", String.class),
+                        row.get("license_plate", String.class),
+                        row.get("previous_route_id", String.class),
+                        row.get("new_route_id", String.class),
+                        row.get("source", String.class),
+                        row.get("actor", String.class),
+                        row.get("observed_at", OffsetDateTime.class).toInstant()))
+                .all();
+    }
+
+    @Override
     public Mono<Boolean> tryRecordVerdict(String licensePlate, String vehicleId,
                                           String assignedRouteNumber, String verdict, String detail,
                                           String factualRouteNumbers,

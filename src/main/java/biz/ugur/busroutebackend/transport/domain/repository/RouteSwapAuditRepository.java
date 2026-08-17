@@ -31,6 +31,8 @@ public interface RouteSwapAuditRepository {
 
     Mono<AssignmentChange> findLastOperatorReassign(String vehicleId, java.time.Instant since);
 
+    Flux<AssignmentChange> findOperatorChangesSince(java.time.Instant since);
+
     Mono<Boolean> tryRecordVerdict(String licensePlate, String vehicleId,
                                    String assignedRouteNumber, String verdict, String detail,
                                    String factualRouteNumbers,
