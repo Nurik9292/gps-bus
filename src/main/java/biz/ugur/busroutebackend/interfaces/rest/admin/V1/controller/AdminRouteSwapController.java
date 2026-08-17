@@ -2,10 +2,12 @@ package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
 import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.routeswap.ReassignVehicleRequest;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
+import biz.ugur.busroutebackend.transport.application.dto.routeswap.OperatorReassignmentDTO;
 import biz.ugur.busroutebackend.transport.application.dto.routeswap.ReassignVehicleCommand;
 import biz.ugur.busroutebackend.transport.application.dto.routeswap.RouteSwapSummaryDTO;
 import biz.ugur.busroutebackend.transport.application.dto.routeswap.RouteSwapVerdictDTO;
 import biz.ugur.busroutebackend.transport.application.dto.routeswap.VehicleReassignmentDTO;
+import biz.ugur.busroutebackend.transport.application.usecase.routeswap.GetOperatorReassignmentsUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.routeswap.GetRouteSwapVerdictsUseCase;
 import biz.ugur.busroutebackend.transport.application.usecase.routeswap.VehicleRouteReassignmentUseCase;
 import biz.ugur.busroutebackend.transport.infrastructure.monitoring.routeswap.RouteSwapProperties;
@@ -32,17 +34,24 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 @RequestMapping(V1_ADMIN_ROUTE_SWAP)
 public class AdminRouteSwapController extends BasePaginatedController {
 
+    private static final String REASSIGN_DISABLED_CODE = "ROUTE_SWAP_REASSIGN_DISABLED";
+    private static final String REASSIGN_DISABLED_MESSAGE =
+            "Manual reassignment is disabled: business.route-swap-detector.reassign-enabled=false";
+
     private final GetRouteSwapVerdictsUseCase getRouteSwapVerdictsUseCase;
     private final VehicleRouteReassignmentUseCase vehicleRouteReassignmentUseCase;
+    private final GetOperatorReassignmentsUseCase getOperatorReassignmentsUseCase;
     private final RouteSwapProperties routeSwapProperties;
 
     public AdminRouteSwapController(GetRouteSwapVerdictsUseCase getRouteSwapVerdictsUseCase,
                                     VehicleRouteReassignmentUseCase vehicleRouteReassignmentUseCase,
+                                    GetOperatorReassignmentsUseCase getOperatorReassignmentsUseCase,
                                     RouteSwapProperties routeSwapProperties,
                                     MessageSource messageSource) {
         super(messageSource);
         this.getRouteSwapVerdictsUseCase = getRouteSwapVerdictsUseCase;
         this.vehicleRouteReassignmentUseCase = vehicleRouteReassignmentUseCase;
+        this.getOperatorReassignmentsUseCase = getOperatorReassignmentsUseCase;
         this.routeSwapProperties = routeSwapProperties;
     }
 
@@ -62,7 +71,17 @@ public class AdminRouteSwapController extends BasePaginatedController {
 
     @GetMapping("/summary")
     public Mono<ResponseEntity<ApiResponse<RouteSwapSummaryDTO>>> getSummary() {
-        return ok(getRouteSwapVerdictsUseCase.summary());
+        return ok(getRouteSwapVerdictsUseCase.summary()
+                .map(summary -> summary.withReassignEnabled(routeSwapProperties.isReassignEnabled())));
+    }
+
+    @GetMapping("/reassignments")
+    public Mono<ResponseEntity<ApiResponse<List<OperatorReassignmentDTO>>>> getReassignments() {
+        if (!routeSwapProperties.isReassignEnabled()) {
+            return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(
+                    REASSIGN_DISABLED_CODE, REASSIGN_DISABLED_MESSAGE)));
+        }
+        return ok(getOperatorReassignmentsUseCase.activeReassignments());
     }
 
     @PostMapping("/reassign")
@@ -85,7 +104,6 @@ public class AdminRouteSwapController extends BasePaginatedController {
 
     private static ResponseEntity<ApiResponse<VehicleReassignmentDTO>> reassignmentDisabled() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(
-                "ROUTE_SWAP_REASSIGN_DISABLED",
-                "Manual reassignment is disabled: business.route-swap-detector.reassign-enabled=false"));
+                REASSIGN_DISABLED_CODE, REASSIGN_DISABLED_MESSAGE));
     }
 }
