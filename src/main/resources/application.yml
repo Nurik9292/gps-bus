@@ -420,6 +420,7 @@ business:
     digest-interval-minutes: ${ROUTE_SWAP_DIGEST_INTERVAL_MINUTES:30}
     provider-check-enabled: ${ROUTE_SWAP_PROVIDER_CHECK_ENABLED:false}
     provider-check-cron: ${ROUTE_SWAP_PROVIDER_CHECK_CRON:0 30 7,15 * * *}
+    reassign-enabled: ${ROUTE_SWAP_REASSIGN_ENABLED:false}
     recipients: ${ROUTE_SWAP_ALERT_RECIPIENTS:${GPS_ALERT_RECIPIENTS:}}
 
   gps-history:

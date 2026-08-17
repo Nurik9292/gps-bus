@@ -37,6 +37,7 @@ public class RouteSwapProperties {
     private double overlapToleranceMeters = 120.0;
     private int digestIntervalMinutes = 30;
     private boolean providerCheckEnabled = false;
+    private boolean reassignEnabled = false;
     private String providerCheckCron = "0 30 7,15 * * *";
     private String recipients = "";
 

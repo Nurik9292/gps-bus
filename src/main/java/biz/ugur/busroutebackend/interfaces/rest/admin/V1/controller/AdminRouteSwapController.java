@@ -1,13 +1,23 @@
 package biz.ugur.busroutebackend.interfaces.rest.admin.V1.controller;
 
+import biz.ugur.busroutebackend.interfaces.rest.admin.V1.request.routeswap.ReassignVehicleRequest;
 import biz.ugur.busroutebackend.shared.infrastructure.web.BasePaginatedController;
+import biz.ugur.busroutebackend.transport.application.dto.routeswap.ReassignVehicleCommand;
 import biz.ugur.busroutebackend.transport.application.dto.routeswap.RouteSwapSummaryDTO;
 import biz.ugur.busroutebackend.transport.application.dto.routeswap.RouteSwapVerdictDTO;
+import biz.ugur.busroutebackend.transport.application.dto.routeswap.VehicleReassignmentDTO;
 import biz.ugur.busroutebackend.transport.application.usecase.routeswap.GetRouteSwapVerdictsUseCase;
+import biz.ugur.busroutebackend.transport.application.usecase.routeswap.VehicleRouteReassignmentUseCase;
+import biz.ugur.busroutebackend.transport.infrastructure.monitoring.routeswap.RouteSwapProperties;
+import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,11 +33,17 @@ import static biz.ugur.busroutebackend.shared.infrastructure.web.ApiVersionConfi
 public class AdminRouteSwapController extends BasePaginatedController {
 
     private final GetRouteSwapVerdictsUseCase getRouteSwapVerdictsUseCase;
+    private final VehicleRouteReassignmentUseCase vehicleRouteReassignmentUseCase;
+    private final RouteSwapProperties routeSwapProperties;
 
     public AdminRouteSwapController(GetRouteSwapVerdictsUseCase getRouteSwapVerdictsUseCase,
+                                    VehicleRouteReassignmentUseCase vehicleRouteReassignmentUseCase,
+                                    RouteSwapProperties routeSwapProperties,
                                     MessageSource messageSource) {
         super(messageSource);
         this.getRouteSwapVerdictsUseCase = getRouteSwapVerdictsUseCase;
+        this.vehicleRouteReassignmentUseCase = vehicleRouteReassignmentUseCase;
+        this.routeSwapProperties = routeSwapProperties;
     }
 
     @Override
@@ -47,5 +63,29 @@ public class AdminRouteSwapController extends BasePaginatedController {
     @GetMapping("/summary")
     public Mono<ResponseEntity<ApiResponse<RouteSwapSummaryDTO>>> getSummary() {
         return ok(getRouteSwapVerdictsUseCase.summary());
+    }
+
+    @PostMapping("/reassign")
+    public Mono<ResponseEntity<ApiResponse<VehicleReassignmentDTO>>> reassign(
+            @Valid @RequestBody ReassignVehicleRequest request) {
+        if (!routeSwapProperties.isReassignEnabled()) {
+            return Mono.just(reassignmentDisabled());
+        }
+        return ok(vehicleRouteReassignmentUseCase.reassign(new ReassignVehicleCommand(
+                request.vehicleId(), request.routeNumber(), request.reason())));
+    }
+
+    @PostMapping("/vehicles/{vehicleId}/revert")
+    public Mono<ResponseEntity<ApiResponse<VehicleReassignmentDTO>>> revert(@PathVariable String vehicleId) {
+        if (!routeSwapProperties.isReassignEnabled()) {
+            return Mono.just(reassignmentDisabled());
+        }
+        return ok(vehicleRouteReassignmentUseCase.revert(vehicleId));
+    }
+
+    private static ResponseEntity<ApiResponse<VehicleReassignmentDTO>> reassignmentDisabled() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(
+                "ROUTE_SWAP_REASSIGN_DISABLED",
+                "Manual reassignment is disabled: business.route-swap-detector.reassign-enabled=false"));
     }
 }
