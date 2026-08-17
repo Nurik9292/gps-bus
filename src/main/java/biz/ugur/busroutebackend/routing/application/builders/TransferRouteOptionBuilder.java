@@ -94,7 +94,7 @@ public class TransferRouteOptionBuilder {
                         : walkingRouteService.getWalkingRoute(transferStopLocation, secondBoardStopLocation);
 
         return Mono.zip(
-                etaCalculationService.calculateWaitingTimeMinutes(transferRoute.firstRoute().getId().getValue(), firstRouteNumber, fromStopName, departureTime),
+                etaCalculationService.calculateWaitingTimeMinutes(transferRoute.firstRoute().getId().getValue(), firstRouteNumber, transferRoute.fromStop().getId().getValue(), fromStopName, departureTime),
                 walkingRouteService.getWalkingRoute(context.fromLocation(), firstStopLocation),
                 walkingRouteService.getWalkingRoute(lastStopLocation, context.toLocation()),
                 transferWalk
@@ -208,7 +208,7 @@ public class TransferRouteOptionBuilder {
                         : walkingRouteService.getWalkingRoute(secondTransferLocation, thirdBoardLocation);
 
         return Mono.zip(
-                etaCalculationService.calculateWaitingTimeMinutes(twoTransferRoute.firstRoute().getId().getValue(), firstRouteNumber, fromStopName, departureTime),
+                etaCalculationService.calculateWaitingTimeMinutes(twoTransferRoute.firstRoute().getId().getValue(), firstRouteNumber, twoTransferRoute.fromStop().getId().getValue(), fromStopName, departureTime),
                 walkingRouteService.getWalkingRoute(context.fromLocation(), firstStopLocation),
                 walkingRouteService.getWalkingRoute(finalStopLocation, context.toLocation()),
                 transferWalk1,

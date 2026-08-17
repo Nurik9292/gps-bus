@@ -25,12 +25,7 @@ public class RealTimeETAService {
     }
 
 
-    public Mono<NearestBusInfo> findNearestBus(String routeId, String routeNumber, String stopName) {
-        return findNearestBus(routeId, routeNumber, stopName, Double.NaN, Double.NaN);
-    }
-
-    public Mono<NearestBusInfo> findNearestBus(String routeId, String routeNumber, String stopName,
-                                                double stopLat, double stopLon) {
+    public Mono<NearestBusInfo> findNearestBus(String routeId, String routeNumber, String stopId) {
         return Mono.fromCallable(() -> {
             List<VehiclePredictionState> allStates = predictionService.getActiveStates();
             if (allStates.isEmpty()) return null;
@@ -57,15 +52,8 @@ public class RealTimeETAService {
                     int direction = vehicle.getDirection();
 
                     OptionalDouble stopFracOpt = stopFracByRouteDir.computeIfAbsent(
-                            vehicleRouteId + "#" + direction, key -> {
-                                OptionalDouble byName = routeGeometryCache
-                                        .getStopFractionByName(vehicleRouteId, direction, stopName);
-                                if (byName.isEmpty() && !Double.isNaN(stopLat) && !Double.isNaN(stopLon)) {
-                                    return routeGeometryCache.getStopFractionByCoordinates(
-                                            vehicleRouteId, direction, stopLat, stopLon, 80.0);
-                                }
-                                return byName;
-                            });
+                            vehicleRouteId + "#" + direction,
+                            key -> routeGeometryCache.getStopFraction(vehicleRouteId, direction, stopId));
                     if (stopFracOpt.isEmpty()) continue;
 
                     double stopFrac = stopFracOpt.getAsDouble();
@@ -102,8 +90,8 @@ public class RealTimeETAService {
             }
 
             if (best != null) {
-                log.info("Real-time ETA: route={} stop={} → bus {} in {}min ({}m, {}km/h)",
-                        routeNumber, stopName, best.licensePlate(), best.etaMinutes(),
+                log.info("Real-time ETA: route={} stopId={} → bus {} in {}min ({}m, {}km/h)",
+                        routeNumber, stopId, best.licensePlate(), best.etaMinutes(),
                         best.distanceMeters(), Math.round(best.speedKmh()));
             }
 
@@ -112,8 +100,8 @@ public class RealTimeETAService {
     }
 
 
-    public Mono<Integer> getWaitingTimeMinutes(String routeId, String routeNumber, String stopName) {
-        return findNearestBus(routeId, routeNumber, stopName)
+    public Mono<Integer> getWaitingTimeMinutes(String routeId, String routeNumber, String stopId) {
+        return findNearestBus(routeId, routeNumber, stopId)
                 .map(NearestBusInfo::etaMinutes);
     }
 

@@ -80,7 +80,8 @@ public class LiveETACalculationService implements ETACalculationService {
     }
 
     @Override
-    public Mono<Integer> calculateWaitingTimeMinutes(String routeId, String routeNumber, String stopName, LocalDateTime currentTime) {
+    public Mono<Integer> calculateWaitingTimeMinutes(String routeId, String routeNumber, String stopId,
+                                                     String stopName, LocalDateTime currentTime) {
         log.debug("Calculating wait time for route {} at stop {} at {}", routeNumber, stopName, currentTime);
 
         TimePeriod period = TimePeriod.fromDateTime(currentTime);
@@ -94,7 +95,7 @@ public class LiveETACalculationService implements ETACalculationService {
                 .cast(Integer.class)
                 .timeout(Duration.ofSeconds(2), Mono.empty())
                 .switchIfEmpty(
-                        calculateWaitingTimeFromData(routeId, routeNumber, stopName, currentTime)
+                        calculateWaitingTimeFromData(routeId, routeNumber, stopId, stopName, currentTime)
                                 .timeout(Duration.ofSeconds(3), getFrequencyBasedWaitingTime(routeNumber, currentTime))
                                 .flatMap(waitTime ->
                                         redisTemplate.opsForValue()
@@ -171,8 +172,9 @@ public class LiveETACalculationService implements ETACalculationService {
         return totalTransferTime;
     }
 
-    private Mono<Integer> calculateWaitingTimeFromData(String routeId, String routeNumber, String stopName, LocalDateTime currentTime) {
-        return getVehicleBasedWaitingTime(routeId, routeNumber, stopName)
+    private Mono<Integer> calculateWaitingTimeFromData(String routeId, String routeNumber, String stopId,
+                                                       String stopName, LocalDateTime currentTime) {
+        return getVehicleBasedWaitingTime(routeId, routeNumber, stopId, stopName)
                 .onErrorResume(e -> {
                     log.warn("Vehicle-based wait time failed for route {}: {}", routeNumber, e.getMessage());
                     return Mono.empty();
@@ -191,8 +193,9 @@ public class LiveETACalculationService implements ETACalculationService {
 
 
 
-    private Mono<Integer> getVehicleBasedWaitingTime(String routeId, String routeNumber, String stopName) {
-        return realTimeETAService.getWaitingTimeMinutes(routeId, routeNumber, stopName)
+    private Mono<Integer> getVehicleBasedWaitingTime(String routeId, String routeNumber, String stopId,
+                                                     String stopName) {
+        return realTimeETAService.getWaitingTimeMinutes(routeId, routeNumber, stopId)
                 .switchIfEmpty(
                         etaRepository.getVehicleBasedWaitingTime(routeId, stopName)
                 );

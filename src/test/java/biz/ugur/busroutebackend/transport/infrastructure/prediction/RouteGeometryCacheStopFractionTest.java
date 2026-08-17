@@ -56,19 +56,6 @@ class RouteGeometryCacheStopFractionTest {
     }
 
     @Test
-    void byNameAndByCoordinatesLookupsReturnGeometricFraction() {
-        givenRouteWithStops(stopAt("stop-mid", 37.0045, 58.0, 900));
-
-        OptionalDouble byName = cache.getStopFractionByName(ROUTE, 0, "Stop stop-mid");
-        OptionalDouble byCoordinates = cache.getStopFractionByCoordinates(ROUTE, 0, 37.0045, 58.0, 100);
-
-        assertThat(byName).isPresent();
-        assertThat(byName.getAsDouble()).isCloseTo(0.5, within(0.01));
-        assertThat(byCoordinates).isPresent();
-        assertThat(byCoordinates.getAsDouble()).isCloseTo(0.5, within(0.01));
-    }
-
-    @Test
     void stopFractionsArrayIsSortedByGeometricPositionDespiteShuffledLegacyDistances() {
         givenRouteWithStops(
                 stopAt("stop-late", 37.008, 58.0, 500),

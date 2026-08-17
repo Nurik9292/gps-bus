@@ -79,7 +79,7 @@ public class DirectRouteOptionBuilder {
                 .doOnSuccess(t -> log.info("[{}] ETA travelTime completed for route {} in {}ms",
                         context.searchId(), routeNumber, System.currentTimeMillis() - startTime));
 
-        Mono<Integer> waitingTime = etaCalculationService.calculateWaitingTimeMinutes(directRoute.route().getId().getValue(), routeNumber, fromStopName, departureTime)
+        Mono<Integer> waitingTime = etaCalculationService.calculateWaitingTimeMinutes(directRoute.route().getId().getValue(), routeNumber, directRoute.fromStop().getId().getValue(), fromStopName, departureTime)
                 .doOnSuccess(t -> log.info("[{}] ETA waitingTime completed for route {} in {}ms",
                         context.searchId(), routeNumber, System.currentTimeMillis() - startTime));
 

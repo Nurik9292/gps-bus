@@ -32,7 +32,6 @@ public class RouteGeometryCache {
     private final ConcurrentHashMap<String, double[]>          stopFractionsCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, List<RouteStopInfo>> routeStopsCache  = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, java.util.Map<String, Double>> stopFractionsByIdCache   = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, java.util.Map<String, Double>> stopFractionsByNameCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String>            routeNameCache     = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String>            routeColorCache    = new ConcurrentHashMap<>();
 
@@ -120,15 +119,10 @@ public class RouteGeometryCache {
         routeStopsCache.put(key, resolved.stream().map(StopWithFraction::stop).toList());
 
         java.util.Map<String, Double> byId = new java.util.HashMap<>();
-        java.util.Map<String, Double> byName = new java.util.HashMap<>();
         for (StopWithFraction sf : resolved) {
             byId.put(sf.stop().getStopId(), sf.fraction());
-            if (sf.stop().getStopName() != null) {
-                byName.putIfAbsent(sf.stop().getStopName().toLowerCase(), sf.fraction());
-            }
         }
         stopFractionsByIdCache.put(key, java.util.Map.copyOf(byId));
-        stopFractionsByNameCache.put(key, java.util.Map.copyOf(byName));
 
         warnOnSequenceOrderInversions(routeId, direction, resolved);
         log.debug("Cached {} stop fractions for routeId {} dir={}", fractions.length, routeId, direction);
@@ -234,40 +228,6 @@ public class RouteGeometryCache {
         return frac != null ? OptionalDouble.of(frac) : OptionalDouble.empty();
     }
 
-    public OptionalDouble getStopFractionByName(String routeId, int direction, String stopName) {
-        if (stopName == null || stopName.isBlank()) return OptionalDouble.empty();
-        String key = routeId + (direction == 0 ? FORWARD : BACKWARD);
-        java.util.Map<String, Double> byName = stopFractionsByNameCache.get(key);
-        if (byName == null) return OptionalDouble.empty();
-        Double frac = byName.get(stopName.toLowerCase());
-        return frac != null ? OptionalDouble.of(frac) : OptionalDouble.empty();
-    }
-
-    public OptionalDouble getStopFractionByCoordinates(String routeId, int direction,
-                                                        double lat, double lon, double maxDistanceMeters) {
-        RouteStopInfo nearest = null;
-        double nearestDist = Double.MAX_VALUE;
-        for (RouteStopInfo s : getRouteStops(routeId, direction)) {
-            double dist = haversineMeters(lat, lon,
-                    s.getLatitude().doubleValue(), s.getLongitude().doubleValue());
-            if (dist < nearestDist) {
-                nearestDist = dist;
-                nearest = s;
-            }
-        }
-        if (nearest == null || nearestDist > maxDistanceMeters) return OptionalDouble.empty();
-        return getStopFraction(routeId, direction, nearest.getStopId());
-    }
-
-    private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
-        double R = 6371000.0;
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLon = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    }
 
     public reactor.core.publisher.Mono<Void> refreshRoute(String routeIdOrNumber) {
         return busRouteRepository.findById(biz.ugur.busroutebackend.transport.domain.valueobject.BusRouteId.of(routeIdOrNumber))
