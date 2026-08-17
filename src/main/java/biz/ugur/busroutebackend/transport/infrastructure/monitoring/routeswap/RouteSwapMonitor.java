@@ -212,10 +212,12 @@ public class RouteSwapMonitor {
         if (assignedCoverage <= properties.getSwapAssignedCoverageMax()
                 && foreignCoverage >= properties.getSwapForeignCoverageMin()
                 && uniqueMinutes >= properties.getUniqueMinutesMin()) {
+            String foreignFamilyKey = bestForeign.orElseThrow().getKey();
             emit(state, lastFix, "SWAP_SUSPECTED",
                     String.format("factual=%s foreignCov=%.0f%% uniqueMin=%.0f",
-                            snapshot.familyLabel(bestForeign.orElseThrow().getKey()),
-                            foreignCoverage * 100, uniqueMinutes));
+                            snapshot.familyLabel(foreignFamilyKey),
+                            foreignCoverage * 100, uniqueMinutes),
+                    snapshot.familyRouteNumbers(foreignFamilyKey));
             return;
         }
         if (assignedCoverage <= properties.getSwapAssignedCoverageMax()
@@ -258,6 +260,11 @@ public class RouteSwapMonitor {
     }
 
     private void emit(VehicleState state, Instant at, String verdict, String detail) {
+        emit(state, at, verdict, detail, null);
+    }
+
+    private void emit(VehicleState state, Instant at, String verdict, String detail,
+                      String factualRouteNumbers) {
         LocalDate operationalDate = ShiftType.operationalDateAt(at);
         String shift = ShiftType.operationalShiftAt(at).map(Enum::name).orElse("OUTSIDE");
         if ("NO_AXIS_FITS".equals(verdict) && alertedEpisodes.containsKey(
@@ -275,7 +282,7 @@ public class RouteSwapMonitor {
                 state.licensePlate, state.routeNumber, verdict, detail,
                 state.completedWindows.size(), operationalDate, shift, supersedes);
         auditRepository.tryRecordVerdict(state.licensePlate, state.vehicleId, state.routeNumber,
-                        verdict, detail, operationalDate, shift)
+                        verdict, detail, factualRouteNumbers, operationalDate, shift)
                 .subscribe(
                         inserted -> {
                             if (inserted) {

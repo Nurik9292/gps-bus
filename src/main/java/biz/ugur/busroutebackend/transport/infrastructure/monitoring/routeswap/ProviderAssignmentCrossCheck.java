@@ -101,7 +101,7 @@ public class ProviderAssignmentCrossCheck {
                             mismatch.providerRouteNumber());
                     return auditRepository.tryRecordVerdict(mismatch.licensePlate(), mismatch.vehicleId(),
                                     mismatch.dbRouteNumber(), "PROVIDER_MISMATCH", detail,
-                                    operationalDate, shift)
+                                    mismatch.providerRouteNumber(), operationalDate, shift)
                             .filter(Boolean::booleanValue)
                             .map(inserted -> String.format("%s | %s", mismatch.licensePlate(), detail))
                             .doOnNext(line -> log.warn("[ROUTE_SWAP] PROVIDER_MISMATCH {}", line))

@@ -7,7 +7,9 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 @Repository
 @RequiredArgsConstructor
@@ -33,15 +35,62 @@ public class R2dbcRouteSwapAuditRepository implements RouteSwapAuditRepository {
     }
 
     @Override
+    public Mono<Void> logOperatorAssignmentChange(String vehicleId, String licensePlate,
+                                                  String previousRouteId, String newRouteId,
+                                                  String source, String actor) {
+        DatabaseClient.GenericExecuteSpec spec = db.sql("""
+                        INSERT INTO vehicle_assignment_log
+                            (vehicle_id, license_plate, previous_route_id, new_route_id, source, actor)
+                        VALUES (:vehicleId, :licensePlate, :previousRouteId, :newRouteId, :source, :actor)
+                        """)
+                .bind("vehicleId", vehicleId)
+                .bind("licensePlate", licensePlate)
+                .bind("newRouteId", newRouteId)
+                .bind("source", source);
+        spec = previousRouteId == null
+                ? spec.bindNull("previousRouteId", String.class)
+                : spec.bind("previousRouteId", previousRouteId);
+        spec = actor == null
+                ? spec.bindNull("actor", String.class) : spec.bind("actor", actor);
+        return spec.fetch().rowsUpdated().then();
+    }
+
+    @Override
+    public Mono<AssignmentChange> findLastOperatorReassign(String vehicleId, Instant since) {
+        return db.sql("""
+                        SELECT vehicle_id, license_plate, previous_route_id, new_route_id,
+                               source, actor, observed_at
+                          FROM vehicle_assignment_log
+                         WHERE vehicle_id = :vehicleId
+                           AND observed_at >= :since
+                           AND source = 'OPERATOR_REASSIGN'
+                         ORDER BY observed_at DESC
+                         LIMIT 1
+                        """)
+                .bind("vehicleId", vehicleId)
+                .bind("since", since)
+                .map((row, meta) -> new AssignmentChange(
+                        row.get("vehicle_id", String.class),
+                        row.get("license_plate", String.class),
+                        row.get("previous_route_id", String.class),
+                        row.get("new_route_id", String.class),
+                        row.get("source", String.class),
+                        row.get("actor", String.class),
+                        row.get("observed_at", OffsetDateTime.class).toInstant()))
+                .one();
+    }
+
+    @Override
     public Mono<Boolean> tryRecordVerdict(String licensePlate, String vehicleId,
                                           String assignedRouteNumber, String verdict, String detail,
+                                          String factualRouteNumbers,
                                           LocalDate operationalDate, String shift) {
         DatabaseClient.GenericExecuteSpec spec = db.sql("""
                         INSERT INTO route_swap_verdicts
                             (license_plate, vehicle_id, assigned_route_number, verdict, detail,
-                             operational_date, shift)
+                             factual_route_numbers, operational_date, shift)
                         VALUES (:licensePlate, :vehicleId, :assignedRouteNumber, :verdict, :detail,
-                                :operationalDate, :shift)
+                                :factualRouteNumbers, :operationalDate, :shift)
                         ON CONFLICT ON CONSTRAINT uq_route_swap_verdict DO NOTHING
                         """)
                 .bind("licensePlate", licensePlate)
@@ -55,6 +104,9 @@ public class R2dbcRouteSwapAuditRepository implements RouteSwapAuditRepository {
                 : spec.bind("assignedRouteNumber", assignedRouteNumber);
         spec = detail == null
                 ? spec.bindNull("detail", String.class) : spec.bind("detail", detail);
+        spec = factualRouteNumbers == null
+                ? spec.bindNull("factualRouteNumbers", String.class)
+                : spec.bind("factualRouteNumbers", factualRouteNumbers);
         return spec.fetch().rowsUpdated().map(rows -> rows > 0);
     }
 
@@ -63,7 +115,7 @@ public class R2dbcRouteSwapAuditRepository implements RouteSwapAuditRepository {
         String verdictFilter = verdict == null || verdict.isBlank() ? "" : " AND verdict = :verdict";
         DatabaseClient.GenericExecuteSpec spec = db.sql("""
                         SELECT id, license_plate, vehicle_id, assigned_route_number, verdict, detail,
-                               operational_date, shift, created_at
+                               factual_route_numbers, operational_date, shift, created_at
                           FROM route_swap_verdicts
                          WHERE operational_date BETWEEN :fromDate AND :toDate
                         """ + verdictFilter + """
@@ -83,9 +135,10 @@ public class R2dbcRouteSwapAuditRepository implements RouteSwapAuditRepository {
                         row.get("assigned_route_number", String.class),
                         row.get("verdict", String.class),
                         row.get("detail", String.class),
+                        row.get("factual_route_numbers", String.class),
                         row.get("operational_date", LocalDate.class),
                         row.get("shift", String.class),
-                        row.get("created_at", java.time.OffsetDateTime.class).toInstant()))
+                        row.get("created_at", OffsetDateTime.class).toInstant()))
                 .all();
     }
 

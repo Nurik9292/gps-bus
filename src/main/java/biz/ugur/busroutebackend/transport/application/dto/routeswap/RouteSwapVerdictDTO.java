@@ -13,6 +13,7 @@ public record RouteSwapVerdictDTO(
         @JsonProperty("assigned_route_number") String assignedRouteNumber,
         String verdict,
         String detail,
+        @JsonProperty("factual_route_numbers") String factualRouteNumbers,
         @JsonProperty("operational_date") LocalDate operationalDate,
         String shift,
         @JsonProperty("created_at") Instant createdAt) {
@@ -20,6 +21,7 @@ public record RouteSwapVerdictDTO(
     public static RouteSwapVerdictDTO fromRecord(VerdictRecord record) {
         return new RouteSwapVerdictDTO(record.id(), record.licensePlate(), record.vehicleId(),
                 record.assignedRouteNumber(), record.verdict(), record.detail(),
-                record.operationalDate(), record.shift(), record.createdAt());
+                record.factualRouteNumbers(), record.operationalDate(), record.shift(),
+                record.createdAt());
     }
 }

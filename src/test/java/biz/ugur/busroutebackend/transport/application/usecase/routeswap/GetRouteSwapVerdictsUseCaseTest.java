@@ -51,7 +51,7 @@ class GetRouteSwapVerdictsUseCaseTest {
         LocalDate date = LocalDate.of(2026, 8, 7);
         when(auditRepository.findVerdicts(eq(date), eq(date), isNull(), anyInt()))
                 .thenReturn(Flux.just(new VerdictRecord(7L, "1903 AGH", "veh-1", "100",
-                        "SWAP_SUSPECTED", "factual=66@city-001", date, "FIRST",
+                        "SWAP_SUSPECTED", "factual=66@city-001", "66", date, "FIRST",
                         Instant.parse("2026-08-07T05:00:00Z"))));
 
         StepVerifier.create(useCase.list(date, date, null, 50))

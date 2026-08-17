@@ -64,7 +64,7 @@ class ProviderAssignmentCrossCheckTest {
         when(emailService.sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString()))
                 .thenReturn(Mono.empty());
         when(auditRepository.tryRecordVerdict(anyString(), any(), any(), anyString(), anyString(),
-                any(), anyString())).thenReturn(Mono.just(true));
+                any(), any(), anyString())).thenReturn(Mono.just(true));
         crossCheck = new ProviderAssignmentCrossCheck(properties, externalApiService, vehicleRepository,
                 auditRepository, emailService, quietHours,
                 java.time.Clock.fixed(java.time.Instant.parse("2026-08-08T06:00:00Z"),
@@ -110,7 +110,7 @@ class ProviderAssignmentCrossCheckTest {
         StepVerifier.create(crossCheck.checkNow()).verifyComplete();
 
         verify(auditRepository, times(1)).tryRecordVerdict(eq("1128 AGJ"), eq("veh-1"), eq("29"),
-                eq("PROVIDER_MISMATCH"), contains("провайдер=r103"), any(), anyString());
+                eq("PROVIDER_MISMATCH"), contains("провайдер=r103"), eq("103"), any(), anyString());
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(emailService, times(1)).sendGpsAlert(
                 eq(properties.recipientList()), anyString(), eq(AlertKind.ROUTE_SWAP),
@@ -128,7 +128,7 @@ class ProviderAssignmentCrossCheckTest {
         StepVerifier.create(crossCheck.checkNow()).verifyComplete();
 
         verify(auditRepository).tryRecordVerdict(eq("1146 AGG"), eq("veh-3"), isNull(),
-                eq("PROVIDER_MISMATCH"), contains("нет назначения"), any(), anyString());
+                eq("PROVIDER_MISMATCH"), contains("нет назначения"), eq("25"), any(), anyString());
     }
 
     @Test
@@ -140,7 +140,7 @@ class ProviderAssignmentCrossCheckTest {
 
         verify(emailService, never()).sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString());
         verify(auditRepository, never()).tryRecordVerdict(anyString(), any(), any(), anyString(),
-                anyString(), any(), anyString());
+                anyString(), any(), any(), anyString());
     }
 
     @Test
@@ -150,7 +150,7 @@ class ProviderAssignmentCrossCheckTest {
         when(vehicleRepository.findActiveVehicles()).thenReturn(Flux.just(
                 vehicle("veh-1", "1128 AGJ", "29")));
         when(auditRepository.tryRecordVerdict(anyString(), any(), any(), anyString(), anyString(),
-                any(), anyString())).thenReturn(Mono.just(false));
+                any(), any(), anyString())).thenReturn(Mono.just(false));
 
         StepVerifier.create(crossCheck.checkNow()).verifyComplete();
 
@@ -166,9 +166,9 @@ class ProviderAssignmentCrossCheckTest {
                 vehicle("veh-1", "1128 AGJ", "29"),
                 vehicle("veh-3", "1146 AGG", "49")));
         when(auditRepository.tryRecordVerdict(eq("1128 AGJ"), any(), any(), anyString(), anyString(),
-                any(), anyString())).thenReturn(Mono.error(new IllegalStateException("db down")));
+                any(), any(), anyString())).thenReturn(Mono.error(new IllegalStateException("db down")));
         when(auditRepository.tryRecordVerdict(eq("1146 AGG"), any(), any(), anyString(), anyString(),
-                any(), anyString())).thenReturn(Mono.just(true));
+                any(), any(), anyString())).thenReturn(Mono.just(true));
 
         StepVerifier.create(crossCheck.checkNow()).verifyComplete();
 
@@ -190,7 +190,7 @@ class ProviderAssignmentCrossCheckTest {
 
         when(quietHours.active()).thenReturn(false);
         when(auditRepository.tryRecordVerdict(anyString(), any(), any(), anyString(), anyString(),
-                any(), anyString())).thenReturn(Mono.just(false));
+                any(), any(), anyString())).thenReturn(Mono.just(false));
 
         StepVerifier.create(crossCheck.checkNow()).verifyComplete();
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
@@ -208,7 +208,7 @@ class ProviderAssignmentCrossCheckTest {
         StepVerifier.create(crossCheck.checkNow()).verifyComplete();
 
         verify(auditRepository, never()).tryRecordVerdict(anyString(), any(), any(), anyString(),
-                anyString(), any(), anyString());
+                anyString(), any(), any(), anyString());
     }
 
     @Test

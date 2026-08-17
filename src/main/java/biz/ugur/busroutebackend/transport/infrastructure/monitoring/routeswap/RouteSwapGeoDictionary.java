@@ -36,6 +36,8 @@ public class RouteSwapGeoDictionary {
 
         String familyLabel(String familyKey);
 
+        String familyRouteNumbers(String familyKey);
+
         double familyDistanceMeters(String routeId, double lat, double lon);
 
         double axisDistanceMeters(String routeId, double lat, double lon);
@@ -119,7 +121,8 @@ public class RouteSwapGeoDictionary {
         }
         Map<String, String> familyOfAxis = assignFamilies(axes);
         Map<String, String> familyLabels = buildFamilyLabels(axes, familyOfAxis);
-        return new BuiltSnapshot(axes, familyOfAxis, familyLabels, properties);
+        Map<String, String> familyRouteNumbers = buildFamilyRouteNumbers(axes, familyOfAxis);
+        return new BuiltSnapshot(axes, familyOfAxis, familyLabels, familyRouteNumbers, properties);
     }
 
     private static void addPolyline(List<Polyline> polylines, RouteGeometry geometry) {
@@ -210,16 +213,29 @@ public class RouteSwapGeoDictionary {
     }
 
     private static Map<String, String> buildFamilyLabels(List<Axis> axes, Map<String, String> familyOfAxis) {
+        Map<String, String> labels = new HashMap<>();
+        membersByFamily(axes, familyOfAxis).forEach((familyKey, members) -> labels.put(familyKey,
+                String.join("/", members.keySet()) + "@" + members.firstEntry().getValue()));
+        return labels;
+    }
+
+    private static Map<String, String> buildFamilyRouteNumbers(List<Axis> axes,
+                                                               Map<String, String> familyOfAxis) {
+        Map<String, String> numbers = new HashMap<>();
+        membersByFamily(axes, familyOfAxis).forEach((familyKey, members) ->
+                numbers.put(familyKey, String.join("/", members.keySet())));
+        return numbers;
+    }
+
+    private static Map<String, TreeMap<String, String>> membersByFamily(List<Axis> axes,
+                                                                        Map<String, String> familyOfAxis) {
         Map<String, TreeMap<String, String>> membersByFamily = new HashMap<>();
         for (Axis axis : axes) {
             membersByFamily
                     .computeIfAbsent(familyOfAxis.get(axis.routeId), key -> new TreeMap<>())
                     .put(axis.routeNumber, axis.cityId == null ? "?" : axis.cityId);
         }
-        Map<String, String> labels = new HashMap<>();
-        membersByFamily.forEach((familyKey, members) -> labels.put(familyKey,
-                String.join("/", members.keySet()) + "@" + members.firstEntry().getValue()));
-        return labels;
+        return membersByFamily;
     }
 
     private record Axis(String routeId, String routeNumber, String cityId, List<Polyline> polylines,
@@ -355,11 +371,13 @@ public class RouteSwapGeoDictionary {
         private final Map<String, Axis> axes;
         private final Map<String, String> familyOfAxis;
         private final Map<String, String> familyLabels;
+        private final Map<String, String> familyRouteNumbers;
         private final Map<String, List<Axis>> axesByFamily;
         private final RouteSwapProperties properties;
 
         private BuiltSnapshot(List<Axis> axisList, Map<String, String> familyOfAxis,
-                              Map<String, String> familyLabels, RouteSwapProperties properties) {
+                              Map<String, String> familyLabels, Map<String, String> familyRouteNumbers,
+                              RouteSwapProperties properties) {
             this.axes = new HashMap<>();
             this.axesByFamily = new HashMap<>();
             for (Axis axis : axisList) {
@@ -368,7 +386,13 @@ public class RouteSwapGeoDictionary {
             }
             this.familyOfAxis = familyOfAxis;
             this.familyLabels = familyLabels;
+            this.familyRouteNumbers = familyRouteNumbers;
             this.properties = properties;
+        }
+
+        @Override
+        public String familyRouteNumbers(String familyKey) {
+            return familyRouteNumbers.get(familyKey);
         }
 
         @Override

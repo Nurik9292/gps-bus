@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -74,7 +75,7 @@ class RouteSwapMonitorTest {
         when(emailService.sendGpsAlert(anyList(), anyString(), any(), anyString(), anyString()))
                 .thenReturn(Mono.empty());
         when(auditRepository.tryRecordVerdict(anyString(), anyString(), anyString(), anyString(),
-                anyString(), any(), anyString())).thenReturn(Mono.just(true));
+                anyString(), any(), any(), anyString())).thenReturn(Mono.just(true));
         when(auditRepository.logAssignmentChange(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(Mono.empty());
         when(auditRepository.findVerdictKeysSince(any())).thenReturn(reactor.core.publisher.Flux.empty());
@@ -138,6 +139,26 @@ class RouteSwapMonitorTest {
         assertTrue(body.getValue().contains("SWAP_SUSPECTED"), body.getValue());
         assertTrue(body.getValue().contains("1903 AGH"), body.getValue());
         assertTrue(body.getValue().contains("39@city-001"), body.getValue());
+    }
+
+    @Test
+    void swapVerdictPersistsFactualRouteNumbersOfForeignFamily() {
+        drive("axis-a", 5.0, 0.0, 8.0, SHIFT_START, Duration.ofMinutes(80));
+
+        monitor.flushDigest();
+
+        verify(auditRepository).tryRecordVerdict(eq("1903 AGH"), anyString(), anyString(),
+                eq("SWAP_SUSPECTED"), anyString(), eq("39"), any(), anyString());
+    }
+
+    @Test
+    void verdictWithoutFactualCandidatePersistsNullRouteNumbers() {
+        drive("axis-a", 2.5, 0.0, 8.0, SHIFT_START, Duration.ofMinutes(80));
+
+        monitor.flushDigest();
+
+        verify(auditRepository).tryRecordVerdict(anyString(), anyString(), anyString(),
+                eq("NO_AXIS_FITS"), anyString(), isNull(), any(), anyString());
     }
 
     @Test
@@ -238,7 +259,7 @@ class RouteSwapMonitorTest {
     @Test
     void alreadyPersistedVerdictSkipsDigestAfterRestart() {
         when(auditRepository.tryRecordVerdict(anyString(), anyString(), anyString(), anyString(),
-                anyString(), any(), anyString())).thenReturn(Mono.just(false));
+                anyString(), any(), any(), anyString())).thenReturn(Mono.just(false));
 
         drive("axis-a", 5.0, 0.0, 8.0, SHIFT_START, Duration.ofMinutes(80));
         monitor.flushDigest();
@@ -257,7 +278,7 @@ class RouteSwapMonitorTest {
     @Test
     void persistFailureIsFailOpenAndStillAlerts() {
         when(auditRepository.tryRecordVerdict(anyString(), anyString(), anyString(), anyString(),
-                anyString(), any(), anyString())).thenReturn(Mono.error(new RuntimeException("db down")));
+                anyString(), any(), any(), anyString())).thenReturn(Mono.error(new RuntimeException("db down")));
 
         drive("axis-a", 5.0, 0.0, 8.0, SHIFT_START, Duration.ofMinutes(80));
         monitor.flushDigest();
