@@ -76,4 +76,8 @@ public enum ShiftType {
     public Instant startInstantOn(LocalDate operationalDate) {
         return operationalDate.atTime(startTime).atZone(ASHGABAT_ZONE).toInstant();
     }
+
+    public Instant endInstantOn(LocalDate operationalDate) {
+        return operationalDate.atTime(endTime).atZone(ASHGABAT_ZONE).toInstant();
+    }
 }
