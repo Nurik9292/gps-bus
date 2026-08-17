@@ -75,18 +75,11 @@ public class TripOptionDTOConverter {
         return tripOption.getRouteSegments().stream()
                 .filter(s -> s.getType() == SegmentType.BUS_RIDE && s.getRouteNumber() != null)
                 .findFirst()
+                .filter(busSegment -> busSegment.getFromStopId() != null)
                 .map(busSegment -> realTimeETAService.findNearestBus(
                                 busSegment.getRouteId(),
                                 busSegment.getRouteNumber(),
-                                busSegment.getFromLocationName() != null
-                                        ? busSegment.getFromLocationName()
-                                        : "",
-                                busSegment.getFromLocation() != null
-                                        ? busSegment.getFromLocation().getLatitudeAsDouble()
-                                        : Double.NaN,
-                                busSegment.getFromLocation() != null
-                                        ? busSegment.getFromLocation().getLongitudeAsDouble()
-                                        : Double.NaN)
+                                busSegment.getFromStopId())
                         .map(info -> new TripOptionDTO.NearestBusDTO(
                                 info.vehicleId(),
                                 info.licensePlate(),

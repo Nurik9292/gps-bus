@@ -25,6 +25,7 @@ class RealTimeETAServiceCityDisambiguationTest {
 
     private static final String ARKADAG_ROUTE_ID = "route-legacy-133";
     private static final String ASHGABAT_ROUTE_ID = "route-legacy-1";
+    private static final String TERMINAL_STOP_ID = "stop-terminal";
 
     @Mock
     private VehiclePositionPredictionService predictionService;
@@ -36,7 +37,7 @@ class RealTimeETAServiceCityDisambiguationTest {
     @BeforeEach
     void setUp() {
         service = new RealTimeETAService(predictionService, routeGeometryCache);
-        when(routeGeometryCache.getStopFractionByName(anyString(), anyInt(), anyString()))
+        when(routeGeometryCache.getStopFraction(anyString(), anyInt(), anyString()))
                 .thenReturn(OptionalDouble.of(0.6));
         when(routeGeometryCache.getTotalDistance(anyString(), anyInt())).thenReturn(10000.0);
         when(predictionService.getActiveStates()).thenReturn(List.of(
@@ -60,7 +61,7 @@ class RealTimeETAServiceCityDisambiguationTest {
 
     @Test
     void routeIdPinsSearchToSingleCityAmongNamesakes() {
-        StepVerifier.create(service.findNearestBus(ARKADAG_ROUTE_ID, "1", "Конечная"))
+        StepVerifier.create(service.findNearestBus(ARKADAG_ROUTE_ID, "1", TERMINAL_STOP_ID))
                 .assertNext(info -> org.assertj.core.api.Assertions.assertThat(info.vehicleId())
                         .isEqualTo("veh-arkadag"))
                 .verifyComplete();
@@ -68,7 +69,7 @@ class RealTimeETAServiceCityDisambiguationTest {
 
     @Test
     void withoutRouteIdFallsBackToNumberMatchingAllCities() {
-        StepVerifier.create(service.findNearestBus(null, "1", "Конечная"))
+        StepVerifier.create(service.findNearestBus(null, "1", TERMINAL_STOP_ID))
                 .assertNext(info -> org.assertj.core.api.Assertions.assertThat(info.vehicleId())
                         .isEqualTo("veh-ashgabat"))
                 .verifyComplete();

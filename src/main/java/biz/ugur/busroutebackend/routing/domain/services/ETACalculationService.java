@@ -12,7 +12,8 @@ public interface ETACalculationService {
 
     int calculateWalkingTimeMinutes(Coordinates from, Coordinates to);
 
-    Mono<Integer> calculateWaitingTimeMinutes(String routeId, String routeNumber, String stopName, LocalDateTime currentTime);
+    Mono<Integer> calculateWaitingTimeMinutes(String routeId, String routeNumber, String stopId,
+                                              String stopName, LocalDateTime currentTime);
 
     Mono<Integer> calculateTravelTimeMinutes(String routeId, String routeNumber, String fromStopName, String toStopName);
 
