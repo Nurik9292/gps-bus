@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.shared.application.CorrelationContextService;
 import biz.ugur.busroutebackend.shared.application.EventBus;
 import biz.ugur.busroutebackend.shared.application.SecurityContextService;
 import biz.ugur.busroutebackend.shared.base.BaseUseCase;
+import biz.ugur.busroutebackend.transport.domain.exceptions.BusStopInUseException;
 import biz.ugur.busroutebackend.transport.domain.repository.BusRouteRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.BusStopRepository;
 import biz.ugur.busroutebackend.transport.domain.repository.RouteStopRepository;
@@ -74,16 +75,10 @@ public class DeleteBusStopUseCase extends BaseUseCase<Mono<String>, Void> {
                         .collectList()
                         .flatMap(activeRouteNumbers -> {
                             if (!activeRouteNumbers.isEmpty()) {
-                                String routeList = String.join(", ", activeRouteNumbers.stream()
-                                        .map(Object::toString)
-                                        .toList());
                                 log.warn("[DeleteBusStop] Cannot delete stop {}: used in {} active routes: {}",
-                                        stopId, activeRouteNumbers.size(), routeList);
-                                return Mono.error(new IllegalStateException(
-                                        String.format("Cannot delete stop %s: it is used in %d active routes (%s). " +
-                                                "Please remove the stop from these routes or deactivate them before deletion.",
-                                                stopId, activeRouteNumbers.size(), routeList)
-                                ));
+                                        stopId, activeRouteNumbers.size(),
+                                        String.join(", ", activeRouteNumbers));
+                                return Mono.error(new BusStopInUseException(stopId, activeRouteNumbers));
                             }
 
                             log.debug("[DeleteBusStop] Stop not used in active routes, proceeding with deletion");

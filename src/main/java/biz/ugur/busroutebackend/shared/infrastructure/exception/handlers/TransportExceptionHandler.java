@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.shared.infrastructure.exception.ErrorResponse;
 import biz.ugur.busroutebackend.shared.infrastructure.exception.ErrorResponseFactory;
 import biz.ugur.busroutebackend.shared.infrastructure.exception.HttpStatusMapper;
 import biz.ugur.busroutebackend.transport.domain.exceptions.AssignmentValidationException;
+import biz.ugur.busroutebackend.transport.domain.exceptions.BusStopInUseException;
 import biz.ugur.busroutebackend.transport.domain.exceptions.BusStopNotFoundException;
 import biz.ugur.busroutebackend.transport.domain.exceptions.RealTimeDataException;
 import biz.ugur.busroutebackend.transport.domain.exceptions.RouteAlreadyExistsException;
@@ -44,6 +45,23 @@ public class TransportExceptionHandler {
         Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("identifier", ex.getIdentifier());
         metadata.put("identifierType", ex.getIdentifierType());
+
+        ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
+        return Mono.just(ResponseEntity.status(status).body(errorResponse));
+    }
+
+    @ExceptionHandler(BusStopInUseException.class)
+    public Mono<ResponseEntity<ErrorResponse>> handleBusStopInUseException(
+            BusStopInUseException ex,
+            ServerWebExchange exchange
+    ) {
+        log.warn("Bus stop is used in active routes - Stop: {} - Routes: {}",
+                ex.getStopId(), String.join(", ", ex.getRouteNumbers()));
+
+        HttpStatus status = HttpStatusMapper.mapFromException(ex);
+        Map<String, Object> metadata = errorResponseFactory.createMetadata();
+        metadata.put("stopId", ex.getStopId());
+        metadata.put("routeNumbers", ex.getRouteNumbers());
 
         ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));
