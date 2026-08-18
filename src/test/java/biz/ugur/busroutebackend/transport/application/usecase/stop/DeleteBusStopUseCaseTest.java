@@ -104,6 +104,9 @@ class DeleteBusStopUseCaseTest {
                     BusStopInUseException conflict = (BusStopInUseException) error;
                     assertThat(conflict.getErrorCode()).endsWith(".CONFLICT");
                     assertThat(conflict.getRouteNumbers()).containsExactly("7");
+                    assertThat(conflict.getBlockingRoutes())
+                            .extracting(BusStopInUseException.BlockingRoute::routeId)
+                            .containsExactly("route-legacy-94");
                     assertThat(conflict.getMessage()).contains("7");
                 })
                 .verify();

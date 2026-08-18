@@ -62,6 +62,9 @@ public class TransportExceptionHandler {
         Map<String, Object> metadata = errorResponseFactory.createMetadata();
         metadata.put("stopId", ex.getStopId());
         metadata.put("routeNumbers", ex.getRouteNumbers());
+        metadata.put("blockingRoutes", ex.getBlockingRoutes().stream()
+                .map(route -> Map.of("routeId", route.routeId(), "routeNumber", route.routeNumber()))
+                .toList());
 
         ErrorResponse errorResponse = errorResponseFactory.fromDomainException(ex, exchange, status, metadata);
         return Mono.just(ResponseEntity.status(status).body(errorResponse));

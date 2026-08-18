@@ -70,15 +70,17 @@ public class DeleteBusStopUseCase extends BaseUseCase<Mono<String>, Void> {
                         .flatMap(stopRouteDetail -> {
                             return busRouteRepository.findById(BusRouteId.of(stopRouteDetail.getRouteId()))
                                     .filter(route -> Boolean.TRUE.equals(route.getIsActive()))
-                                    .map(route -> stopRouteDetail.getRouteNumber());
+                                    .map(route -> new BusStopInUseException.BlockingRoute(
+                                            route.getId().getValue(), stopRouteDetail.getRouteNumber()));
                         })
                         .collectList()
-                        .flatMap(activeRouteNumbers -> {
-                            if (!activeRouteNumbers.isEmpty()) {
+                        .flatMap(blockingRoutes -> {
+                            if (!blockingRoutes.isEmpty()) {
                                 log.warn("[DeleteBusStop] Cannot delete stop {}: used in {} active routes: {}",
-                                        stopId, activeRouteNumbers.size(),
-                                        String.join(", ", activeRouteNumbers));
-                                return Mono.error(new BusStopInUseException(stopId, activeRouteNumbers));
+                                        stopId, blockingRoutes.size(),
+                                        String.join(", ", blockingRoutes.stream()
+                                                .map(BusStopInUseException.BlockingRoute::routeNumber).toList()));
+                                return Mono.error(new BusStopInUseException(stopId, blockingRoutes));
                             }
 
                             log.debug("[DeleteBusStop] Stop not used in active routes, proceeding with deletion");

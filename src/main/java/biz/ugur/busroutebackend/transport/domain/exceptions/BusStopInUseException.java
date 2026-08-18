@@ -8,18 +8,25 @@ import java.util.List;
 @Getter
 public class BusStopInUseException extends TransportDomainException {
 
-    private final String stopId;
-    private final List<String> routeNumbers;
-
-    public BusStopInUseException(String stopId, List<String> routeNumbers) {
-        super("BUS_STOP_IN_USE.CONFLICT", buildMessage(stopId, routeNumbers), Severity.WARNING);
-        this.stopId = stopId;
-        this.routeNumbers = Collections.unmodifiableList(routeNumbers);
+    public record BlockingRoute(String routeId, String routeNumber) {
     }
 
-    private static String buildMessage(String stopId, List<String> routeNumbers) {
+    private final String stopId;
+    private final List<BlockingRoute> blockingRoutes;
+
+    public BusStopInUseException(String stopId, List<BlockingRoute> blockingRoutes) {
+        super("BUS_STOP_IN_USE.CONFLICT", buildMessage(blockingRoutes), Severity.WARNING);
+        this.stopId = stopId;
+        this.blockingRoutes = Collections.unmodifiableList(blockingRoutes);
+    }
+
+    public List<String> getRouteNumbers() {
+        return blockingRoutes.stream().map(BlockingRoute::routeNumber).toList();
+    }
+
+    private static String buildMessage(List<BlockingRoute> blockingRoutes) {
         return String.format(
                 "Остановка используется в активных маршрутах (%s). Сначала уберите её из этих маршрутов, затем удаляйте.",
-                String.join(", ", routeNumbers));
+                String.join(", ", blockingRoutes.stream().map(BlockingRoute::routeNumber).toList()));
     }
 }
