@@ -53,7 +53,7 @@ public class IntegrationBannersController extends BasePaginatedController {
             @Valid @RequestBody ExternalBannerRequest request) {
         return ok(serviceId()
                 .map(serviceId -> new ExternalBannerCommand(serviceId, request.externalRef(),
-                        request.type(), request.title(), request.imageUrl(), request.targetUrl(),
+                        request.type(), request.title(), request.image(), request.targetUrl(),
                         request.content(), request.startsAt(), request.endsAt(), request.displayOrder()))
                 .as(upsertUseCase::execute)
                 .map(IntegrationBannersController::describe));

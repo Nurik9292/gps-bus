@@ -11,7 +11,7 @@ public record ExternalBannerRequest(
         @NotBlank @Size(max = 100) @JsonProperty("external_ref") String externalRef,
         @NotBlank @Size(max = 20) String type,
         @NotBlank @Size(max = 200) String title,
-        @NotBlank @JsonProperty("image_url") String imageUrl,
+        @NotBlank @JsonProperty("image") String image,
         @JsonProperty("target_url") String targetUrl,
         String content,
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") @JsonProperty("starts_at") LocalDateTime startsAt,
