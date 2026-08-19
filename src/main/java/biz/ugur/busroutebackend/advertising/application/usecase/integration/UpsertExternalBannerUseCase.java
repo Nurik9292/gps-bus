@@ -82,7 +82,7 @@ public class UpsertExternalBannerUseCase extends BaseUseCase<Mono<ExternalBanner
 
     private static void requireEmbeddedImage(String imageUrl) {
         if (imageUrl == null || !imageUrl.startsWith(EMBEDDED_IMAGE_PREFIX)) {
-            throw new AdvertisingValidationException("imageUrl",
+            throw new AdvertisingValidationException("image",
                     "banner image must be sent as base64 data URL (data:image/...), links to external storage are not accepted");
         }
     }
