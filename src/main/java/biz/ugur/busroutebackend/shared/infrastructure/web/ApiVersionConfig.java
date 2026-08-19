@@ -82,6 +82,7 @@ public class ApiVersionConfig {
 
     public static final String V1_INTEGRATION = API_V1 + INTEGRATION;
     public static final String V1_INTEGRATION_CLIENTS = V1_INTEGRATION + CLIENTS;
+    public static final String V1_INTEGRATION_BANNERS = V1_INTEGRATION + "/banners";
 
     public static final String SUBSCRIPTIONS = "/subscriptions";
     public static final String V1_CLIENT_SUBSCRIPTIONS = V1_CLIENT + SUBSCRIPTIONS;

@@ -108,6 +108,35 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
     }
 
     @Override
+    public Mono<AdPlacement> findByExternalRef(String externalServiceId, String externalRef) {
+        String sql = String.format("""
+                SELECT %s FROM ad_placements
+                 WHERE source = 'EXTERNAL'
+                   AND external_service_id = :serviceId
+                   AND external_ref = :externalRef
+                """, selectColumns());
+        return databaseClient.sql(sql)
+                .bind("serviceId", externalServiceId)
+                .bind("externalRef", externalRef)
+                .map(getRowMapper())
+                .one();
+    }
+
+    @Override
+    public Flux<AdPlacement> findByExternalServiceId(String externalServiceId) {
+        String sql = String.format("""
+                SELECT %s FROM ad_placements
+                 WHERE source = 'EXTERNAL'
+                   AND external_service_id = :serviceId
+                 ORDER BY display_order ASC, created_at DESC
+                """, selectColumns());
+        return databaseClient.sql(sql)
+                .bind("serviceId", externalServiceId)
+                .map(getRowMapper())
+                .all();
+    }
+
+    @Override
     public Flux<AdPlacement> findByKind(PlacementKind kind, Pageable pageable) {
         String sql = String.format("""
                 SELECT %s FROM ad_placements
