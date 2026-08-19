@@ -16,13 +16,22 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 @Slf4j
 public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implements BaseRepository<T, ID> {
+
+    private static final String DEFAULT_ORDER_BY = "ORDER BY created_at DESC";
+
+    private static final Pattern SORTABLE_COLUMN = Pattern.compile("^[a-z_][a-z0-9_]{0,62}$");
 
     protected final DatabaseClient databaseClient;
     protected final String tableName;
@@ -247,11 +256,38 @@ public abstract class BaseR2dbcRepository<T extends BaseEntity<ID>, ID> implemen
 
     protected String getOrderByClause(Pageable pageable) {
         if (pageable.getSort().isEmpty()) {
-            return "ORDER BY created_at DESC";
+            return DEFAULT_ORDER_BY;
         }
-        return "ORDER BY " + pageable.getSort().stream()
-                .map(order -> order.getProperty().toLowerCase() + " " + order.getDirection().name())
+        Set<String> sortable = sortableColumns();
+        String clause = pageable.getSort().stream()
+                .map(order -> acceptedSortColumn(order.getProperty(), sortable) == null
+                        ? null
+                        : acceptedSortColumn(order.getProperty(), sortable) + " " + order.getDirection().name())
+                .filter(Objects::nonNull)
                 .collect(Collectors.joining(", "));
+        return clause.isBlank() ? DEFAULT_ORDER_BY : "ORDER BY " + clause;
+    }
+
+    private String acceptedSortColumn(String property, Set<String> sortable) {
+        if (property == null) {
+            return null;
+        }
+        String candidate = property.toLowerCase(Locale.ROOT).trim();
+        if (!SORTABLE_COLUMN.matcher(candidate).matches()) {
+            return null;
+        }
+        return sortable.isEmpty() || sortable.contains(candidate) ? candidate : null;
+    }
+
+    private Set<String> sortableColumns() {
+        String declared = selectColumns();
+        if (declared == null || "*".equals(declared.trim())) {
+            return Set.of();
+        }
+        return Arrays.stream(declared.split(","))
+                .map(column -> column.toLowerCase(Locale.ROOT).trim())
+                .filter(column -> SORTABLE_COLUMN.matcher(column).matches())
+                .collect(Collectors.toUnmodifiableSet());
     }
 
 

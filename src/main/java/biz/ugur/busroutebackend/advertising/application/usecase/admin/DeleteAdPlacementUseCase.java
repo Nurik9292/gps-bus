@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.advertising.application.usecase.admin;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdPlacementNotFoundException;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdClickEventRepository;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdImpressionEventRepository;
+import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
 import biz.ugur.busroutebackend.advertising.domain.storage.AdPlacementStorage;
 import biz.ugur.busroutebackend.advertising.domain.valueobjects.PlacementId;
@@ -40,6 +41,7 @@ public class DeleteAdPlacementUseCase extends BaseUseCase<String, Void> {
         PlacementId id = PlacementId.of(placementId);
         return placementRepository.findById(id)
                 .switchIfEmpty(Mono.error(new AdPlacementNotFoundException(placementId)))
+                .doOnNext(AdPlacement::ensureEditableByAdmin)
                 .flatMap(placement -> deleteCreative(placement.getImageUrl())
                         .then(impressionEventRepository.deleteByPlacementId(id))
                         .then(clickEventRepository.deleteByPlacementId(id))

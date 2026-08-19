@@ -62,32 +62,6 @@ public class AdPlacementResponseMapper {
     }
 
     private AdPlacementResponse buildResponse(AdPlacement placement, PaymentInfo pendingCashPayment) {
-        AdPlacementResponse base = AdPlacementResponse.fromDomain(placement);
-        return new AdPlacementResponse(
-                base.id(),
-                base.businessId(),
-                base.tariffId(),
-                base.placementType(),
-                base.kind(),
-                base.status(),
-                base.title(),
-                base.content(),
-                base.contentType(),
-                base.imageUrl(),
-                base.targetUrl(),
-                base.ctaText(),
-                base.startsAt(),
-                base.endsAt(),
-                base.targets(),
-                base.displayOrder(),
-                base.rejectionReason(),
-                base.approvedAt(),
-                base.approvedByAdminId(),
-                base.rejectedAt(),
-                base.rejectedByAdminId(),
-                base.createdAt(),
-                base.updatedAt(),
-                pendingCashPayment
-        );
+        return AdPlacementResponse.fromDomain(placement).withPendingCashPayment(pendingCashPayment);
     }
 }

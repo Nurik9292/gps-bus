@@ -55,7 +55,10 @@ public class UpdateEditorialAdPlacementUseCase
             return placementRepository.findById(id)
                     .switchIfEmpty(Mono.defer(() ->
                             Mono.error(new AdPlacementNotFoundException(cmd.placementId()))))
-                    .flatMap(existing -> applyAndPersist(existing, cmd));
+                    .flatMap(existing -> {
+                        existing.ensureEditableByAdmin();
+                        return applyAndPersist(existing, cmd);
+                    });
         });
     }
 

@@ -25,6 +25,10 @@ public interface AdPlacementRepository extends BaseRepository<AdPlacement, Place
 
     Mono<Long> countByStatus(PlacementStatus status);
 
+    Mono<AdPlacement> findByExternalRef(String externalServiceId, String externalRef);
+
+    Flux<AdPlacement> findByExternalServiceId(String externalServiceId);
+
     Flux<AdPlacement> findByKind(PlacementKind kind, Pageable pageable);
 
     Mono<Long> countByKind(PlacementKind kind);

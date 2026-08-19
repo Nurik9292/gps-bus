@@ -2,6 +2,8 @@ package biz.ugur.busroutebackend.advertising.domain.model;
 
 import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
+import biz.ugur.busroutebackend.advertising.domain.enums.PlacementSource;
+import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.events.AdPlacementApprovedEvent;
@@ -53,6 +55,10 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
 
     private final List<PlacementTarget> targets;
     private final Integer displayOrder;
+
+    private final PlacementSource source;
+    private final String externalServiceId;
+    private final String externalRef;
 
     private final String rejectionReason;
     private final LocalDateTime approvedAt;
@@ -107,6 +113,7 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 .window(window != null ? window : PlacementWindow.unscheduled())
                 .targets(resolvedTargets)
                 .displayOrder(displayOrder != null ? displayOrder : 0)
+                .source(PlacementSource.MANUAL)
                 .version(0L)
                 .build();
 
@@ -118,6 +125,63 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                 resolvedKind));
 
         return placement;
+    }
+
+    public static AdPlacement createExternal(String externalServiceId,
+                                            String externalRef,
+                                            PlacementType placementType,
+                                            String title,
+                                            String content,
+                                            String imageUrl,
+                                            String targetUrl,
+                                            String ctaText,
+                                            ContentType contentType,
+                                            PlacementWindow window,
+                                            List<PlacementTarget> targets,
+                                            Integer displayOrder) {
+        if (externalServiceId == null || externalServiceId.isBlank()) {
+            throw new AdvertisingValidationException("externalServiceId", "must not be blank for EXTERNAL source");
+        }
+        if (externalRef == null || externalRef.isBlank()) {
+            throw new AdvertisingValidationException("externalRef", "must not be blank for EXTERNAL source");
+        }
+        validateRoutesOnly(targets);
+
+        AdPlacement placement = create(null, null, placementType, PlacementKind.EDITORIAL,
+                title, content, imageUrl, targetUrl, ctaText, contentType, window, targets, displayOrder);
+
+        return placement.toBuilder()
+                .source(PlacementSource.EXTERNAL)
+                .externalServiceId(externalServiceId.trim())
+                .externalRef(externalRef.trim())
+                .build();
+    }
+
+    private static void validateRoutesOnly(List<PlacementTarget> targets) {
+        if (targets == null || targets.isEmpty()) {
+            throw new AdvertisingValidationException("targets", "external placement must target ROUTES_LIST");
+        }
+        boolean onlyRoutes = targets.stream()
+                .allMatch(target -> target.getTargetType() == TargetType.ROUTES_LIST);
+        if (!onlyRoutes) {
+            throw new AdvertisingValidationException("targets",
+                    "external placement accepts only ROUTES_LIST target");
+        }
+    }
+
+    public void ensureEditableByAdmin() {
+        if (isExternal()) {
+            throw new AdvertisingValidationException("source",
+                    "external placement content is managed by the owning service; admin may only withdraw it from display");
+        }
+    }
+
+    public boolean isExternal() {
+        return source == PlacementSource.EXTERNAL;
+    }
+
+    public boolean isOwnedBy(String serviceId) {
+        return isExternal() && externalServiceId != null && externalServiceId.equals(serviceId);
     }
 
     private static void validateContentConsistency(ContentType contentType, String content, String targetUrl) {
@@ -155,7 +219,44 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
                                        LocalDateTime createdAt,
                                        LocalDateTime updatedAt,
                                        Long version) {
+        return restore(PlacementSource.MANUAL, null, null,
+                id, businessId, tariffId, placementType, kind, status,
+                title, content, imageUrl, targetUrl, ctaText, contentType,
+                window, targets, displayOrder, rejectionReason,
+                approvedAt, approvedByAdminId, rejectedAt, rejectedByAdminId,
+                createdAt, updatedAt, version);
+    }
+
+    public static AdPlacement restore(PlacementSource source,
+                                      String externalServiceId,
+                                      String externalRef,
+                                      PlacementId id,
+                                       BusinessId businessId,
+                                       TariffId tariffId,
+                                       PlacementType placementType,
+                                       PlacementKind kind,
+                                       PlacementStatus status,
+                                       String title,
+                                       String content,
+                                       String imageUrl,
+                                       String targetUrl,
+                                       String ctaText,
+                                       ContentType contentType,
+                                       PlacementWindow window,
+                                       List<PlacementTarget> targets,
+                                       Integer displayOrder,
+                                       String rejectionReason,
+                                       LocalDateTime approvedAt,
+                                       String approvedByAdminId,
+                                       LocalDateTime rejectedAt,
+                                       String rejectedByAdminId,
+                                       LocalDateTime createdAt,
+                                       LocalDateTime updatedAt,
+                                       Long version) {
         return builder()
+                .source(source != null ? source : PlacementSource.MANUAL)
+                .externalServiceId(externalServiceId)
+                .externalRef(externalRef)
                 .id(id).businessId(businessId).tariffId(tariffId)
                 .placementType(placementType)
                 .kind(kind != null ? kind : PlacementKind.COMMERCIAL)

@@ -22,6 +22,7 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
             "title", "content", "image_url", "target_url", "cta_text", "content_type",
             "starts_at", "ends_at",
             "display_order",
+            "source", "external_service_id", "external_ref",
             "rejection_reason",
             "approved_at", "approved_by_admin_id",
             "rejected_at", "rejected_by_admin_id",
@@ -69,6 +70,9 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
         columns.put("rejected_by_admin_id", e.getRejectedByAdminId());
         columns.put("created_at", e.getCreatedAt());
         columns.put("updated_at", e.getUpdatedAt());
+        columns.put("source", e.getSource());
+        columns.put("external_service_id", e.getExternalServiceId());
+        columns.put("external_ref", e.getExternalRef());
         columns.put("version", e.getVersion());
         return columns;
     }
@@ -90,6 +94,9 @@ public abstract class AdPlacementBaseRepository extends BaseR2dbcRepository<AdPl
                 .startsAt(row.get("starts_at", LocalDateTime.class))
                 .endsAt(row.get("ends_at", LocalDateTime.class))
                 .displayOrder(row.get("display_order", Integer.class))
+                .source(row.get("source", String.class))
+                .externalServiceId(row.get("external_service_id", String.class))
+                .externalRef(row.get("external_ref", String.class))
                 .rejectionReason(row.get("rejection_reason", String.class))
                 .approvedAt(row.get("approved_at", LocalDateTime.class))
                 .approvedByAdminId(row.get("approved_by_admin_id", String.class))

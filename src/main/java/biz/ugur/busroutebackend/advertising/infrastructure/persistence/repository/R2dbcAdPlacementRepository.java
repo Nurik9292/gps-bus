@@ -31,6 +31,7 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
             "p.title", "p.content", "p.image_url", "p.target_url", "p.cta_text", "p.content_type",
             "p.starts_at", "p.ends_at",
             "p.display_order",
+            "p.source", "p.external_service_id", "p.external_ref",
             "p.rejection_reason",
             "p.approved_at", "p.approved_by_admin_id",
             "p.rejected_at", "p.rejected_by_admin_id",
@@ -102,6 +103,35 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
                 .bind("status", status.name())
                 .bind("limit", pageable.getPageSize())
                 .bind("offset", pageable.getOffset())
+                .map(getRowMapper())
+                .all();
+    }
+
+    @Override
+    public Mono<AdPlacement> findByExternalRef(String externalServiceId, String externalRef) {
+        String sql = String.format("""
+                SELECT %s FROM ad_placements
+                 WHERE source = 'EXTERNAL'
+                   AND external_service_id = :serviceId
+                   AND external_ref = :externalRef
+                """, selectColumns());
+        return databaseClient.sql(sql)
+                .bind("serviceId", externalServiceId)
+                .bind("externalRef", externalRef)
+                .map(getRowMapper())
+                .one();
+    }
+
+    @Override
+    public Flux<AdPlacement> findByExternalServiceId(String externalServiceId) {
+        String sql = String.format("""
+                SELECT %s FROM ad_placements
+                 WHERE source = 'EXTERNAL'
+                   AND external_service_id = :serviceId
+                 ORDER BY display_order ASC, created_at DESC
+                """, selectColumns());
+        return databaseClient.sql(sql)
+                .bind("serviceId", externalServiceId)
                 .map(getRowMapper())
                 .all();
     }
