@@ -45,14 +45,7 @@ public class WsOutboundStreamBuilder {
     private final biz.ugur.busroutebackend.transport.application.services.VehicleCityIndex vehicleCityIndex;
     private final java.util.concurrent.atomic.AtomicInteger activeSessions =
             new java.util.concurrent.atomic.AtomicInteger();
-    private java.util.function.Supplier<reactor.core.publisher.Flux<
-            java.util.List<biz.ugur.busroutebackend.prediction.broadcast.V31FrameEnvelope>>>
-            v31Frames = reactor.core.publisher.Flux::never;
-
-    public void v31Frames(java.util.function.Supplier<reactor.core.publisher.Flux<
-            java.util.List<biz.ugur.busroutebackend.prediction.broadcast.V31FrameEnvelope>>> frames) {
-        this.v31Frames = frames;
-    }
+    private final biz.ugur.busroutebackend.prediction.broadcast.V31FrameFeed v31FrameFeed;
 
     public int activeSessions() {
         return activeSessions.get();
@@ -62,12 +55,16 @@ public class WsOutboundStreamBuilder {
                                    ObjectMapper objectMapper,
                                    WsBroadcastSink broadcastSink,
                                    PipelineTracer pipelineTracer,
-                                   biz.ugur.busroutebackend.transport.application.services.VehicleCityIndex vehicleCityIndex) {
+                                   biz.ugur.busroutebackend.transport.application.services.VehicleCityIndex vehicleCityIndex,
+                                   org.springframework.beans.factory.ObjectProvider<
+                                           biz.ugur.busroutebackend.prediction.broadcast.V31FrameFeed> v31FrameFeed) {
         this.getActiveVehiclesUseCase = getActiveVehiclesUseCase;
         this.objectMapper = objectMapper;
         this.broadcastSink = broadcastSink;
         this.pipelineTracer = pipelineTracer;
         this.vehicleCityIndex = vehicleCityIndex;
+        this.v31FrameFeed = v31FrameFeed.getIfAvailable(
+                biz.ugur.busroutebackend.prediction.broadcast.V31FrameFeed::silent);
     }
 
     public Flux<WebSocketMessage> buildFor(WebSocketSession session, SessionConfig config) {
@@ -75,7 +72,7 @@ public class WsOutboundStreamBuilder {
         Flux<WebSocketMessage> liveUpdates = liveUpdatesStream(session, config);
         Flux<WebSocketMessage> heartbeat = heartbeatStream(session);
 
-        Flux<WebSocketMessage> v31Live = v31Frames.get()
+        Flux<WebSocketMessage> v31Live = v31FrameFeed.frames()
                 .takeUntilOther(session.closeStatus().then())
                 .map(batch -> batch.stream()
                         .filter(env -> isRouteInScope(env.routeNumber(), config)

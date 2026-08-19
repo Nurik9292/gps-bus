@@ -3,6 +3,7 @@ package biz.ugur.busroutebackend.prediction.infrastructure.config;
 import biz.ugur.busroutebackend.prediction.broadcast.V31BroadcastLoop;
 import biz.ugur.busroutebackend.prediction.broadcast.V31BroadcastProperties;
 import biz.ugur.busroutebackend.prediction.broadcast.V31CityZoneProperties;
+import biz.ugur.busroutebackend.prediction.broadcast.V31FrameFeed;
 import biz.ugur.busroutebackend.prediction.broadcast.V31FrameSink;
 import biz.ugur.busroutebackend.prediction.core.CoreConfig;
 import biz.ugur.busroutebackend.prediction.core.RouteTopology;
@@ -20,7 +21,6 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
-import biz.ugur.busroutebackend.interfaces.websocket.WsOutboundStreamBuilder;
 import biz.ugur.busroutebackend.transport.infrastructure.prediction.PredictionBroadcaster;
 
 import java.nio.file.Path;
@@ -71,19 +71,16 @@ public class V31BroadcastConfig {
         return byId != null ? byId : zones.getRoutes().get(routeNumber);
     }
 
-    @Bean(destroyMethod = "dispose")
-    public Disposable v31LiveWiring(V31BroadcastProperties props, V31FrameSink sink,
-                                    WsOutboundStreamBuilder builder,
-                                    PredictionBroadcaster legacyBroadcaster) {
-        if (props.getBroadcast() == V31BroadcastProperties.Mode.LIVE) {
-            builder.v31Frames(sink::asFlux);
-            legacyBroadcaster.v31LiveRouteSuppressor(props::routeInScope);
-            log.info("v31 LIVE cutover: легаси-вещание подавлено для allowlist={}",
-                    props.getRoutesAllowlist().isEmpty() ? "все маршруты" : props.getRoutesAllowlist());
+    @Bean
+    public V31FrameFeed v31FrameFeed(V31BroadcastProperties props, V31FrameSink sink,
+                                     PredictionBroadcaster legacyBroadcaster) {
+        if (props.getBroadcast() != V31BroadcastProperties.Mode.LIVE) {
+            return V31FrameFeed.silent();
         }
-        return Flux.interval(Duration.ofMinutes(1))
-                .subscribe(t -> log.info("[WS] активных соединений: {}", builder.activeSessions()),
-                        err -> log.debug("ws gauge stopped: {}", err.getMessage()));
+        legacyBroadcaster.v31LiveRouteSuppressor(props::routeInScope);
+        log.info("v31 LIVE cutover: легаси-вещание подавлено для allowlist={}",
+                props.getRoutesAllowlist().isEmpty() ? "все маршруты" : props.getRoutesAllowlist());
+        return sink::asFlux;
     }
 
     @Bean(destroyMethod = "dispose")
