@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.advertising.application.usecase.mobile;
 
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
+import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
 import biz.ugur.busroutebackend.advertising.domain.repository.AdPlacementRepository;
 import biz.ugur.busroutebackend.banner.application.dto.BannerList;
 import biz.ugur.busroutebackend.banner.application.dto.BannerPaginationQuery;
@@ -17,11 +18,15 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
 public class GetActiveBannersAsAdPlacementsUseCase
         extends BaseUseCase<TargetType, BannerList> {
+
+    private static final int EXTERNAL_RESERVED_SLOTS = 3;
 
     private static final List<TargetType> EDITORIAL_TARGETS = List.of(
             TargetType.HOME,
@@ -53,9 +58,7 @@ public class GetActiveBannersAsAdPlacementsUseCase
 
     @Override
     protected Mono<BannerList> process(TargetType targetType) {
-        return placementRepository
-                .findActiveByKindAndTargetType(PlacementKind.EDITORIAL, targetType)
-                .map(p -> BannerJsonMapper.fromAdPlacement(p, targetType))
+        return loadForTarget(targetType)
                 .collectList()
                 .map(GetActiveBannersAsAdPlacementsUseCase::buildSinglePageList);
     }
@@ -77,9 +80,7 @@ public class GetActiveBannersAsAdPlacementsUseCase
         TargetType targetType = resolveTargetType(query.getType());
         int page = query.getPage();
         int size = query.getSize();
-        return placementRepository
-                .findActiveByKindAndTargetType(PlacementKind.EDITORIAL, targetType)
-                .map(p -> BannerJsonMapper.fromAdPlacement(p, targetType))
+        return loadForTarget(targetType)
                 .collectList()
                 .map(all -> {
                     long total = all.size();
@@ -93,7 +94,29 @@ public class GetActiveBannersAsAdPlacementsUseCase
     private Flux<BannerResponse> loadForTarget(TargetType targetType) {
         return placementRepository
                 .findActiveByKindAndTargetType(PlacementKind.EDITORIAL, targetType)
+                .collectList()
+                .map(placements -> applyExternalPriority(placements, targetType))
+                .flatMapMany(Flux::fromIterable)
                 .map(p -> BannerJsonMapper.fromAdPlacement(p, targetType));
+    }
+
+    private static List<AdPlacement> applyExternalPriority(List<AdPlacement> placements, TargetType targetType) {
+        if (targetType != TargetType.ROUTES_LIST) {
+            return placements;
+        }
+        List<AdPlacement> external = placements.stream()
+                .filter(AdPlacement::isExternal)
+                .sorted(Comparator.comparing(p -> p.getDisplayOrder() != null ? p.getDisplayOrder() : 0))
+                .limit(EXTERNAL_RESERVED_SLOTS)
+                .toList();
+        List<AdPlacement> manual = placements.stream()
+                .filter(p -> !p.isExternal())
+                .toList();
+
+        List<AdPlacement> ordered = new ArrayList<>(external.size() + manual.size());
+        ordered.addAll(external);
+        ordered.addAll(manual);
+        return ordered;
     }
 
     private TargetType resolveTargetType(String rawType) {
