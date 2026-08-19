@@ -31,6 +31,8 @@ public record AdPlacementResponse(
 
         @JsonProperty("targets")              List<PlacementTargetView> targets,
         @JsonProperty("display_order")        Integer displayOrder,
+        @JsonProperty("source")               String source,
+        @JsonProperty("external_ref")         String externalRef,
 
         @JsonProperty("rejection_reason")     String rejectionReason,
 
@@ -57,6 +59,14 @@ public record AdPlacementResponse(
         @JsonProperty("pending_cash_payment") PaymentInfo pendingCashPayment
 ) {
 
+    public AdPlacementResponse withPendingCashPayment(PaymentInfo payment) {
+        return new AdPlacementResponse(
+                id, businessId, tariffId, placementType, kind, status, title, content, contentType,
+                imageUrl, targetUrl, ctaText, startsAt, endsAt, targets, displayOrder, source, externalRef,
+                rejectionReason, approvedAt, approvedByAdminId, rejectedAt, rejectedByAdminId,
+                createdAt, updatedAt, payment);
+    }
+
     public static AdPlacementResponse fromDomain(AdPlacement p) {
         List<PlacementTargetView> targetViews = p.getTargets() == null
                 ? List.of()
@@ -78,6 +88,8 @@ public record AdPlacementResponse(
                 p.getWindow() != null ? p.getWindow().getEndsAt() : null,
                 targetViews,
                 p.getDisplayOrder(),
+                p.getSource() != null ? p.getSource().name() : null,
+                p.getExternalRef(),
                 p.getRejectionReason(),
                 p.getApprovedAt(),
                 p.getApprovedByAdminId(),

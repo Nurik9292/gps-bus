@@ -132,4 +132,49 @@ class AdPlacementResponseMapperTest {
                 .assertNext(list -> assertEquals(0, list.size()))
                 .verifyComplete();
     }
+    @Test
+    void toResponseExposesSourceAndExternalRefSoAdminUiCanMarkForeignBanners() {
+        AdPlacement external = AdPlacement.createExternal(
+                "partner-service", "banner-42", PlacementType.BANNER,
+                "Partner Ad", null, "/img.jpg", "https://partner.tm", "Click",
+                ContentType.LINK, null,
+                List.of(PlacementTarget.general(TargetType.ROUTES_LIST)), 1);
+
+        when(paymentRepository.findFirstBySubjectAndProviderAndStatus(
+                eq(PaymentSubjectType.AD_PLACEMENT),
+                eq(external.getId().getValue()),
+                eq(PaymentProvider.CASH),
+                eq(PaymentStatus.REGISTERED)))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(mapper.toResponse(external))
+                .assertNext(response -> {
+                    assertEquals("EXTERNAL", response.source());
+                    assertEquals("banner-42", response.externalRef());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void toResponseReportsManualSourceForAdminCreatedPlacements() {
+        AdPlacement manual = AdPlacement.create(
+                BusinessId.generate(), TariffId.generate(), PlacementType.BANNER,
+                null, "My Ad", "Body", "/img.jpg", "https://x.tm", "Click",
+                ContentType.CONTENT, null,
+                List.of(PlacementTarget.general(TargetType.HOME)), 1);
+
+        when(paymentRepository.findFirstBySubjectAndProviderAndStatus(
+                eq(PaymentSubjectType.AD_PLACEMENT),
+                eq(manual.getId().getValue()),
+                eq(PaymentProvider.CASH),
+                eq(PaymentStatus.REGISTERED)))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(mapper.toResponse(manual))
+                .assertNext(response -> {
+                    assertEquals("MANUAL", response.source());
+                    assertNull(response.externalRef());
+                })
+                .verifyComplete();
+    }
 }
