@@ -50,6 +50,7 @@ logging:
     biz.ugur.busroutebackend.shared.infrastructure.security: WARN
     biz.ugur.busroutebackend.admin.infrastructure.security: WARN
     biz.ugur.busroutebackend.interfaces.websocket: WARN
+    biz.ugur.busroutebackend.prediction.infrastructure.config: INFO
     biz.ugur.busroutebackend.transport.infrastructure.prediction.PredictionBroadcaster: ERROR
     biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.FracFlipStrategy: WARN
     biz.ugur.busroutebackend.transport.infrastructure.prediction.snap.HeadingFlipStrategy: WARN
