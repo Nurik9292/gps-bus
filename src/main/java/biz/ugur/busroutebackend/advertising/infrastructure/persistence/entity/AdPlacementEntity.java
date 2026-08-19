@@ -32,7 +32,11 @@ public class AdPlacementEntity {
     @Column("starts_at")                 private LocalDateTime startsAt;
     @Column("ends_at")                   private LocalDateTime endsAt;
     @Column("display_order")             private Integer displayOrder;
-    @Column("rejection_reason")          private String rejectionReason;
+    @Column("rejection_reason")          private String source;
+    private String externalServiceId;
+    private String externalRef;
+
+    private String rejectionReason;
     @Column("approved_at")               private LocalDateTime approvedAt;
     @Column("approved_by_admin_id")      private String approvedByAdminId;
     @Column("rejected_at")               private LocalDateTime rejectedAt;

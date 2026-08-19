@@ -31,6 +31,7 @@ public class R2dbcAdPlacementRepository extends AdPlacementBaseRepository implem
             "p.title", "p.content", "p.image_url", "p.target_url", "p.cta_text", "p.content_type",
             "p.starts_at", "p.ends_at",
             "p.display_order",
+            "p.source", "p.external_service_id", "p.external_ref",
             "p.rejection_reason",
             "p.approved_at", "p.approved_by_admin_id",
             "p.rejected_at", "p.rejected_by_admin_id",

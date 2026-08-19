@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.advertising.infrastructure.mapper;
 
 import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
+import biz.ugur.busroutebackend.advertising.domain.enums.PlacementSource;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.model.AdPlacement;
@@ -27,6 +28,9 @@ public final class AdPlacementMapper {
                 ? ContentType.valueOf(e.getContentType())
                 : ContentType.LINK;
         return AdPlacement.restore(
+                PlacementSource.from(e.getSource()),
+                e.getExternalServiceId(),
+                e.getExternalRef(),
                 PlacementId.of(e.getId()),
                 e.getBusinessId() != null ? BusinessId.of(e.getBusinessId()) : null,
                 e.getTariffId() != null ? TariffId.of(e.getTariffId()) : null,
@@ -73,6 +77,9 @@ public final class AdPlacementMapper {
                 .startsAt(window != null ? window.getStartsAt() : null)
                 .endsAt(window != null ? window.getEndsAt() : null)
                 .displayOrder(p.getDisplayOrder())
+                .source(p.getSource() != null ? p.getSource().name() : PlacementSource.MANUAL.name())
+                .externalServiceId(p.getExternalServiceId())
+                .externalRef(p.getExternalRef())
                 .rejectionReason(p.getRejectionReason())
                 .approvedAt(p.getApprovedAt())
                 .approvedByAdminId(p.getApprovedByAdminId())
