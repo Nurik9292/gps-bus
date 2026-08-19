@@ -40,6 +40,14 @@ public class WithdrawExternalBannerUseCase extends BaseUseCase<Mono<WithdrawExte
         return request.flatMap(this::withdraw);
     }
 
+    private static AdPlacement takeOffAir(AdPlacement placement) {
+        return switch (placement.getStatus()) {
+            case ACTIVE -> placement.markAsPaused();
+            case DRAFT, PENDING_PAYMENT, SCHEDULED -> placement.cancel();
+            case PAUSED, EXPIRED, CANCELLED -> placement;
+        };
+    }
+
     private Mono<AdPlacement> withdraw(Command command) {
         return placementRepository.findByExternalRef(command.externalServiceId(), command.externalRef())
                 .switchIfEmpty(Mono.error(() -> new AdvertisingValidationException("externalRef",
@@ -49,7 +57,7 @@ public class WithdrawExternalBannerUseCase extends BaseUseCase<Mono<WithdrawExte
                         return Mono.error(new AdvertisingValidationException("externalRef",
                                 "placement belongs to another owner"));
                     }
-                    return Mono.just(placement.markAsPaused());
+                    return Mono.just(takeOffAir(placement));
                 })
                 .flatMap(placementRepository::save)
                 .flatMap(saved -> {

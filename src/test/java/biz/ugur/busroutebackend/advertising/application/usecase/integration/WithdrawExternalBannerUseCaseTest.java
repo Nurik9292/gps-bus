@@ -62,6 +62,10 @@ class WithdrawExternalBannerUseCaseTest {
                 correlationService, eventBus);
     }
 
+    private static AdPlacement withStatus(PlacementStatus status) {
+        return active(SERVICE_ID).toBuilder().status(status).build();
+    }
+
     private static AdPlacement active(String ownerId) {
         AdPlacement placement = AdPlacement.createExternal(ownerId, EXTERNAL_REF, PlacementType.BANNER,
                 "Внешний", null, "https://cdn/i.png", "https://t", null, ContentType.LINK,
@@ -120,5 +124,34 @@ class WithdrawExternalBannerUseCaseTest {
                 .verifyComplete();
 
         verify(securityService).logAudit(anyString(), anyString(), anyString());
+    }
+    @Test
+    void bannerWithdrawnBeforeItStartsIsCancelledInsteadOfFailing() {
+        when(placementRepository.findByExternalRef(SERVICE_ID, EXTERNAL_REF))
+                .thenReturn(Mono.just(withStatus(PlacementStatus.SCHEDULED)));
+
+        StepVerifier.create(useCase.execute(Mono.just(new WithdrawExternalBannerUseCase.Command(SERVICE_ID, EXTERNAL_REF))))
+                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(PlacementStatus.CANCELLED))
+                .verifyComplete();
+    }
+
+    @Test
+    void repeatedWithdrawalOfTheSameBannerIsAccepted() {
+        when(placementRepository.findByExternalRef(SERVICE_ID, EXTERNAL_REF))
+                .thenReturn(Mono.just(withStatus(PlacementStatus.PAUSED)));
+
+        StepVerifier.create(useCase.execute(Mono.just(new WithdrawExternalBannerUseCase.Command(SERVICE_ID, EXTERNAL_REF))))
+                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(PlacementStatus.PAUSED))
+                .verifyComplete();
+    }
+
+    @Test
+    void withdrawingAFinishedBannerDoesNotFail() {
+        when(placementRepository.findByExternalRef(SERVICE_ID, EXTERNAL_REF))
+                .thenReturn(Mono.just(withStatus(PlacementStatus.EXPIRED)));
+
+        StepVerifier.create(useCase.execute(Mono.just(new WithdrawExternalBannerUseCase.Command(SERVICE_ID, EXTERNAL_REF))))
+                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(PlacementStatus.EXPIRED))
+                .verifyComplete();
     }
 }
