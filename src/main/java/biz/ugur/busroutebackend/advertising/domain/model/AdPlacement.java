@@ -169,6 +169,13 @@ public class AdPlacement extends AggregateRoot<AdPlacement, PlacementId> {
         }
     }
 
+    public void ensureEditableByAdmin() {
+        if (isExternal()) {
+            throw new AdvertisingValidationException("source",
+                    "external placement content is managed by the owning service; admin may only withdraw it from display");
+        }
+    }
+
     public boolean isExternal() {
         return source == PlacementSource.EXTERNAL;
     }
