@@ -2,6 +2,7 @@ package biz.ugur.busroutebackend.advertising.application.usecase.integration;
 
 import biz.ugur.busroutebackend.advertising.application.dto.integration.ExternalBannerCommand;
 import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
+import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
@@ -20,11 +21,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Service
 @Slf4j
 public class UpsertExternalBannerUseCase extends BaseUseCase<Mono<ExternalBannerCommand>, AdPlacement> {
+
+    private static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
 
     private final AdPlacementRepository placementRepository;
     private final AdPlacementTargetRepository targetRepository;
@@ -56,8 +61,9 @@ public class UpsertExternalBannerUseCase extends BaseUseCase<Mono<ExternalBanner
 
         return placementRepository.findByExternalRef(command.externalServiceId(), command.externalRef())
                 .flatMap(existing -> rejectForeign(existing, command))
+                .flatMap(existing -> rejectFinishedRun(existing, command))
                 .map(existing -> applyUpdate(existing, command, targetType))
-                .switchIfEmpty(Mono.fromSupplier(() -> buildNew(command, targetType)))
+                .switchIfEmpty(Mono.fromSupplier(() -> putOnAir(buildNew(command, targetType))))
                 .flatMap(placementRepository::save)
                 .flatMap(saved -> targetRepository
                         .replaceAll(saved.getId(), List.of(PlacementTarget.general(targetType)))
@@ -80,6 +86,25 @@ public class UpsertExternalBannerUseCase extends BaseUseCase<Mono<ExternalBanner
                     "placement belongs to another owner"));
         }
         return Mono.just(existing);
+    }
+
+    private Mono<AdPlacement> rejectFinishedRun(AdPlacement existing, ExternalBannerCommand command) {
+        if (existing.getStatus() == PlacementStatus.EXPIRED || existing.getStatus() == PlacementStatus.CANCELLED) {
+            return Mono.error(new AdvertisingValidationException("externalRef",
+                    "banner '" + command.externalRef() + "' has already finished its run ("
+                            + existing.getStatus() + "); send a new run under a different externalRef"));
+        }
+        return Mono.just(existing);
+    }
+
+    private static AdPlacement putOnAir(AdPlacement placement) {
+        AdPlacement scheduled = placement.markAsPendingPayment().markAsScheduled();
+        return windowAlreadyOpen(scheduled) ? scheduled.markAsActive() : scheduled;
+    }
+
+    private static boolean windowAlreadyOpen(AdPlacement placement) {
+        LocalDateTime startsAt = placement.getWindow() != null ? placement.getWindow().getStartsAt() : null;
+        return startsAt == null || !startsAt.isAfter(LocalDateTime.now(ASHGABAT_ZONE));
     }
 
     private AdPlacement buildNew(ExternalBannerCommand command, TargetType targetType) {

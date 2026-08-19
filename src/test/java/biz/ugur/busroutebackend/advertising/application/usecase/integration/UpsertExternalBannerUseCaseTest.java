@@ -4,6 +4,7 @@ import biz.ugur.busroutebackend.advertising.application.dto.integration.External
 import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementSource;
+import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
 import biz.ugur.busroutebackend.advertising.domain.enums.TargetType;
 import biz.ugur.busroutebackend.advertising.domain.exceptions.AdvertisingValidationException;
@@ -153,5 +154,88 @@ class UpsertExternalBannerUseCaseTest {
                 .verifyComplete();
 
         verify(securityService).logAudit(anyString(), anyString(), anyString());
+    }
+    @Test
+    void bannerOfUnsupportedTypeLeavesNothingBehind() {
+        ExternalBannerCommand stopsBanner = new ExternalBannerCommand(SERVICE_ID, EXTERNAL_REF, "stops",
+                "Внешний баннер", "https://cdn/img.png", "https://target", null,
+                LocalDateTime.now(), LocalDateTime.now().plusDays(7), 1);
+
+        StepVerifier.create(useCase.execute(Mono.just(stopsBanner)))
+                .expectError(AdvertisingValidationException.class)
+                .verify();
+
+        verify(placementRepository, never()).save(any());
+        verify(targetRepository, never()).replaceAll(any(), any());
+        verify(securityService, never()).logAudit(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void bannerWithoutTitleLeavesNothingBehind() {
+        ExternalBannerCommand untitled = new ExternalBannerCommand(SERVICE_ID, EXTERNAL_REF, "routes",
+                "   ", "https://cdn/img.png", "https://target", null,
+                LocalDateTime.now(), LocalDateTime.now().plusDays(7), 1);
+
+        StepVerifier.create(useCase.execute(Mono.just(untitled)))
+                .expectError(AdvertisingValidationException.class)
+                .verify();
+
+        verify(placementRepository, never()).save(any());
+        verify(targetRepository, never()).replaceAll(any(), any());
+    }
+
+    @Test
+    void manualPlacementIsNeverHijackedByExternalService() {
+        AdPlacement manual = AdPlacement.create(
+                null, null, PlacementType.BANNER, PlacementKind.EDITORIAL,
+                "Ручной баннер", null, "https://cdn/manual.png", "https://manual", null,
+                ContentType.LINK, PlacementWindow.of(LocalDateTime.now(), LocalDateTime.now().plusDays(1)),
+                List.of(PlacementTarget.of(TargetType.ROUTES_LIST, null)), 1);
+        when(placementRepository.findByExternalRef(SERVICE_ID, EXTERNAL_REF)).thenReturn(Mono.just(manual));
+
+        StepVerifier.create(useCase.execute(Mono.just(command())))
+                .expectError(AdvertisingValidationException.class)
+                .verify();
+
+        verify(placementRepository, never()).save(any());
+    }
+    @Test
+    void acceptedBannerGoesOnAirImmediatelyWhenItsPeriodHasStarted() {
+        StepVerifier.create(useCase.execute(Mono.just(command())))
+                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(PlacementStatus.ACTIVE))
+                .verifyComplete();
+    }
+
+    @Test
+    void bannerWithFuturePeriodWaitsScheduledInsteadOfShowingEarly() {
+        ExternalBannerCommand future = new ExternalBannerCommand(SERVICE_ID, EXTERNAL_REF, "routes",
+                "Будущий баннер", "https://cdn/img.png", "https://target", null,
+                LocalDateTime.now().plusDays(3), LocalDateTime.now().plusDays(10), 1);
+
+        StepVerifier.create(useCase.execute(Mono.just(future)))
+                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(PlacementStatus.SCHEDULED))
+                .verifyComplete();
+    }
+
+    @Test
+    void finishedRunIsNotSilentlyResurrectedUnderTheSameReference() {
+        AdPlacement finished = existing().markAsPendingPayment().markAsScheduled().markAsActive().markAsExpired();
+        when(placementRepository.findByExternalRef(SERVICE_ID, EXTERNAL_REF)).thenReturn(Mono.just(finished));
+
+        StepVerifier.create(useCase.execute(Mono.just(command())))
+                .expectError(AdvertisingValidationException.class)
+                .verify();
+
+        verify(placementRepository, never()).save(any());
+    }
+
+    @Test
+    void withdrawnBannerStaysWithdrawnWhenOwnerSendsItAgain() {
+        AdPlacement paused = existing().markAsPendingPayment().markAsScheduled().markAsActive().markAsPaused();
+        when(placementRepository.findByExternalRef(SERVICE_ID, EXTERNAL_REF)).thenReturn(Mono.just(paused));
+
+        StepVerifier.create(useCase.execute(Mono.just(command())))
+                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(PlacementStatus.PAUSED))
+                .verifyComplete();
     }
 }
