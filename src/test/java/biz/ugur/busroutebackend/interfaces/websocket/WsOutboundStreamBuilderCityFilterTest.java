@@ -1,5 +1,6 @@
 package biz.ugur.busroutebackend.interfaces.websocket;
 
+import biz.ugur.busroutebackend.prediction.broadcast.V31FrameFeed;
 import biz.ugur.busroutebackend.transport.application.services.VehicleCityIndex;
 import biz.ugur.busroutebackend.transport.application.usecase.GetActiveVehiclesUseCase;
 import biz.ugur.busroutebackend.transport.infrastructure.debug.PipelineTracer;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
@@ -30,14 +32,18 @@ class WsOutboundStreamBuilderCityFilterTest {
     private PipelineTracer pipelineTracer;
     @Mock
     private VehicleCityIndex vehicleCityIndex;
+    @Mock
+    private ObjectProvider<V31FrameFeed> v31FrameFeedProvider;
 
     private WsOutboundStreamBuilder builder;
     private SessionConfig config;
 
     @BeforeEach
     void setUp() {
+        when(v31FrameFeedProvider.getIfAvailable(org.mockito.ArgumentMatchers.<java.util.function.Supplier<V31FrameFeed>>any()))
+                .thenReturn(V31FrameFeed.silent());
         builder = new WsOutboundStreamBuilder(getActiveVehiclesUseCase, new ObjectMapper(),
-                broadcastSink, pipelineTracer, vehicleCityIndex);
+                broadcastSink, pipelineTracer, vehicleCityIndex, v31FrameFeedProvider);
         config = new SessionConfig();
         config.setRouteFilter(Set.of("1"));
         config.setSubscriptionType("routes");
