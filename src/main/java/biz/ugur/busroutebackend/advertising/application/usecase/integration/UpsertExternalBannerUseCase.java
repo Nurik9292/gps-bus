@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.advertising.application.usecase.integration;
 
 import biz.ugur.busroutebackend.advertising.application.dto.integration.ExternalBannerCommand;
+import biz.ugur.busroutebackend.advertising.application.processor.AdPlacementImageProcessor;
 import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementStatus;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementType;
@@ -31,18 +32,23 @@ public class UpsertExternalBannerUseCase extends BaseUseCase<Mono<ExternalBanner
 
     private static final ZoneId ASHGABAT_ZONE = ZoneId.of("Asia/Ashgabat");
 
+    private static final String EMBEDDED_IMAGE_PREFIX = "data:image/";
+
     private final AdPlacementRepository placementRepository;
     private final AdPlacementTargetRepository targetRepository;
+    private final AdPlacementImageProcessor imageProcessor;
     private final SecurityContextService securityService;
 
     public UpsertExternalBannerUseCase(AdPlacementRepository placementRepository,
                                        AdPlacementTargetRepository targetRepository,
+                                       AdPlacementImageProcessor imageProcessor,
                                        SecurityContextService securityService,
                                        CorrelationContextService correlationService,
                                        EventBus eventBus) {
         super(correlationService, eventBus);
         this.placementRepository = placementRepository;
         this.targetRepository = targetRepository;
+        this.imageProcessor = imageProcessor;
         this.securityService = securityService;
     }
 
@@ -58,17 +64,27 @@ public class UpsertExternalBannerUseCase extends BaseUseCase<Mono<ExternalBanner
 
     private Mono<AdPlacement> upsert(ExternalBannerCommand command) {
         TargetType targetType = resolveRoutesTarget(command.type());
+        requireEmbeddedImage(command.imageUrl());
 
         return placementRepository.findByExternalRef(command.externalServiceId(), command.externalRef())
                 .flatMap(existing -> rejectForeign(existing, command))
                 .flatMap(existing -> rejectFinishedRun(existing, command))
-                .map(existing -> applyUpdate(existing, command, targetType))
-                .switchIfEmpty(Mono.fromSupplier(() -> putOnAir(buildNew(command, targetType))))
+                .flatMap(existing -> imageProcessor.processForUpdate(command.imageUrl(), existing.getImageUrl())
+                        .map(storedImage -> applyUpdate(existing, command, targetType, storedImage)))
+                .switchIfEmpty(Mono.defer(() -> imageProcessor.process(command.imageUrl())
+                        .map(storedImage -> putOnAir(buildNew(command, targetType, storedImage)))))
                 .flatMap(placementRepository::save)
                 .flatMap(saved -> targetRepository
                         .replaceAll(saved.getId(), List.of(PlacementTarget.general(targetType)))
                         .thenReturn(saved))
                 .flatMap(saved -> auditOperation(saved, command).thenReturn(saved));
+    }
+
+    private static void requireEmbeddedImage(String imageUrl) {
+        if (imageUrl == null || !imageUrl.startsWith(EMBEDDED_IMAGE_PREFIX)) {
+            throw new AdvertisingValidationException("imageUrl",
+                    "banner image must be sent as base64 data URL (data:image/...), links to external storage are not accepted");
+        }
     }
 
     private TargetType resolveRoutesTarget(String rawType) {
@@ -107,14 +123,14 @@ public class UpsertExternalBannerUseCase extends BaseUseCase<Mono<ExternalBanner
         return startsAt == null || !startsAt.isAfter(LocalDateTime.now(ASHGABAT_ZONE));
     }
 
-    private AdPlacement buildNew(ExternalBannerCommand command, TargetType targetType) {
+    private AdPlacement buildNew(ExternalBannerCommand command, TargetType targetType, String storedImage) {
         return AdPlacement.createExternal(
                 command.externalServiceId(),
                 command.externalRef(),
                 PlacementType.BANNER,
                 command.title(),
                 command.content(),
-                command.imageUrl(),
+                storedImage,
                 command.targetUrl(),
                 null,
                 contentTypeOf(command),
@@ -123,11 +139,12 @@ public class UpsertExternalBannerUseCase extends BaseUseCase<Mono<ExternalBanner
                 command.displayOrder());
     }
 
-    private AdPlacement applyUpdate(AdPlacement existing, ExternalBannerCommand command, TargetType targetType) {
+    private AdPlacement applyUpdate(AdPlacement existing, ExternalBannerCommand command,
+                                    TargetType targetType, String storedImage) {
         return existing.toBuilder()
                 .title(command.title().trim())
                 .content(command.content())
-                .imageUrl(command.imageUrl())
+                .imageUrl(storedImage)
                 .targetUrl(command.targetUrl())
                 .contentType(contentTypeOf(command))
                 .window(PlacementWindow.of(command.startsAt(), command.endsAt()))

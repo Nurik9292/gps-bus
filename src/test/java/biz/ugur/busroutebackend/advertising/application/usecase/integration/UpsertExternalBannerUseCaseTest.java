@@ -1,6 +1,7 @@
 package biz.ugur.busroutebackend.advertising.application.usecase.integration;
 
 import biz.ugur.busroutebackend.advertising.application.dto.integration.ExternalBannerCommand;
+import biz.ugur.busroutebackend.advertising.application.processor.AdPlacementImageProcessor;
 import biz.ugur.busroutebackend.advertising.domain.enums.ContentType;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementKind;
 import biz.ugur.busroutebackend.advertising.domain.enums.PlacementSource;
@@ -44,11 +45,15 @@ class UpsertExternalBannerUseCaseTest {
 
     private static final String SERVICE_ID = "svc-1";
     private static final String EXTERNAL_REF = "banner-42";
+    private static final String EMBEDDED_IMAGE = "data:image/png;base64,iVBORw0KGgo=";
+    private static final String STORED_IMAGE = "/uploads/ad-placements/stored.png";
 
     @Mock
     private AdPlacementRepository placementRepository;
     @Mock
     private AdPlacementTargetRepository targetRepository;
+    @Mock
+    private AdPlacementImageProcessor imageProcessor;
     @Mock
     private SecurityContextService securityService;
     @Mock
@@ -68,19 +73,21 @@ class UpsertExternalBannerUseCaseTest {
         when(targetRepository.replaceAll(any(), any())).thenReturn(Mono.empty());
         when(targetRepository.findByPlacementId(any())).thenReturn(Flux.empty());
         when(securityService.logAudit(anyString(), anyString(), anyString())).thenReturn(Mono.empty());
+        when(imageProcessor.process(anyString())).thenReturn(Mono.just(STORED_IMAGE));
+        when(imageProcessor.processForUpdate(anyString(), any())).thenReturn(Mono.just(STORED_IMAGE));
         useCase = new UpsertExternalBannerUseCase(placementRepository, targetRepository,
-                securityService, correlationService, eventBus);
+                imageProcessor, securityService, correlationService, eventBus);
     }
 
     private static ExternalBannerCommand command() {
         return new ExternalBannerCommand(SERVICE_ID, EXTERNAL_REF, "routes", "Внешний баннер",
-                "https://cdn/img.png", "https://target", null,
+                EMBEDDED_IMAGE, "https://target", null,
                 LocalDateTime.now(), LocalDateTime.now().plusDays(7), 1);
     }
 
     private static AdPlacement existing() {
         return AdPlacement.createExternal(SERVICE_ID, EXTERNAL_REF, PlacementType.BANNER,
-                "Старый заголовок", null, "https://cdn/old.png", "https://old", null,
+                "Старый заголовок", null, STORED_IMAGE, "https://old", null,
                 ContentType.LINK, PlacementWindow.of(LocalDateTime.now(), LocalDateTime.now().plusDays(1)),
                 List.of(PlacementTarget.of(TargetType.ROUTES_LIST, null)), 1);
     }
@@ -120,7 +127,7 @@ class UpsertExternalBannerUseCaseTest {
     @Test
     void onlyRoutesTypeIsAccepted() {
         ExternalBannerCommand wrongType = new ExternalBannerCommand(SERVICE_ID, EXTERNAL_REF,
-                "main", "Внешний баннер", "https://cdn/img.png", "https://target", null,
+                "main", "Внешний баннер", EMBEDDED_IMAGE, "https://target", null,
                 LocalDateTime.now(), LocalDateTime.now().plusDays(7), 1);
 
         StepVerifier.create(useCase.execute(Mono.just(wrongType)))
@@ -135,7 +142,7 @@ class UpsertExternalBannerUseCaseTest {
     @Test
     void foreignPlacementIsNotOverwritten() {
         AdPlacement foreign = AdPlacement.createExternal("svc-other", EXTERNAL_REF,
-                PlacementType.BANNER, "Чужой", null, "https://cdn/x.png", "https://x", null,
+                PlacementType.BANNER, "Чужой", null, STORED_IMAGE, "https://x", null,
                 ContentType.LINK, PlacementWindow.of(LocalDateTime.now(), LocalDateTime.now().plusDays(1)),
                 List.of(PlacementTarget.of(TargetType.ROUTES_LIST, null)), 1);
         when(placementRepository.findByExternalRef(SERVICE_ID, EXTERNAL_REF)).thenReturn(Mono.just(foreign));
@@ -158,7 +165,7 @@ class UpsertExternalBannerUseCaseTest {
     @Test
     void bannerOfUnsupportedTypeLeavesNothingBehind() {
         ExternalBannerCommand stopsBanner = new ExternalBannerCommand(SERVICE_ID, EXTERNAL_REF, "stops",
-                "Внешний баннер", "https://cdn/img.png", "https://target", null,
+                "Внешний баннер", EMBEDDED_IMAGE, "https://target", null,
                 LocalDateTime.now(), LocalDateTime.now().plusDays(7), 1);
 
         StepVerifier.create(useCase.execute(Mono.just(stopsBanner)))
@@ -173,7 +180,7 @@ class UpsertExternalBannerUseCaseTest {
     @Test
     void bannerWithoutTitleLeavesNothingBehind() {
         ExternalBannerCommand untitled = new ExternalBannerCommand(SERVICE_ID, EXTERNAL_REF, "routes",
-                "   ", "https://cdn/img.png", "https://target", null,
+                "   ", EMBEDDED_IMAGE, "https://target", null,
                 LocalDateTime.now(), LocalDateTime.now().plusDays(7), 1);
 
         StepVerifier.create(useCase.execute(Mono.just(untitled)))
@@ -188,7 +195,7 @@ class UpsertExternalBannerUseCaseTest {
     void manualPlacementIsNeverHijackedByExternalService() {
         AdPlacement manual = AdPlacement.create(
                 null, null, PlacementType.BANNER, PlacementKind.EDITORIAL,
-                "Ручной баннер", null, "https://cdn/manual.png", "https://manual", null,
+                "Ручной баннер", null, STORED_IMAGE, "https://manual", null,
                 ContentType.LINK, PlacementWindow.of(LocalDateTime.now(), LocalDateTime.now().plusDays(1)),
                 List.of(PlacementTarget.of(TargetType.ROUTES_LIST, null)), 1);
         when(placementRepository.findByExternalRef(SERVICE_ID, EXTERNAL_REF)).thenReturn(Mono.just(manual));
@@ -209,7 +216,7 @@ class UpsertExternalBannerUseCaseTest {
     @Test
     void bannerWithFuturePeriodWaitsScheduledInsteadOfShowingEarly() {
         ExternalBannerCommand future = new ExternalBannerCommand(SERVICE_ID, EXTERNAL_REF, "routes",
-                "Будущий баннер", "https://cdn/img.png", "https://target", null,
+                "Будущий баннер", EMBEDDED_IMAGE, "https://target", null,
                 LocalDateTime.now().plusDays(3), LocalDateTime.now().plusDays(10), 1);
 
         StepVerifier.create(useCase.execute(Mono.just(future)))
@@ -237,5 +244,26 @@ class UpsertExternalBannerUseCaseTest {
         StepVerifier.create(useCase.execute(Mono.just(command())))
                 .assertNext(result -> assertThat(result.getStatus()).isEqualTo(PlacementStatus.PAUSED))
                 .verifyComplete();
+    }
+    @Test
+    void bannerImageMustArriveAsFileNotAsLinkToTheirStorage() {
+        ExternalBannerCommand linked = new ExternalBannerCommand(SERVICE_ID, EXTERNAL_REF, "routes",
+                "Внешний баннер", "https://tanat.halkarahil.com/api/storage/serve/f95b283b.jpg",
+                "https://target", null, LocalDateTime.now(), LocalDateTime.now().plusDays(7), 1);
+
+        StepVerifier.create(useCase.execute(Mono.just(linked)))
+                .expectError(AdvertisingValidationException.class)
+                .verify();
+
+        verify(placementRepository, never()).save(any());
+    }
+
+    @Test
+    void acceptedImageIsStoredOnOurSideSoTheAppNeverCallsTheirDomain() {
+        StepVerifier.create(useCase.execute(Mono.just(command())))
+                .assertNext(result -> assertThat(result.getImageUrl()).isEqualTo(STORED_IMAGE))
+                .verifyComplete();
+
+        verify(imageProcessor).process(EMBEDDED_IMAGE);
     }
 }
