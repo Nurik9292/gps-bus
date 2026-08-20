@@ -48,19 +48,9 @@ public class ClientSecurityConfig {
 
                 .addFilterAt(clientAuthenticationFilter, SecurityWebFiltersOrder.AUTHENTICATION)
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/register").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/login").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/center-auth").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/refresh").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/verify").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/resend-verification").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/forgot-password").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/reset-password").permitAll()
 
-                        .pathMatchers(HttpMethod.GET, "/api/v1/client/auth/me").authenticated()
-                        .pathMatchers(HttpMethod.PATCH, "/api/v1/client/auth/profile").authenticated()
                         .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/logout").authenticated()
-                        .pathMatchers(HttpMethod.POST, "/api/v1/client/auth/change-password").authenticated()
 
                         .pathMatchers("/api/v1/client/favorites/**").authenticated()
                         .pathMatchers("/api/v1/client/suggestions/**").authenticated()

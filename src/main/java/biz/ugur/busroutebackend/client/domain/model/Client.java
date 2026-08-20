@@ -25,7 +25,6 @@ import java.time.LocalDateTime;
 @Getter
 public class Client extends AggregateRoot<Client, ClientId> {
 
-    private static final String TEST_CENTER_OTP = "11111";
     private static final int MAX_NAME_LENGTH = 100;
 
     private ClientId id;
@@ -204,56 +203,6 @@ public class Client extends AggregateRoot<Client, ClientId> {
         return client;
     }
 
-
-    public Client generateOtp() {
-        Otp otp = Otp.generate();
-        return this.toBuilder()
-                .otpCode(otp.getCode())
-                .otpVerify(false)
-                .build();
-    }
-
-
-    public Client generateOtpForCenter() {
-        return this.toBuilder()
-                .otpCode(TEST_CENTER_OTP)
-                .otpVerify(true)
-                .build();
-    }
-
-
-    public VerificationResult verifyOtpCenter(String inputOtp) {
-        if (this.otpCode != null && this.otpCode.equals(inputOtp)) {
-            LocalDateTime now = LocalDateTime.now();
-            Client verified = this.toBuilder()
-                    .otpVerify(true)
-                    .status(ClientStatus.ACTIVE)
-                    .lastActivity(now)
-                    .updatedAt(now)
-                    .build();
-            return new VerificationResult(true, verified);
-        }
-        return new VerificationResult(false, this);
-    }
-
-    public VerificationResult verifyOtp(String inputOtp) {
-        if (this.otpCode != null && this.otpCode.equals(inputOtp)) {
-            LocalDateTime now = LocalDateTime.now();
-            Client verified = this.toBuilder()
-                    .otpVerify(true)
-                    .status(ClientStatus.ACTIVE)
-                    .lastActivity(now)
-                    .updatedAt(now)
-                    .build();
-
-            verified.registerEvent(new ClientOtpVerifiedEvent(
-                    this.id.getValue(),
-                    this.phoneNumber
-            ));
-            return new VerificationResult(true, verified);
-        }
-        return new VerificationResult(false, this);
-    }
 
 
     public Client authenticate(String accessToken, String refreshToken) {
