@@ -113,6 +113,10 @@ public class UpsertExternalBannerUseCase extends BaseUseCase<Mono<ExternalBanner
         return Mono.just(existing);
     }
 
+    private static AdPlacement backOnAirIfWithdrawnWhileAbsent(AdPlacement existing) {
+        return existing.getStatus() == PlacementStatus.PAUSED ? existing.markAsResumed() : existing;
+    }
+
     private static AdPlacement putOnAir(AdPlacement placement) {
         AdPlacement scheduled = placement.markAsPendingPayment().markAsScheduled();
         return windowAlreadyOpen(scheduled) ? scheduled.markAsActive() : scheduled;
@@ -141,7 +145,7 @@ public class UpsertExternalBannerUseCase extends BaseUseCase<Mono<ExternalBanner
 
     private AdPlacement applyUpdate(AdPlacement existing, ExternalBannerCommand command,
                                     TargetType targetType, String storedImage) {
-        return existing.toBuilder()
+        return backOnAirIfWithdrawnWhileAbsent(existing).toBuilder()
                 .title(command.title().trim())
                 .content(command.content())
                 .imageUrl(storedImage)

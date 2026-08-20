@@ -334,6 +334,20 @@ external:
       read-timeout: ${OSRM_READ_TIMEOUT:3s}
       write-timeout: ${OSRM_WRITE_TIMEOUT:2s}
 
+    tanat:
+      enabled: ${TANAT_BANNERS_ENABLED:false}
+      base-url: ${TANAT_BASE_URL:https://tanat.halkarahil.com}
+      position-key: ${TANAT_POSITION_KEY:key-client-pos-app-path}
+      service-id: ${TANAT_SERVICE_ID:tanat}
+      fetch-interval: ${TANAT_FETCH_INTERVAL:5m}
+      languages: ${TANAT_LANGUAGES:tk,ru,en}
+      devices: ${TANAT_DEVICES:mobile}
+      operating-systems: ${TANAT_OS:android,ios}
+      timeout: ${TANAT_TIMEOUT:8s}
+      connect-timeout: ${TANAT_CONNECT_TIMEOUT:3s}
+      read-timeout: ${TANAT_READ_TIMEOUT:8s}
+      write-timeout: ${TANAT_WRITE_TIMEOUT:3s}
+
 business:
   routing:
     nearby-stops-radius: 800

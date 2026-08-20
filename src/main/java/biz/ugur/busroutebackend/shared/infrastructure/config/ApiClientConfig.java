@@ -136,4 +136,30 @@ public class ApiClientConfig {
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(maxInMemoryBytes))
                 .build();
     }
+
+    @Bean("tanatBannerClient")
+    @ConditionalOnProperty(prefix = "external.api.tanat", name = "enabled", havingValue = "true")
+    public WebClient tanatBannerClient(
+            @Value("${external.api.tanat.base-url}") String baseUrl,
+            @Value("${external.api.tanat.timeout:8s}") Duration timeout,
+            @Value("${external.api.tanat.connect-timeout:3s}") Duration connectTimeout,
+            @Value("${external.api.tanat.read-timeout:8s}") Duration readTimeout,
+            @Value("${external.api.tanat.write-timeout:3s}") Duration writeTimeout,
+            @Value("${external.api.tanat.max-in-memory-bytes:8388608}") int maxInMemoryBytes) {
+
+        HttpClient httpClient = HttpClient.create()
+                .responseTimeout(timeout)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) connectTimeout.toMillis())
+                .doOnConnected(conn -> conn
+                        .addHandlerLast(new ReadTimeoutHandler(readTimeout.toSeconds(), TimeUnit.SECONDS))
+                        .addHandlerLast(new WriteTimeoutHandler(writeTimeout.toSeconds(), TimeUnit.SECONDS)));
+
+        log.info("Tanat banner WebClient configured: baseUrl={}, responseTimeout={}s", baseUrl, timeout.toSeconds());
+
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(maxInMemoryBytes))
+                .build();
+    }
 }
