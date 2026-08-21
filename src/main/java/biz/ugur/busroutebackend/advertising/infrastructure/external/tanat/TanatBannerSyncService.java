@@ -12,9 +12,11 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -25,6 +27,7 @@ public class TanatBannerSyncService {
     private static final Duration PER_ITEM_TIMEOUT = Duration.ofSeconds(10);
     private static final int CONCURRENCY = 3;
     private static final String ROUTES_TYPE = "routes";
+    private static final Duration IMAGE_REFRESH_WINDOW = Duration.ofHours(24);
 
     private final TanatBannerApiClient apiClient;
     private final TanatBannerProperties properties;
@@ -60,8 +63,13 @@ public class TanatBannerSyncService {
                 .map(AdPlacement::getExternalRef)
                 .collect(java.util.stream.Collectors.toSet());
 
+        Map<String, AdPlacement> storedByRef = stored.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        AdPlacement::getExternalRef, placement -> placement, (first, second) -> first));
+
         List<TanatBannerResponse.Banner> toStore = offered.stream()
                 .filter(banner -> !takenDownByAdmin.contains(banner.hash()))
+                .filter(banner -> needsStoring(storedByRef.get(banner.hash())))
                 .toList();
 
         Set<String> stillOffered = hashesOf(offered);
@@ -85,6 +93,20 @@ public class TanatBannerSyncService {
         return apiClient.fetchBanner(combination.language(), combination.device(), combination.operatingSystem())
                 .timeout(PER_ITEM_TIMEOUT)
                 .onErrorResume(error -> Mono.empty());
+    }
+
+    private static boolean needsStoring(AdPlacement alreadyStored) {
+        if (alreadyStored == null || alreadyStored.getStatus() != PlacementStatus.ACTIVE) {
+            return true;
+        }
+        if (alreadyStored.getImageUrl() == null || alreadyStored.getImageUrl().isBlank()) {
+            return true;
+        }
+        return olderThanRefreshWindow(alreadyStored.getUpdatedAt());
+    }
+
+    private static boolean olderThanRefreshWindow(LocalDateTime lastStored) {
+        return lastStored == null || lastStored.isBefore(LocalDateTime.now().minus(IMAGE_REFRESH_WINDOW));
     }
 
     private Mono<Void> storeOffered(List<TanatBannerResponse.Banner> banners) {
