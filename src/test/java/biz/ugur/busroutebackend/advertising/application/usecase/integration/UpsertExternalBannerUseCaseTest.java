@@ -237,15 +237,6 @@ class UpsertExternalBannerUseCaseTest {
     }
 
     @Test
-    void withdrawnBannerStaysWithdrawnWhenOwnerSendsItAgain() {
-        AdPlacement paused = existing().markAsPendingPayment().markAsScheduled().markAsActive().markAsPaused();
-        when(placementRepository.findByExternalRef(SERVICE_ID, EXTERNAL_REF)).thenReturn(Mono.just(paused));
-
-        StepVerifier.create(useCase.execute(Mono.just(command())))
-                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(PlacementStatus.PAUSED))
-                .verifyComplete();
-    }
-    @Test
     void bannerImageMustArriveAsFileNotAsLinkToTheirStorage() {
         ExternalBannerCommand linked = new ExternalBannerCommand(SERVICE_ID, EXTERNAL_REF, "routes",
                 "Внешний баннер", "https://tanat.halkarahil.com/api/storage/serve/f95b283b.jpg",
@@ -265,5 +256,17 @@ class UpsertExternalBannerUseCaseTest {
                 .verifyComplete();
 
         verify(imageProcessor).process(EMBEDDED_IMAGE);
+    }
+
+    @Test
+    void bannerReturnsToAirWhenTanatOffersItAgainAfterAbsence() {
+        AdPlacement withdrawnWhileAbsent = existing()
+                .markAsPendingPayment().markAsScheduled().markAsActive().markAsPaused();
+        when(placementRepository.findByExternalRef(SERVICE_ID, EXTERNAL_REF))
+                .thenReturn(Mono.just(withdrawnWhileAbsent));
+
+        StepVerifier.create(useCase.execute(Mono.just(command())))
+                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(PlacementStatus.ACTIVE))
+                .verifyComplete();
     }
 }
