@@ -85,7 +85,7 @@ class TanatBannerSyncServiceTest {
                 ContentType.LINK,
                 PlacementWindow.of(LocalDateTime.now().minusDays(1), LocalDateTime.now().plusDays(30)),
                 List.of(PlacementTarget.general(TargetType.ROUTES_LIST)), 0);
-        return placement.toBuilder().status(status).build();
+        return placement.toBuilder().status(status).updatedAt(LocalDateTime.now()).build();
     }
 
     @Test
@@ -178,5 +178,97 @@ class TanatBannerSyncServiceTest {
 
         verify(apiClient, times(6)).fetchBanner(anyString(), anyString(), anyString());
         verify(upsertUseCase, times(1)).execute(any());
+    }
+    @Test
+    void unchangedBannerIsNotDownloadedAgainSoItsUrlStaysStable() {
+        when(apiClient.fetchBanner(anyString(), anyString(), anyString())).thenReturn(Mono.just(offered()));
+        when(placementRepository.findByExternalServiceId(SERVICE_ID))
+                .thenReturn(Flux.just(storedBanner(PlacementStatus.ACTIVE)));
+
+        StepVerifier.create(syncService.synchronize()).verifyComplete();
+
+        verify(apiClient, never()).downloadImage(anyString());
+        verify(upsertUseCase, never()).execute(any());
+    }
+
+    @Test
+    void bannerWithoutStoredImageIsDownloadedEvenWhenActive() {
+        AdPlacement withoutImage = storedBanner(PlacementStatus.ACTIVE).toBuilder().imageUrl(null).build();
+        when(apiClient.fetchBanner(anyString(), anyString(), anyString())).thenReturn(Mono.just(offered()));
+        when(placementRepository.findByExternalServiceId(SERVICE_ID)).thenReturn(Flux.just(withoutImage));
+
+        StepVerifier.create(syncService.synchronize()).verifyComplete();
+
+        verify(apiClient).downloadImage(anyString());
+        verify(upsertUseCase).execute(any());
+    }
+
+    @Test
+    void bannerWithdrawnEarlierIsDownloadedAgainToComeBackOnAir() {
+        when(apiClient.fetchBanner(anyString(), anyString(), anyString())).thenReturn(Mono.just(offered()));
+        when(placementRepository.findByExternalServiceId(SERVICE_ID))
+                .thenReturn(Flux.just(storedBanner(PlacementStatus.PAUSED)));
+
+        StepVerifier.create(syncService.synchronize()).verifyComplete();
+
+        verify(upsertUseCase).execute(any());
+    }
+    @Test
+    void bannerIsRefreshedOnceADayInCaseTanatSwappedTheImageUnderSameHash() {
+        AdPlacement staleCopy = storedBanner(PlacementStatus.ACTIVE).toBuilder()
+                .updatedAt(LocalDateTime.now().minusHours(25))
+                .build();
+        when(apiClient.fetchBanner(anyString(), anyString(), anyString())).thenReturn(Mono.just(offered()));
+        when(placementRepository.findByExternalServiceId(SERVICE_ID)).thenReturn(Flux.just(staleCopy));
+
+        StepVerifier.create(syncService.synchronize()).verifyComplete();
+
+        verify(apiClient).downloadImage(anyString());
+        verify(upsertUseCase).execute(any());
+    }
+    @Test
+    void storedBannerAlwaysCarriesPeriodBecauseMobileClientCannotParseNulls() {
+        when(apiClient.fetchBanner(anyString(), anyString(), anyString())).thenReturn(Mono.just(offered()));
+
+        StepVerifier.create(syncService.synchronize()).verifyComplete();
+
+        ArgumentCaptor<Mono<ExternalBannerCommand>> captor = ArgumentCaptor.forClass(Mono.class);
+        verify(upsertUseCase).execute(captor.capture());
+        ExternalBannerCommand command = captor.getValue().block();
+        assertThat(command.startsAt()).isNotNull();
+        assertThat(command.endsAt()).isNotNull();
+        assertThat(command.endsAt()).isAfter(LocalDateTime.now().plusYears(1));
+    }
+
+    @Test
+    void repeatedStoreKeepsOriginalRunStartInsteadOfSlidingItToToday() {
+        LocalDateTime startedLongAgo = LocalDateTime.now().minusDays(30);
+        AdPlacement stale = storedBanner(PlacementStatus.ACTIVE).toBuilder()
+                .updatedAt(LocalDateTime.now().minusHours(25))
+                .window(PlacementWindow.of(startedLongAgo, startedLongAgo.plusYears(10)))
+                .build();
+        when(apiClient.fetchBanner(anyString(), anyString(), anyString())).thenReturn(Mono.just(offered()));
+        when(placementRepository.findByExternalServiceId(SERVICE_ID)).thenReturn(Flux.just(stale));
+
+        StepVerifier.create(syncService.synchronize()).verifyComplete();
+
+        ArgumentCaptor<Mono<ExternalBannerCommand>> captor = ArgumentCaptor.forClass(Mono.class);
+        verify(upsertUseCase).execute(captor.capture());
+        assertThat(captor.getValue().block().startsAt()).isEqualTo(startedLongAgo);
+    }
+    @Test
+    void bannerStoredWithoutPeriodIsRepairedOnNextSync() {
+        AdPlacement withoutPeriod = storedBanner(PlacementStatus.ACTIVE).toBuilder()
+                .updatedAt(LocalDateTime.now())
+                .window(null)
+                .build();
+        when(apiClient.fetchBanner(anyString(), anyString(), anyString())).thenReturn(Mono.just(offered()));
+        when(placementRepository.findByExternalServiceId(SERVICE_ID)).thenReturn(Flux.just(withoutPeriod));
+
+        StepVerifier.create(syncService.synchronize()).verifyComplete();
+
+        ArgumentCaptor<Mono<ExternalBannerCommand>> captor = ArgumentCaptor.forClass(Mono.class);
+        verify(upsertUseCase).execute(captor.capture());
+        assertThat(captor.getValue().block().startsAt()).isNotNull();
     }
 }

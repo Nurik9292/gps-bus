@@ -2,11 +2,13 @@ package biz.ugur.busroutebackend.advertising.infrastructure.external.tanat;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 @Component
+@ConditionalOnProperty(prefix = "external.api.tanat", name = "enabled", havingValue = "true")
 @Slf4j
 public class TanatBannerApiClient {
 
