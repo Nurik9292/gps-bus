@@ -4,7 +4,6 @@ import biz.ugur.busroutebackend.client.domain.enums.ClientStatus;
 import biz.ugur.busroutebackend.client.domain.enums.Platform;
 import biz.ugur.busroutebackend.client.domain.event.ClientAuthenticatedEvent;
 import biz.ugur.busroutebackend.client.domain.event.ClientCreatedViaServiceEvent;
-import biz.ugur.busroutebackend.client.domain.event.ClientOtpVerifiedEvent;
 import biz.ugur.busroutebackend.client.domain.event.ClientRegisteredEvent;
 import biz.ugur.busroutebackend.client.domain.exceptions.ClientAuthenticationException;
 import biz.ugur.busroutebackend.client.domain.exceptions.ClientValidationException;
@@ -24,6 +23,10 @@ class ClientTest {
     @BeforeEach
     void setUp() {
         freshClient = Client.create(NAME, VALID_PHONE, Platform.ANDROID);
+    }
+
+    private static Client activeClient() {
+        return Client.createViaExternalService(NAME, "srv-123456", "ext-1", VALID_PHONE);
     }
 
     @Nested
@@ -162,59 +165,11 @@ class ClientTest {
     }
 
     @Nested
-    class OtpLifecycle {
-
-        @Test
-        void generateOtpStoresGeneratedCodeAndMarksUnverified() {
-            Client withOtp = freshClient.generateOtp();
-            assertNotNull(withOtp.getOtpCode());
-            assertFalse(withOtp.getOtpVerify());
-        }
-
-        @Test
-        void generateOtpForCenterUsesTestCodeAndFlagsVerified() {
-            Client centerTest = freshClient.generateOtpForCenter();
-            assertEquals("11111", centerTest.getOtpCode());
-            assertTrue(centerTest.getOtpVerify());
-        }
-
-        @Test
-        void verifyOtpAcceptsMatchingCodeActivatesAndEmitsEvent() {
-            Client withOtp = freshClient.generateOtpForCenter();
-
-            Client.VerificationResult result = withOtp.verifyOtp("11111");
-
-            assertTrue(result.verified());
-            Client verified = result.client();
-            assertEquals(ClientStatus.ACTIVE, verified.getStatus());
-            assertTrue(verified.isOtpVerified());
-            assertEquals(1, verified.getDomainEvents().size());
-            assertInstanceOf(ClientOtpVerifiedEvent.class, verified.getDomainEvents().get(0));
-        }
-
-        @Test
-        void verifyOtpRejectsWrongCode() {
-            Client withOtp = freshClient.generateOtpForCenter();
-            Client.VerificationResult result = withOtp.verifyOtp("99999");
-            assertFalse(result.verified());
-            assertSame(withOtp, result.client());
-        }
-
-        @Test
-        void verifyOtpCenterDoesNotEmitEvent() {
-            Client withOtp = freshClient.generateOtpForCenter();
-            Client.VerificationResult result = withOtp.verifyOtpCenter("11111");
-            assertTrue(result.verified());
-            assertEquals(0, result.client().getDomainEvents().size());
-        }
-    }
-
-    @Nested
     class Authentication {
 
         @Test
         void authenticateActiveClientSetsTokensAndEmitsEvent() {
-            Client active = freshClient.generateOtpForCenter().verifyOtp("11111").client();
+            Client active = activeClient();
 
             Client auth = active.authenticate("access-token", "refresh-token");
 
@@ -232,7 +187,7 @@ class ClientTest {
 
         @Test
         void authenticateFailsForSuspendedClient() {
-            Client active = freshClient.generateOtpForCenter().verifyOtp("11111").client();
+            Client active = activeClient();
             Client suspended = active.suspend();
             assertThrows(ClientAuthenticationException.class,
                     () -> suspended.authenticate("a", "r"));
@@ -240,7 +195,7 @@ class ClientTest {
 
         @Test
         void isRefreshTokenValidOnlyWhenMatchingAndCanLogin() {
-            Client active = freshClient.generateOtpForCenter().verifyOtp("11111").client();
+            Client active = activeClient();
             Client auth = active.authenticate("a", "refresh-1");
             assertTrue(auth.isRefreshTokenValid("refresh-1"));
             assertFalse(auth.isRefreshTokenValid("refresh-2"));
@@ -252,7 +207,7 @@ class ClientTest {
 
         @Test
         void updateTokensReplacesTokens() {
-            Client active = freshClient.generateOtpForCenter().verifyOtp("11111").client();
+            Client active = activeClient();
             Client auth = active.authenticate("old-a", "old-r");
 
             Client updated = auth.updateTokens("new-a", "new-r");
@@ -263,7 +218,7 @@ class ClientTest {
 
         @Test
         void logoutClearsTokens() {
-            Client active = freshClient.generateOtpForCenter().verifyOtp("11111").client();
+            Client active = activeClient();
             Client auth = active.authenticate("a", "r");
 
             Client loggedOut = auth.logout();
@@ -279,7 +234,7 @@ class ClientTest {
 
         @Test
         void suspendClearsTokensAndSetsStatus() {
-            Client active = freshClient.generateOtpForCenter().verifyOtp("11111").client();
+            Client active = activeClient();
             Client auth = active.authenticate("a", "r");
             Client suspended = auth.suspend();
 
@@ -291,14 +246,14 @@ class ClientTest {
 
         @Test
         void blockSimilarToSuspend() {
-            Client active = freshClient.generateOtpForCenter().verifyOtp("11111").client();
+            Client active = activeClient();
             Client blocked = active.block();
             assertEquals(ClientStatus.BLOCKED, blocked.getStatus());
         }
 
         @Test
         void activateReturnsClientWithActiveStatus() {
-            Client suspended = freshClient.generateOtpForCenter().verifyOtp("11111").client().suspend();
+            Client suspended = activeClient().suspend();
             Client reactivated = suspended.activate();
             assertEquals(ClientStatus.ACTIVE, reactivated.getStatus());
             assertTrue(reactivated.isActive());
